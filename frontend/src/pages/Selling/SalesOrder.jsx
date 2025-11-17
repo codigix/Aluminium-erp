@@ -48,7 +48,7 @@ export default function SalesOrder() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/selling/sales-orders?${query}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-orders?${query}`)
       const data = await res.json()
       if (data.success) {
         setOrders(data.data || [])
@@ -110,7 +110,7 @@ export default function SalesOrder() {
 
   const handleConfirmOrder = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/sales-orders/${id}/confirm`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-orders/${id}/confirm`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       })
@@ -128,7 +128,7 @@ export default function SalesOrder() {
   const handleDeleteOrder = async (id) => {
     if (!window.confirm('Are you sure you want to delete this sales order?')) return
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/sales-orders/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-orders/${id}`, {
         method: 'DELETE'
       })
       if (res.ok) {

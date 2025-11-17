@@ -44,7 +44,7 @@ export default function DeliveryNote() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/selling/delivery-notes?${query}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/delivery-notes?${query}`)
       const data = await res.json()
       if (data.success) {
         setDeliveryNotes(data.data || [])
@@ -106,7 +106,7 @@ export default function DeliveryNote() {
 
   const handleSubmitDelivery = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/delivery-notes/${id}/submit`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/delivery-notes/${id}/submit`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       })
@@ -121,7 +121,7 @@ export default function DeliveryNote() {
   const handleDeleteDeliveryNote = async (id) => {
     if (!window.confirm('Are you sure you want to delete this delivery note?')) return
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/delivery-notes/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/delivery-notes/${id}`, {
         method: 'DELETE'
       })
       if (res.ok) {

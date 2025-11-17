@@ -45,7 +45,7 @@ export default function PurchaseOrders() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/purchase-orders?${query}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-orders?${query}`)
       const data = await res.json()
       if (data.success) {
         setOrders(data.data || [])

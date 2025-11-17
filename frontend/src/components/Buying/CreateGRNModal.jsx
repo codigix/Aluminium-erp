@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { AlertCircle, Package, Plus, Trash2 } from 'lucide-react'
 import Modal from '../Modal'
+import { API_BASE_URL } from '../../services/api'
 
 export default function CreateGRNModal({ isOpen, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
@@ -27,7 +28,7 @@ export default function CreateGRNModal({ isOpen, onClose, onSuccess }) {
 
   const fetchPurchaseOrders = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/purchase-orders')
+      const res = await fetch(`${API_BASE_URL}/purchase-orders`)
       const data = await res.json()
       if (data.success) {
         // Show all POs (draft and submitted)
@@ -40,7 +41,7 @@ export default function CreateGRNModal({ isOpen, onClose, onSuccess }) {
 
   const fetchPODetails = async (poNo) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/purchase-orders/${poNo}`)
+      const res = await fetch(`${API_BASE_URL}/purchase-orders/${poNo}`)
       const data = await res.json()
       if (data.success) {
         setPoDetails(data.data)
@@ -149,7 +150,7 @@ export default function CreateGRNModal({ isOpen, onClose, onSuccess }) {
         throw new Error('All items must have valid received quantities (greater than 0)')
       }
 
-      const res = await fetch('http://localhost:5000/api/purchase-receipts', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-receipts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

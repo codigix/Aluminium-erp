@@ -17,7 +17,7 @@ export default function ViewSalesOrderModal({ isOpen, orderId, onClose }) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/sales-orders/${orderId}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-orders/${orderId}`)
       const data = await res.json()
       if (data.success) {
         setOrder(data.data)

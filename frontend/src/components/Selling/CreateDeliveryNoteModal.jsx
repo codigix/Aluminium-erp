@@ -24,7 +24,7 @@ export default function CreateDeliveryNoteModal({ isOpen, onClose, onSuccess }) 
 
   const fetchSalesOrders = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/selling/sales-orders')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-orders`)
       const data = await res.json()
       if (data.success) {
         setOrders(data.data?.filter(o => o.status === 'confirmed') || [])
@@ -64,7 +64,7 @@ export default function CreateDeliveryNoteModal({ isOpen, onClose, onSuccess }) 
         throw new Error('Please fill in all required fields')
       }
 
-      const res = await fetch('http://localhost:5000/api/selling/delivery-notes', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/delivery-notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

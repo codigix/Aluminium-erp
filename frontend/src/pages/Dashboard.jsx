@@ -32,12 +32,12 @@ export default function Dashboard() {
 
         // Fetch all stats in parallel
         const [mrRes, rfqRes, quotRes, supplierRes, poRes, invoiceRes] = await Promise.all([
-          fetch('http://localhost:5000/api/material-requests', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/rfqs', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/quotations', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/suppliers', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/purchase-orders', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/purchase-invoices', { headers }).catch(() => ({}))
+          fetch(`${import.meta.env.VITE_API_URL}/material-requests`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/rfqs`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/quotations`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/suppliers`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/purchase-orders`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/purchase-invoices`, { headers }).catch(() => ({}))
         ])
 
         const [mrs, rfqs, quotations, suppliers, pos, invoices] = await Promise.all([

@@ -33,7 +33,7 @@ export default function CreatePurchaseInvoiceModal({ isOpen, onClose, onSuccess 
 
   const fetchAcceptedGRNs = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/purchase-receipts')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-receipts`)
       const data = await res.json()
       if (data.success) {
         // Filter for accepted GRNs that don't have invoices yet
@@ -47,7 +47,7 @@ export default function CreatePurchaseInvoiceModal({ isOpen, onClose, onSuccess 
   const fetchGRNDetails = async (grnNo) => {
     setLoadingGrn(true)
     try {
-      const res = await fetch(`http://localhost:5000/api/purchase-receipts/${grnNo}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-receipts/${grnNo}`)
       const data = await res.json()
       if (data.success) {
         setSelectedGrn(data.data)
@@ -137,7 +137,7 @@ export default function CreatePurchaseInvoiceModal({ isOpen, onClose, onSuccess 
         throw new Error('Please fill in all required fields')
       }
 
-      const res = await fetch('http://localhost:5000/api/purchase-invoices', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-invoices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

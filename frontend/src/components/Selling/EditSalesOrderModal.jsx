@@ -23,7 +23,7 @@ export default function EditSalesOrderModal({ isOpen, orderId, onClose, onSucces
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/sales-orders/${orderId}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-orders/${orderId}`)
       const data = await res.json()
       if (data.success) {
         const order = data.data
@@ -64,7 +64,7 @@ export default function EditSalesOrderModal({ isOpen, orderId, onClose, onSucces
         throw new Error('Please fill in all required fields')
       }
 
-      const res = await fetch(`http://localhost:5000/api/selling/sales-orders/${orderId}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-orders/${orderId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

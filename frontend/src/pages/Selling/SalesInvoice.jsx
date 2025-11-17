@@ -46,7 +46,7 @@ export default function SalesInvoice() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/selling/sales-invoices?${query}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-invoices?${query}`)
       const data = await res.json()
       if (data.success) {
         setInvoices(data.data || [])
@@ -125,7 +125,7 @@ export default function SalesInvoice() {
 
   const handleSubmitInvoice = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/sales-invoices/${id}/submit`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-invoices/${id}/submit`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       })
@@ -140,7 +140,7 @@ export default function SalesInvoice() {
   const handleDeleteInvoice = async (id) => {
     if (!window.confirm('Are you sure you want to delete this invoice?')) return
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/sales-invoices/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-invoices/${id}`, {
         method: 'DELETE'
       })
       if (res.ok) {

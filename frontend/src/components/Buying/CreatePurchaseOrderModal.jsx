@@ -29,7 +29,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess })
 
   const fetchSuppliers = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/suppliers')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/suppliers`)
       const data = await res.json()
       if (data.success) {
         setSuppliers(data.data || [])
@@ -41,7 +41,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess })
 
   const fetchItems = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/items')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/items`)
       const data = await res.json()
       if (data.success) {
         setItems(data.data || [])
@@ -134,7 +134,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess })
         throw new Error('Please add at least one item with item code, quantity, and rate')
       }
 
-      const res = await fetch('http://localhost:5000/api/purchase-orders', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

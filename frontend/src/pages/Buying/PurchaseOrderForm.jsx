@@ -29,7 +29,7 @@ export default function PurchaseOrderForm() {
 
   const fetchSuppliers = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/suppliers')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/suppliers`)
       const data = await res.json()
       if (data.success) {
         setSuppliers(data.data)
@@ -41,7 +41,7 @@ export default function PurchaseOrderForm() {
 
   const fetchItems = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/items')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/items`)
       const data = await res.json()
       if (data.success) {
         setItems(data.data)
@@ -54,7 +54,7 @@ export default function PurchaseOrderForm() {
   const fetchPO = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:5000/api/purchase-orders/${po_no}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-orders/${po_no}`)
       const data = await res.json()
       if (data.success) {
         setPo(data.data)
@@ -85,7 +85,7 @@ export default function PurchaseOrderForm() {
     setLoading(true)
     try {
       const method = po_no ? 'PUT' : 'POST'
-      const url = po_no ? `http://localhost:5000/api/purchase-orders/${po_no}` : 'http://localhost:5000/api/purchase-orders'
+      const url = po_no ? `${import.meta.env.VITE_API_URL}/purchase-orders/${po_no}` : `${import.meta.env.VITE_API_URL}/purchase-orders`
       
       const res = await fetch(url, {
         method,
