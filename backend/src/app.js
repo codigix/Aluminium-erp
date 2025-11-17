@@ -70,13 +70,17 @@ async function initializeDatabase() {
       connectionLimit: 10,
       queueLimit: 0
     })
-    
+
+    // Test the database connection
+    await db.execute('SELECT 1')
+    console.log('✓ Database connected successfully')
+
     // Store db in app locals for route handlers
     app.locals.db = db
-    
+
     // Make db available globally for models
     global.db = db
-    
+
     console.log('✓ Database pool created successfully')
   } catch (error) {
     console.error('Database connection failed:', error)
