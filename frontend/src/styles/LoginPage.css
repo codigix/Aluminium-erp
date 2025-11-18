@@ -110,7 +110,6 @@
   display: flex;
   border-bottom: 2px solid var(--border-light);
   background: var(--bg-tertiary);
-  background-color: red;
 }
 
 .login-tabs .tab {
