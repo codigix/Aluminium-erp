@@ -22,7 +22,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }) {
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/selling/customers')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/customers`)
       const data = await res.json()
       if (data.success) {
         setCustomers(data.data || [])
@@ -62,7 +62,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }) {
         throw new Error('Please fill in all required fields')
       }
 
-      const res = await fetch('http://localhost:5000/api/selling/quotations', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/quotations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

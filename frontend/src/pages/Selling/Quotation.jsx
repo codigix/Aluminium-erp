@@ -43,7 +43,7 @@ export default function Quotation() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/selling/quotations?${query}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/quotations?${query}`)
       const data = await res.json()
       if (data.success) {
         setQuotations(data.data || [])
@@ -105,7 +105,7 @@ export default function Quotation() {
 
   const handleSendQuotation = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/quotations/${id}/send`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/quotations/${id}/send`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       })
@@ -120,7 +120,7 @@ export default function Quotation() {
   const handleDeleteQuotation = async (id) => {
     if (!window.confirm('Are you sure you want to delete this quotation?')) return
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/quotations/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/quotations/${id}`, {
         method: 'DELETE'
       })
       if (res.ok) {

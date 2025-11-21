@@ -30,12 +30,12 @@ function BuyingDashboard({ user }) {
         }
 
         const [mrRes, rfqRes, quotRes, supplierRes, poRes, invoiceRes] = await Promise.all([
-          fetch('http://localhost:5000/api/material-requests', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/rfqs', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/quotations', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/suppliers', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/purchase-orders', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/purchase-invoices', { headers }).catch(() => ({}))
+          fetch(`${import.meta.env.VITE_API_URL}/material-requests`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/rfqs`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/quotations`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/suppliers`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/purchase-orders`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/purchase-invoices`, { headers }).catch(() => ({}))
         ])
 
         const [mrs, rfqs, quotations, suppliers, pos, invoices] = await Promise.all([
@@ -462,10 +462,10 @@ function InventoryDashboard({ user }) {
 
         // Fetch warehouse and stock statistics
         const [warehouseRes, balanceRes, ledgerRes, transferRes] = await Promise.all([
-          fetch('http://localhost:5000/api/stock/warehouses', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/stock/stock-balance', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/stock/ledger', { headers }).catch(() => ({})),
-          fetch('http://localhost:5000/api/stock/transfers', { headers }).catch(() => ({}))
+          fetch(`${import.meta.env.VITE_API_URL}/stock/warehouses`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/stock/stock-balance`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/stock/ledger`, { headers }).catch(() => ({})),
+          fetch(`${import.meta.env.VITE_API_URL}/stock/transfers`, { headers }).catch(() => ({}))
         ])
 
         const [warehouses, balances, ledger, transfers] = await Promise.all([

@@ -20,6 +20,14 @@ export default function PurchaseReceipts() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [metrics, setMetrics] = useState({
+    total: 0,
+    pending: 0,
+    inspecting: 0,
+    approved: 0,
+    rejected: 0,
+    totalValue: 0
+  })
 
   useEffect(() => {
     fetchGRNs()
@@ -32,10 +40,12 @@ export default function PurchaseReceipts() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/grn-requests?${query}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-receipts?${query}`)
       const data = await res.json()
       if (data.success) {
-        setGrns(data.data || [])
+        const grnData = data.data || []
+        setGrns(grnData)
+        calculateMetrics(grnData)
       } else {
         setError(data.error || 'Failed to fetch receipts')
       }
@@ -45,6 +55,27 @@ export default function PurchaseReceipts() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const calculateMetrics = (data) => {
+    const newMetrics = {
+      total: data.length,
+      pending: 0,
+      inspecting: 0,
+      approved: 0,
+      rejected: 0,
+      totalValue: 0
+    }
+
+    data.forEach((grn) => {
+      if (grn.status === 'pending') newMetrics.pending++
+      else if (grn.status === 'inspecting') newMetrics.inspecting++
+      else if (grn.status === 'approved') newMetrics.approved++
+      else if (grn.status === 'rejected') newMetrics.rejected++
+      newMetrics.totalValue += parseFloat(grn.total_value || 0)
+    })
+
+    setMetrics(newMetrics)
   }
 
   const getStatusColor = (status) => {
@@ -148,6 +179,24 @@ export default function PurchaseReceipts() {
     </div>
   )
 
+  const MetricCard = ({ label, value, borderColor, icon }) => (
+    <div className={`bg-white dark:bg-neutral-800 rounded-lg p-6 border-l-4 transition-all hover:shadow-lg`} style={{ borderLeftColor: borderColor }}>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+            {label}
+          </p>
+          <p className="text-4xl font-bold text-neutral-900 dark:text-neutral-100 mt-3">
+            {typeof value === 'number' && value > 999999 ? `₹${(value / 100000).toFixed(1)}L` : value}
+          </p>
+        </div>
+        <div className="text-4xl opacity-20">
+          {icon}
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div>
       {/* Page Header */}
@@ -170,6 +219,18 @@ export default function PurchaseReceipts() {
         <Card className="mb-6 p-5 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
           <p className="text-red-700 dark:text-red-400 font-medium">{error}</p>
         </Card>
+      )}
+
+      {/* Metrics Cards */}
+      {!loading && grns.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <MetricCard label="Total GRNs" value={metrics.total} borderColor="#3b82f6" icon="📦" />
+          <MetricCard label="Pending" value={metrics.pending} borderColor="#f59e0b" icon="⏳" />
+          <MetricCard label="Inspecting" value={metrics.inspecting} borderColor="#06b6d4" icon="🔍" />
+          <MetricCard label="Approved" value={metrics.approved} borderColor="#10b981" icon="✅" />
+          <MetricCard label="Rejected" value={metrics.rejected} borderColor="#ef4444" icon="❌" />
+          <MetricCard label="Total Value" value={metrics.totalValue} borderColor="#8b5cf6" icon="💰" />
+        </div>
       )}
 
       {/* Filters */}

@@ -41,7 +41,7 @@ export default function Customers() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/selling/customers?${query}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/customers?${query}`)
       const data = await res.json()
       if (data.success) {
         setCustomers(data.data || [])
@@ -99,7 +99,7 @@ export default function Customers() {
   const handleDeleteCustomer = async (id) => {
     if (!window.confirm('Are you sure you want to delete this customer?')) return
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/customers/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/customers/${id}`, {
         method: 'DELETE'
       })
       if (res.ok) {

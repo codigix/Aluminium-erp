@@ -31,7 +31,7 @@ export default function SellingAnalytics() {
   const fetchAnalytics = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/analytics?period=${period}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/analytics?period=${period}`)
       const data = await res.json()
       if (data.success) {
         setAnalyticsData(data.data || {})
@@ -45,7 +45,7 @@ export default function SellingAnalytics() {
 
   const handleExport = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/selling/analytics/export?period=${period}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/analytics/export?period=${period}`)
       if (res.ok) {
         const blob = await res.blob()
         const url = window.URL.createObjectURL(blob)

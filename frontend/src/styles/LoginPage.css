@@ -226,7 +226,7 @@
 .btn-submit {
   width: auto;
   padding: var(--spacing-3) var(--spacing-4);
-  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
   color: white;
   border: none;
   border-radius: var(--radius-md);

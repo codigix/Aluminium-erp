@@ -24,7 +24,7 @@ export default function Items() {
 
   const fetchItemGroups = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/items/groups')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/items/groups`)
       const data = await res.json()
       if (data.success) {
         setGroups(data.data)
@@ -40,7 +40,7 @@ export default function Items() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/items?${query}`)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/items?${query}`)
       const data = await res.json()
       if (data.success) {
         setItems(data.data)
