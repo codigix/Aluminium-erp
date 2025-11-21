@@ -9,17 +9,13 @@ import {
   FileText, Edit2, Send, Download, Eye, Package, AlertCircle, CheckCircle, XCircle, 
   Clock, Plus, TrendingUp, AlertTriangle, Truck, Trash2
 } from 'lucide-react'
-import CreateSalesOrderModal from '../../components/Selling/CreateSalesOrderModal'
 import ViewSalesOrderModal from '../../components/Selling/ViewSalesOrderModal'
-import EditSalesOrderModal from '../../components/Selling/EditSalesOrderModal'
 import './Selling.css'
 
 export default function SalesOrder() {
   const navigate = useNavigate()
   const [orders, setOrders] = useState([])
-  const [showModal, setShowModal] = useState(false)
   const [viewOrderId, setViewOrderId] = useState(null)
-  const [editOrderId, setEditOrderId] = useState(null)
   const [stats, setStats] = useState({
     total: 0,
     draft: 0,
@@ -145,6 +141,24 @@ export default function SalesOrder() {
   const columns = [
     { label: 'Order ID', key: 'sales_order_id', searchable: true },
     { label: 'Customer', key: 'customer_name', searchable: true },
+    { 
+      label: 'Items Summary', 
+      render: (val, row) => {
+        if (!row.items || row.items.length === 0) return 'No items'
+        const itemList = row.items.map(item => `${item.item_name || item.item_code} (Qty: ${item.qty})`).join(', ')
+        return (
+          <span title={itemList} style={{ 
+            maxWidth: '250px', 
+            display: 'inline-block', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis', 
+            whiteSpace: 'nowrap' 
+          }}>
+            {itemList}
+          </span>
+        )
+      }
+    },
     { label: 'Amount', key: 'total_value', render: (val) => `₹${parseFloat(val || 0).toFixed(2)}` },
     { label: 'Delivery Date', key: 'delivery_date' },
     { label: 'Status', key: 'status', render: (val) => <Badge color={getStatusColor(val)}>{val}</Badge> },
@@ -162,7 +176,7 @@ export default function SalesOrder() {
           {row.status === 'draft' && (
             <>
               <button 
-                onClick={() => setEditOrderId(row.sales_order_id)}
+                onClick={() => navigate(`/selling/sales-orders/${row.sales_order_id}`)}
                 className="flex items-center justify-center p-2 text-green-600 hover:bg-green-50 rounded transition-colors duration-200"
                 title="Edit"
               >
@@ -204,7 +218,7 @@ export default function SalesOrder() {
       <div className="page-header">
         <h2>Sales Orders</h2>
         <Button 
-          onClick={() => setShowModal(true)}
+          onClick={() => navigate('/selling/sales-orders/new')}
           className="flex items-center gap-2"
         >
           <Plus size={18} /> New Sales Order
@@ -291,29 +305,11 @@ export default function SalesOrder() {
         )}
       </div>
 
-      {/* Create Sales Order Modal */}
-      <CreateSalesOrderModal 
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        onSuccess={fetchOrders}
-      />
-
       {/* View Sales Order Modal */}
       <ViewSalesOrderModal 
         isOpen={!!viewOrderId}
         orderId={viewOrderId}
         onClose={() => setViewOrderId(null)}
-      />
-
-      {/* Edit Sales Order Modal */}
-      <EditSalesOrderModal 
-        isOpen={!!editOrderId}
-        orderId={editOrderId}
-        onClose={() => setEditOrderId(null)}
-        onSuccess={() => {
-          fetchOrders()
-          setEditOrderId(null)
-        }}
       />
     </div>
   )

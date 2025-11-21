@@ -14,12 +14,14 @@ import {
   PurchaseInvoices,
   Items
 } from './pages/Buying'
+import GRNRequestDetail from './pages/Buying/GRNRequestDetail'
 import MaterialRequests from './pages/Buying/MaterialRequests'
 import MaterialRequestForm from './pages/Buying/MaterialRequestForm'
 import RFQs from './pages/Buying/RFQs'
 import RFQForm from './pages/Buying/RFQForm'
 import SupplierQuotations from './pages/Buying/SupplierQuotations'
 import QuotationForm from './pages/Buying/QuotationForm'
+import ItemForm from './pages/Buying/ItemForm'
 import BuyingAnalytics from './pages/Buying/BuyingAnalytics'
 import {
   Quotation,
@@ -29,6 +31,8 @@ import {
   Customers,
   SellingAnalytics
 } from './pages/Selling'
+import SalesQuotationForm from './pages/Selling/SalesQuotationForm'
+import SalesOrderForm from './pages/Selling/SalesOrderForm'
 import {
   Warehouses,
   StockBalance,
@@ -38,7 +42,8 @@ import {
   BatchTracking,
   Reconciliation,
   ReorderManagement,
-  InventoryAnalytics
+  InventoryAnalytics,
+  GRNRequests
 } from './pages/Inventory'
 import {
   ToolRoomDashboard,
@@ -272,6 +277,20 @@ function App() {
             }
           />
 
+          {/* Buying Module - GRN Request Detail */}
+          <Route
+            path="/buying/grn-requests/:grnNo"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['buying', 'inventory', 'admin']}>
+                    <GRNRequestDetail />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
           {/* Buying Module - Purchase Invoices */}
           <Route
             path="/buying/purchase-invoices"
@@ -326,6 +345,58 @@ function App() {
             }
           />
 
+          <Route
+            path="/buying/item/new"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['buying', 'admin']}>
+                    <ItemForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/buying/item/:item_code"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['buying', 'admin']}>
+                    <ItemForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/masters/item/new"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['buying', 'admin']}>
+                    <ItemForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/masters/item/:item_code"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['buying', 'admin']}>
+                    <ItemForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
           {/* Analytics */}
           <Route
             path="/analytics/buying"
@@ -359,7 +430,7 @@ function App() {
               <ProtectedRoute>
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <Quotation />
+                    <SalesQuotationForm />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>
@@ -371,7 +442,7 @@ function App() {
               <ProtectedRoute>
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <Quotation />
+                    <SalesQuotationForm />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>
@@ -397,7 +468,7 @@ function App() {
               <ProtectedRoute>
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesOrder />
+                    <SalesOrderForm />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>
@@ -409,7 +480,7 @@ function App() {
               <ProtectedRoute>
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesOrder />
+                    <SalesOrderForm />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>
@@ -650,6 +721,20 @@ function App() {
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['inventory', 'admin']}>
                     <ReorderManagement />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Inventory Module - GRN Requests */}
+          <Route
+            path="/inventory/grn-requests"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['inventory', 'admin']}>
+                    <GRNRequests />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>

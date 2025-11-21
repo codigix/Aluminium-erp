@@ -241,9 +241,11 @@ export default function StockEntries() {
                 >
                   <option value="">Select Type</option>
                   <option value="Material Transfer">Material Transfer</option>
-                  <option value="Receipt">Receipt</option>
-                  <option value="Issue">Issue</option>
-                  <option value="Adjustment">Adjustment</option>
+                  <option value="Material Receipt">Material Receipt</option>
+                  <option value="Material Issue">Material Issue</option>
+                  <option value="Manufacturing Return">Manufacturing Return</option>
+                  <option value="Repack">Repack</option>
+                  <option value="Scrap Entry">Scrap Entry</option>
                 </select>
               </div>
             </div>

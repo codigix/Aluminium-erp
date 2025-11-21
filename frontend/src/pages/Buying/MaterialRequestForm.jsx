@@ -5,6 +5,7 @@ import Button from '../../components/Button/Button'
 import Alert from '../../components/Alert/Alert'
 import Card from '../../components/Card/Card'
 import AuditTrail from '../../components/AuditTrail'
+import { Edit } from 'lucide-react'
 import './Buying.css'
 
 export default function MaterialRequestForm() {
@@ -13,10 +14,15 @@ export default function MaterialRequestForm() {
   const isEditMode = id && id !== 'new'
 
   const [formData, setFormData] = useState({
+    series_no: '',
+    transition_date: '',
     requested_by_id: '',
     department: '',
+    purpose: 'purchase',
     required_by_date: '',
-    purpose: '',
+    target_warehouse: '',
+    source_warehouse: '',
+    items_notes: '',
     items: []
   })
 
@@ -24,10 +30,12 @@ export default function MaterialRequestForm() {
   const [items, setItems] = useState([])
   const [contacts, setContacts] = useState([])
   const [departments, setDepartments] = useState(['Production', 'Maintenance', 'Store'])
+  const [warehouses, setWarehouses] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
-  const [newItem, setNewItem] = useState({ item_code: '', qty: 1, uom: 'pcs', purpose: '' })
+  const [newItem, setNewItem] = useState({ item_code: '', qty: 1, uom: 'pcs' })
+  const [editingItemIndex, setEditingItemIndex] = useState(null)
   
   // Check if form should be disabled (not editable)
   const isFormDisabled = isEditMode && materialRequest && materialRequest.status !== 'draft'
@@ -35,6 +43,10 @@ export default function MaterialRequestForm() {
   useEffect(() => {
     fetchItems()
     fetchContacts()
+    fetchWarehouses()
+    if (!isEditMode) {
+      generateSeriesNumber()
+    }
     if (isEditMode) {
       fetchMaterialRequest()
     }
@@ -75,6 +87,22 @@ export default function MaterialRequestForm() {
     }
   }
 
+  const fetchWarehouses = async () => {
+    try {
+      const response = await axios.get('/api/warehouses?limit=1000')
+      setWarehouses(response.data.data || [])
+    } catch (err) {
+      console.error('Failed to fetch warehouses:', err)
+    }
+  }
+
+  const generateSeriesNumber = () => {
+    const timestamp = Date.now()
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
+    const seriesNo = `MR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${random}`
+    setFormData(prev => ({ ...prev, series_no: seriesNo }))
+  }
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData({ ...formData, [name]: value })
@@ -86,26 +114,47 @@ export default function MaterialRequestForm() {
       return
     }
 
-    const itemExists = formData.items.some(i => i.item_code === newItem.item_code)
+    const itemExists = formData.items.some(i => i.item_code === newItem.item_code && (editingItemIndex === null || formData.items.indexOf(i) !== editingItemIndex))
     if (itemExists) {
       setError('Item already added')
       return
     }
 
-    setFormData({
-      ...formData,
-      items: [...formData.items, { ...newItem, id: Date.now() }]
-    })
+    if (editingItemIndex !== null) {
+      const updatedItems = [...formData.items]
+      updatedItems[editingItemIndex] = { ...newItem, id: updatedItems[editingItemIndex].id }
+      setFormData({ ...formData, items: updatedItems })
+      setEditingItemIndex(null)
+    } else {
+      setFormData({
+        ...formData,
+        items: [...formData.items, { ...newItem, id: Date.now() }]
+      })
+    }
 
-    setNewItem({ item_code: '', qty: 1, uom: 'pcs', purpose: '' })
+    setNewItem({ item_code: '', qty: 1, uom: 'pcs' })
     setError(null)
   }
 
-  const handleRemoveItem = (id) => {
+  const handleEditItem = (index) => {
+    setEditingItemIndex(index)
+    setNewItem(formData.items[index])
+  }
+
+  const handleRemoveItem = (index) => {
     setFormData({
       ...formData,
-      items: formData.items.filter(item => item.id !== id)
+      items: formData.items.filter((_, i) => i !== index)
     })
+    if (editingItemIndex === index) {
+      setEditingItemIndex(null)
+      setNewItem({ item_code: '', qty: 1, uom: 'pcs' })
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingItemIndex(null)
+    setNewItem({ item_code: '', qty: 1, uom: 'pcs' })
   }
 
   const handleSubmit = async (e) => {
@@ -185,6 +234,31 @@ export default function MaterialRequestForm() {
         <form onSubmit={handleSubmit} className="form-section">
           <div className="form-row">
             <div className="form-group">
+              <label>Series No</label>
+              <input 
+                type="text"
+                name="series_no"
+                value={formData.series_no}
+                readOnly
+                disabled
+                style={{ backgroundColor: '#f5f5f5' }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Transition Date</label>
+              <input 
+                type="date"
+                name="transition_date"
+                value={formData.transition_date}
+                onChange={handleChange}
+                disabled={isFormDisabled}
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
               <label>Requested By *</label>
               <select 
                 name="requested_by_id"
@@ -221,6 +295,21 @@ export default function MaterialRequestForm() {
 
           <div className="form-row">
             <div className="form-group">
+              <label>Purpose *</label>
+              <select 
+                name="purpose"
+                value={formData.purpose}
+                onChange={handleChange}
+                disabled={isFormDisabled}
+                required
+              >
+                <option value="purchase">Purchase</option>
+                <option value="material_transfer">Material Transfer</option>
+                <option value="material_issue">Material Issue</option>
+              </select>
+            </div>
+
+            <div className="form-group">
               <label>Required By Date *</label>
               <input 
                 type="date"
@@ -231,16 +320,50 @@ export default function MaterialRequestForm() {
                 required
               />
             </div>
+          </div>
 
+          <div className="form-row">
             <div className="form-group">
-              <label>Purpose</label>
-              <input 
-                type="text"
-                name="purpose"
-                value={formData.purpose}
+              <label>Target Warehouse</label>
+              <select 
+                name="target_warehouse"
+                value={formData.target_warehouse}
                 onChange={handleChange}
                 disabled={isFormDisabled}
-                placeholder="e.g., Production, Maintenance"
+              >
+                <option value="">Select Warehouse</option>
+                {warehouses.map(wh => (
+                  <option key={wh.warehouse_id} value={wh.warehouse_id}>{wh.warehouse_name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Source Warehouse</label>
+              <select 
+                name="source_warehouse"
+                value={formData.source_warehouse}
+                onChange={handleChange}
+                disabled={isFormDisabled}
+              >
+                <option value="">Select Warehouse</option>
+                {warehouses.map(wh => (
+                  <option key={wh.warehouse_id} value={wh.warehouse_id}>{wh.warehouse_name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group full-width">
+              <label>Items Notes</label>
+              <textarea 
+                name="items_notes"
+                value={formData.items_notes}
+                onChange={handleChange}
+                disabled={isFormDisabled}
+                placeholder="Enter any additional notes about the items"
+                rows="3"
               />
             </div>
           </div>
@@ -248,12 +371,12 @@ export default function MaterialRequestForm() {
           <hr />
 
           <div className="items-section">
-            <h3>Material Items</h3>
+            <h3>{editingItemIndex !== null ? 'Edit Material Item' : 'Add Material Items'}</h3>
             
             <div className="add-item-section">
               <div className="form-row">
                 <div className="form-group">
-                  <label>Item *</label>
+                  <label>Item Code *</label>
                   <select 
                     value={newItem.item_code}
                     onChange={(e) => {
@@ -269,7 +392,7 @@ export default function MaterialRequestForm() {
                     <option value="">Select Item</option>
                     {items.map(item => (
                       <option key={item.item_code} value={item.item_code}>
-                        {item.name} ({item.item_code})
+                        {item.item_code} - {item.name}
                       </option>
                     ))}
                   </select>
@@ -280,7 +403,7 @@ export default function MaterialRequestForm() {
                   <input 
                     type="number"
                     value={newItem.qty}
-                    onChange={(e) => setNewItem({...newItem, qty: parseFloat(e.target.value)})}
+                    onChange={(e) => setNewItem({...newItem, qty: parseFloat(e.target.value) || 0})}
                     disabled={isFormDisabled}
                     placeholder="0"
                     min="0"
@@ -289,7 +412,7 @@ export default function MaterialRequestForm() {
                 </div>
 
                 <div className="form-group">
-                  <label>UOM</label>
+                  <label>Unit of Measurement</label>
                   <input 
                     type="text"
                     value={newItem.uom}
@@ -298,26 +421,27 @@ export default function MaterialRequestForm() {
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>Purpose</label>
-                  <input 
-                    type="text"
-                    value={newItem.purpose}
-                    onChange={(e) => setNewItem({...newItem, purpose: e.target.value})}
-                    disabled={isFormDisabled}
-                    placeholder="Optional"
-                  />
-                </div>
-
-                <div className="form-group">
+                <div>
                   <Button 
                     onClick={handleAddItem}
                     variant="success"
                     type="button"
                     disabled={isFormDisabled}
+                    style={{ marginTop: '24px' }}
                   >
-                    Add Item
+                    {editingItemIndex !== null ? 'Update Item' : 'Add Item'}
                   </Button>
+                  {editingItemIndex !== null && (
+                    <Button 
+                      onClick={handleCancelEdit}
+                      variant="secondary"
+                      type="button"
+                      disabled={isFormDisabled}
+                      style={{ marginTop: '24px', marginLeft: '8px' }}
+                    >
+                      Cancel
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -327,29 +451,40 @@ export default function MaterialRequestForm() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Item</th>
-                      <th>Qty</th>
-                      <th>UOM</th>
-                      <th>Purpose</th>
-                      <th>Action</th>
+                      <th style={{ width: '50px' }}>No.</th>
+                      <th>Item Code</th>
+                      <th style={{ width: '120px' }}>Quantity</th>
+                      <th style={{ width: '150px' }}>Unit of Measurement</th>
+                      <th style={{ width: '80px' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {formData.items.map(item => (
-                      <tr key={item.id}>
-                        <td>{getItemName(item.item_code)}</td>
+                    {formData.items.map((item, index) => (
+                      <tr key={item.id} style={{ backgroundColor: editingItemIndex === index ? '#fffbea' : 'transparent' }}>
+                        <td style={{ textAlign: 'center' }}>{index + 1}</td>
+                        <td>{item.item_code}</td>
                         <td>{item.qty}</td>
                         <td>{item.uom}</td>
-                        <td>{item.purpose}</td>
                         <td>
-                          <button 
-                            type="button"
-                            className="btn-sm btn-danger"
-                            onClick={() => handleRemoveItem(item.id)}
-                            disabled={isFormDisabled}
-                          >
-                            Remove
-                          </button>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button 
+                              type="button"
+                              onClick={() => handleEditItem(index)}
+                              disabled={isFormDisabled}
+                              style={{ background: 'none', border: 'none', cursor: isFormDisabled ? 'not-allowed' : 'pointer', color: '#0066cc', padding: '4px' }}
+                              title="Edit"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button 
+                              type="button"
+                              className="btn-sm btn-danger"
+                              onClick={() => handleRemoveItem(index)}
+                              disabled={isFormDisabled}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

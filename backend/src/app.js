@@ -27,6 +27,7 @@ import { createDispatchRoutes } from './routes/dispatch.js'
 import { createHRPayrollRoutes } from './routes/hrpayroll.js'
 import { createFinanceRoutes } from './routes/finance.js'
 import sellingRoutes from './routes/selling.js'
+import grnRequestRoutes from './routes/grnRequests.js'
 
 // Load environment variables
 dotenv.config()
@@ -135,6 +136,9 @@ function setupRoutes() {
   
   // API Routes - Selling Module
   app.use('/api/selling', sellingRoutes)
+
+  // API Routes - GRN Requests
+  app.use('/api/grn-requests', grnRequestRoutes)
   
   // Error handling middleware (must be after all routes)
   app.use((err, req, res, next) => {

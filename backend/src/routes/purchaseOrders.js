@@ -13,4 +13,9 @@ router.delete('/:po_no', controller.deletePurchaseOrder)
 // Actions
 router.post('/:po_no/submit', controller.submitPurchaseOrder)
 
+// Payment Reminders
+router.get('/reminders/list', controller.getPaymentReminders)
+router.post('/reminders/send', controller.sendPaymentReminder)
+router.post('/reminders/status', controller.updateReminderStatus)
+
 export default router

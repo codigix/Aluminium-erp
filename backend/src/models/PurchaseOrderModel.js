@@ -11,8 +11,12 @@ export class PurchaseOrderModel {
     try {
       await this.db.execute(
         `INSERT INTO purchase_order 
-         (po_no, supplier_id, order_date, expected_date, currency, total_value, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (po_no, supplier_id, order_date, expected_date, currency, total_value, status,
+          shipping_address_line1, shipping_address_line2, shipping_city, shipping_state,
+          shipping_pincode, shipping_country, payment_terms_description, due_date,
+          invoice_portion, payment_amount, advance_paid, tax_category, tax_rate,
+          subtotal, tax_amount, final_amount, incoterm, shipping_rule)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           po_no,
           data.supplier_id,
@@ -20,7 +24,25 @@ export class PurchaseOrderModel {
           data.expected_date || null,
           data.currency || 'INR',
           0,
-          'draft'
+          'draft',
+          data.shipping_address_line1 || null,
+          data.shipping_address_line2 || null,
+          data.shipping_city || null,
+          data.shipping_state || null,
+          data.shipping_pincode || null,
+          data.shipping_country || null,
+          data.payment_terms_description || null,
+          data.due_date || null,
+          data.invoice_portion || 100,
+          data.payment_amount || 0,
+          data.advance_paid || 0,
+          data.tax_category || null,
+          data.tax_rate || 0,
+          data.subtotal || 0,
+          data.tax_amount || 0,
+          data.final_amount || 0,
+          data.incoterm || null,
+          data.shipping_rule || null
         ]
       )
 
@@ -119,7 +141,13 @@ export class PurchaseOrderModel {
       let updateQuery = `UPDATE purchase_order SET `
       const params = []
 
-      const allowedFields = ['expected_date', 'status']
+      const allowedFields = [
+        'expected_date', 'status', 'shipping_address_line1', 'shipping_address_line2',
+        'shipping_city', 'shipping_state', 'shipping_pincode', 'shipping_country',
+        'payment_terms_description', 'due_date', 'invoice_portion', 'payment_amount',
+        'advance_paid', 'tax_category', 'tax_rate', 'subtotal', 'tax_amount',
+        'final_amount', 'incoterm', 'shipping_rule'
+      ]
       const updateFields = []
 
       for (const field of allowedFields) {
@@ -163,6 +191,59 @@ export class PurchaseOrderModel {
       return { success: true, total_value: total }
     } catch (error) {
       throw new Error(`Failed to submit purchase order: ${error.message}`)
+    }
+  }
+
+  async createPaymentReminder(reminderId, po_no, supplier_id, due_date, payment_amount) {
+    try {
+      await this.db.execute(
+        `INSERT INTO payment_reminder 
+         (reminder_id, po_no, supplier_id, due_date, payment_amount, reminder_status, sent_to_dept)
+         VALUES (?, ?, ?, ?, ?, 'pending', 'Accounts')`,
+        [reminderId, po_no, supplier_id, due_date, payment_amount]
+      )
+      return { success: true }
+    } catch (error) {
+      throw new Error(`Failed to create payment reminder: ${error.message}`)
+    }
+  }
+
+  async getPaymentReminders(filters = {}) {
+    try {
+      let query = `SELECT pr.*, po.final_amount, s.name as supplier_name, s.email as supplier_email
+                   FROM payment_reminder pr
+                   JOIN purchase_order po ON pr.po_no = po.po_no
+                   JOIN supplier s ON pr.supplier_id = s.supplier_id
+                   WHERE 1=1`
+      const params = []
+
+      if (filters.status) {
+        query += ` AND pr.reminder_status = ?`
+        params.push(filters.status)
+      }
+
+      if (filters.po_no) {
+        query += ` AND pr.po_no = ?`
+        params.push(filters.po_no)
+      }
+
+      query += ` ORDER BY pr.due_date ASC`
+      const [reminders] = await this.db.execute(query, params)
+      return reminders
+    } catch (error) {
+      throw new Error(`Failed to fetch payment reminders: ${error.message}`)
+    }
+  }
+
+  async updateReminderStatus(reminder_id, status) {
+    try {
+      await this.db.execute(
+        `UPDATE payment_reminder SET reminder_status = ?, sent_date = CURRENT_TIMESTAMP WHERE reminder_id = ?`,
+        [status, reminder_id]
+      )
+      return { success: true }
+    } catch (error) {
+      throw new Error(`Failed to update reminder status: ${error.message}`)
     }
   }
 

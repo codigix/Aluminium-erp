@@ -68,6 +68,7 @@ export class RFQModel {
   static async create(db, rfqData) {
     try {
       const {
+        series_no,
         created_by_id,
         valid_till,
         items = [],
@@ -79,8 +80,8 @@ export class RFQModel {
 
       // Insert RFQ
       await db.execute(
-        'INSERT INTO rfq (rfq_id, created_by_id, created_date, valid_till, status) VALUES (?, ?, ?, ?, ?)',
-        [rfq_id, created_by_id, created_date, valid_till, 'draft']
+        'INSERT INTO rfq (rfq_id, series_no, created_by_id, created_date, valid_till, status) VALUES (?, ?, ?, ?, ?, ?)',
+        [rfq_id, series_no, created_by_id, created_date, valid_till, 'draft']
       )
 
       // Insert items

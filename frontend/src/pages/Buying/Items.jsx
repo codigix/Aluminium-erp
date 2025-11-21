@@ -65,7 +65,7 @@ export default function Items() {
     <div>
       <div className="flex-between mb-6">
         <h2 className="text-3xl font-bold text-neutral-900 dark:text-neutral-100">Items Master</h2>
-        <Link to="/buying/item/new">
+        <Link to="/masters/item/new">
           <Button variant="primary" className="flex items-center gap-2">
             <Plus size={20} /> Create Item
           </Button>
@@ -104,7 +104,7 @@ export default function Items() {
           <Table
             columns={columns}
             data={items}
-            onRowClick={(item) => navigate(`/buying/item/${item.item_code}`)}
+            onRowClick={(item) => navigate(`/masters/item/${item.item_code}`)}
           />
         )}
       </Card>

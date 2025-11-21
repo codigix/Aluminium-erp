@@ -9,13 +9,12 @@ import {
   FileText, Edit2, Send, Download, Eye, Package, AlertCircle, CheckCircle, XCircle, 
   Clock, Plus, TrendingUp, AlertTriangle, Mail, Trash2
 } from 'lucide-react'
-import CreateQuotationModal from '../../components/Selling/CreateQuotationModal'
+
 import './Selling.css'
 
 export default function Quotation() {
   const navigate = useNavigate()
   const [quotations, setQuotations] = useState([])
-  const [showModal, setShowModal] = useState(false)
   const [stats, setStats] = useState({
     total: 0,
     draft: 0,
@@ -194,7 +193,7 @@ export default function Quotation() {
       <div className="page-header">
         <h2>Sales Quotations</h2>
         <Button 
-          onClick={() => setShowModal(true)}
+          onClick={() => navigate('/selling/quotations/new')}
           className="flex items-center gap-2"
         >
           <Plus size={18} /> New Quotation
@@ -281,12 +280,7 @@ export default function Quotation() {
         )}
       </div>
 
-      {/* Create Quotation Modal */}
-      <CreateQuotationModal 
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        onSuccess={fetchQuotations}
-      />
+
     </div>
   )
 }

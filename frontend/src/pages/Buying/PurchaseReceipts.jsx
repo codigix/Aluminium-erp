@@ -32,7 +32,7 @@ export default function PurchaseReceipts() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`http://localhost:5000/api/purchase-receipts?${query}`)
+      const res = await fetch(`http://localhost:5000/api/grn-requests?${query}`)
       const data = await res.json()
       if (data.success) {
         setGrns(data.data || [])
@@ -49,58 +49,68 @@ export default function PurchaseReceipts() {
 
   const getStatusColor = (status) => {
     const colors = {
-      draft: 'warning',           // Yellow - Action Required
-      submitted: 'info',          // Blue - Submitted for Review
-      inspected: 'info',          // Blue - Under Inspection
-      accepted: 'success',        // Green - Goods Accepted
-      rejected: 'danger'          // Red - Goods Rejected
+      pending: 'warning',                  // Yellow - Action Required
+      inspecting: 'info',                  // Blue - Under Inspection
+      awaiting_inventory_approval: 'info', // Blue - Awaiting Inventory
+      approved: 'success',                 // Green - Approved
+      rejected: 'danger',                  // Red - Rejected
+      sent_back: 'warning',                // Yellow - Sent Back
+      draft: 'warning',
+      submitted: 'info',
+      inspected: 'info',
+      accepted: 'success'
     }
     return colors[status] || 'secondary'
   }
 
   const filterConfig = [
-    { key: 'search', label: 'Search GRN', type: 'text', placeholder: 'GRN #, Supplier...' },
+    { key: 'search', label: 'Search', type: 'text', placeholder: 'GRN #, PO, Supplier...' },
     { 
       key: 'status', 
       label: 'Status', 
       type: 'select',
       options: [
         { value: '', label: 'All Status' },
-        { value: 'draft', label: 'Draft' },
-        { value: 'submitted', label: 'Submitted' },
-        { value: 'inspected', label: 'Inspected' },
-        { value: 'accepted', label: 'Accepted' },
-        { value: 'rejected', label: 'Rejected' }
+        { value: 'pending', label: 'Pending' },
+        { value: 'inspecting', label: 'Inspecting' },
+        { value: 'awaiting_inventory_approval', label: 'Awaiting Inventory' },
+        { value: 'approved', label: 'Approved' },
+        { value: 'rejected', label: 'Rejected' },
+        { value: 'sent_back', label: 'Sent Back' }
       ]
     },
     { 
       key: 'po_no', 
       label: 'PO Number', 
       type: 'text',
-      placeholder: 'PO #...'
+      placeholder: 'Search PO...'
     }
   ]
 
   const columns = [
-    { key: 'grn_no', label: 'GRN Number', width: '12%' },
-    { key: 'po_no', label: 'PO Number', width: '12%' },
-    { key: 'supplier_name', label: 'Supplier', width: '15%' },
+    { key: 'grn_no', label: 'GRN Number', width: '13%' },
+    { key: 'po_no', label: 'PO Number', width: '11%' },
+    { key: 'supplier_name', label: 'Supplier', width: '16%' },
     { 
       key: 'receipt_date', 
       label: 'Receipt Date', 
       width: '12%',
-      render: (val) => val ? new Date(val).toLocaleDateString() : 'N/A'
+      render: (val) => val ? new Date(val).toLocaleDateString() : '—'
     },
     { 
-      key: 'item_count', 
+      key: 'total_items', 
       label: 'Items', 
       width: '8%',
-      render: (val) => val || '0'
+      render: (val) => (
+        <span style={{ fontWeight: 600, color: '#0284c7' }}>
+          {val || '0'}
+        </span>
+      )
     },
     { 
       key: 'status', 
       label: 'Status', 
-      width: '12%',
+      width: '14%',
       render: (val) => (
         <Badge color={getStatusColor(val)} variant="solid">
           {val?.replace('_', ' ').toUpperCase()}
@@ -111,12 +121,12 @@ export default function PurchaseReceipts() {
       key: 'created_at', 
       label: 'Created', 
       width: '13%',
-      render: (val) => val ? new Date(val).toLocaleString() : 'N/A'
+      render: (val) => val ? new Date(val).toLocaleDateString() : '—'
     },
     { 
       key: 'created_by', 
       label: 'Created By', 
-      width: '12%',
+      width: '13%',
       render: (val) => val || 'System'
     }
   ]
@@ -128,9 +138,9 @@ export default function PurchaseReceipts() {
         variant="icon"
         onClick={(e) => {
           e.stopPropagation()
-          navigate(`/buying/purchase-receipt/${row.grn_no}`)
+          navigate(`/buying/grn-requests/${row.grn_no}`)
         }}
-        title="View Receipt"
+        title="View GRN"
         className="flex items-center justify-center p-2"
       >
         <Eye size={16} />
@@ -140,44 +150,51 @@ export default function PurchaseReceipts() {
 
   return (
     <div>
-      <div className="flex-between mb-6">
-        <div>
-          <h2 className="text-3xl font-bold text-neutral-900 dark:text-neutral-100">Goods Receipt Notes (GRN)</h2>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">Track and manage all purchase receipts</p>
+      {/* Page Header */}
+      <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
+        <div className="flex-1">
+          <h2 className="text-3xl font-bold text-neutral-900 dark:text-neutral-100">Goods Receipt Notes</h2>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-2 text-base">Track and manage purchase receipts • {grns.length} {grns.length === 1 ? 'item' : 'items'} total</p>
         </div>
         <Button 
           onClick={() => setShowCreateModal(true)}
           variant="primary" 
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 px-6 py-3"
         >
           <Plus size={20} /> Create GRN
         </Button>
       </div>
 
+      {/* Error Alert */}
       {error && (
-        <Card className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
-          <p className="text-red-700 dark:text-red-400">{error}</p>
+        <Card className="mb-6 p-5 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
+          <p className="text-red-700 dark:text-red-400 font-medium">{error}</p>
         </Card>
       )}
 
-      <AdvancedFilters
-        filters={filters}
-        onFilterChange={setFilters}
-        filterConfig={filterConfig}
-        showPresets={true}
-      />
+      {/* Filters */}
+      <div className="mb-6">
+        <AdvancedFilters
+          filters={filters}
+          onFilterChange={setFilters}
+          filterConfig={filterConfig}
+          showPresets={true}
+        />
+      </div>
 
+      {/* Data Table */}
       <Card>
         {loading ? (
-          <div className="py-12 text-center">
+          <div className="py-16 text-center">
             <div className="inline-block">
-              <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-neutral-600 dark:text-neutral-400 mt-2">Loading receipts...</p>
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-neutral-600 dark:text-neutral-400 mt-3">Loading receipts...</p>
             </div>
           </div>
         ) : grns.length === 0 ? (
-          <div className="py-12 text-center">
-            <p className="text-neutral-500 dark:text-neutral-400 mb-4">No purchase receipts found</p>
+          <div className="py-16 text-center">
+            <Package size={48} className="mx-auto text-neutral-400 mb-4" />
+            <p className="text-neutral-600 dark:text-neutral-400 mb-6 text-base">No purchase receipts found</p>
             <Button 
               onClick={() => setShowCreateModal(true)}
               variant="primary" 
@@ -194,7 +211,7 @@ export default function PurchaseReceipts() {
             filterable={true}
             sortable={true}
             pageSize={10}
-            onRowClick={(row) => navigate(`/buying/purchase-receipt/${row.grn_no}`)}
+            onRowClick={(row) => navigate(`/buying/grn-requests/${row.grn_no}`)}
           />
         )}
       </Card>
