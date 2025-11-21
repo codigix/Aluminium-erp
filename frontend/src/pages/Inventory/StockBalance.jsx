@@ -136,21 +136,30 @@ export default function StockBalance() {
 
       {/* Statistics */}
       <div className="inventory-stats">
-        <div className="inventory-stat-card">
-          <div className="inventory-stat-label">Total Items</div>
-          <div className="inventory-stat-value">{stats.total}</div>
-        </div>
-        <div className="inventory-stat-card">
-          <div className="inventory-stat-label">Low Stock Items</div>
-          <div className="inventory-stat-value" style={{ color: '#ef4444' }}>
-            {stats.low}
+        <div className="inventory-stat-card" style={{ borderLeftColor: '#3b82f6' }}>
+          <div>
+            <div className="inventory-stat-label">Total Items</div>
+            <div className="inventory-stat-value">{stats.total}</div>
           </div>
+          <div style={{ fontSize: '32px', opacity: 0.2 }}>📦</div>
         </div>
-        <div className="inventory-stat-card">
-          <div className="inventory-stat-label">Out of Stock</div>
-          <div className="inventory-stat-value" style={{ color: '#6b7280' }}>
-            {stats.outOfStock}
+        <div className="inventory-stat-card" style={{ borderLeftColor: '#f59e0b' }}>
+          <div>
+            <div className="inventory-stat-label">Low Stock Items</div>
+            <div className="inventory-stat-value" style={{ color: '#f59e0b' }}>
+              {stats.low}
+            </div>
           </div>
+          <div style={{ fontSize: '32px', opacity: 0.2 }}>⚠️</div>
+        </div>
+        <div className="inventory-stat-card" style={{ borderLeftColor: '#ef4444' }}>
+          <div>
+            <div className="inventory-stat-label">Out of Stock</div>
+            <div className="inventory-stat-value" style={{ color: '#ef4444' }}>
+              {stats.outOfStock}
+            </div>
+          </div>
+          <div style={{ fontSize: '32px', opacity: 0.2 }}>❌</div>
         </div>
       </div>
 
