@@ -9,16 +9,32 @@
       const db = this.getDb()
       let query = `
         SELECT 
-          se.*,
+          se.id as entry_id,
+          se.entry_no,
+          se.entry_date,
+          se.entry_type,
+          se.purpose,
+          se.reference_doctype,
+          se.reference_name,
+          se.remarks,
+          se.status,
+          se.from_warehouse_id,
+          se.to_warehouse_id,
+          se.created_by,
+          se.created_at,
+          se.updated_at,
           fw.warehouse_code as from_warehouse_code,
           fw.warehouse_name as from_warehouse_name,
           tw.warehouse_code as to_warehouse_code,
           tw.warehouse_name as to_warehouse_name,
-          u.full_name as created_by_user
+          COALESCE(tw.warehouse_name, fw.warehouse_name) as warehouse_name,
+          u.full_name as created_by_user,
+          COUNT(sei.id) as total_items
         FROM stock_entries se
         LEFT JOIN warehouses fw ON se.from_warehouse_id = fw.id
         LEFT JOIN warehouses tw ON se.to_warehouse_id = tw.id
         LEFT JOIN users u ON se.created_by = u.user_id
+        LEFT JOIN stock_entry_items sei ON se.id = sei.stock_entry_id
         WHERE 1=1
       `
       const params = []
@@ -53,7 +69,7 @@
         params.push(`%${filters.search}%`)
       }
 
-      query += ' ORDER BY se.entry_date DESC'
+      query += ' GROUP BY se.id ORDER BY se.entry_date DESC'
 
       const [rows] = await db.query(query, params)
       return rows
@@ -86,18 +102,41 @@
 
       const entry = entryRows[0]
 
-      // Get items
-      const [items] = await db.query(
-        `SELECT 
-          sei.*,
-          i.item_code,
-          i.name as item_name,
-          i.uom
-        FROM stock_entry_items sei
-        JOIN item i ON sei.item_id = i.id
-        WHERE sei.stock_entry_id = ?`,
-        [id]
-      )
+      // Get items - handle both old (item_id) and new (item_code) schemas
+      let items = []
+      try {
+        // Try new schema with item_code
+        const [result] = await db.query(
+          `SELECT 
+            sei.*,
+            i.item_code,
+            i.name as item_name,
+            COALESCE(sei.uom, 'Kg') as uom
+          FROM stock_entry_items sei
+          LEFT JOIN item i ON sei.item_code = i.item_code
+          WHERE sei.stock_entry_id = ?`,
+          [id]
+        )
+        items = result
+      } catch (e) {
+        if (e.message.includes("Unknown column 'item_code'")) {
+          // Fall back to old schema with item_id
+          const [result] = await db.query(
+            `SELECT 
+              sei.*,
+              i.item_code,
+              i.name as item_name,
+              COALESCE(sei.uom, 'Kg') as uom
+            FROM stock_entry_items sei
+            LEFT JOIN item i ON sei.item_id = i.id
+            WHERE sei.stock_entry_id = ?`,
+            [id]
+          )
+          items = result
+        } else {
+          throw e
+        }
+      }
 
       entry.items = items
       return entry
@@ -138,6 +177,17 @@
         items = []
       } = data
 
+      // Check if GRN already has a stock entry
+      if (reference_doctype === 'GRN' && reference_name) {
+        const [existingEntries] = await db.query(
+          'SELECT id FROM stock_entries WHERE reference_doctype = ? AND reference_name = ?',
+          ['GRN', reference_name]
+        )
+        if (existingEntries.length > 0) {
+          throw new Error(`A stock entry already exists for GRN ${reference_name}. You cannot create another entry for the same GRN.`)
+        }
+      }
+
       // Start transaction
       const connection = await db.getConnection()
       await connection.beginTransaction()
@@ -150,7 +200,7 @@
             purpose, reference_doctype, reference_name, status, remarks, created_by
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?, ?)`,
           [
-            entry_no, entry_date, entry_type, from_warehouse_id, to_warehouse_id,
+            entry_no, entry_date, entry_type, from_warehouse_id || null, to_warehouse_id || null,
             purpose, reference_doctype, reference_name, remarks, created_by
           ]
         )
@@ -160,20 +210,41 @@
         let totalValue = 0
 
         // Add items
+        console.log('Processing items:', JSON.stringify(items, null, 2))
         for (const item of items) {
-          const itemValue = item.qty * (item.valuation_rate || 0)
-          totalQty += item.qty
+          const qty = Number(item.qty) || 0
+          const valuationRate = Number(item.valuation_rate) || 0
+          const itemValue = qty * valuationRate
+          totalQty += qty
           totalValue += itemValue
 
+          if (!item.item_code) {
+            throw new Error(`Item code is required`)
+          }
+
+          const [itemRows] = await connection.query(
+            'SELECT item_code FROM item WHERE item_code = ?',
+            [item.item_code]
+          )
+          if (!itemRows[0]) {
+            throw new Error(`Item not found with code: ${item.item_code}`)
+          }
+          
           await connection.query(
             `INSERT INTO stock_entry_items (
-              stock_entry_id, item_id, qty, uom, valuation_rate, 
+              stock_entry_id, item_code, qty, uom, valuation_rate, 
               transaction_value, batch_no, serial_no, remarks
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              entryId, item.item_id, item.qty, item.uom || 'Kg',
-              item.valuation_rate || 0, itemValue, item.batch_no,
-              item.serial_no, item.remarks
+              entryId,
+              item.item_code,
+              qty,
+              item.uom || 'Kg',
+              valuationRate,
+              itemValue,
+              item.batch_no || null,
+              item.serial_no || null,
+              item.remarks || null
             ]
           )
         }
@@ -188,11 +259,13 @@
         return this.getById(entryId)
       } catch (error) {
         await connection.rollback()
+        console.error('Stock entry creation error:', error)
         throw error
       } finally {
         connection.release()
       }
     } catch (error) {
+      console.error('Stock entry model error:', error)
       throw new Error(`Failed to create stock entry: ${error.message}`)
     }
   }
@@ -231,24 +304,85 @@
         // Get entry details
         const entry = await this.getById(id)
 
-        // Create stock ledger entries for each item
+        // Create stock ledger entries and update stock balance for each item
         for (const item of entry.items) {
           const transactionDate = entry.entry_date
-          const qtyIn = ['Purchase Receipt', 'Manufacturing Return', 'Repack'].includes(entry.entry_type) ? item.qty : 0
-          const qtyOut = ['Material Issue', 'Transfer', 'Scrap Entry'].includes(entry.entry_type) ? item.qty : 0
-          const warehouseId = entry.entry_type === 'Transfer' ? entry.to_warehouse_id : entry.from_warehouse_id
+          const itemQty = Number(item.qty) || 0
+          const qtyIn = ['Material Receipt', 'Manufacturing Return', 'Repack'].includes(entry.entry_type) ? itemQty : 0
+          const qtyOut = ['Material Issue', 'Material Transfer', 'Scrap Entry'].includes(entry.entry_type) ? itemQty : 0
+          
+          let warehouseId = entry.from_warehouse_id
+          if (['Material Receipt', 'Manufacturing Return', 'Repack'].includes(entry.entry_type)) {
+            warehouseId = entry.to_warehouse_id
+          }
+          if (entry.entry_type === 'Material Transfer') {
+            warehouseId = entry.to_warehouse_id
+          }
 
+          // Get item_code from stock_entry_items
+          const itemCode = item.item_code
+          if (!itemCode) {
+            throw new Error('Item code is required in stock entry items')
+          }
+          
+          const [itemRows] = await connection.query(
+            'SELECT item_code FROM item WHERE item_code = ?',
+            [itemCode]
+          )
+          if (!itemRows[0]) {
+            throw new Error(`Item not found with code: ${itemCode}`)
+          }
+          
+          const valuationRate = Number(item.valuation_rate) || 0
+          
+          const transactionTypeMap = {
+            'Material Receipt': 'Purchase Receipt',
+            'Material Issue': 'Issue',
+            'Material Transfer': 'Transfer',
+            'Manufacturing Return': 'Manufacturing Return',
+            'Repack': 'Repack',
+            'Scrap Entry': 'Scrap Entry'
+          }
+          const transactionType = transactionTypeMap[entry.entry_type] || entry.entry_type
+          
           await connection.query(
             `INSERT INTO stock_ledger (
-              item_id, warehouse_id, transaction_date, transaction_type,
+              item_code, warehouse_id, transaction_date, transaction_type,
               qty_in, qty_out, valuation_rate, reference_doctype, reference_name,
               created_by
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              item.item_id, warehouseId, transactionDate, entry.entry_type,
-              qtyIn, qtyOut, item.valuation_rate, 'Stock Entry', entry.entry_no, userId
+              itemCode, warehouseId, transactionDate, transactionType,
+              qtyIn, qtyOut, valuationRate, 'Stock Entry', entry.entry_no, userId
             ]
           )
+
+          if (qtyIn > 0) {
+            const [existingBalanceRows] = await connection.query(
+              `SELECT current_qty, reserved_qty FROM stock_balance WHERE item_code = ? AND warehouse_id = ?`,
+              [itemCode, warehouseId]
+            )
+            
+            const currentQty = existingBalanceRows[0]?.current_qty || 0
+            const reservedQty = existingBalanceRows[0]?.reserved_qty || 0
+            const newCurrentQty = currentQty + qtyIn
+            const availableQty = newCurrentQty - reservedQty
+            const totalValue = newCurrentQty * valuationRate
+            
+            await connection.query(
+              `INSERT INTO stock_balance (item_code, warehouse_id, current_qty, reserved_qty, available_qty, valuation_rate, total_value)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON DUPLICATE KEY UPDATE
+               current_qty = ?,
+               available_qty = ?,
+               valuation_rate = ?,
+               total_value = ?`,
+              [
+                itemCode, warehouseId, newCurrentQty, reservedQty, availableQty, valuationRate, totalValue,
+                newCurrentQty, availableQty, valuationRate, totalValue
+              ]
+            )
+          }
         }
 
         await connection.commit()

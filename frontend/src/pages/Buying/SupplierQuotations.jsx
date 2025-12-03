@@ -137,7 +137,7 @@ export default function SupplierQuotations() {
   ]
 
   const renderActions = (row) => (
-    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: '2px' }}>
       <Button 
         size="sm"
         variant="icon"

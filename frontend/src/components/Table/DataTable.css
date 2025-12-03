@@ -7,6 +7,105 @@
   border: 1px solid var(--border-color, #e5e7eb);
 }
 
+.table-toolbar {
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #fafbfc 0%, #f0f1f3 100%);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.column-toggle-container {
+  position: relative;
+}
+
+.column-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #374151);
+  transition: all 0.2s ease;
+}
+
+.column-toggle-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.column-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  z-index: 100;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.column-menu-header {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  gap: 4px;
+}
+
+.column-menu-action {
+  flex: 1;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-primary, #374151);
+  transition: all 0.2s ease;
+}
+
+.column-menu-action:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.column-menu-items {
+  padding: 4px;
+}
+
+.column-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary, #374151);
+  transition: background 0.15s ease;
+}
+
+.column-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.column-menu-item input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.column-menu-item span {
+  flex: 1;
+}
+
 .table-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -23,18 +122,18 @@
 }
 
 .filter-input label {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
-  color: var(--text-primary, #374151);
+  color:  rgb(75 85 99);
   text-transform: uppercase;
   letter-spacing: 0.8px;
 }
 
 .filter-input input {
-  padding: 10px 12px;
+  padding: 6px;
   border: 1px solid var(--border-color, #d1d5db);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 12px;
   background: var(--input-bg, #fff);
   color: var(--text-primary, #333);
   transition: all 0.2s ease;

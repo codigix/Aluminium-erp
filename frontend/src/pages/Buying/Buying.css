@@ -127,13 +127,12 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--spacing-4);
-  margin-bottom: var(--spacing-4);
+  margin-top: 1rem;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-1);
 }
 
 .form-group label {
@@ -176,7 +175,6 @@
 /* Items Section */
 .items-section,
 .suppliers-section {
-  margin-top: var(--spacing-8);
   padding-top: var(--spacing-8);
   border-top: 2px solid var(--border-light);
 }
@@ -236,8 +234,6 @@
 }
 
 .form-actions button {
-  flex: 1;
-  max-width: 200px;
   padding: var(--spacing-3) var(--spacing-6);
   border: none;
   border-radius: var(--radius-md);
@@ -279,7 +275,7 @@ button[title] {
 button[title]:hover::after {
   content: attr(title);
   position: absolute;
-  bottom: 120%;
+  top: 120%;
   left: 50%;
   transform: translateX(-50%);
   background-color: rgba(0, 0, 0, 0.9);
@@ -291,26 +287,37 @@ button[title]:hover::after {
   font-weight: 500;
   z-index: 1000;
   pointer-events: none;
-  animation: slideInDown 0.2s ease-out;
+  animation: slideInUp 0.2s ease-out;
 }
 
 button[title]:hover::before {
   content: '';
   position: absolute;
-  bottom: 115%;
+  top: 115%;
   left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: rgba(0, 0, 0, 0.9);
+  border-bottom-color: rgba(0, 0, 0, 0.9);
   z-index: 1000;
   pointer-events: none;
-  animation: slideInDown 0.2s ease-out;
+  animation: slideInUp 0.2s ease-out;
 }
 
 @keyframes slideInDown {
   from {
     opacity: 0;
     transform: translateX(-50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
   }
   to {
     opacity: 1;
@@ -874,7 +881,6 @@ button[title]:hover::before {
 .form-actions button {
   padding: var(--spacing-2) var(--spacing-4);
   font-size: var(--text-sm);
-  min-width: 120px;
 }
 
 .form-actions button.flex {

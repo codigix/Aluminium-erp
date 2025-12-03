@@ -70,10 +70,15 @@ export class MaterialRequestModel {
   static async create(db, mrData) {
     try {
       const {
-        requested_by_id,
-        department,
-        required_by_date,
-        purpose,
+        series_no = '',
+        transition_date = null,
+        requested_by_id = '',
+        department = '',
+        purpose = 'purchase',
+        required_by_date = null,
+        target_warehouse = null,
+        source_warehouse = null,
+        items_notes = '',
         items = []
       } = mrData
 
@@ -81,10 +86,15 @@ export class MaterialRequestModel {
       const mr_id = 'MR-' + Date.now()
       const request_date = new Date().toISOString().split('T')[0]
 
-      // Insert MR
+      // Insert MR with all fields
       await db.execute(
-        'INSERT INTO material_request (mr_id, requested_by_id, department, request_date, required_by_date, status) VALUES (?, ?, ?, ?, ?, ?)',
-        [mr_id, requested_by_id, department, request_date, required_by_date, 'draft']
+        `INSERT INTO material_request 
+         (mr_id, series_no, transition_date, requested_by_id, department, purpose, 
+          request_date, required_by_date, target_warehouse, source_warehouse, items_notes, status) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [mr_id, series_no || null, transition_date || null, requested_by_id || null, 
+         department || null, purpose, request_date, required_by_date || null, 
+         target_warehouse || null, source_warehouse || null, items_notes || '', 'draft']
       )
 
       // Insert items
@@ -93,7 +103,7 @@ export class MaterialRequestModel {
           const mr_item_id = 'MRI-' + Date.now() + '-' + Math.random()
           await db.execute(
             'INSERT INTO material_request_item (mr_item_id, mr_id, item_code, qty, uom, purpose) VALUES (?, ?, ?, ?, ?, ?)',
-            [mr_item_id, mr_id, item.item_code, item.qty, item.uom, item.purpose]
+            [mr_item_id, mr_id, item.item_code || null, item.qty || 0, item.uom || '', item.purpose || null]
           )
         }
       }

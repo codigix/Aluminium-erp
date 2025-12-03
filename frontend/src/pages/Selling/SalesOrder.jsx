@@ -3,14 +3,151 @@ import Card from '../../components/Card/Card'
 import Button from '../../components/Button/Button'
 import Badge from '../../components/Badge/Badge'
 import DataTable from '../../components/Table/DataTable'
-import AdvancedFilters from '../../components/AdvancedFilters'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { 
-  FileText, Edit2, Send, Download, Eye, Package, AlertCircle, CheckCircle, XCircle, 
-  Clock, Plus, TrendingUp, AlertTriangle, Truck, Trash2
+  Edit2, Eye, Package, CheckCircle, Trash2, Plus, TrendingUp, AlertTriangle, 
+  Truck, Clock, Calendar
 } from 'lucide-react'
 import ViewSalesOrderModal from '../../components/Selling/ViewSalesOrderModal'
 import './Selling.css'
+
+const styles = {
+  mainContainer: {
+    maxWidth: '100%',
+    margin: '2rem',
+    padding: '0'
+  },
+  header: {
+    marginBottom: '20px',
+    paddingBottom: '12px',
+    borderBottom: '2px solid #e5e7eb',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  title: {
+    fontSize: '24px',
+    fontWeight: '700',
+    margin: '0',
+    color: '#1f2937'
+  },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    gap: '16px',
+    marginBottom: '20px'
+  },
+  statCard: {
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    padding: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    border: '1px solid #e5e7eb'
+  },
+  statCardPrimary: {
+    borderLeft: '4px solid #007bff'
+  },
+  statCardSuccess: {
+    borderLeft: '4px solid #10b981'
+  },
+  statCardWarning: {
+    borderLeft: '4px solid #f59e0b'
+  },
+  statCardDanger: {
+    borderLeft: '4px solid #ef4444'
+  },
+  statHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '8px'
+  },
+  statLabel: {
+    fontSize: '12px',
+    color: '#6b7280',
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  },
+  statIcon: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '16px'
+  },
+  statValue: {
+    fontSize: '24px',
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: '4px'
+  },
+  statTrend: {
+    fontSize: '11px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px'
+  },
+  filtersSection: {
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    padding: '16px',
+    marginBottom: '20px',
+    border: '1px solid #e5e7eb',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'flex-end',
+    flexWrap: 'wrap'
+  },
+  filterGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  filterLabel: {
+    fontSize: '12px',
+    fontWeight: '500',
+    color: '#374151'
+  },
+  filterInput: {
+    padding: '8px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '13px',
+    fontFamily: 'inherit',
+    minWidth: '200px'
+  },
+  tableSection: {
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb'
+  },
+  tableContent: {
+    padding: '20px',
+    overflowX: 'auto'
+  },
+  emptyState: {
+    textAlign: 'center',
+    padding: '40px 20px',
+    color: '#6b7280'
+  },
+  actionButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    fontSize: '12px',
+    color: '#374151',
+    transition: 'all 0.2s',
+    whiteSpace: 'nowrap'
+  }
+}
 
 export default function SalesOrder() {
   const navigate = useNavigate()
@@ -23,11 +160,12 @@ export default function SalesOrder() {
     dispatched: 0,
     invoiced: 0,
     cancelled: 0,
-    total_value: 0
+    total_value: 0,
+    avg_value: 0,
+    pending_delivery: 0
   })
   const [filters, setFilters] = useState({
     status: '',
-    customer: '',
     search: ''
   })
   const [loading, setLoading] = useState(false)
@@ -68,36 +206,37 @@ export default function SalesOrder() {
       dispatched: 0,
       invoiced: 0,
       cancelled: 0,
-      total_value: 0
+      total_value: 0,
+      avg_value: 0,
+      pending_delivery: 0
     }
 
     data.forEach((order) => {
       if (order.status) {
-        newStats[order.status] = (newStats[order.status] || 0) + 1
+        const status = order.status.toLowerCase()
+        newStats[status] = (newStats[status] || 0) + 1
       }
       newStats.total_value += parseFloat(order.total_value || 0)
+      if (order.status === 'confirmed' || order.status === 'dispatched') {
+        newStats.pending_delivery += 1
+      }
     })
 
+    newStats.avg_value = data.length > 0 ? newStats.total_value / data.length : 0
     setStats(newStats)
   }
 
   const getStatusColor = (status) => {
-    // Status colors with semantic meaning for sales order workflow
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case 'draft':
-        // Yellow - Action Required: Order needs confirmation
         return 'warning'
       case 'confirmed':
-        // Blue - In Progress: Order confirmed, awaiting dispatch
         return 'info'
       case 'dispatched':
-        // Blue - In Progress: Goods dispatched, awaiting invoice
         return 'info'
       case 'invoiced':
-        // Green - Success: Order completed and invoiced
         return 'success'
       case 'cancelled':
-        // Red - Rejected: Order was cancelled
         return 'danger'
       default:
         return 'secondary'
@@ -138,13 +277,77 @@ export default function SalesOrder() {
     }
   }
 
+  const ActionButton = ({ icon: Icon, label, onClick, danger = false }) => (
+    <button
+      onClick={onClick}
+      style={{
+        ...styles.actionButton,
+        color: danger ? '#dc2626' : '#374151'
+      }}
+      onMouseEnter={(e) => {
+        e.target.style.backgroundColor = danger ? '#fee2e2' : '#f3f4f6'
+        e.target.style.borderColor = danger ? '#fca5a5' : '#9ca3af'
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.backgroundColor = '#fff'
+        e.target.style.borderColor = '#d1d5db'
+      }}
+    >
+      <Icon size={14} /> {label}
+    </button>
+  )
+
+  const ActionDropdown = ({ row }) => {
+    return (
+      <div style={{
+        display: 'flex',
+        gap: '4px',
+        flexWrap: 'nowrap',
+        justifyContent: 'center'
+      }}>
+        <ActionButton
+          icon={Eye}
+          onClick={() => setViewOrderId(row.sales_order_id)}
+        />
+        {row.status?.toLowerCase() === 'draft' && (
+          <>
+            <ActionButton
+              icon={Edit2}
+             
+              onClick={() => navigate(`/selling/sales-orders/${row.sales_order_id}`)}
+            />
+            <ActionButton
+              icon={CheckCircle}
+              
+              onClick={() => handleConfirmOrder(row.sales_order_id)}
+            />
+          </>
+        )}
+        {row.status?.toLowerCase() === 'confirmed' && (
+          <ActionButton
+            icon={Truck}
+            
+            onClick={() => navigate(`/selling/delivery-notes/new?order=${row.sales_order_id}`)}
+          />
+        )}
+        <ActionButton
+          icon={Trash2}
+          
+          onClick={() => handleDeleteOrder(row.sales_order_id)}
+          danger={true}
+        />
+      </div>
+    )
+  }
+
   const columns = [
     { label: 'Order ID', key: 'sales_order_id', searchable: true },
     { label: 'Customer', key: 'customer_name', searchable: true },
     { 
       label: 'Items Summary', 
-      render: (val, row) => {
-        if (!row.items || row.items.length === 0) return 'No items'
+      key: 'items_summary',
+      render: (value, row) => {
+        if (!row || !row.items || row.items.length === 0) return 'No items'
         const itemList = row.items.map(item => `${item.item_name || item.item_code} (Qty: ${item.qty})`).join(', ')
         return (
           <span title={itemList} style={{ 
@@ -164,148 +367,148 @@ export default function SalesOrder() {
     { label: 'Status', key: 'status', render: (val) => <Badge color={getStatusColor(val)}>{val}</Badge> },
     {
       label: 'Actions',
-      render: (val, row) => (
-        <div className="action-buttons">
-          <button 
-            onClick={() => setViewOrderId(row.sales_order_id)}
-            className="flex items-center justify-center p-2 text-primary-600 hover:bg-primary-100 rounded transition-colors duration-200"
-            title="View"
-          >
-            <Eye size={16} />
-          </button>
-          {row.status === 'draft' && (
-            <>
-              <button 
-                onClick={() => navigate(`/selling/sales-orders/${row.sales_order_id}`)}
-                className="flex items-center justify-center p-2 text-green-600 hover:bg-green-50 rounded transition-colors duration-200"
-                title="Edit"
-              >
-                <Edit2 size={16} />
-              </button>
-              <button 
-                onClick={() => handleConfirmOrder(row.sales_order_id)}
-                className="flex items-center justify-center p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200"
-                title="Confirm"
-              >
-                <CheckCircle size={16} />
-              </button>
-            </>
-          )}
-          {row.status === 'confirmed' && (
-            <button 
-              onClick={() => navigate(`/selling/delivery-notes/new?order=${row.sales_order_id}`)}
-              className="flex items-center justify-center p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200"
-              title="Create Delivery Note"
-            >
-              <Truck size={16} />
-            </button>
-          )}
-          <button 
-            onClick={() => handleDeleteOrder(row.sales_order_id)}
-            className="flex items-center justify-center p-2 text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
-            title="Delete"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      )
+      key: 'actions',
+      render: (value, row) => {
+        if (!row) return null
+        return <ActionDropdown row={row} />
+      }
     }
   ]
 
   return (
-    <div className="selling-container">
-      {/* Page Header */}
-      <div className="page-header">
-        <h2>Sales Orders</h2>
-        <Button 
-          onClick={() => navigate('/selling/sales-orders/new')}
-          className="flex items-center gap-2"
-        >
-          <Plus size={18} /> New Sales Order
-        </Button>
-      </div>
+    <div style={styles.mainContainer}>
+      <Card>
+        <div style={styles.header}>
+          <h2 style={styles.title}>Sales Orders</h2>
+          <Button 
+            onClick={() => navigate('/selling/sales-orders/new')}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <Plus size={18} /> New Order
+          </Button>
+        </div>
 
-      {/* Stats */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-info">
-            <h3>Total Orders</h3>
-            <p>{stats.total}</p>
+        <div style={styles.statsGrid}>
+          <div style={{...styles.statCard, ...styles.statCardPrimary}}>
+            <div style={styles.statHeader}>
+              <span style={styles.statLabel}>Total Orders</span>
+              <div style={{...styles.statIcon, backgroundColor: '#eff6ff'}}>📦</div>
+            </div>
+            <div style={styles.statValue}>{stats.total}</div>
+            <div style={{...styles.statTrend, color: '#6b7280'}}>
+              <Calendar size={12} /> All time
+            </div>
           </div>
-          <div className="stat-icon primary">📦</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-info">
-            <h3>Draft</h3>
-            <p>{stats.draft}</p>
-          </div>
-          <div className="stat-icon warning">✏️</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-info">
-            <h3>Confirmed</h3>
-            <p>{stats.confirmed}</p>
-          </div>
-          <div className="stat-icon info">📋</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-info">
-            <h3>Dispatched</h3>
-            <p>{stats.dispatched}</p>
-          </div>
-          <div className="stat-icon info">🚚</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-info">
-            <h3>Total Value</h3>
-            <p>₹{stats.total_value.toFixed(0)}</p>
-          </div>
-          <div className="stat-icon primary">💰</div>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <div className="filters-section">
-        <div className="filter-group">
-          <label>Status</label>
-          <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
-            <option value="">All Status</option>
-            <option value="draft">Draft</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="dispatched">Dispatched</option>
-            <option value="invoiced">Invoiced</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-        <div className="filter-group">
-          <label>Search</label>
-          <input
-            type="text"
-            placeholder="Order ID or Customer..."
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          />
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && <Card className="error-banner">{error}</Card>}
-
-      {/* Data Table */}
-      <div className="table-container">
-        {loading ? (
-          <div className="table-empty">Loading...</div>
-        ) : orders.length === 0 ? (
-          <div className="table-empty">
-            <Package size={48} />
-            <p>No sales orders found. Create one to get started.</p>
+          <div style={{...styles.statCard, ...styles.statCardWarning}}>
+            <div style={styles.statHeader}>
+              <span style={styles.statLabel}>Draft Orders</span>
+              <div style={{...styles.statIcon, backgroundColor: '#fffbeb'}}>✏️</div>
+            </div>
+            <div style={styles.statValue}>{stats.draft}</div>
+            <div style={{...styles.statTrend, color: '#f59e0b'}}>
+              <AlertTriangle size={12} /> Awaiting confirmation
+            </div>
           </div>
-        ) : (
-          <DataTable columns={columns} data={orders} />
+
+          <div style={{...styles.statCard, ...styles.statCardSuccess}}>
+            <div style={styles.statHeader}>
+              <span style={styles.statLabel}>Confirmed Orders</span>
+              <div style={{...styles.statIcon, backgroundColor: '#f0fdf4'}}>✅</div>
+            </div>
+            <div style={styles.statValue}>{stats.confirmed}</div>
+            <div style={{...styles.statTrend, color: '#10b981'}}>
+              <CheckCircle size={12} /> Ready to dispatch
+            </div>
+          </div>
+
+          <div style={{...styles.statCard, ...styles.statCardSuccess}}>
+            <div style={styles.statHeader}>
+              <span style={styles.statLabel}>Total Revenue</span>
+              <div style={{...styles.statIcon, backgroundColor: '#f0fdf4'}}>💰</div>
+            </div>
+            <div style={styles.statValue}>₹{(stats.total_value / 100000).toFixed(1)}L</div>
+            <div style={{...styles.statTrend, color: '#10b981'}}>
+              <TrendingUp size={12} /> Avg: ₹{(stats.avg_value / 1000).toFixed(0)}K
+            </div>
+          </div>
+
+          <div style={{...styles.statCard, ...styles.statCardDanger}}>
+            <div style={styles.statHeader}>
+              <span style={styles.statLabel}>Pending Delivery</span>
+              <div style={{...styles.statIcon, backgroundColor: '#fef2f2'}}>🚚</div>
+            </div>
+            <div style={styles.statValue}>{stats.pending_delivery}</div>
+            <div style={{...styles.statTrend, color: '#ef4444'}}>
+              <Clock size={12} /> In transit
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.filtersSection}>
+          <div style={styles.filterGroup}>
+            <label style={styles.filterLabel}>Status</label>
+            <select 
+              value={filters.status} 
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              style={styles.filterInput}
+            >
+              <option value="">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="dispatched">Dispatched</option>
+              <option value="invoiced">Invoiced</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div style={styles.filterGroup}>
+            <label style={styles.filterLabel}>Search</label>
+            <input
+              type="text"
+              placeholder="Order ID or Customer..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              style={styles.filterInput}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ 
+            backgroundColor: '#fef2f2', 
+            borderLeft: '4px solid #ef4444',
+            padding: '12px',
+            borderRadius: '4px',
+            marginBottom: '16px',
+            color: '#991b1b',
+            fontSize: '13px'
+          }}>
+            {error}
+          </div>
         )}
-      </div>
 
-      {/* View Sales Order Modal */}
+        <div style={styles.tableSection}>
+          <div style={styles.tableContent}>
+            {loading ? (
+              <div style={styles.emptyState}>Loading...</div>
+            ) : orders.length === 0 ? (
+              <div style={styles.emptyState}>
+                <Package size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
+                <p style={{ margin: '8px 0' }}>No sales orders found.</p>
+                <Button 
+                  onClick={() => navigate('/selling/sales-orders/new')}
+                  style={{ marginTop: '12px' }}
+                >
+                  Create First Order
+                </Button>
+              </div>
+            ) : (
+              <DataTable columns={columns} data={orders} />
+            )}
+          </div>
+        </div>
+      </Card>
+
       <ViewSalesOrderModal 
         isOpen={!!viewOrderId}
         orderId={viewOrderId}

@@ -6,6 +6,7 @@ import DataTable from '../../components/Table/DataTable'
 import Alert from '../../components/Alert/Alert'
 import Card from '../../components/Card/Card'
 import Badge from '../../components/Badge/Badge'
+import Modal, { useModal } from '../../components/Modal/Modal'
 import Pagination from './Pagination'
 import { Plus, Edit2, Trash2, Package, Eye, X } from 'lucide-react'
 import './Inventory.css'
@@ -15,17 +16,21 @@ export default function StockEntries() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
-  const [showForm, setShowForm] = useState(false)
+  const formModal = useModal(false)
+  const [showGRNForm, setShowGRNForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [warehouses, setWarehouses] = useState([])
   const [items, setItems] = useState([])
+  const [grnRequests, setGrnRequests] = useState([])
+  const [grnWithEntries, setGrnWithEntries] = useState(new Set())
+  const [selectedGRN, setSelectedGRN] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const navigate = useNavigate()
-
+  
   const [formData, setFormData] = useState({
     entry_date: new Date().toISOString().split('T')[0],
     entry_type: '',
@@ -34,23 +39,69 @@ export default function StockEntries() {
     purpose: '',
     reference_doctype: '',
     reference_name: '',
-    remarks: ''
+    remarks: '',
+    grn_id: ''
   })
 
   const [entryItems, setEntryItems] = useState([])
-  const [newItem, setNewItem] = useState({ item_code: '', qty: 1 })
+  const [newItem, setNewItem] = useState({ 
+    item_code: '', 
+    qty: 1,
+    valuation_rate: 0,
+    uom: 'Kg',
+    batch_no: ''
+  })
 
   useEffect(() => {
     fetchEntries()
     fetchWarehouses()
     fetchItems()
+    fetchApprovedGRNs()
   }, [])
+
+  useEffect(() => {
+    if (!formModal.isOpen) {
+      resetForm()
+      setSelectedGRN(null)
+    }
+  }, [formModal.isOpen])
+
+  const fetchApprovedGRNs = async () => {
+    try {
+      const [grnRes, entriesRes] = await Promise.all([
+        axios.get('/api/grn-requests?status=approved'),
+        axios.get('/api/stock/entries')
+      ])
+      
+      const grns = grnRes.data.data || []
+      const entries = entriesRes.data.data || []
+      
+      const grnNosWithEntries = new Set(
+        entries
+          .filter(entry => entry.reference_doctype === 'GRN')
+          .map(entry => entry.reference_name)
+      )
+      
+      setGrnRequests(grns)
+      setGrnWithEntries(grnNosWithEntries)
+    } catch (err) {
+      console.error('Failed to fetch approved GRNs:', err)
+    }
+  }
 
   const fetchEntries = async () => {
     try {
       setLoading(true)
       const response = await axios.get('/api/stock/entries')
       setEntries(response.data.data || [])
+      
+      const grnNosWithEntries = new Set(
+        (response.data.data || [])
+          .filter(entry => entry.reference_doctype === 'GRN')
+          .map(entry => entry.reference_name)
+      )
+      setGrnWithEntries(grnNosWithEntries)
+      
       setError(null)
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch stock entries')
@@ -78,20 +129,56 @@ export default function StockEntries() {
     }
   }
 
+  const handleGRNSelectInForm = (grnId) => {
+    const grn = grnRequests.find(g => g.id === parseInt(grnId))
+    if (!grn) return
+
+    setSelectedGRN(grn)
+    
+    const grnItems = (grn.items || []).map(item => ({
+      _key: `grn_${item.id}`,
+      item_code: item.item_code,
+      item_name: item.item_name,
+      qty: Number(item.accepted_qty) || 0,
+      grn_item_id: item.id,
+      batch_no: item.batch_no || '',
+      valuation_rate: Number(item.valuation_rate) || 0,
+      uom: 'Kg'
+    }))
+    
+    setFormData(prev => ({
+      ...prev,
+      entry_type: 'Material Receipt',
+      purpose: `GRN: ${grn.grn_no}`,
+      reference_doctype: 'GRN',
+      reference_name: grn.grn_no,
+      remarks: grn.notes || '',
+      grn_id: grnId
+    }))
+    
+    setEntryItems(grnItems)
+  }
+
+
+
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData({ ...formData, [name]: value })
+    if (name === 'grn_id') {
+      handleGRNSelectInForm(value)
+    } else {
+      setFormData({ ...formData, [name]: value })
+    }
   }
 
   const handleAddItem = () => {
     if (newItem.item_code && newItem.qty > 0) {
-      setEntryItems([...entryItems, { ...newItem, id: Date.now() }])
-      setNewItem({ item_code: '', qty: 1 })
+      setEntryItems([...entryItems, { ...newItem, _key: `manual_${Date.now()}` }])
+      setNewItem({ item_code: '', qty: 1, valuation_rate: 0, uom: 'Kg', batch_no: '' })
     }
   }
 
-  const handleRemoveItem = (id) => {
-    setEntryItems(entryItems.filter(item => item.id !== id))
+  const handleRemoveItem = (key) => {
+    setEntryItems(entryItems.filter(item => item._key !== key))
   }
 
   const handleSubmit = async (e) => {
@@ -103,9 +190,19 @@ export default function StockEntries() {
 
     try {
       setLoading(true)
+      const cleanItems = entryItems.map(item => ({
+        item_code: item.item_code,
+        qty: Number(item.qty) || 0,
+        valuation_rate: Number(item.valuation_rate) || 0,
+        uom: item.uom || 'Kg',
+        batch_no: item.batch_no || null
+      }))
       const submitData = {
         ...formData,
-        items: entryItems
+        from_warehouse_id: formData.from_warehouse_id ? Number(formData.from_warehouse_id) : null,
+        to_warehouse_id: formData.to_warehouse_id ? Number(formData.to_warehouse_id) : null,
+        grn_id: formData.grn_id ? Number(formData.grn_id) : null,
+        items: cleanItems
       }
 
       if (editingId) {
@@ -135,10 +232,11 @@ export default function StockEntries() {
       purpose: '',
       reference_doctype: '',
       reference_name: '',
-      remarks: ''
+      remarks: '',
+      grn_id: ''
     })
     setEntryItems([])
-    setShowForm(false)
+    setSelectedGRN(null)
     setEditingId(null)
   }
 
@@ -160,7 +258,7 @@ export default function StockEntries() {
     (entry.entry_id?.toString().includes(searchTerm.toLowerCase()) ||
      entry.warehouse_name?.toLowerCase().includes(searchTerm.toLowerCase())) &&
     (typeFilter === '' || entry.reference_doctype === typeFilter) &&
-    (warehouseFilter === '' || entry.warehouse_id?.toString() === warehouseFilter)
+    (warehouseFilter === '' || String(entry.warehouse_id || entry.to_warehouse_id) === warehouseFilter)
   )
 
   const totalPages = Math.ceil(filteredEntries.length / itemsPerPage)
@@ -188,7 +286,7 @@ export default function StockEntries() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (val, row) => (
+      render: (row) => (
         <div className="inventory-actions-cell">
           <button className="btn-delete" onClick={() => handleDelete(row.entry_id)}>
             <Trash2 size={14} />
@@ -202,27 +300,81 @@ export default function StockEntries() {
     <div className="inventory-container">
       <div className="inventory-header">
         <h1>
-          <Package size={28} style={{ display: 'inline', marginRight: '10px' }} />
+          <Package size={18} style={{ display: 'inline', marginRight: '6px' }} />
           Stock Entries
         </h1>
         <Button
           variant="primary"
-          onClick={() => setShowForm(!showForm)}
+          onClick={formModal.open}
           icon={Plus}
+          style={{ padding: '6px 10px', fontSize: '11px' }}
         >
-          {showForm ? 'Cancel' : 'New Entry'}
+          Add
         </Button>
       </div>
 
       {error && <Alert type="danger">{error}</Alert>}
       {success && <Alert type="success">{success}</Alert>}
 
-      {showForm && (
-        <Card title="Create Stock Entry" className="inventory-form">
-          <form onSubmit={handleSubmit}>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Entry Date *</label>
+      <Modal
+        isOpen={formModal.isOpen}
+        onClose={formModal.close}
+        title="Create Stock Entry"
+        size="2xl"
+        footer={
+          <>
+            <Button variant="secondary" onClick={formModal.close}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" form="manual-entry-form" loading={loading}>
+              Create Entry
+            </Button>
+          </>
+        }
+      >
+        <form id="manual-entry-form" onSubmit={handleSubmit}>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Select GRN Request (Optional)</label>
+              <select
+                name="grn_id"
+                value={formData.grn_id}
+                onChange={handleChange}
+              >
+                <option value="">-- Manual Entry --</option>
+                {grnRequests.map(grn => {
+                  const hasEntry = grnWithEntries.has(grn.grn_no)
+                  return (
+                    <option 
+                      key={grn.id} 
+                      value={grn.id}
+                      disabled={hasEntry}
+                      style={{ color: hasEntry ? '#999' : 'inherit' }}
+                    >
+                      {grn.grn_no} - {grn.supplier_name} ({grn.items?.length} items)
+                      {hasEntry ? ' (Already Processed)' : ''}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '15px', fontSize: '12px', color: '#666' }}>
+            <span>Available GRNs: {grnRequests.filter(g => !grnWithEntries.has(g.grn_no)).length} | Already Processed: {grnWithEntries.size}</span>
+          </div>
+
+          {selectedGRN && (
+            <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
+              <p style={{ margin: 0, color: '#1e40af', fontSize: '14px', fontWeight: '500' }}>
+                GRN: {selectedGRN.grn_no} | PO: {selectedGRN.po_no} | Supplier: {selectedGRN.supplier_name}
+              </p>
+            </div>
+          )}
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Entry Date *</label>
                 <input
                   type="date"
                   name="entry_date"
@@ -260,22 +412,23 @@ export default function StockEntries() {
                 >
                   <option value="">Select Source Warehouse</option>
                   {warehouses.map(wh => (
-                    <option key={wh.id} value={wh.id}>
+                    <option key={wh.id} value={String(wh.id)}>
                       {wh.warehouse_name}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="form-group">
-                <label>To Warehouse</label>
+                <label>To Warehouse {formData.entry_type === 'Material Receipt' && '*'}</label>
                 <select
                   name="to_warehouse_id"
                   value={formData.to_warehouse_id}
                   onChange={handleChange}
+                  required={formData.entry_type === 'Material Receipt'}
                 >
                   <option value="">Select Destination Warehouse</option>
                   {warehouses.map(wh => (
-                    <option key={wh.id} value={wh.id}>
+                    <option key={wh.id} value={String(wh.id)}>
                       {wh.warehouse_name}
                     </option>
                   ))}
@@ -302,6 +455,7 @@ export default function StockEntries() {
                   onChange={handleChange}
                 >
                   <option value="">Select Type</option>
+                  <option value="GRN">GRN</option>
                   <option value="purchase_receipt">Purchase Receipt</option>
                   <option value="production">Production</option>
                   <option value="adjustment">Adjustment</option>
@@ -332,7 +486,7 @@ export default function StockEntries() {
                     <option value="">Select Item</option>
                     {items.map(item => (
                       <option key={item.item_code} value={item.item_code}>
-                        {item.item_name} ({item.item_code})
+                        {item.name || item.item_name} ({item.item_code})
                       </option>
                     ))}
                   </select>
@@ -346,6 +500,38 @@ export default function StockEntries() {
                     onChange={(e) => setNewItem({ ...newItem, qty: parseFloat(e.target.value) })}
                   />
                 </div>
+                <div className="form-group">
+                  <label>UOM</label>
+                  <input
+                    type="text"
+                    value={newItem.uom}
+                    onChange={(e) => setNewItem({ ...newItem, uom: e.target.value })}
+                    placeholder="Kg"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Batch No</label>
+                  <input
+                    type="text"
+                    value={newItem.batch_no}
+                    onChange={(e) => setNewItem({ ...newItem, batch_no: e.target.value })}
+                    placeholder="Batch number (optional)"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Valuation Rate (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newItem.valuation_rate}
+                    onChange={(e) => setNewItem({ ...newItem, valuation_rate: parseFloat(e.target.value) })}
+                    placeholder="0.00"
+                  />
+                </div>
                 <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
                   <Button variant="secondary" onClick={handleAddItem}>
                     Add Item
@@ -354,32 +540,40 @@ export default function StockEntries() {
               </div>
 
               {entryItems.length > 0 && (
-                <table className="inventory-items-table">
-                  <thead>
-                    <tr>
-                      <th>Item Code</th>
-                      <th>Quantity</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entryItems.map(item => (
-                      <tr key={item.id}>
-                        <td>{item.item_code}</td>
-                        <td>{item.qty}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn-delete"
-                            onClick={() => handleRemoveItem(item.id)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
+                <div style={{ overflowX: 'auto', marginTop: '15px' }}>
+                  <table className="inventory-items-table">
+                    <thead>
+                      <tr>
+                        <th>Item Code</th>
+                        <th>Quantity</th>
+                        <th>UOM</th>
+                        <th>Batch No</th>
+                        <th>Valuation Rate (₹)</th>
+                        <th style={{ width: '80px' }}>Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {entryItems.map(item => (
+                        <tr key={item._key || Math.random()}>
+                          <td>{item.item_code}</td>
+                          <td>{Number(item.qty || 0)}</td>
+                          <td>{item.uom || 'Kg'}</td>
+                          <td>{item.batch_no || '-'}</td>
+                          <td>₹{Number(item.valuation_rate || 0).toFixed(2)}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn-delete"
+                              onClick={() => handleRemoveItem(item._key)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </Card>
 
@@ -393,19 +587,10 @@ export default function StockEntries() {
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" onClick={resetForm}>
-                Cancel
-              </Button>
-              <Button variant="primary" type="submit" loading={loading}>
-                Create Entry
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
+        </form>
+      </Modal>
 
-      {!showForm && entries.length > 0 && (
+      {entries.length > 0 && (
         <div className="inventory-filters">
           <div style={{ flex: 1, minWidth: '200px' }}>
             <input
@@ -426,6 +611,7 @@ export default function StockEntries() {
             }}
           >
             <option value="">All Types</option>
+            <option value="GRN">GRN</option>
             <option value="purchase_receipt">Purchase Receipt</option>
             <option value="production">Production</option>
             <option value="adjustment">Adjustment</option>
@@ -439,7 +625,7 @@ export default function StockEntries() {
           >
             <option value="">All Warehouses</option>
             {warehouses.map(wh => (
-              <option key={wh.warehouse_id} value={wh.warehouse_id}>
+              <option key={wh.id} value={wh.id}>
                 {wh.warehouse_name}
               </option>
             ))}
@@ -456,34 +642,30 @@ export default function StockEntries() {
         </div>
       )}
 
-      {loading && !showForm ? (
+      {loading ? (
         <div className="no-data">
           <Package size={48} style={{ opacity: 0.5 }} />
           <p>Loading stock entries...</p>
         </div>
-      ) : entries.length === 0 ? (
-        <div className="no-data">
-          <Package size={48} style={{ opacity: 0.5 }} />
-          <p>📦 No stock entries found.</p>
-          <p style={{ fontSize: '14px', marginTop: '10px' }}>Create your first entry to track stock movements.</p>
-        </div>
-      ) : filteredEntries.length === 0 ? (
-        <div className="no-data">
-          <Package size={48} style={{ opacity: 0.5 }} />
-          <p>❌ No entries match your filters.</p>
-          <p style={{ fontSize: '14px', marginTop: '10px' }}>Try adjusting your search or filters.</p>
-        </div>
       ) : (
         <>
-          <DataTable columns={columns} data={paginatedData} />
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            itemsPerPage={itemsPerPage}
-            totalItems={filteredEntries.length}
-            onItemsPerPageChange={setItemsPerPage}
+          <DataTable 
+            columns={columns} 
+            data={paginatedData}
+            disablePagination={true}
+            filterable={true}
+            sortable={true}
           />
+          {filteredEntries.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              itemsPerPage={itemsPerPage}
+              totalItems={filteredEntries.length}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          )}
         </>
       )}
     </div>

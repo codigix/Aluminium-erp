@@ -159,7 +159,10 @@ export default function SalesInvoice() {
     { label: 'Status', key: 'status', render: (val) => <Badge color={getStatusColor(val)}>{val}</Badge> },
     {
       label: 'Actions',
-      render: (val, row) => (
+      key: 'actions',
+      render: (value, row) => {
+        if (!row) return null
+        return (
         <div className="action-buttons">
           <button 
             onClick={() => navigate(`/selling/sales-invoices/${row.invoice_id}`)}
@@ -195,6 +198,7 @@ export default function SalesInvoice() {
           </button>
         </div>
       )
+      }
     }
   ]
 

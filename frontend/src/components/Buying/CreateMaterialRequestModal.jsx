@@ -39,7 +39,8 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
 
   const fetchItems = async () => {
     try {
-      const response = await axios.get('/api/items?limit=1000')
+      const apiUrl = import.meta.env.VITE_API_URL
+      const response = await axios.get(`${apiUrl}/items?limit=1000`)
       setItems(response.data.data || [])
     } catch (err) {
       console.error('Failed to fetch items:', err)
@@ -48,7 +49,8 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
 
   const fetchContacts = async () => {
     try {
-      const response = await axios.get('/api/suppliers/contacts/all')
+      const apiUrl = import.meta.env.VITE_API_URL
+      const response = await axios.get(`${apiUrl}/suppliers/contacts/all`)
       setContacts(response.data.data || [])
     } catch (err) {
       console.error('Failed to fetch contacts:', err)
@@ -57,7 +59,8 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
 
   const fetchWarehouses = async () => {
     try {
-      const response = await axios.get('/api/warehouses?limit=1000')
+      const apiUrl = import.meta.env.VITE_API_URL
+      const response = await axios.get(`${apiUrl}/stock/warehouses?limit=1000`)
       setWarehouses(response.data.data || [])
     } catch (err) {
       console.error('Failed to fetch warehouses:', err)
@@ -140,7 +143,8 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
         items: formData.items.map(({ id, ...item }) => item)
       }
 
-      await axios.post('/api/material-requests', submitData)
+      const apiUrl = import.meta.env.VITE_API_URL
+      await axios.post(`${apiUrl}/material-requests`, submitData)
       onSuccess()
       onClose()
     } catch (err) {
@@ -175,156 +179,171 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Create Material Request" size="lg">
-      <div style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+    <Modal isOpen={isOpen} onClose={handleClose} title="Create Material Request" size="xl">
+      <div style={{ maxHeight: '85vh', overflowY: 'auto', padding: '4px' }}>
         {error && <Alert type="danger">{error}</Alert>}
 
         <form onSubmit={handleSubmit}>
-          {/* Series No & Transition Date */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Series No</label>
-              <input 
-                type="text"
-                name="series_no"
-                value={formData.series_no}
-                readOnly
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', backgroundColor: '#f5f5f5' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Transition Date</label>
-              <input 
-                type="date"
-                name="transition_date"
-                value={formData.transition_date}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-              />
-            </div>
-          </div>
-
-          {/* Requested By & Department */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Requested By *</label>
-              <select 
-                name="requested_by_id"
-                value={formData.requested_by_id}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-              >
-                <option value="">Select Contact</option>
-                {contacts.map(contact => (
-                  <option key={contact.contact_id} value={contact.contact_id}>
-                    {contact.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Department *</label>
-              <select 
-                name="department"
-                value={formData.department}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-              >
-                <option value="">Select Department</option>
-                {departments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Purpose & Required By Date */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Purpose *</label>
-              <select 
-                name="purpose"
-                value={formData.purpose}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-              >
-                <option value="purchase">Purchase</option>
-                <option value="material_transfer">Material Transfer</option>
-                <option value="material_issue">Material Issue</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Required By Date *</label>
-              <input 
-                type="date"
-                name="required_by_date"
-                value={formData.required_by_date}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-              />
-            </div>
-          </div>
-
-          {/* Target & Source Warehouse */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Target Warehouse</label>
-              <select 
-                name="target_warehouse"
-                value={formData.target_warehouse}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-              >
-                <option value="">Select Warehouse</option>
-                {warehouses.map(wh => (
-                  <option key={wh.warehouse_id} value={wh.warehouse_id}>{wh.warehouse_name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Source Warehouse</label>
-              <select 
-                name="source_warehouse"
-                value={formData.source_warehouse}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-              >
-                <option value="">Select Warehouse</option>
-                {warehouses.map(wh => (
-                  <option key={wh.warehouse_id} value={wh.warehouse_id}>{wh.warehouse_name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Items Notes */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Items Notes</label>
-            <textarea 
-              name="items_notes"
-              value={formData.items_notes}
-              onChange={handleChange}
-              placeholder="Enter any additional notes about the items"
-              rows="3"
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', fontFamily: 'monospace' }}
-            />
-          </div>
-
-          {/* Add Items */}
-          <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-            <h4 style={{ marginTop: 0 }}>{editingItemIndex !== null ? 'Edit Material Item' : 'Add Material Items'}</h4>
+          {/* Section 1: Basic Information */}
+          <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '6px', border: '1px solid #e8e8e8' }}>
+            <h5 style={{ marginTop: 0, marginBottom: '16px', color: '#333', fontSize: '14px', fontWeight: '600' }}>Basic Information</h5>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '12px' }}>
               <div>
-                <label style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Item Code *</label>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Series No</label>
+                <input 
+                  type="text"
+                  name="series_no"
+                  value={formData.series_no}
+                  readOnly
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', backgroundColor: '#f5f5f5', fontSize: '13px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Transition Date</label>
+                <input 
+                  type="date"
+                  name="transition_date"
+                  value={formData.transition_date}
+                  onChange={handleChange}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Requested By <span style={{ color: '#d32f2f' }}>*</span></label>
+                <input 
+                  type="text"
+                  name="requested_by_id"
+                  value={formData.requested_by_id}
+                  onChange={handleChange}
+                  placeholder="Enter name or select from list"
+                  list="requestedByList"
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
+                />
+                <datalist id="requestedByList">
+                  {contacts.map(contact => (
+                    <option key={contact.contact_id} value={contact.name || contact.contact_id}>
+                      {contact.name}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Department <span style={{ color: '#d32f2f' }}>*</span></label>
+                <select 
+                  name="department"
+                  value={formData.department}
+                  onChange={handleChange}
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
+                >
+                  <option value="">Select Department</option>
+                  {departments.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Purpose <span style={{ color: '#d32f2f' }}>*</span></label>
+                <select 
+                  name="purpose"
+                  value={formData.purpose}
+                  onChange={handleChange}
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
+                >
+                  <option value="purchase">Purchase</option>
+                  <option value="material_transfer">Material Transfer</option>
+                  <option value="material_issue">Material Issue</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Required By Date <span style={{ color: '#d32f2f' }}>*</span></label>
+                <input 
+                  type="date"
+                  name="required_by_date"
+                  value={formData.required_by_date}
+                  onChange={handleChange}
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Warehouses */}
+          <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '6px', border: '1px solid #e8e8e8' }}>
+            <h5 style={{ marginTop: 0, marginBottom: '16px', color: '#333', fontSize: '14px', fontWeight: '600' }}>Warehouse Details</h5>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Target Warehouse</label>
+                <select 
+                  name="target_warehouse"
+                  value={formData.target_warehouse}
+                  onChange={handleChange}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
+                >
+                  <option value="">Select Warehouse</option>
+                  {warehouses.map(wh => (
+                    <option key={wh.warehouse_id} value={wh.warehouse_id}>{wh.warehouse_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Source Warehouse</label>
+                <select 
+                  name="source_warehouse"
+                  value={formData.source_warehouse}
+                  onChange={handleChange}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
+                >
+                  <option value="">Select Warehouse</option>
+                  {warehouses.map(wh => (
+                    <option key={wh.warehouse_id} value={wh.warehouse_id}>{wh.warehouse_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Notes */}
+          <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '6px', border: '1px solid #e8e8e8' }}>
+            <h5 style={{ marginTop: 0, marginBottom: '16px', color: '#333', fontSize: '14px', fontWeight: '600' }}>Additional Notes</h5>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', fontSize: '13px' }}>Items Notes</label>
+              <textarea 
+                name="items_notes"
+                value={formData.items_notes}
+                onChange={handleChange}
+                placeholder="Enter any additional notes about the items"
+                rows="3"
+                style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontFamily: 'monospace', fontSize: '13px', resize: 'vertical' }}
+              />
+            </div>
+          </div>
+
+          {/* Section 4: Add Items */}
+          <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '6px', border: '1px solid #e8e8e8' }}>
+            <h5 style={{ marginTop: 0, marginBottom: '16px', color: '#333', fontSize: '14px', fontWeight: '600' }}>
+              {editingItemIndex !== null ? 'Edit Material Item' : 'Add Material Items'}
+            </h5>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ fontSize: '13px', display: 'block', marginBottom: '6px', fontWeight: '500' }}>Item Code <span style={{ color: '#d32f2f' }}>*</span></label>
                 <select 
                   value={newItem.item_code}
                   onChange={(e) => {
@@ -335,7 +354,7 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
                       uom: item?.uom || 'pcs'
                     })
                   }}
-                  style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '12px' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
                 >
                   <option value="">Select Item</option>
                   {items.map(item => (
@@ -347,7 +366,7 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
               </div>
 
               <div>
-                <label style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Quantity *</label>
+                <label style={{ fontSize: '13px', display: 'block', marginBottom: '6px', fontWeight: '500' }}>Quantity <span style={{ color: '#d32f2f' }}>*</span></label>
                 <input 
                   type="number"
                   value={newItem.qty}
@@ -355,48 +374,48 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
                   placeholder="0"
                   min="0"
                   step="0.01"
-                  style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '12px' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px' }}
                 />
               </div>
 
               <div>
-                <label style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Unit of Measurement</label>
+                <label style={{ fontSize: '13px', display: 'block', marginBottom: '6px', fontWeight: '500' }}>UOM</label>
                 <input 
                   type="text"
                   value={newItem.uom}
                   readOnly
                   disabled
-                  style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '12px', backgroundColor: '#e8e8e8' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px', backgroundColor: '#e8e8e8' }}
                 />
               </div>
+            </div>
 
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Button 
+                onClick={handleAddItem}
+                variant="success"
+                type="button"
+                style={{ padding: '8px 16px', fontSize: '13px', whiteSpace: 'nowrap' }}
+              >
+                <Plus size={16} /> {editingItemIndex !== null ? 'Update Item' : 'Add Item'}
+              </Button>
+              {editingItemIndex !== null && (
                 <Button 
-                  onClick={handleAddItem}
-                  variant="success"
+                  onClick={handleCancelEdit}
+                  variant="secondary"
                   type="button"
-                  style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
+                  style={{ padding: '8px 16px', fontSize: '13px', whiteSpace: 'nowrap' }}
                 >
-                  <Plus size={14} /> {editingItemIndex !== null ? 'Update' : 'Add'}
+                  Cancel
                 </Button>
-                {editingItemIndex !== null && (
-                  <Button 
-                    onClick={handleCancelEdit}
-                    variant="secondary"
-                    type="button"
-                    style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
-                  >
-                    Cancel
-                  </Button>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
           {/* Items List */}
           {formData.items.length > 0 && (
-            <div style={{ marginBottom: '20px' }}>
-              <h4>Selected Items ({formData.items.length})</h4>
+            <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '6px', border: '1px solid #e8e8e8' }}>
+              <h5 style={{ marginTop: 0, marginBottom: '16px', color: '#333', fontSize: '14px', fontWeight: '600' }}>Selected Items ({formData.items.length})</h5>
               <div style={{ overflowX: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead style={{ backgroundColor: '#f5f5f5' }}>
@@ -444,12 +463,13 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
           )}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #e8e8e8' }}>
             <Button 
               type="button"
               variant="secondary"
               onClick={handleClose}
               disabled={loading}
+              style={{ padding: '10px 24px', fontSize: '13px' }}
             >
               Cancel
             </Button>
@@ -457,6 +477,7 @@ export default function CreateMaterialRequestModal({ isOpen, onClose, onSuccess 
               type="submit"
               variant="primary"
               disabled={loading}
+              style={{ padding: '10px 24px', fontSize: '13px' }}
             >
               {loading ? 'Creating...' : 'Create Material Request'}
             </Button>

@@ -18,15 +18,16 @@
   }
 
   h3 {
-    @apply text-2xl font-semibold text-[var(--text-primary)];
+    @apply text-sm font-semibold text-[var(--text-primary)];
   }
 
   h4 {
-    @apply text-xl font-semibold text-[var(--text-primary)];
+    @apply text-sm font-semibold text-[var(--text-primary)];
   }
 
   p {
-    @apply text-base text-[var(--text-secondary)] leading-relaxed;
+    @apply  text-[var(--text-secondary)] leading-relaxed;
+    font-size: 12px;
   }
 
   label {
@@ -124,12 +125,10 @@
     @apply badge bg-[var(--danger-100)] text-[var(--danger-700)];
   }
 
-  .form-group {
-    @apply mb-5;
-  }
+
 
   .form-group label {
-    @apply block mb-2.5 font-medium;
+    @apply block font-medium;
   }
 
   .form-row {

@@ -49,12 +49,12 @@ export class RFQController {
     try {
       const { db } = req.app.locals
 
-      const { created_by_id, valid_till, items, suppliers } = req.body
+      const { valid_till, items, suppliers } = req.body
 
-      if (!created_by_id || !valid_till) {
+      if (!valid_till) {
         return res.status(400).json({
           success: false,
-          error: 'Missing required fields: created_by_id, valid_till'
+          error: 'Missing required field: valid_till'
         })
       }
 

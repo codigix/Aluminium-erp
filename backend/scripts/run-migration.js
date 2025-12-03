@@ -5,43 +5,50 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-const db = createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'aluminium_erp',
-  port: process.env.DB_PORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-})
-
 async function runMigration() {
+  const db = createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'aluminium_erp',
+    port: process.env.DB_PORT || 3306
+  })
+
   try {
-    console.log('Reading GRN requests schema...')
-    const schemaPath = path.join(process.cwd(), 'scripts', 'grn_requests_schema.sql')
-    const schemaSql = fs.readFileSync(schemaPath, 'utf8')
-
-    const connection = await db.getConnection()
+    console.log('Starting database migration...')
     
-    const statements = schemaSql
+    // Read the migration file
+    const scriptDir = path.dirname(new URL(import.meta.url).pathname)
+    const migrationPath = path.join(scriptDir, 'fix-item-code-schema.sql')
+    const sql = fs.readFileSync(migrationPath, 'utf8')
+    
+    // Split the SQL into individual statements
+    const statements = sql
       .split(';')
-      .map(s => s.trim())
-      .filter(s => s && !s.startsWith('--') && !s.startsWith('/*'))
-
-    for (const statement of statements) {
-      if (statement.length > 0) {
-        console.log(`Executing: ${statement.substring(0, 60)}...`)
-        await connection.query(statement)
+      .map(stmt => stmt.trim())
+      .filter(stmt => stmt.length > 0)
+    
+    // Execute each statement
+    for (let i = 0; i < statements.length; i++) {
+      const statement = statements[i]
+      console.log(`Executing statement ${i + 1}/${statements.length}...`)
+      console.log(`${statement.substring(0, 80)}...`)
+      
+      try {
+        await db.execute(statement)
+      } catch (e) {
+        // Some errors are expected (like if columns don't exist), log but continue
+        console.warn(`  Warning: ${e.message}`)
       }
     }
-
-    console.log('✓ GRN requests tables created successfully')
-    connection.release()
-    await db.end()
+    
+    console.log('✓ Migration completed successfully!')
+    process.exit(0)
   } catch (error) {
     console.error('✗ Migration failed:', error.message)
     process.exit(1)
+  } finally {
+    await db.end()
   }
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { Eye, ChevronDown } from 'lucide-react'
 import '../Table/DataTable.css'
 
 export default function DataTable({ 
@@ -7,7 +8,9 @@ export default function DataTable({
   renderActions,
   filterable = true,
   sortable = true,
-  pageSize = 10
+  pageSize = 10,
+  disablePagination = false,
+  hideColumnToggle = false
 }) {
   const [filters, setFilters] = useState({})
   const [sortConfig, setSortConfig] = useState({
@@ -15,8 +18,33 @@ export default function DataTable({
     direction: 'asc'
   })
   const [currentPage, setCurrentPage] = useState(1)
+  const [visibleColumns, setVisibleColumns] = useState(
+    new Set(columns.map(col => col.key))
+  )
+  const [showColumnMenu, setShowColumnMenu] = useState(false)
 
-  // Apply filters
+  const filteredColumns = columns.filter(col => visibleColumns.has(col.key))
+
+  const toggleColumnVisibility = (columnKey) => {
+    setVisibleColumns(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(columnKey)) {
+        newSet.delete(columnKey)
+      } else {
+        newSet.add(columnKey)
+      }
+      return newSet
+    })
+  }
+
+  const showAllColumns = () => {
+    setVisibleColumns(new Set(columns.map(col => col.key)))
+  }
+
+  const hideAllColumns = () => {
+    setVisibleColumns(new Set())
+  }
+
   const filteredData = useMemo(() => {
     return data.filter(row => {
       return Object.entries(filters).every(([key, value]) => {
@@ -27,7 +55,6 @@ export default function DataTable({
     })
   }, [data, filters])
 
-  // Apply sorting
   const sortedData = useMemo(() => {
     if (!sortConfig.key) return filteredData
 
@@ -52,12 +79,14 @@ export default function DataTable({
     return sorted
   }, [filteredData, sortConfig])
 
-  // Paginate
-  const totalPages = Math.ceil(sortedData.length / pageSize)
+  const totalPages = disablePagination ? 1 : Math.ceil(sortedData.length / pageSize)
   const paginatedData = useMemo(() => {
+    if (disablePagination) {
+      return sortedData
+    }
     const start = (currentPage - 1) * pageSize
     return sortedData.slice(start, start + pageSize)
-  }, [sortedData, currentPage, pageSize])
+  }, [sortedData, currentPage, pageSize, disablePagination])
 
   const handleSort = (key) => {
     setSortConfig(prev => ({
@@ -73,9 +102,45 @@ export default function DataTable({
 
   return (
     <div className="data-table-wrapper">
-      {filterable && columns.length > 0 && (
+      {!hideColumnToggle && (
+        <div className="table-toolbar">
+          <div className="column-toggle-container">
+            <button
+              className="column-toggle-btn"
+              onClick={() => setShowColumnMenu(!showColumnMenu)}
+              title="Toggle column visibility"
+            >
+              <Eye size={18} />
+              <span>Columns ({visibleColumns.size}/{columns.length})</span>
+              <ChevronDown size={16} />
+            </button>
+            {showColumnMenu && (
+              <div className="column-menu">
+                <div className="column-menu-header">
+                  <button onClick={showAllColumns} className="column-menu-action">Show All</button>
+                  <button onClick={hideAllColumns} className="column-menu-action">Hide All</button>
+                </div>
+                <div className="column-menu-items">
+                  {columns.map(col => (
+                    <label key={col.key} className="column-menu-item">
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns.has(col.key)}
+                        onChange={() => toggleColumnVisibility(col.key)}
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {filterable && filteredColumns.length > 0 && (
         <div className="table-filters">
-          {columns.map(col => (
+          {filteredColumns.map(col => (
             <div key={col.key} className="filter-input">
               <label>{col.label}</label>
               <input 
@@ -93,12 +158,12 @@ export default function DataTable({
         <table className="data-table">
           <thead>
             <tr>
-              {columns.map(col => (
+              {filteredColumns.map(col => (
                 <th 
                   key={col.key}
                   style={{ width: col.width }}
                   onClick={() => sortable && handleSort(col.key)}
-                  className={sortable ? 'sortable' : ''}
+                  className={sortable && col.key !== 'actions' ? 'sortable' : ''}
                   title={sortable ? 'Click to sort' : ''}
                 >
                   <div className="th-content">
@@ -117,14 +182,14 @@ export default function DataTable({
           <tbody>
             {paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + (renderActions ? 1 : 0)} className="no-data">
+                <td colSpan={filteredColumns.length + (renderActions ? 1 : 0)} className="no-data">
                   No data available
                 </td>
               </tr>
             ) : (
               paginatedData.map((row, idx) => (
                 <tr key={idx} className="data-row">
-                  {columns.map(col => (
+                  {filteredColumns.map(col => (
                     <td key={col.key} style={{ width: col.width }}>
                       {col.render ? col.render(row[col.key], row) : row[col.key]}
                     </td>
@@ -141,7 +206,7 @@ export default function DataTable({
         </table>
       </div>
 
-      {totalPages > 1 && (
+      {!disablePagination && totalPages > 1 && (
         <div className="table-pagination">
           <button 
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}

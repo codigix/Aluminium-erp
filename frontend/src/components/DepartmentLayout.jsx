@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
-import ThemeToggle from './ThemeToggle'
+import Header from './Header'
 import '../styles/Sidebar.css'
 import {
   LayoutDashboard,
@@ -16,9 +16,6 @@ import {
   Receipt,
   Building2,
   ChevronRight,
-  Menu,
-  X,
-  LogOut,
   Users,
   Warehouse,
   AlertCircle,
@@ -27,7 +24,9 @@ import {
   CheckCircle,
   Calendar,
   Activity,
-  Eye
+  Eye,
+  Wrench,
+  Grid3x3
 } from 'lucide-react'
 
 /**
@@ -39,18 +38,32 @@ export default function DepartmentLayout({ children }) {
   const location = useLocation()
   const { user, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [expandedMenu, setExpandedMenu] = useState(null)
+  const [popoverMenu, setPopoverMenu] = useState(null)
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 })
 
   const userDept = user?.department?.toLowerCase() || 'buying'
 
   const isActive = (path) => location.pathname.startsWith(path)
+  const sidebarWidth = sidebarCollapsed ? 80 : 280
 
   const toggleMenu = (menu) => {
     setExpandedMenu(expandedMenu === menu ? null : menu)
   }
 
+  const handleCollapsedSubmenuClick = (item, event) => {
+    event.preventDefault()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setPopoverMenu(item.id === popoverMenu ? null : item.id)
+    setPopoverPosition({
+      top: rect.top,
+      left: rect.right + 10
+    })
+  }
+
   const handleLinkClick = () => {
-    // Only close sidebar on mobile devices
+    setPopoverMenu(null)
     if (window.innerWidth <= 768) {
       setSidebarOpen(false)
     }
@@ -62,16 +75,18 @@ export default function DepartmentLayout({ children }) {
       id: 'dashboard',
       label: 'Dashboard',
       icon: LayoutDashboard,
-      path: '/dashboard'
+      path: '/dashboard',
+      section: 'NAVIGATION'
     }
 
     const masterItems = {
       id: 'masters',
       label: 'Masters',
       icon: Settings,
+      section: 'APPS',
       submenu: [
         { label: 'Suppliers', path: '/masters/suppliers', icon: Building2 },
-        { label: 'Items', path: '/masters/items', icon: Package }
+        { label: 'Items', path: '/masters/items', icon: Package },
       ]
     }
 
@@ -83,6 +98,7 @@ export default function DepartmentLayout({ children }) {
           id: 'buying',
           label: 'Buying Module',
           icon: ShoppingCart,
+          section: 'APPS',
           submenu: [
             { label: 'Material Requests', path: '/buying/material-requests', icon: FileText },
             { label: 'RFQs', path: '/buying/rfqs', icon: Send },
@@ -97,6 +113,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: TrendingUp,
+          section: 'APPS',
           submenu: [
             { label: 'Buying Analytics', path: '/analytics/buying', icon: TrendingUp }
           ]
@@ -112,6 +129,7 @@ export default function DepartmentLayout({ children }) {
           id: 'selling',
           label: 'Selling Module',
           icon: TrendingUp,
+          section: 'APPS',
           submenu: [
             { label: 'Quotations', path: '/selling/quotations', icon: DollarSign },
             { label: 'Sales Orders', path: '/selling/sales-orders', icon: Clipboard },
@@ -124,6 +142,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: TrendingUp,
+          section: 'APPS',
           submenu: [
             { label: 'Sales Analytics', path: '/analytics/selling', icon: TrendingUp }
           ]
@@ -139,21 +158,20 @@ export default function DepartmentLayout({ children }) {
           id: 'inventory',
           label: 'Inventory Module',
           icon: Warehouse,
+          section: 'APPS',
           submenu: [
-            { label: 'Warehouses', path: '/inventory/warehouses', icon: Warehouse },
-            { label: 'Stock Balance', path: '/inventory/stock-balance', icon: Package },
+            { label: 'GRN Requests', path: '/inventory/grn-requests', icon: CheckCircle },
             { label: 'Stock Entries', path: '/inventory/stock-entries', icon: FileText },
+            { label: 'Stock Balance', path: '/inventory/stock-balance', icon: Package },
             { label: 'Stock Ledger', path: '/inventory/stock-ledger', icon: BarChart3 },
-            { label: 'Stock Transfers', path: '/inventory/stock-transfers', icon: Truck },
-            { label: 'Batch Tracking', path: '/inventory/batch-tracking', icon: Package },
-            { label: 'Reconciliation', path: '/inventory/reconciliation', icon: BarChart3 },
-            { label: 'Reorder Management', path: '/inventory/reorder-management', icon: AlertCircle }
+            { label: 'Warehouses', path: '/inventory/warehouses', icon: Warehouse }
           ]
         },
         {
           id: 'analytics',
           label: 'Analytics',
           icon: TrendingUp,
+          section: 'APPS',
           submenu: [
             { label: 'Inventory Analytics', path: '/analytics/inventory', icon: TrendingUp }
           ]
@@ -169,6 +187,7 @@ export default function DepartmentLayout({ children }) {
           id: 'buying',
           label: 'Buying Module',
           icon: ShoppingCart,
+          section: 'APPS',
           submenu: [
             { label: 'Material Requests', path: '/buying/material-requests', icon: FileText },
             { label: 'RFQs', path: '/buying/rfqs', icon: Send },
@@ -182,6 +201,7 @@ export default function DepartmentLayout({ children }) {
           id: 'selling',
           label: 'Selling Module',
           icon: TrendingUp,
+          section: 'APPS',
           submenu: [
             { label: 'Quotations', path: '/selling/quotations', icon: DollarSign },
             { label: 'Sales Orders', path: '/selling/sales-orders', icon: Clipboard },
@@ -194,15 +214,13 @@ export default function DepartmentLayout({ children }) {
           id: 'inventory',
           label: 'Inventory Module',
           icon: Warehouse,
+          section: 'APPS',
           submenu: [
-            { label: 'Warehouses', path: '/inventory/warehouses', icon: Warehouse },
-            { label: 'Stock Balance', path: '/inventory/stock-balance', icon: Package },
+            { label: 'GRN Requests', path: '/inventory/grn-requests', icon: CheckCircle },
             { label: 'Stock Entries', path: '/inventory/stock-entries', icon: FileText },
+            { label: 'Stock Balance', path: '/inventory/stock-balance', icon: Package },
             { label: 'Stock Ledger', path: '/inventory/stock-ledger', icon: BarChart3 },
-            { label: 'Stock Transfers', path: '/inventory/stock-transfers', icon: Truck },
-            { label: 'Batch Tracking', path: '/inventory/batch-tracking', icon: Package },
-            { label: 'Reconciliation', path: '/inventory/reconciliation', icon: BarChart3 },
-            { label: 'Reorder Management', path: '/inventory/reorder-management', icon: AlertCircle }
+            { label: 'Warehouses', path: '/inventory/warehouses', icon: Warehouse }
           ]
         },
         masterItems,
@@ -210,6 +228,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: TrendingUp,
+          section: 'APPS',
           submenu: [
             { label: 'Buying Analytics', path: '/analytics/buying', icon: TrendingUp },
             { label: 'Sales Analytics', path: '/analytics/selling', icon: TrendingUp },
@@ -220,6 +239,7 @@ export default function DepartmentLayout({ children }) {
           id: 'admin',
           label: 'Administration',
           icon: Users,
+          section: 'APPS',
           submenu: [
             { label: 'User Management', path: '/admin/users', icon: Users },
             { label: 'Settings', path: '/admin/settings', icon: Settings }
@@ -233,14 +253,26 @@ export default function DepartmentLayout({ children }) {
       return [
         dashboardItem,
         {
-          id: 'production',
-          label: 'Production Module',
+          id: 'billOfMaterials',
+          label: 'Bill of Materials',
           icon: Clipboard,
+          section: 'APPS',
           submenu: [
-            { label: 'Production Orders', path: '/production/orders', icon: Clipboard },
-            { label: 'Production Schedule', path: '/production/schedule', icon: Calendar },
-            { label: 'Daily Entries', path: '/production/entries', icon: Activity },
-            { label: 'Batch Tracking', path: '/production/batch-tracking', icon: Package },
+            { label: 'BOM', path: '/production/boms', icon: Clipboard },
+            { label: 'Workstations', path: '/production/workstations', icon: Grid3x3 },
+            { label: 'Operations', path: '/production/operations', icon: Wrench }
+          ]
+        },
+        {
+          id: 'production',
+          label: 'Production',
+          icon: Package,
+          section: 'APPS',
+          submenu: [
+            { label: 'Work Order', path: '/production/work-orders', icon: Clipboard },
+            { label: 'Job Card', path: '/production/job-cards', icon: FileText },
+            { label: 'Production Plan', path: '/production/plans', icon: Calendar },
+            { label: 'Production Orders', path: '/production/orders', icon: Package },
             { label: 'Quality Records', path: '/production/quality', icon: CheckCircle }
           ]
         },
@@ -248,6 +280,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: BarChart3,
+          section: 'APPS',
           submenu: [
             { label: 'Production Analytics', path: '/analytics/production', icon: TrendingUp }
           ]
@@ -263,6 +296,7 @@ export default function DepartmentLayout({ children }) {
           id: 'toolroom',
           label: 'Tool Room Module',
           icon: Settings,
+          section: 'APPS',
           submenu: [
             { label: 'Tools', path: '/toolroom/tools', icon: Package },
             { label: 'Die Register', path: '/toolroom/die-register', icon: Clipboard },
@@ -274,6 +308,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: BarChart3,
+          section: 'APPS',
           submenu: [
             { label: 'Tool Analytics', path: '/analytics/toolroom', icon: TrendingUp }
           ]
@@ -289,6 +324,7 @@ export default function DepartmentLayout({ children }) {
           id: 'quality',
           label: 'Quality Control Module',
           icon: CheckCircle,
+          section: 'APPS',
           submenu: [
             { label: 'Inspections', path: '/quality/inspections', icon: FileText },
             { label: 'Defects Log', path: '/quality/defects', icon: AlertCircle },
@@ -300,6 +336,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: BarChart3,
+          section: 'APPS',
           submenu: [
             { label: 'Quality Analytics', path: '/analytics/quality', icon: TrendingUp }
           ]
@@ -315,6 +352,7 @@ export default function DepartmentLayout({ children }) {
           id: 'dispatch',
           label: 'Dispatch & Logistics',
           icon: Truck,
+          section: 'APPS',
           submenu: [
             { label: 'Shipments', path: '/dispatch/shipments', icon: FileText },
             { label: 'Routes', path: '/dispatch/routes', icon: Activity },
@@ -326,6 +364,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: BarChart3,
+          section: 'APPS',
           submenu: [
             { label: 'Dispatch Analytics', path: '/analytics/dispatch', icon: TrendingUp }
           ]
@@ -341,6 +380,7 @@ export default function DepartmentLayout({ children }) {
           id: 'accounts',
           label: 'Accounts & Finance',
           icon: DollarSign,
+          section: 'APPS',
           submenu: [
             { label: 'Invoices', path: '/accounts/invoices', icon: Receipt },
             { label: 'Payments', path: '/accounts/payments', icon: DollarSign },
@@ -352,6 +392,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: BarChart3,
+          section: 'APPS',
           submenu: [
             { label: 'Financial Reports', path: '/analytics/accounts', icon: TrendingUp }
           ]
@@ -367,6 +408,7 @@ export default function DepartmentLayout({ children }) {
           id: 'hr',
           label: 'HR & Payroll',
           icon: Users,
+          section: 'APPS',
           submenu: [
             { label: 'Employees', path: '/hr/employees', icon: Users },
             { label: 'Attendance', path: '/hr/attendance', icon: CheckCircle },
@@ -378,6 +420,7 @@ export default function DepartmentLayout({ children }) {
           id: 'analytics',
           label: 'Analytics',
           icon: BarChart3,
+          section: 'APPS',
           submenu: [
             { label: 'HR Analytics', path: '/analytics/hr', icon: TrendingUp }
           ]
@@ -425,131 +468,160 @@ export default function DepartmentLayout({ children }) {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      {/* Sidebar Toggle Button (Mobile) */}
-      <button 
-        className="sidebar-toggle" 
-        onClick={() => setSidebarOpen(!sidebarOpen)} 
-        aria-label="Toggle sidebar"
-      >
-        {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+    <div style={{ backgroundColor: 'var(--bg-primary)', minHeight: '100vh' }}>
+      {/* Header - Fixed at top */}
+      <Header sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} />
 
-      {/* Overlay (Mobile) */}
-      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)}></div>}
+      {/* Main container with sidebar and content */}
+      <div style={{ display: 'flex', marginTop: '70px', minHeight: 'calc(100vh - 70px)' }}>
+        {/* Overlay (Mobile) */}
+        {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)}></div>}
 
-      {/* Sidebar */}
-      <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
-        {/* Brand */}
-        <div className="sidebar-brand">
-          <Link to="/dashboard">
-            <span className="brand-icon">🏭</span>
-            <span className="brand-text">Aluminium ERP</span>
-          </Link>
-        </div>
-
-        {/* User Info with Department Badge */}
-        <div className="user-section">
-          <div className="user-avatar" style={{ backgroundColor: getDepartmentBadgeColor() }}>
-            {user?.full_name?.charAt(0).toUpperCase()}
-          </div>
-          <div className="user-info">
-            <p className="user-name">{user?.full_name}</p>
-            <p className="user-email">{user?.email}</p>
-            <p style={{
-              fontSize: '12px',
-              marginTop: '4px',
-              padding: '4px 8px',
-              backgroundColor: getDepartmentBadgeColor() + '15',
-              color: getDepartmentBadgeColor(),
-              borderRadius: '4px',
-              textAlign: 'center',
-              fontWeight: '600'
-            }}>
-              {getDepartmentLabel()}
-            </p>
-          </div>
-        </div>
-
-        {/* Navigation Menu */}
+        {/* Sidebar */}
+        <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'} ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <nav className="sidebar-nav">
-          {menuItems.map((item) => {
-            const IconComponent = item.icon
-            return (
-              <div key={item.id} className="nav-group">
-                {item.submenu ? (
-                  <div>
-                    <button
-                      className={`nav-item submenu-toggle ${expandedMenu === item.id ? 'expanded' : ''}`}
-                      onClick={() => toggleMenu(item.id)}
-                    >
-                      <IconComponent className="nav-icon-lucide" size={20} />
-                      <span className="nav-label">{item.label}</span>
-                      <ChevronRight className="submenu-arrow-icon" size={18} />
-                    </button>
-                    {expandedMenu === item.id && (
-                      <div className="submenu">
-                        {item.submenu.map((subitem) => {
-                          const SubIconComponent = subitem.icon
-                          return (
-                            <Link
-                              key={subitem.path}
-                              to={subitem.path}
-                              className={`nav-subitem ${isActive(subitem.path) ? 'active' : ''}`}
-                              onClick={handleLinkClick}
+          {!sidebarCollapsed && (
+            <>
+              {Array.from(new Set(menuItems.map(item => item.section))).map((section) => (
+                <div key={section}>
+                  <div className="nav-section-label">{section}</div>
+                  {menuItems.filter(item => item.section === section).map((item) => {
+                    const IconComponent = item.icon
+                    return (
+                      <div key={item.id} className="nav-group">
+                        {item.submenu ? (
+                          <div>
+                            <button
+                              className={`nav-item submenu-toggle ${expandedMenu === item.id ? 'expanded' : ''}`}
+                              onClick={() => toggleMenu(item.id)}
+                              title={item.label}
                             >
-                              <SubIconComponent className="nav-icon-lucide" size={18} />
-                              <span className="nav-label">{subitem.label}</span>
-                            </Link>
-                          )
-                        })}
+                              <IconComponent className="nav-icon-lucide" size={20} />
+                              <span className="nav-label">{item.label}</span>
+                              <ChevronRight className="submenu-arrow-icon" size={18} />
+                            </button>
+                            {expandedMenu === item.id && (
+                              <div className="submenu">
+                                {item.submenu.map((subitem) => {
+                                  const SubIconComponent = subitem.icon
+                                  return (
+                                    <Link
+                                      key={subitem.path}
+                                      to={subitem.path}
+                                      className={`nav-subitem ${isActive(subitem.path) ? 'active' : ''}`}
+                                      onClick={handleLinkClick}
+                                    >
+                                      <SubIconComponent className="nav-icon-lucide" size={18} />
+                                      <span className="nav-label">{subitem.label}</span>
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <Link
+                            to={item.path}
+                            className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
+                            onClick={handleLinkClick}
+                            title={item.label}
+                            style={{ position: 'relative' }}
+                          >
+                            <IconComponent className="nav-icon-lucide" size={20} />
+                            <span className="nav-label">{item.label}</span>
+                          </Link>
+                        )}
                       </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </>
+          )}
+          {sidebarCollapsed && (
+            <>
+              {menuItems.map((item) => {
+                const IconComponent = item.icon
+                return (
+                  <div key={item.id} className="nav-group">
+                    {item.submenu ? (
+                      <button
+                        className={`nav-item submenu-toggle collapsed-submenu ${popoverMenu === item.id ? 'active' : ''}`}
+                        onClick={(e) => handleCollapsedSubmenuClick(item, e)}
+                        title={item.label}
+                      >
+                        <IconComponent className="nav-icon-lucide" size={20} />
+                      </button>
+                    ) : (
+                      <Link
+                        to={item.path}
+                        className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
+                        onClick={handleLinkClick}
+                        title={item.label}
+                      >
+                        <IconComponent className="nav-icon-lucide" size={20} />
+                      </Link>
                     )}
                   </div>
-                ) : (
-                  <Link
-                    to={item.path}
-                    className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
-                    onClick={handleLinkClick}
-                  >
-                    <IconComponent className="nav-icon-lucide" size={20} />
-                    <span className="nav-label">{item.label}</span>
-                  </Link>
-                )}
-              </div>
-            )
-          })}
+                )
+              })}
+            </>
+          )}
         </nav>
 
-        {/* Divider */}
-        <div className="sidebar-divider"></div>
+        </aside>
 
-        {/* Sidebar Footer */}
-        <div className="sidebar-footer">
-          <ThemeToggle />
-          <button
-            className="btn-logout"
-            onClick={() => {
-              logout()
-              handleLinkClick()
+        {/* Collapsed Sidebar Popover Menu */}
+        {sidebarCollapsed && popoverMenu && (
+          <div
+            className="nav-popover"
+            style={{
+              top: `${popoverPosition.top}px`,
+              left: `${popoverPosition.left}px`
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setPopoverMenu(null)
+              }
             }}
           >
-            <LogOut className="logout-icon" size={20} />
-            <span className="logout-text">Logout</span>
-          </button>
-          <p className="version">v1.0.0</p>
-        </div>
-      </aside>
+            {menuItems.find(item => item.id === popoverMenu)?.submenu?.map((subitem) => {
+              const SubIconComponent = subitem.icon
+              return (
+                <Link
+                  key={subitem.path}
+                  to={subitem.path}
+                  className={`popover-item ${isActive(subitem.path) ? 'active' : ''}`}
+                  onClick={handleLinkClick}
+                >
+                  <SubIconComponent className="nav-icon-lucide" size={18} />
+                  <span className="popover-label">{subitem.label}</span>
+                </Link>
+              )
+            })}
+          </div>
+        )}
 
-      {/* Main Content */}
-      <main style={{
-        flex: 1,
-        overflowY: 'auto',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        {children}
-      </main>
+        {/* Popover Overlay */}
+        {sidebarCollapsed && popoverMenu && (
+          <div
+            className="popover-overlay"
+            onClick={() => setPopoverMenu(null)}
+          />
+        )}
+
+        {/* Main Content */}
+        <main style={{
+          flex: 1,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          marginLeft: `${sidebarWidth}px`,
+          transition: 'margin-left 0.3s ease'
+        }}>
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

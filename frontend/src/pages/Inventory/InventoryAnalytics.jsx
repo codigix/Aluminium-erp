@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import Card from '../../components/Card/Card'
 import Alert from '../../components/Alert/Alert'
-import { TrendingUp, Boxes, AlertTriangle, DollarSign } from 'lucide-react'
-import './Inventory.css'
+import { TrendingUp, Boxes, AlertTriangle, DollarSign, ChevronRight } from 'lucide-react'
+import './InventoryAnalytics.css'
 
 export default function InventoryAnalytics() {
   const [analytics, setAnalytics] = useState(null)
@@ -29,136 +29,164 @@ export default function InventoryAnalytics() {
 
   if (loading) {
     return (
-      <div className="inventory-container">
-        <h1>Inventory Analytics</h1>
-        <div className="no-data">Loading analytics...</div>
+      <div className="analytics-container">
+        <div className="analytics-loading">
+          <div className="spinner"></div>
+          <p>Loading analytics...</p>
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="inventory-container">
-        <h1>Inventory Analytics</h1>
+      <div className="analytics-container">
+        <div className="analytics-header">
+          <div className="analytics-title">
+            <h1>Inventory Analytics</h1>
+            <p className="analytics-subtitle">Track and monitor your inventory metrics</p>
+          </div>
+        </div>
         <Alert type="danger">{error}</Alert>
       </div>
     )
   }
 
   return (
-    <div className="inventory-container">
-      <h1>📊 Inventory Analytics</h1>
+    <div className="analytics-container">
+      <div className="analytics-header">
+        <div className="analytics-title">
+          <h1>Inventory Analytics</h1>
+          <p className="analytics-subtitle">Real-time inventory metrics and insights</p>
+        </div>
+      </div>
 
-      {/* Key Metrics */}
-      <div className="inventory-stats">
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div className="inventory-stat-label">Total Inventory Value</div>
-              <div className="inventory-stat-value" style={{ color: '#059669' }}>
-                ₹{analytics?.total_value?.toLocaleString() || '0'}
-              </div>
-            </div>
-            <DollarSign size={40} style={{ color: '#059669', opacity: 0.5 }} />
+      <div className="analytics-metrics">
+        <div className="metric-card metric-card-primary">
+          <div className="metric-icon">
+            <DollarSign size={28} />
+          </div>
+          <div className="metric-content">
+            <span className="metric-label">Total Inventory Value</span>
+            <span className="metric-value">₹{analytics?.total_value?.toLocaleString() || '0'}</span>
+          </div>
+        </div>
+
+        <div className="metric-card metric-card-blue">
+          <div className="metric-icon">
+            <Boxes size={28} />
+          </div>
+          <div className="metric-content">
+            <span className="metric-label">Total Items</span>
+            <span className="metric-value">{analytics?.total_items || 0}</span>
+          </div>
+        </div>
+
+        <div className="metric-card metric-card-danger">
+          <div className="metric-icon">
+            <AlertTriangle size={28} />
+          </div>
+          <div className="metric-content">
+            <span className="metric-label">Low Stock Items</span>
+            <span className="metric-value">{analytics?.low_stock_items || 0}</span>
+          </div>
+        </div>
+
+        <div className="metric-card metric-card-success">
+          <div className="metric-icon">
+            <TrendingUp size={28} />
+          </div>
+          <div className="metric-content">
+            <span className="metric-label">Stock Turnover Rate</span>
+            <span className="metric-value">{analytics?.turnover_rate?.toFixed(2) || '0'}x</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="analytics-grid">
+        <Card title="Inventory by Warehouse" className="analytics-card">
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Warehouse</th>
+                  <th className="text-right">Total Items</th>
+                  <th className="text-right">Value</th>
+                  <th className="text-right">Occupancy</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics?.warehouse_distribution?.length > 0 ? (
+                  analytics.warehouse_distribution.map((wh, idx) => (
+                    <tr key={idx}>
+                      <td className="font-medium">{wh.warehouse_name}</td>
+                      <td className="text-right">{wh.item_count}</td>
+                      <td className="text-right font-medium">₹{wh.value?.toLocaleString()}</td>
+                      <td className="text-right">
+                        <span className="occupancy-badge">{wh.occupancy}%</span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="text-center no-data-cell">No warehouse data available</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </Card>
 
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div className="inventory-stat-label">Total Items</div>
-              <div className="inventory-stat-value">{analytics?.total_items || 0}</div>
-            </div>
-            <Boxes size={40} style={{ color: '#3b82f6', opacity: 0.5 }} />
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div className="inventory-stat-label">Low Stock Items</div>
-              <div className="inventory-stat-value" style={{ color: '#ef4444' }}>
-                {analytics?.low_stock_items || 0}
-              </div>
-            </div>
-            <AlertTriangle size={40} style={{ color: '#ef4444', opacity: 0.5 }} />
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div className="inventory-stat-label">Stock Turnover Rate</div>
-              <div className="inventory-stat-value">{analytics?.turnover_rate?.toFixed(2) || '0'}x</div>
-            </div>
-            <TrendingUp size={40} style={{ color: '#10b981', opacity: 0.5 }} />
+        <Card title="Top Items by Inventory Value" className="analytics-card">
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Item Code</th>
+                  <th>Item Name</th>
+                  <th className="text-right">Quantity</th>
+                  <th className="text-right">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics?.top_items?.length > 0 ? (
+                  analytics.top_items.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <span className="item-code">{item.item_code}</span>
+                      </td>
+                      <td className="font-medium">{item.item_name}</td>
+                      <td className="text-right">{item.quantity}</td>
+                      <td className="text-right font-medium">₹{item.value?.toLocaleString()}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="text-center no-data-cell">No item data available</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </Card>
       </div>
 
-      {/* Warehouse Distribution */}
-      <Card title="Inventory by Warehouse">
-        <table className="inventory-items-table">
-          <thead>
-            <tr>
-              <th>Warehouse</th>
-              <th>Total Items</th>
-              <th>Value</th>
-              <th>Occupancy</th>
-            </tr>
-          </thead>
-          <tbody>
-            {analytics?.warehouse_distribution?.map((wh, idx) => (
-              <tr key={idx}>
-                <td>{wh.warehouse_name}</td>
-                <td>{wh.item_count}</td>
-                <td>₹{wh.value?.toLocaleString()}</td>
-                <td>{wh.occupancy}%</td>
-              </tr>
-            )) || (
-              <tr>
-                <td colSpan="4" style={{ textAlign: 'center' }}>No data</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
-
-      {/* Top Items by Value */}
-      <Card title="Top Items by Inventory Value">
-        <table className="inventory-items-table">
-          <thead>
-            <tr>
-              <th>Item Code</th>
-              <th>Item Name</th>
-              <th>Quantity</th>
-              <th>Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {analytics?.top_items?.map((item, idx) => (
-              <tr key={idx}>
-                <td>{item.item_code}</td>
-                <td>{item.item_name}</td>
-                <td>{item.quantity}</td>
-                <td>₹{item.value?.toLocaleString()}</td>
-              </tr>
-            )) || (
-              <tr>
-                <td colSpan="4" style={{ textAlign: 'center' }}>No data</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
-
-      {/* Stock Movement Trend */}
-      <Card title="Stock Movement (Last 30 Days)">
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          <div className="inventory-stat-value">{analytics?.stock_movements_count || 0}</div>
-          <div className="inventory-stat-label">Total Transactions</div>
-          <div style={{ marginTop: '10px', fontSize: '14px', color: 'var(--text-secondary)' }}>
-            Inward: {analytics?.inward_qty || 0} | Outward: {analytics?.outward_qty || 0}
+      <Card title="Stock Movement (Last 30 Days)" className="analytics-card analytics-card-full">
+        <div className="stock-movement">
+          <div className="movement-stat">
+            <div className="movement-number">{analytics?.stock_movements_count || 0}</div>
+            <div className="movement-label">Total Transactions</div>
+          </div>
+          <div className="movement-divider"></div>
+          <div className="movement-row">
+            <div className="movement-item">
+              <span className="movement-badge inward">Inward</span>
+              <span className="movement-value">{analytics?.inward_qty || 0}</span>
+            </div>
+            <div className="movement-item">
+              <span className="movement-badge outward">Outward</span>
+              <span className="movement-value">{analytics?.outward_qty || 0}</span>
+            </div>
           </div>
         </div>
       </Card>

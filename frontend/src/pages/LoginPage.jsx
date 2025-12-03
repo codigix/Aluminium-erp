@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
-import { Lock, Mail, User, Eye, EyeOff, Building2, CheckCircle, AlertCircle } from 'lucide-react'
+import { Lock, Mail, User, Eye, EyeOff, Building2, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react'
 import '../styles/LoginPage.css'
 
 export default function LoginPage() {
@@ -18,18 +18,18 @@ export default function LoginPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const departments = [
-    { value: 'buying', label: 'Buying/Procurement', color: '#4F46E5' },
-    { value: 'selling', label: 'Selling/Sales', color: '#7C3AED' },
-    { value: 'inventory', label: 'Inventory/Stock', color: '#059669' },
-    { value: 'production', label: 'Production/Manufacturing', color: '#F59E0B' },
-    { value: 'toolroom', label: 'Tool Room/Maintenance', color: '#8B5CF6' },
-    { value: 'quality', label: 'Quality Control/QC', color: '#06B6D4' },
-    { value: 'dispatch', label: 'Dispatch/Logistics', color: '#EC4899' },
-    { value: 'accounts', label: 'Accounts/Finance', color: '#14B8A6' },
-    { value: 'hr', label: 'HR/Payroll', color: '#3B82F6' },
-    { value: 'admin', label: 'Administration', color: '#DC2626' }
+    { value: 'buying', label: 'Buying' },
+    { value: 'selling', label: 'Selling' },
+    { value: 'inventory', label: 'Inventory' },
+    { value: 'production', label: 'Production' },
+    { value: 'toolroom', label: 'Tool Room' },
+    { value: 'quality', label: 'Quality' },
+    { value: 'dispatch', label: 'Dispatch' },
+    { value: 'accounts', label: 'Accounts' },
+    { value: 'hr', label: 'HR' },
+    { value: 'admin', label: 'Admin' }
   ]
-  
+
   const { login, register } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -42,7 +42,6 @@ export default function LoginPage() {
 
     try {
       if (isLogin) {
-        // Login
         if (!email || !password) {
           throw new Error('Please enter email and password')
         }
@@ -53,7 +52,6 @@ export default function LoginPage() {
           navigate(from)
         }, 1000)
       } else {
-        // Register
         if (!email || !fullName || !password || !confirmPassword || !department) {
           throw new Error('Please fill all fields')
         }
@@ -78,17 +76,21 @@ export default function LoginPage() {
 
   return (
     <div className="login-container">
-      <div className="login-wrapper">
-        <div className="login-box">
-          <div className="login-header">
-            <div className="login-header-icon">
-              <Building2 size={40} />
+      <div className="login-card">
+        <div className="card-header">
+          <div className="header-top">
+            <div className="brand">
+              <div className="brand-icon">
+                <Building2 size={28} strokeWidth={1.5} />
+              </div>
+              <div className="brand-info">
+                <h1>Aluminium ERP</h1>
+                <p>Enterprise Management</p>
+              </div>
             </div>
-            <h1>Aluminium ERP</h1>
-            <p>Buying Module - Procurement Management System</p>
           </div>
 
-          <div className="login-tabs">
+          <div className="tabs">
             <button
               className={`tab ${isLogin ? 'active' : ''}`}
               onClick={() => {
@@ -97,7 +99,7 @@ export default function LoginPage() {
                 setSuccess('')
               }}
             >
-              Login
+              Sign In
             </button>
             <button
               className={`tab ${!isLogin ? 'active' : ''}`}
@@ -110,101 +112,89 @@ export default function LoginPage() {
               Register
             </button>
           </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="login-form">
-            {error && <div className="alert alert-error"><AlertCircle size={18} style={{display: 'inline-block', marginRight: '8px'}} />{error}</div>}
-            {success && <div className="alert alert-success"><CheckCircle size={18} style={{display: 'inline-block', marginRight: '8px'}} />{success}</div>}
+        <div className="card-body">
+          {error && (
+            <div className="alert alert-error">
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+          {success && (
+            <div className="alert alert-success">
+              <CheckCircle size={16} />
+              <span>{success}</span>
+            </div>
+          )}
 
+          <form onSubmit={handleSubmit}>
             {!isLogin && (
-              <div className="form-group">
-                <label><User size={16} style={{display: 'inline', marginRight: '6px'}} />Full Name</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Enter your full name"
-                  disabled={loading}
-                />
+              <div className="form-field">
+                <label>Full Name</label>
+                <div className="input-field">
+                  <User size={18} className="icon" />
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="John Doe"
+                    disabled={loading}
+                  />
+                </div>
               </div>
             )}
 
-            {!isLogin && (
-              <div className="form-group">
-                <label><Building2 size={16} style={{display: 'inline', marginRight: '6px'}} />Department</label>
-                <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
+            <div className="form-field">
+              <label>Email Address</label>
+              <div className="input-field">
+                <Mail size={18} className="icon" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
                   disabled={loading}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontFamily: 'inherit',
-                    backgroundColor: '#fff',
-                    cursor: 'pointer',
-                    transition: 'border-color 0.2s'
-                  }}
-                >
+                />
+              </div>
+            </div>
+
+            {!isLogin && (
+              <div className="form-field">
+                <label>Department</label>
+                <div className="dept-list">
                   {departments.map(dept => (
-                    <option key={dept.value} value={dept.value}>{dept.label}</option>
-                  ))}
-                </select>
-                <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
-                  {departments.map(dept => (
-                    <div
+                    <button
                       key={dept.value}
-                      onClick={() => !loading && setDepartment(dept.value)}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: '6px',
-                        textAlign: 'center',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                        border: department === dept.value ? '2px solid ' + dept.color : '1px solid #e5e7eb',
-                        backgroundColor: department === dept.value ? dept.color + '10' : '#f9fafb',
-                        color: department === dept.value ? dept.color : '#666',
-                        transition: 'all 0.2s',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
+                      type="button"
+                      className={`dept-item ${department === dept.value ? 'active' : ''}`}
+                      onClick={() => setDepartment(dept.value)}
+                      disabled={loading}
                     >
                       {dept.label}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="form-group">
-              <label><Mail size={16} style={{display: 'inline', marginRight: '6px'}} />Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label><Lock size={16} style={{display: 'inline', marginRight: '6px'}} />Password</label>
-              <div className="password-input-wrapper">
+            <div className="form-field">
+              <label>Password</label>
+              <div className="input-field password-field">
+                <Lock size={18} className="icon" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder="••••••••"
                   disabled={loading}
                 />
                 <button
                   type="button"
-                  className="password-toggle"
+                  className="eye-btn"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={loading}
+                  tabIndex="-1"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -212,21 +202,23 @@ export default function LoginPage() {
             </div>
 
             {!isLogin && (
-              <div className="form-group">
-                <label><Lock size={16} style={{display: 'inline', marginRight: '6px'}} />Confirm Password</label>
-                <div className="password-input-wrapper">
+              <div className="form-field">
+                <label>Confirm Password</label>
+                <div className="input-field password-field">
+                  <Lock size={18} className="icon" />
                   <input
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm password"
+                    placeholder="••••••••"
                     disabled={loading}
                   />
                   <button
                     type="button"
-                    className="password-toggle"
+                    className="eye-btn"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     disabled={loading}
+                    tabIndex="-1"
                   >
                     {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -234,32 +226,32 @@ export default function LoginPage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              className="btn-submit"
-              disabled={loading}
-            >
-              {loading ? 'Processing...' : (isLogin ? 'Login' : 'Register')}
+            <button type="submit" className="btn-submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="spinner"></span>
+                  Processing
+                </>
+              ) : (
+                <>
+                  {isLogin ? 'Sign In' : 'Create Account'}
+                  <ArrowRight size={18} />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="login-footer">
-            <p><Lock size={16} style={{display: 'inline', marginRight: '6px'}} />Your data is secure and encrypted</p>
-            {isLogin && (
-              <div className="demo-credentials">
-                <strong>Demo Credentials (Any Department):</strong><br/>
-                Email: test@example.com<br/>
-                Password: password123<br/>
-                <br/>
-                <strong>Or Register New:</strong><br/>
-                1. Enter your name & email<br/>
-                2. Select any department<br/>
-                3. Password: password123<br/>
-                <br/>
-                <small>🎯 Available Departments: Buying, Selling, Inventory, Production, Tool Room, Quality, Dispatch, Accounts, HR, Admin</small>
-              </div>
-            )}
-          </div>
+          {isLogin && (
+            <div className="footer">
+              <details>
+                <summary>Demo Credentials</summary>
+                <div className="demo-box">
+                  <p><strong>Email:</strong> test@example.com</p>
+                  <p><strong>Password:</strong> password123</p>
+                </div>
+              </details>
+            </div>
+          )}
         </div>
       </div>
     </div>

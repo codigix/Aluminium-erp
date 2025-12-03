@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import axios from 'axios'
 import Button from '../../components/Button/Button'
@@ -14,7 +14,6 @@ export default function RFQForm() {
 
   const [formData, setFormData] = useState({
     series_no: '',
-    created_by_id: '',
     valid_till: '',
     items: [],
     suppliers: []
@@ -23,7 +22,6 @@ export default function RFQForm() {
   const [approvedMRs, setApprovedMRs] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [allItems, setAllItems] = useState([])
-  const [contacts, setContacts] = useState([])
   const [companyInfo, setCompanyInfo] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -52,18 +50,17 @@ export default function RFQForm() {
 
   const fetchRequiredData = async () => {
     try {
-      const [mrRes, supRes, itemRes, contRes, compRes] = await Promise.all([
-        axios.get('/api/material-requests/approved'),
-        axios.get('/api/suppliers?active=true'),
-        axios.get('/api/items?limit=1000'),
-        axios.get('/api/suppliers/contacts/all'),
-        axios.get('/api/company-info').catch(() => ({ data: { data: null } }))
+      const apiUrl = import.meta.env.VITE_API_URL
+      const [mrRes, supRes, itemRes, compRes] = await Promise.all([
+        axios.get(`${apiUrl}/material-requests/approved`),
+        axios.get(`${apiUrl}/suppliers?active=true`),
+        axios.get(`${apiUrl}/items?limit=1000`),
+        axios.get(`${apiUrl}/company-info`).catch(() => ({ data: { data: null } }))
       ])
 
       setApprovedMRs(mrRes.data.data || [])
       setSuppliers(supRes.data.data || [])
       setAllItems(itemRes.data.data || [])
-      setContacts(contRes.data.data || [])
       setCompanyInfo(compRes.data.data)
     } catch (err) {
       console.error('Failed to fetch required data:', err)
@@ -72,11 +69,11 @@ export default function RFQForm() {
 
   const fetchRFQ = async () => {
     try {
-      const response = await axios.get(`/api/rfqs/${id}`)
+      const apiUrl = import.meta.env.VITE_API_URL
+      const response = await axios.get(`${apiUrl}/rfqs/${id}`)
       const rfq = response.data.data
       setFormData({
         series_no: rfq.series_no || '',
-        created_by_id: rfq.created_by_id,
         valid_till: rfq.valid_till,
         items: rfq.items || [],
         suppliers: rfq.suppliers || []
@@ -179,26 +176,26 @@ export default function RFQForm() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!formData.created_by_id || !formData.valid_till || formData.items.length === 0 || formData.suppliers.length === 0) {
+    if (!formData.valid_till || formData.items.length === 0 || formData.suppliers.length === 0) {
       setError('Please fill all required fields')
       return
     }
 
     try {
       setLoading(true)
+      const apiUrl = import.meta.env.VITE_API_URL
       const submitData = {
         series_no: formData.series_no,
-        created_by_id: formData.created_by_id,
         valid_till: formData.valid_till,
         items: formData.items,
         suppliers: formData.suppliers.map(({ id, ...supplier }) => supplier)
       }
 
       if (isEditMode) {
-        await axios.put(`/api/rfqs/${id}`, submitData)
+        await axios.put(`${apiUrl}/rfqs/${id}`, submitData)
         setSuccess('RFQ updated successfully')
       } else {
-        await axios.post('/api/rfqs', submitData)
+        await axios.post(`${apiUrl}/rfqs`, submitData)
         setSuccess('RFQ created successfully')
       }
 
@@ -257,23 +254,6 @@ export default function RFQForm() {
                 readOnly
                 style={{ backgroundColor: '#f5f5f5', cursor: 'default' }}
               />
-            </div>
-
-            <div className="form-group">
-              <label>Created By *</label>
-              <select 
-                name="created_by_id"
-                value={formData.created_by_id}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Select Contact</option>
-                {contacts.map(contact => (
-                  <option key={contact.contact_id} value={contact.contact_id}>
-                    {contact.name}
-                  </option>
-                ))}
-              </select>
             </div>
 
             <div className="form-group">

@@ -209,7 +209,7 @@ export default function StockTransfers() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (val, row) => (
+      render: (row) => (
         <div className="inventory-actions-cell">
           {row.status === 'in-transit' && (
             <button className="btn-edit" onClick={() => handleReceive(row.transfer_id)}>

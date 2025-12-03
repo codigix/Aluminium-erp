@@ -7,10 +7,13 @@ class StockBalanceModel {
   static async getAll(filters = {}) {
     try {
       const db = this.getDb()
+      const params = []
       let query = `
         SELECT 
           sb.*,
+          i.item_code,
           i.name as item_name,
+          i.item_group,
           i.uom,
           w.warehouse_code,
           w.warehouse_name
@@ -19,7 +22,6 @@ class StockBalanceModel {
         LEFT JOIN warehouses w ON sb.warehouse_id = w.id
         WHERE 1=1
       `
-      const params = []
 
       if (filters.warehouseId) {
         query += ' AND sb.warehouse_id = ?'
@@ -27,8 +29,13 @@ class StockBalanceModel {
       }
 
       if (filters.itemCode) {
-        query += ' AND sb.item_code = ?'
+        query += ' AND i.item_code = ?'
         params.push(filters.itemCode)
+      }
+
+      if (filters.itemId) {
+        query += ' AND i.item_code = ?'
+        params.push(filters.itemId)
       }
 
       if (filters.department && filters.department !== 'all') {
@@ -37,7 +44,7 @@ class StockBalanceModel {
       }
 
       if (filters.search) {
-        query += ' AND (sb.item_code LIKE ? OR i.name LIKE ?)'
+        query += ' AND (i.item_code LIKE ? OR i.name LIKE ?)'
         const searchTerm = `%${filters.search}%`
         params.push(searchTerm, searchTerm)
       }
@@ -47,7 +54,7 @@ class StockBalanceModel {
         params.push(filters.isLocked)
       }
 
-      query += ' ORDER BY sb.item_code ASC'
+      query += ' ORDER BY i.item_code ASC'
 
       const [rows] = await db.query(query, params)
       return rows
@@ -60,10 +67,14 @@ class StockBalanceModel {
   static async getByItemAndWarehouse(itemCode, warehouseId) {
     try {
       const db = this.getDb()
-      const [rows] = await db.query(
-        `SELECT * FROM stock_balance WHERE item_code = ? AND warehouse_id = ?`,
-        [itemCode, warehouseId]
-      )
+      
+      const query = `SELECT sb.*, i.item_code, i.name as item_name, i.item_group, i.uom, w.warehouse_code, w.warehouse_name
+                     FROM stock_balance sb
+                     LEFT JOIN item i ON sb.item_code = i.item_code
+                     LEFT JOIN warehouses w ON sb.warehouse_id = w.id
+                     WHERE sb.item_code = ? AND sb.warehouse_id = ?`
+      
+      const [rows] = await db.query(query, [itemCode, warehouseId])
       return rows[0] || null
     } catch (error) {
       throw new Error(`Failed to fetch stock balance: ${error.message}`)
@@ -119,7 +130,7 @@ class StockBalanceModel {
       let query = `
         SELECT 
           sb.*,
-          i.name as item_name,
+          i.item_name,
           w.warehouse_code,
           w.warehouse_name
         FROM stock_balance sb
@@ -154,6 +165,7 @@ class StockBalanceModel {
       const db = this.getDb()
       let query = `
         SELECT 
+          w.id,
           w.warehouse_code,
           w.warehouse_name,
           COUNT(DISTINCT sb.item_code) as total_items,
@@ -216,6 +228,7 @@ class StockBalanceModel {
   static async updateAvailableQty(itemCode, warehouseId, qty, operation = 'subtract') {
     try {
       const db = this.getDb()
+      
       const sign = operation === 'subtract' ? '-' : '+'
       await db.query(
         `UPDATE stock_balance 

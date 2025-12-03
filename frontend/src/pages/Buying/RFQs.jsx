@@ -145,7 +145,7 @@ export default function RFQs() {
   ]
 
   const renderActions = (row) => (
-    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: '5px'}}>
       <Button 
         size="sm"
         variant="icon"
@@ -218,7 +218,7 @@ export default function RFQs() {
   )
 
   return (
-    <div>
+    <div className="container mx-auto px-4 py-8">
       <CreateRFQModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

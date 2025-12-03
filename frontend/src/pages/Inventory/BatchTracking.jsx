@@ -158,12 +158,13 @@ export default function BatchTracking() {
     {
       key: 'expiry_date',
       label: 'Expiry Date',
-      render: (row) => new Date(row.expiry_date).toLocaleDateString()
+      render: (value) => value ? new Date(value).toLocaleDateString() : 'N/A'
     },
     {
       key: 'status',
       label: 'Status',
-      render: (row) => {
+      render: (value, row) => {
+        if (!row) return null
         const status = getBatchStatus(row.expiry_date, row.qty_available)
         return <Badge className={status.color}>{status.text}</Badge>
       }
@@ -171,11 +172,14 @@ export default function BatchTracking() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (val, row) => (
+      render: (value, row) => {
+        if (!row) return null
+        return (
         <button className="btn-delete" onClick={() => handleDelete(row.batch_id)}>
           <Trash2 size={14} />
         </button>
       )
+      }
     }
   ]
 

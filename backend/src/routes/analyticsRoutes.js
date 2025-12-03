@@ -1,7 +1,11 @@
 import express from 'express';
 import BuyingAnalyticsController from '../controllers/BuyingAnalyticsController.js';
+import InventoryAnalyticsController from '../controllers/InventoryAnalyticsController.js';
 
 const router = express.Router();
+
+// Inventory Analytics
+router.get('/inventory', InventoryAnalyticsController.getInventoryAnalytics);
 
 // Analytics Summary
 router.get('/buying/summary', BuyingAnalyticsController.getSummary);

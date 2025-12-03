@@ -86,14 +86,12 @@ export default function StockLedger() {
     setCurrentPage(1)
   }
 
-  // Pagination logic
   const totalPages = Math.ceil(ledgers.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const paginatedData = ledgers.slice(startIndex, endIndex)
 
   const handleDownload = () => {
-    // Create CSV export
     const headers = ['Item Code', 'Warehouse', 'Date', 'Transaction Type', 'Qty In', 'Qty Out', 'Balance', 'Rate', 'Value']
     const csvContent = [
       headers.join(','),
@@ -126,22 +124,22 @@ export default function StockLedger() {
     {
       key: 'posting_date',
       label: 'Date',
-      render: (row) => new Date(row.posting_date).toLocaleDateString()
+      render: (value, row) => row ? new Date(row.posting_date).toLocaleDateString() : '-'
     },
     {
       key: 'transaction_type',
       label: 'Type',
-      render: (row) => <Badge>{row.transaction_type}</Badge>
+      render: (value, row) => row ? <Badge>{row.transaction_type}</Badge> : '-'
     },
     {
       key: 'qty_in',
       label: 'In',
-      render: (row) => row.qty_in ? `+${row.qty_in}` : '-'
+      render: (value, row) => row && row.qty_in ? `+${row.qty_in}` : '-'
     },
     {
       key: 'qty_out',
       label: 'Out',
-      render: (row) => row.qty_out ? `-${row.qty_out}` : '-'
+      render: (value, row) => row && row.qty_out ? `-${row.qty_out}` : '-'
     },
     {
       key: 'balance',
@@ -150,12 +148,12 @@ export default function StockLedger() {
     {
       key: 'rate',
       label: 'Rate',
-      render: (row) => `₹${row.rate || 0}`
+      render: (value, row) => row ? `₹${row.rate || 0}` : '-'
     },
     {
       key: 'value',
       label: 'Value',
-      render: (row) => `₹${((row.balance || 0) * (row.rate || 0)).toFixed(2)}`
+      render: (value, row) => row ? `₹${((row.balance || 0) * (row.rate || 0)).toFixed(2)}` : '-'
     }
   ]
 
@@ -163,25 +161,25 @@ export default function StockLedger() {
     <div className="inventory-container">
       <div className="inventory-header">
         <h1>
-          <BookOpen size={28} style={{ display: 'inline', marginRight: '10px' }} />
+          <BookOpen size={18} style={{ display: 'inline', marginRight: '6px' }} />
           Stock Ledger
         </h1>
-        <Button variant="secondary" onClick={handleDownload} icon={Download}>
+        <Button 
+          variant="secondary" 
+          onClick={handleDownload} 
+          icon={Download}
+          style={{ padding: '6px 10px', fontSize: '11px' }}
+        >
           Download
         </Button>
       </div>
 
       {error && <Alert type="danger">{error}</Alert>}
 
-      {/* Filters */}
       {ledgers.length > 0 && (
         <div className="inventory-filters">
-          <select
-            name="warehouse_id"
-            value={filters.warehouse_id}
-            onChange={handleFilterChange}
-          >
-            <option value="">All Warehouses</option>
+          <select name="warehouse_id" value={filters.warehouse_id} onChange={handleFilterChange}>
+            <option value="">All WH</option>
             {warehouses.map(wh => (
               <option key={wh.warehouse_id} value={wh.warehouse_id}>
                 {wh.warehouse_name}
@@ -189,46 +187,31 @@ export default function StockLedger() {
             ))}
           </select>
 
-          <select
-            name="item_code"
-            value={filters.item_code}
-            onChange={handleFilterChange}
-          >
+          <select name="item_code" value={filters.item_code} onChange={handleFilterChange}>
             <option value="">All Items</option>
             {items.map(item => (
               <option key={item.item_code} value={item.item_code}>
-                {item.item_name} ({item.item_code})
+                {item.item_code}
               </option>
             ))}
           </select>
 
-          <input
-            type="date"
-            name="from_date"
-            value={filters.from_date}
-            onChange={handleFilterChange}
-          />
-
-          <input
-            type="date"
-            name="to_date"
-            value={filters.to_date}
-            onChange={handleFilterChange}
-          />
+          <input type="date" name="from_date" value={filters.from_date} onChange={handleFilterChange} />
+          <input type="date" name="to_date" value={filters.to_date} onChange={handleFilterChange} />
 
           {(filters.warehouse_id || filters.item_code || filters.from_date || filters.to_date) && (
             <Button 
               variant="secondary" 
               onClick={handleClearFilters}
               icon={X}
+              style={{ padding: '6px 10px', fontSize: '11px' }}
             >
-              Clear Filters
+              Clear
             </Button>
           )}
         </div>
       )}
 
-      {/* Table */}
       {loading ? (
         <div className="no-data">
           <BookOpen size={48} style={{ opacity: 0.5 }} />

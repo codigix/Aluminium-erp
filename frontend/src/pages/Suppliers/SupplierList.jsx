@@ -1,46 +1,51 @@
 ﻿import { useState, useEffect } from 'react'
-import Card from '../../components/Card/Card'
 import Button from '../../components/Button/Button'
-import Input from '../../components/Input/Input'
 import Badge from '../../components/Badge/Badge'
-import Modal, { useModal } from '../../components/Modal/Modal'
 import Alert from '../../components/Alert/Alert'
-import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table/Table'
-import DataTable from '../../components/Table/DataTable'
-import AdvancedFilters from '../../components/AdvancedFilters'
+import SearchableSelect from '../../components/SearchableSelect'
 import { suppliersAPI } from '../../services/api'
+import { Plus, Edit2, Trash2, X, Check } from 'lucide-react'
 
 export default function SupplierList() {
   const [suppliers, setSuppliers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [formError, setFormError] = useState('')
+
   const [filters, setFilters] = useState({
     search: '',
-    status: '',
+    status: 'all',
     group: ''
   })
-  
-  // Form states
+
   const [formData, setFormData] = useState({
     name: '',
     supplier_group: '',
     gstin: '',
+    email: '',
+    phone: '',
     payment_terms_days: 30,
     lead_time_days: 7,
     rating: 0,
     is_active: true
   })
-  const [editingId, setEditingId] = useState(null)
-  const [formError, setFormError] = useState('')
 
-  // Modal states
-  const addModal = useModal()
-  const editModal = useModal()
-  const deleteModal = useModal()
-  const [selectedSupplier, setSelectedSupplier] = useState(null)
+  const supplierGroups = [
+    { label: 'Raw Materials', value: 'Raw Materials' },
+    { label: 'Components', value: 'Components' },
+    { label: 'Services', value: 'Services' },
+    { label: 'Tools', value: 'Tools' }
+  ]
 
-  // Fetch suppliers
+  const statusOptions = [
+    { label: 'All Status', value: 'all' },
+    { label: 'Active', value: 'true' },
+    { label: 'Inactive', value: 'false' }
+  ]
+
   useEffect(() => {
     fetchSuppliers()
   }, [])
@@ -59,100 +64,21 @@ export default function SupplierList() {
     }
   }
 
-  // Filter configuration
-  const filterConfig = [
-    {
-      key: 'search',
-      label: 'Search',
-      type: 'text',
-      placeholder: 'Supplier name, ID, or GSTIN...'
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      type: 'select',
-      options: [
-        { value: '', label: 'All Status' },
-        { value: 'active', label: 'Active' },
-        { value: 'inactive', label: 'Inactive' }
-      ]
-    },
-    {
-      key: 'group',
-      label: 'Group',
-      type: 'select',
-      options: [
-        { value: '', label: 'All Groups' },
-        { value: 'Raw Materials', label: 'Raw Materials' },
-        { value: 'Components', label: 'Components' },
-        { value: 'Services', label: 'Services' },
-        { value: 'Tools', label: 'Tools' }
-      ]
-    }
-  ]
-
-  // Column configuration
-  const columns = [
-    {
-      key: 'supplier_id',
-      label: 'Supplier ID',
-      width: '12%'
-    },
-    {
-      key: 'name',
-      label: 'Name',
-      width: '18%'
-    },
-    {
-      key: 'supplier_group',
-      label: 'Group',
-      width: '12%',
-      render: (val) => val || '-'
-    },
-    {
-      key: 'gstin',
-      label: 'GSTIN',
-      width: '15%',
-      render: (val) => val ? <span className="font-mono text-sm">{val}</span> : '-'
-    },
-    {
-      key: 'rating',
-      label: 'Rating',
-      width: '10%',
-      render: (val) => val ? `⭐ ${(parseFloat(val) || 0).toFixed(1)}` : '—'
-    },
-    {
-      key: 'is_active',
-      label: 'Status',
-      width: '12%',
-      render: (val) => (
-        <Badge variant={val ? 'success' : 'warning'}>
-          {val ? 'Active' : 'Inactive'}
-        </Badge>
-      )
-    }
-  ]
-
-  // Apply advanced filters
   const getFilteredSuppliers = () => {
     return suppliers.filter(supplier => {
-      // Search filter
       if (filters.search) {
         const search = filters.search.toLowerCase()
-        const matchesSearch = 
-          supplier.name?.toLowerCase().includes(search) ||
-          supplier.supplier_id?.toLowerCase().includes(search) ||
-          supplier.gstin?.toLowerCase().includes(search)
-        if (!matchesSearch) return false
+        if (!supplier.name?.toLowerCase().includes(search) &&
+          !supplier.supplier_id?.toLowerCase().includes(search) &&
+          !supplier.gstin?.toLowerCase().includes(search)) {
+          return false
+        }
       }
 
-      // Status filter
-      if (filters.status) {
-        const isActive = filters.status === 'active'
-        if (supplier.is_active !== isActive) return false
+      if (filters.status !== 'all') {
+        if (supplier.is_active !== (filters.status === 'true')) return false
       }
 
-      // Group filter
       if (filters.group && supplier.supplier_group !== filters.group) return false
 
       return true
@@ -161,38 +87,13 @@ export default function SupplierList() {
 
   const filteredSuppliers = getFilteredSuppliers()
 
-  // Render actions
-  const renderActions = (supplier) => (
-    <div className="flex gap-2">
-      <Button
-        variant="primary"
-        size="sm"
-        onClick={(e) => {
-          e.stopPropagation()
-          handleEditClick(supplier)
-        }}
-      >
-        Edit
-      </Button>
-      <Button
-        variant="danger"
-        size="sm"
-        onClick={(e) => {
-          e.stopPropagation()
-          handleDeleteClick(supplier)
-        }}
-      >
-        Delete
-      </Button>
-    </div>
-  )
-
-  // Form handlers
-  const handleResetForm = () => {
+  const resetForm = () => {
     setFormData({
       name: '',
       supplier_group: '',
       gstin: '',
+      email: '',
+      phone: '',
       payment_terms_days: 30,
       lead_time_days: 7,
       rating: 0,
@@ -203,8 +104,8 @@ export default function SupplierList() {
   }
 
   const handleAddClick = () => {
-    handleResetForm()
-    addModal.open()
+    resetForm()
+    setShowAddForm(true)
   }
 
   const handleEditClick = (supplier) => {
@@ -212,18 +113,14 @@ export default function SupplierList() {
       name: supplier.name || '',
       supplier_group: supplier.supplier_group || '',
       gstin: supplier.gstin || '',
+      email: supplier.email || '',
+      phone: supplier.phone || '',
       payment_terms_days: supplier.payment_terms_days || 30,
       lead_time_days: supplier.lead_time_days || 7,
       rating: supplier.rating || 0,
       is_active: supplier.is_active !== false
     })
     setEditingId(supplier.supplier_id)
-    editModal.open()
-  }
-
-  const handleDeleteClick = (supplier) => {
-    setSelectedSupplier(supplier)
-    deleteModal.open()
   }
 
   const validateForm = () => {
@@ -240,47 +137,47 @@ export default function SupplierList() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setError(null)
+    setFormError('')
 
     if (!validateForm()) return
 
     try {
-      setFormError('')
       if (editingId) {
-        // Update existing supplier
         await suppliersAPI.update(editingId, formData)
         setSuccess('Supplier updated successfully')
-        editModal.close()
       } else {
-        // Create new supplier
         await suppliersAPI.create(formData)
         setSuccess('Supplier created successfully')
-        addModal.close()
       }
 
-      handleResetForm()
+      resetForm()
+      setShowAddForm(false)
+      setEditingId(null)
       fetchSuppliers()
 
-      // Clear success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setFormError(err.response?.data?.error || 'Failed to save supplier')
-      console.error('Error saving supplier:', err)
     }
   }
 
-  const handleConfirmDelete = async () => {
-    try {
-      await suppliersAPI.delete(selectedSupplier.supplier_id)
-      setSuccess('Supplier deleted successfully')
-      deleteModal.close()
-      setSelectedSupplier(null)
-      fetchSuppliers()
+  const handleCancel = () => {
+    resetForm()
+    setShowAddForm(false)
+    setEditingId(null)
+  }
 
-      // Clear success message after 3 seconds
+  const handleDelete = async (supplierId) => {
+    if (!window.confirm('Are you sure you want to delete this supplier?')) return
+
+    try {
+      await suppliersAPI.delete(supplierId)
+      setSuccess('Supplier deleted successfully')
+      fetchSuppliers()
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to delete supplier')
-      deleteModal.close()
     }
   }
 
@@ -288,223 +185,425 @@ export default function SupplierList() {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-          <p className="mt-4 text-[var(--text-secondary)] font-medium">Loading suppliers...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600 font-medium">Loading suppliers...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div>
-      {/* Success Alert */}
+    <div className="space-y-6 p-5">
       {success && (
-        <Alert variant="success" className="mb-6">
-          {success}
-        </Alert>
+        <Alert variant="success">{success}</Alert>
       )}
 
-      {/* Error Alert */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-md">
-          <p className="text-red-800 dark:text-red-200">{error}</p>
-        </div>
+        <Alert variant="danger">{error}</Alert>
       )}
 
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-3xl font-bold text-[var(--text-primary)]">Suppliers</h2>
-          <Button variant="primary" onClick={handleAddClick}>
-            + Add New Supplier
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900">Suppliers</h1>
+            <p className="text-gray-600 mt-1">Manage your supplier network and relationships</p>
+          </div>
+          <Button
+            onClick={handleAddClick}
+            className="flex items-center gap-2 bg-blue-500 text-white px-5 py-2.5 rounded-md font-semibold text-sm"
+          >
+            <Plus size={18} />
+            Add New Supplier
           </Button>
         </div>
-        <p className="text-[var(--text-secondary)]">Manage your supplier database with advanced filtering and search</p>
       </div>
 
-      {/* Advanced Filters */}
-      <div className="mb-6">
-        <AdvancedFilters
-          filters={filters}
-          onFilterChange={setFilters}
-          filterConfig={filterConfig}
-          onReset={() => setFilters({ search: '', status: '', group: '' })}
-          showPresets={true}
-        />
-      </div>
+      <div className="bg-white rounded-lg p-5 border border-gray-200">
+        <div className="grid grid-cols-4 gap-4 mb-5">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Search</label>
+            <input
+              type="text"
+              placeholder="Name, ID, or GSTIN..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md"
+            />
+          </div>
 
-      {/* Suppliers DataTable */}
-      <Card>
-        {filteredSuppliers.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-[var(--text-secondary)] text-lg mb-4">No suppliers found</p>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">Try adjusting your filters or create a new supplier</p>
-            <Button variant="primary" size="sm" onClick={handleAddClick}>
-              Create First Supplier
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Status</label>
+            <SearchableSelect
+              value={filters.status}
+              onChange={(val) => setFilters({ ...filters, status: val })}
+              options={statusOptions}
+              placeholder="All Status"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Group</label>
+            <SearchableSelect
+              value={filters.group}
+              onChange={(val) => setFilters({ ...filters, group: val })}
+              options={[{ label: 'All Groups', value: '' }, ...supplierGroups]}
+              placeholder="All Groups"
+            />
+          </div>
+
+          <div className="flex items-end">
+            <Button
+              onClick={() => setFilters({ search: '', status: 'all', group: '' })}
+              className="w-full px-2 py-1.5 text-xs bg-gray-100 text-gray-700 border border-gray-300 rounded-md font-medium hover:bg-gray-200"
+            >
+              Reset Filters
             </Button>
           </div>
-        ) : (
-          <DataTable
-            columns={columns}
-            data={filteredSuppliers}
-            renderActions={renderActions}
-            sortable={true}
-            filterable={false}
-            pageSize={10}
-          />
-        )}
-      </Card>
+        </div>
+      </div>
 
-      {/* Add Supplier Modal */}
-      <Modal
-        isOpen={addModal.isOpen}
-        onClose={() => {
-          addModal.close()
-          handleResetForm()
-        }}
-        title="Add New Supplier"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => {
-              addModal.close()
-              handleResetForm()
-            }}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSubmit}>
-              Create Supplier
-            </Button>
-          </>
-        }
-      >
-        <SupplierForm formData={formData} setFormData={setFormData} formError={formError} />
-      </Modal>
+      {showAddForm && (
+        <div className="bg-gray-50 rounded-lg p-6 border-l-4 border-blue-500">
+          <div className="flex justify-between items-center mb-5">
+            <h3 className="text-lg font-semibold text-gray-800">Add New Supplier</h3>
+            <button
+              onClick={handleCancel}
+              className="bg-transparent border-none cursor-pointer p-1 flex items-center justify-center"
+            >
+              <X size={20} className="text-gray-600" />
+            </button>
+          </div>
 
-      {/* Edit Supplier Modal */}
-      <Modal
-        isOpen={editModal.isOpen}
-        onClose={() => {
-          editModal.close()
-          handleResetForm()
-        }}
-        title="Edit Supplier"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => {
-              editModal.close()
-              handleResetForm()
-            }}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSubmit}>
-              Update Supplier
-            </Button>
-          </>
-        }
-      >
-        <SupplierForm formData={formData} setFormData={setFormData} formError={formError} />
-      </Modal>
+          {formError && (
+            <Alert variant="danger" className="mb-4">{formError}</Alert>
+          )}
 
-      {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={deleteModal.isOpen}
-        onClose={deleteModal.close}
-        title="Delete Supplier"
-        footer={
-          <>
-            <Button variant="secondary" onClick={deleteModal.close}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={handleConfirmDelete}>
-              Delete
-            </Button>
-          </>
-        }
-      >
-        <p className="text-neutral-700">
-          Are you sure you want to delete <strong>{selectedSupplier?.name}</strong>? This action cannot be undone.
-        </p>
-      </Modal>
-    </div>
-  )
-}
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1.5">Supplier Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g., ABC Industries"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-md"
+                />
+              </div>
 
-// Supplier Form Component
-function SupplierForm({ formData, setFormData, formError }) {
-  return (
-    <div className="space-y-4">
-      {formError && (
-        <Alert variant="danger">{formError}</Alert>
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1.5">GSTIN *</label>
+                <input
+                  type="text"
+                  placeholder="e.g., 27AABCT1234H1Z0"
+                  value={formData.gstin}
+                  onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1.5">Email</label>
+                <input
+                  type="email"
+                  placeholder="supplier@example.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1.5">Phone</label>
+                <input
+                  type="tel"
+                  placeholder="+91-XXXXXXXXXX"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1.5">Supplier Group</label>
+                <SearchableSelect
+                  value={formData.supplier_group}
+                  onChange={(val) => setFormData({ ...formData, supplier_group: val })}
+                  options={supplierGroups}
+                  placeholder="Select group"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1.5">Rating (0-5)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  value={formData.rating}
+                  onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1.5">Payment Terms (Days)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.payment_terms_days}
+                  onChange={(e) => setFormData({ ...formData, payment_terms_days: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1.5">Lead Time (Days)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.lead_time_days}
+                  onChange={(e) => setFormData({ ...formData, lead_time_days: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-md"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 mb-5">
+              <input
+                type="checkbox"
+                id="is_active"
+                checked={formData.is_active}
+                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                className="w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor="is_active" className="text-sm text-gray-800 cursor-pointer">Active Supplier</label>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <Button
+                type="button"
+                onClick={handleCancel}
+                className="px-5 py-2.5 bg-gray-200 text-gray-800 border border-gray-300 rounded-md text-sm font-semibold hover:bg-gray-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="px-5 py-2.5 bg-green-600 text-white rounded-md text-sm font-semibold hover:bg-green-700"
+              >
+                Create Supplier
+              </Button>
+            </div>
+          </form>
+        </div>
       )}
 
-      <Input
-        label="Supplier Name *"
-        placeholder="e.g., ABC Industries"
-        value={formData.name}
-        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-      />
+      {filteredSuppliers.length === 0 ? (
+        <div className="bg-white rounded-lg p-10 text-center border border-gray-200">
+          <p className="text-base text-gray-600 mb-4">No suppliers found</p>
+          <p className="text-sm text-gray-500 mb-5">Try adjusting your filters or create a new supplier</p>
+          <Button
+            onClick={handleAddClick}
+            className="inline-block px-5 py-2.5 bg-blue-500 text-white rounded-md text-sm font-semibold hover:bg-blue-600"
+          >
+            Create First Supplier
+          </Button>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100 border-b-2 border-gray-200">
+                <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600">Name</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600">ID</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600">GSTIN</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600">Group</th>
+                <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600">Rating</th>
+                <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600">Lead Time</th>
+                <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600">Status</th>
+                <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSuppliers.map((supplier) => (
+                editingId === supplier.supplier_id ? (
+                  <tr key={`edit-${supplier.supplier_id}`} className="bg-gray-50 border-b border-gray-200">
+                    <td colSpan="8" className="px-4 py-4">
+                      <form onSubmit={handleSubmit}>
+                        <div className="grid grid-cols-4 gap-3 mb-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Name *</label>
+                            <input
+                              type="text"
+                              value={formData.name}
+                              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                              className="w-full px-2.5 py-2 text-sm border border-blue-500 rounded-sm"
+                            />
+                          </div>
 
-      <Input
-        label="GSTIN *"
-        placeholder="e.g., 27AABCT1234H1Z0"
-        value={formData.gstin}
-        onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
-      />
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">GSTIN *</label>
+                            <input
+                              type="text"
+                              value={formData.gstin}
+                              onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
+                              className="w-full px-2.5 py-2 text-sm border border-blue-500 rounded-sm"
+                            />
+                          </div>
 
-      <div className="form-group">
-        <label className="block mb-2 text-sm font-medium text-[var(--text-primary)]">Supplier Group</label>
-        <select
-          className="input-base"
-          value={formData.supplier_group}
-          onChange={(e) => setFormData({ ...formData, supplier_group: e.target.value })}
-        >
-          <option value="">Select a group</option>
-          <option value="Raw Materials">Raw Materials</option>
-          <option value="Components">Components</option>
-          <option value="Services">Services</option>
-          <option value="Tools">Tools</option>
-        </select>
-      </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Email</label>
+                            <input
+                              type="email"
+                              value={formData.email}
+                              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                              className="w-full px-2.5 py-2 text-sm border border-blue-500 rounded-sm"
+                            />
+                          </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Input
-          label="Payment Terms (Days)"
-          type="number"
-          min="0"
-          value={formData.payment_terms_days}
-          onChange={(e) => setFormData({ ...formData, payment_terms_days: parseInt(e.target.value) || 0 })}
-        />
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Phone</label>
+                            <input
+                              type="tel"
+                              value={formData.phone}
+                              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                              className="w-full px-2.5 py-2 text-sm border border-blue-500 rounded-sm"
+                            />
+                          </div>
 
-        <Input
-          label="Lead Time (Days)"
-          type="number"
-          min="0"
-          value={formData.lead_time_days}
-          onChange={(e) => setFormData({ ...formData, lead_time_days: parseInt(e.target.value) || 0 })}
-        />
-      </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Group</label>
+                            <SearchableSelect
+                              value={formData.supplier_group}
+                              onChange={(val) => setFormData({ ...formData, supplier_group: val })}
+                              options={supplierGroups}
+                              placeholder="Select group"
+                            />
+                          </div>
 
-      <Input
-        label="Rating (0-5)"
-        type="number"
-        min="0"
-        max="5"
-        step="0.1"
-        value={formData.rating}
-        onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) || 0 })}
-      />
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Rating</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="5"
+                              step="0.1"
+                              value={formData.rating}
+                              onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) || 0 })}
+                              className="w-full px-2.5 py-2 text-sm border border-blue-500 rounded-sm"
+                            />
+                          </div>
 
-      <div className="form-group">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={formData.is_active}
-            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-            className="w-4 h-4"
-          />
-          <span className="text-sm font-medium text-neutral-700">Active</span>
-        </label>
-      </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Payment Terms</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={formData.payment_terms_days}
+                              onChange={(e) => setFormData({ ...formData, payment_terms_days: parseInt(e.target.value) || 0 })}
+                              className="w-full px-2.5 py-2 text-sm border border-blue-500 rounded-sm"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Lead Time</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={formData.lead_time_days}
+                              onChange={(e) => setFormData({ ...formData, lead_time_days: parseInt(e.target.value) || 0 })}
+                              className="w-full px-2.5 py-2 text-sm border border-blue-500 rounded-sm"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 mb-3">
+                          <input
+                            type="checkbox"
+                            id={`is_active_${supplier.supplier_id}`}
+                            checked={formData.is_active}
+                            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                            className="w-3.5 h-3.5 cursor-pointer"
+                          />
+                          <label htmlFor={`is_active_${supplier.supplier_id}`} className="text-xs text-gray-800 cursor-pointer">Active Supplier</label>
+                        </div>
+
+                        {formError && (
+                          <Alert variant="danger" className="mb-3 text-xs">{formError}</Alert>
+                        )}
+
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            type="button"
+                            onClick={handleCancel}
+                            className="px-4 py-2 bg-red-500 text-white rounded-sm text-xs font-semibold flex items-center gap-1.5 hover:bg-red-600"
+                          >
+                            <X size={14} />
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-green-500 text-white rounded-sm text-xs font-semibold flex items-center gap-1.5 hover:bg-green-600"
+                          >
+                            <Check size={14} />
+                            Save Changes
+                          </button>
+                        </div>
+                      </form>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={supplier.supplier_id} className="border-b border-gray-200 hover:bg-gray-50">
+                    <td className="px-4 py-4 text-sm text-gray-800 font-medium">
+                      {supplier.name}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600 font-mono">
+                      {supplier.supplier_id}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600 font-mono">
+                      {supplier.gstin || '-'}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600">
+                      {supplier.supplier_group || '-'}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600 text-center">
+                      {supplier.rating ? `⭐ ${Number(supplier.rating).toFixed(1)}` : '—'}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600 text-center">
+                      {supplier.lead_time_days || 0} days
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <Badge variant={supplier.is_active ? 'success' : 'warning'}>
+                        {supplier.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <div className="flex gap-2 justify-center">
+                        <button
+                          onClick={() => handleEditClick(supplier)}
+                          className="px-3 py-1.5 bg-blue-500 text-white rounded-sm text-xs font-semibold flex items-center gap-1 hover:bg-blue-600"
+                        >
+                          <Edit2 size={14} />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(supplier.supplier_id)}
+                          className="px-3 py-1.5 bg-red-500 text-white rounded-sm text-xs font-semibold flex items-center gap-1 hover:bg-red-600"
+                        >
+                          <Trash2 size={14} />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

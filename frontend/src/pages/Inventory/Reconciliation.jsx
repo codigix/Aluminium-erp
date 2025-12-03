@@ -187,7 +187,7 @@ export default function Reconciliation() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (val, row) => (
+      render: (row) => (
         <div className="inventory-actions-cell">
           {row.status === 'draft' && (
             <>

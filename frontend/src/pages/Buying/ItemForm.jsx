@@ -5,8 +5,10 @@ import Button from '../../components/Button/Button'
 import Alert from '../../components/Alert/Alert'
 import Card from '../../components/Card/Card'
 import AuditTrail from '../../components/AuditTrail'
-import { ChevronLeft, ChevronRight, X, Edit, Trash2 } from 'lucide-react'
+import SearchableSelect from '../../components/SearchableSelect'
+import { ChevronLeft, ChevronRight, X, Edit, Trash2, Check } from 'lucide-react'
 import './Buying.css'
+
 
 const TABS = [
   { id: 'details', label: 'Details' },
@@ -36,6 +38,7 @@ export default function ItemForm() {
   const [editingSupplier, setEditingSupplier] = useState(null)
   const [barcodeEditData, setBarcodeEditData] = useState({})
   const [supplierEditData, setSupplierEditData] = useState({})
+
 
   const [formData, setFormData] = useState({
     item_code: '',
@@ -97,6 +100,26 @@ export default function ItemForm() {
   const [itemGroups, setItemGroups] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [customers, setCustomers] = useState([])
+  const [uomList, setUomList] = useState([])
+  const [valuationMethods, setValuationMethods] = useState([
+    { label: 'FIFO', value: 'FIFO' },
+    { label: 'Moving Average', value: 'Moving Average' },
+    { label: 'LIFO', value: 'LIFO' }
+  ])
+  const [barcodeTypes, setBarcodeTypes] = useState([
+    { label: 'EAN', value: 'EAN' },
+    { label: 'CODE128', value: 'CODE128' },
+    { label: 'CODE39', value: 'CODE39' },
+    { label: 'QR', value: 'QR' },
+    { label: 'UPC', value: 'UPC' }
+  ])
+  const [statusOptions, setStatusOptions] = useState([
+    { label: 'Match', value: 'Match' },
+    { label: 'No Match', value: 'No Match' },
+    { label: 'Pending', value: 'Pending' }
+  ])
+
+
 
   useEffect(() => {
     fetchDropdownData()
@@ -105,25 +128,72 @@ export default function ItemForm() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!isEditMode && formData.item_name && !formData.item_code) {
+      const generatedCode = generateItemCode(formData.item_name)
+      setFormData(prev => ({
+        ...prev,
+        item_code: generatedCode
+      }))
+    }
+  }, [formData.item_name, isEditMode])
+
+
+  const generateItemCode = (itemName) => {
+    const cleaned = itemName
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .substring(0, 10)
+
+    return cleaned ? `ITEM-${cleaned}` : `ITEM-${Date.now()}`
+  }
+
+
+
+  const handleSelectItemGroup = (groupName) => {
+    setFormData(prev => ({
+      ...prev,
+      item_group: groupName
+    }))
+    setItemGroupInput(groupName)
+    setShowItemGroupDropdown(false)
+  }
+
+  const filteredItemGroups = itemGroups.filter(group =>
+    group.toLowerCase().includes(itemGroupInput.toLowerCase())
+  )
+
   const fetchDropdownData = async () => {
     try {
-      const [groupsRes, suppliersRes, customersRes] = await Promise.all([
-        axios.get('/api/item-groups'),
-        axios.get('/api/suppliers?limit=1000'),
-        axios.get('/api/customers?limit=1000')
+      const apiUrl = import.meta.env.VITE_API_URL
+      const [groupsRes, suppliersRes, customersRes, uomRes] = await Promise.all([
+        axios.get(`${apiUrl}/items/groups`),
+        axios.get(`${apiUrl}/suppliers?limit=1000`),
+        axios.get(`${apiUrl}/selling/customers?limit=1000`),
+        axios.get(`${apiUrl}/uom?limit=1000`).catch(() => ({ data: { data: [] } }))
       ])
-      
-      setItemGroups(groupsRes.data.data || [])
+
+      const groups = groupsRes.data.data || []
+      setItemGroups(Array.isArray(groups) && groups.length > 0 && typeof groups[0] === 'object'
+        ? groups.map(g => ({ label: g.name || g.item_group || '', value: g.name || g.item_group || '' }))
+        : groups.map(g => ({ label: g, value: g })))
+
       setSuppliers(suppliersRes.data.data || [])
       setCustomers(customersRes.data.data || [])
+
+      const uoms = uomRes.data.data || []
+      setUomList(Array.isArray(uoms) && uoms.length > 0 && typeof uoms[0] === 'object'
+        ? uoms.map(u => ({ label: u.name || u.uom || '', value: u.name || u.uom || '' }))
+        : uoms.map(u => ({ label: u, value: u })))
     } catch (err) {
       console.error('Failed to fetch dropdown data:', err)
     }
   }
 
+
   const fetchItem = async () => {
     try {
-      const response = await axios.get(`/api/items/${item_code}`)
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/items/${item_code}`)
       const itemData = response.data.data
       setItem(itemData)
       setFormData(prev => ({
@@ -341,7 +411,7 @@ export default function ItemForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!formData.item_code || !formData.item_name || !formData.item_group) {
       setError('Item Code, Name, and Group are required in Details tab')
       setActiveTab('details')
@@ -350,11 +420,12 @@ export default function ItemForm() {
 
     try {
       setLoading(true)
+      const apiUrl = import.meta.env.VITE_API_URL
       if (isEditMode) {
-        await axios.put(`/api/items/${item_code}`, formData)
+        await axios.put(`${apiUrl}/items/${item_code}`, formData)
         setSuccess('Item updated successfully')
       } else {
-        await axios.post('/api/items', formData)
+        await axios.post(`${apiUrl}/items`, formData)
         setSuccess('Item created successfully')
       }
 
@@ -381,44 +452,193 @@ export default function ItemForm() {
             <thead>
               <tr>
                 <th style={{ width: '40px' }}>
-                  <input
-                    type="checkbox"
-                    onChange={() => {}}
-                  />
+                  <input type="checkbox" onChange={() => { }} />
                 </th>
                 <th style={{ width: '60px' }}>No.</th>
                 <th>Parameter</th>
                 <th>Value</th>
                 <th>Status</th>
-                <th style={{ width: '80px' }}>Actions</th>
+                <th style={{ width: '120px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {formData[type].map((row, index) => (
-                <tr key={index} className={row.selected ? 'selected' : ''}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={row.selected || false}
-                      onChange={() => handleDimensionCheckboxChange(type, index)}
-                    />
-                  </td>
-                  <td>{index + 1}</td>
-                  <td>{row.name || row.parameter || '-'}</td>
-                  <td>{row.value || '-'}</td>
-                  <td>{row.status || '-'}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn-icon-edit"
-                      onClick={() => handleEditDimension(type, index, row)}
-                      title="Edit"
-                    >
-                      <Edit size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {formData[type].map((row, index) => {
+                const isEditing = editingDimension === index && editingType === type;
+                return (
+                  <tr
+                    key={index}
+                    className={row.selected ? 'selected' : ''}
+                    style={isEditing ? {
+                      backgroundColor: '#e3f2fd',
+                      border: '2px solid #2196F3'
+                    } : {}}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={row.selected || false}
+                        onChange={() => handleDimensionCheckboxChange(type, index)}
+                        disabled={isEditing}
+                      />
+                    </td>
+                    <td>{index + 1}</td>
+                    <td style={{ padding: '0' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', width: '100%' }}>
+                          <SearchableSelect
+                            value={editFormData.name || editFormData.parameter || ''}
+                            onChange={(val) => setEditFormData({
+                              ...editFormData,
+                              name: val,
+                              parameter: val
+                            })}
+                            options={[
+                              { label: 'Parameter 1', value: 'Parameter 1' },
+                              { label: 'Parameter 2', value: 'Parameter 2' },
+                              { label: 'Parameter 3', value: 'Parameter 3' },
+                              { label: 'Dimension A', value: 'Dimension A' },
+                              { label: 'Dimension B', value: 'Dimension B' }
+                            ]}
+                            placeholder="Select parameter"
+                          />
+                        </div>
+                      ) : (
+                        row.name || row.parameter || '-'
+                      )}
+                    </td>
+
+                    <td>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editFormData.value || ''}
+                          onChange={(e) => setEditFormData({
+                            ...editFormData,
+                            value: e.target.value
+                          })}
+                          placeholder="Enter value"
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            border: '1px solid #2196F3',
+                            borderRadius: '4px',
+                            fontFamily: 'inherit',
+                            fontSize: 'inherit',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      ) : (
+                        row.value || '-'
+                      )}
+                    </td>
+
+                    <td style={{ padding: '0' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', width: '100%' }}>
+                          <SearchableSelect
+                            value={editFormData.value || ''}
+                            onChange={(val) => setEditFormData({
+                              ...editFormData,
+                              value: val
+                            })}
+                            options={[
+                              { label: '10 mm', value: '10 mm' },
+                              { label: '15 mm', value: '15 mm' },
+                              { label: '20 mm', value: '20 mm' },
+                              { label: '25 mm', value: '25 mm' },
+                              { label: '30 mm', value: '30 mm' }
+                            ]}
+                            placeholder="Select value"
+                          />
+                        </div>
+                      ) : (
+                        row.value || '-'
+                      )}
+                    </td>
+
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleSaveDimension}
+                              title="Save"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                backgroundColor: '#4CAF50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingDimension(null)
+                                setEditingType(null)
+                                setEditFormData({})
+                              }}
+                              title="Cancel"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = '#da190b'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = '#f44336'}
+                            >
+                              <X size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-icon-edit"
+                            onClick={() => handleEditDimension(type, index, row)}
+                            title="Edit"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '32px',
+                              height: '32px',
+                              backgroundColor: '#2196F3',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#1976D2'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = '#2196F3'}
+                          >
+                            <Edit size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         ) : (
@@ -448,6 +668,7 @@ export default function ItemForm() {
     </div>
   )
 
+
   const renderDetailsTab = () => (
     <div className="form-section">
       <div className="form-row">
@@ -459,7 +680,7 @@ export default function ItemForm() {
             value={formData.item_code}
             onChange={handleChange}
             disabled={isEditMode}
-            placeholder="Auto-generated"
+            placeholder={isEditMode ? 'Item Code' : 'Auto-generated'}
             required
           />
         </div>
@@ -479,30 +700,24 @@ export default function ItemForm() {
       <div className="form-row">
         <div className="form-group">
           <label>Item Group *</label>
-          <select
-            name="item_group"
+          <SearchableSelect
             value={formData.item_group}
-            onChange={handleChange}
-            required
-          >
-            <option value="">Select Item Group</option>
-            {itemGroups.map(group => (
-              <option key={group.name} value={group.name}>{group.name}</option>
-            ))}
-          </select>
+            onChange={(val) => setFormData({ ...formData, item_group: val })}
+            options={itemGroups}
+            placeholder="Select item group"
+          />
         </div>
         <div className="form-group">
           <label>Default UOM *</label>
-          <input
-            type="text"
-            name="uom"
+          <SearchableSelect
             value={formData.uom}
-            onChange={handleChange}
-            placeholder="e.g., Nos, Kg, Meter"
-            required
+            onChange={(val) => setFormData({ ...formData, uom: val })}
+            options={uomList}
+            placeholder="Select UOM"
           />
         </div>
       </div>
+
 
       <div className="form-row">
         <div className="form-group">
@@ -635,19 +850,17 @@ export default function ItemForm() {
   const renderInventoryTab = () => (
     <div className="form-section">
       <h3>Inventory Settings</h3>
-      
+
       <div className="form-row">
         <div className="form-group">
-          <label>Valuation Method</label>
-          <select
-            name="valuation_method"
+                   <label>Valuation Method</label>
+          <SearchableSelect
             value={formData.valuation_method}
-            onChange={handleChange}
-          >
-            <option value="FIFO">FIFO</option>
-            <option value="Moving Average">Moving Average</option>
-            <option value="LIFO">LIFO</option>
-          </select>
+            onChange={(val) => setFormData({ ...formData, valuation_method: val })}
+            options={valuationMethods}
+            placeholder="Select valuation method"
+          />
+
         </div>
         <div className="form-group">
           <label>Shelf Life In Days</label>
@@ -696,14 +909,14 @@ export default function ItemForm() {
           />
         </div>
         <div className="form-group">
-          <label>Weight UOM</label>
-          <input
-            type="text"
-            name="weight_uom"
+                   <label>Weight UOM</label>
+          <SearchableSelect
             value={formData.weight_uom}
-            onChange={handleChange}
-            placeholder="Kg"
+            onChange={(val) => setFormData({ ...formData, weight_uom: val })}
+            options={uomList}
+            placeholder="Select weight UOM"
           />
+
         </div>
       </div>
 
@@ -720,9 +933,9 @@ export default function ItemForm() {
         </div>
       </div>
 
-      <hr />
-      <h3>Barcodes</h3>
-      
+    
+      <h3 className='mt-5'>Barcodes</h3>
+
       <div className="items-section">
         {formData.barcode_list.length > 0 && (
           <table className="table">
@@ -734,34 +947,155 @@ export default function ItemForm() {
                 <th style={{ width: '60px' }}>No.</th>
                 <th>Barcode Name</th>
                 <th>Barcode Type</th>
-                <th style={{ width: '80px' }}>Action</th>
+                <th style={{ width: '120px' }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {formData.barcode_list.map((barcode, index) => (
-                <tr key={index} className={barcode.selected ? 'selected' : ''}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={barcode.selected || false}
-                      onChange={() => handleBarcodeCheckboxChange(index)}
-                    />
-                  </td>
-                  <td>{index + 1}</td>
-                  <td>{barcode.barcode_name || '-'}</td>
-                  <td>{barcode.barcode_type || '-'}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn-icon-edit"
-                      onClick={() => handleEditBarcode(index, barcode)}
-                      title="Edit"
-                    >
-                      <Edit size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {formData.barcode_list.map((barcode, index) => {
+                const isEditing = editingBarcode === index;
+                return (
+                  <tr
+                    key={index}
+                    className={barcode.selected ? 'selected' : ''}
+                    style={isEditing ? {
+                      backgroundColor: '#e3f2fd',
+                      border: '2px solid #2196F3'
+                    } : {}}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={barcode.selected || false}
+                        onChange={() => handleBarcodeCheckboxChange(index)}
+                        disabled={isEditing}
+                      />
+                    </td>
+                    <td>{index + 1}</td>
+                    <td style={{ padding: '1rem' }}>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={barcodeEditData.barcode_name || ''}
+                          onChange={(e) => setBarcodeEditData({
+                            ...barcodeEditData,
+                            barcode_name: e.target.value
+                          })}
+                          placeholder="Enter barcode name"
+                          autoFocus
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            border: '1px solid #2196F3',
+                            borderRadius: '4px',
+                            fontFamily: 'inherit',
+                            fontSize: '12px',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      ) : (
+                        barcode.barcode_name || '-'
+                      )}
+                    </td>
+                                       <td style={{ padding: '0' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', width: '100%' }}>
+                          <SearchableSelect
+                            value={barcodeEditData.barcode_type || ''}
+                            onChange={(val) => setBarcodeEditData({
+                              ...barcodeEditData,
+                              barcode_type: val
+                            })}
+                            options={barcodeTypes}
+                            placeholder="Select barcode type"
+                          />
+                        </div>
+                      ) : (
+                        barcode.barcode_type || '-'
+                      )}
+                    </td>
+
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleSaveBarcode}
+                              title="Save"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                backgroundColor: '#4CAF50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingBarcode(null)
+                                setBarcodeEditData({})
+                              }}
+                              title="Cancel"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = '#da190b'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = '#f44336'}
+                            >
+                              <X size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-icon-edit"
+                            onClick={() => handleEditBarcode(index, barcode)}
+                            title="Edit"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '32px',
+                              height: '32px',
+                              backgroundColor: '#2196F3',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#1976D2'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = '#2196F3'}
+                          >
+                            <Edit size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -787,8 +1121,8 @@ export default function ItemForm() {
         </div>
       </div>
 
-      <hr />
-      <h3>
+      
+      <h3 className='mt-5'>
         <input
           type="checkbox"
           id="has_batch_no"
@@ -895,14 +1229,14 @@ export default function ItemForm() {
     <div className="form-section">
       <div className="form-row">
         <div className="form-group">
-          <label>Default Purchase Unit of Measure</label>
-          <input
-            type="text"
-            name="default_purchase_uom"
+                    <label>Default Purchase Unit of Measure</label>
+          <SearchableSelect
             value={formData.default_purchase_uom}
-            onChange={handleChange}
-            placeholder="e.g., Nos, Kg"
+            onChange={(val) => setFormData({ ...formData, default_purchase_uom: val })}
+            options={uomList}
+            placeholder="Select purchase UOM"
           />
+
         </div>
         <div className="form-group">
           <label>Lead Time in days</label>
@@ -956,7 +1290,7 @@ export default function ItemForm() {
         </div>
       </div>
 
-      <div className="form-group checkbox">
+      <div className="form-group checkbox mt-5">
         <input
           type="checkbox"
           name="supply_raw_materials_for_purchase"
@@ -967,9 +1301,8 @@ export default function ItemForm() {
         <label htmlFor="supply_raw_materials">Supply Raw Materials for Purchase - If subcontracted to a vendor</label>
       </div>
 
-      <hr />
-      <h3>Suppliers</h3>
-      
+      <h3 className='mt-5'>Suppliers</h3>
+
       <div className="items-section">
         {formData.suppliers_list.length > 0 && (
           <table className="table">
@@ -981,34 +1314,154 @@ export default function ItemForm() {
                 <th style={{ width: '60px' }}>No.</th>
                 <th>Supplier Name</th>
                 <th>Supplier Code</th>
-                <th style={{ width: '80px' }}>Action</th>
+                <th style={{ width: '120px' }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {formData.suppliers_list.map((supplier, index) => (
-                <tr key={index} className={supplier.selected ? 'selected' : ''}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={supplier.selected || false}
-                      onChange={() => handleSupplierCheckboxChange(index)}
-                    />
-                  </td>
-                  <td>{index + 1}</td>
-                  <td>{supplier.supplier_name || '-'}</td>
-                  <td>{supplier.supplier_code || '-'}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn-icon-edit"
-                      onClick={() => handleEditSupplier(index, supplier)}
-                      title="Edit"
-                    >
-                      <Edit size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {formData.suppliers_list.map((supplier, index) => {
+                const isEditing = editingSupplier === index;
+                return (
+                  <tr
+                    key={index}
+                    className={supplier.selected ? 'selected' : ''}
+                    style={isEditing ? {
+                      backgroundColor: '#e3f2fd',
+                      border: '2px solid #2196F3'
+                    } : {}}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={supplier.selected || false}
+                        onChange={() => handleSupplierCheckboxChange(index)}
+                        disabled={isEditing}
+                      />
+                    </td>
+                    <td>{index + 1}</td>
+                                       <td style={{ padding: '0' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', width: '100%' }}>
+                          <SearchableSelect
+                            value={supplierEditData.supplier_name || ''}
+                            onChange={(val) => setSupplierEditData({
+                              ...supplierEditData,
+                              supplier_name: val
+                            })}
+                            options={suppliers.map(s => ({ label: s.supplier_name, value: s.supplier_name }))}
+                            placeholder="Select supplier"
+                          />
+                        </div>
+                      ) : (
+                        supplier.supplier_name || '-'
+                      )}
+                    </td>
+
+                    <td style={{ padding: '0' }}>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={supplierEditData.supplier_code || ''}
+                          onChange={(e) => setSupplierEditData({
+                            ...supplierEditData,
+                            supplier_code: e.target.value
+                          })}
+                          placeholder="Enter supplier code"
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            border: '1px solid #2196F3',
+                            borderRadius: '4px',
+                            fontFamily: 'inherit',
+                            fontSize: 'inherit',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      ) : (
+                        supplier.supplier_code || '-'
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleSaveSupplier}
+                              title="Save"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                backgroundColor: '#4CAF50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSupplier(null)
+                                setSupplierEditData({})
+                              }}
+                              title="Cancel"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = '#da190b'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = '#f44336'}
+                            >
+                              <X size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-icon-edit"
+                            onClick={() => handleEditSupplier(index, supplier)}
+                            title="Edit"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '32px',
+                              height: '32px',
+                              backgroundColor: '#2196F3',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#1976D2'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = '#2196F3'}
+                          >
+                            <Edit size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -1040,14 +1493,14 @@ export default function ItemForm() {
     <div className="form-section">
       <div className="form-row">
         <div className="form-group">
-          <label>Default Sales Unit of Measure</label>
-          <input
-            type="text"
-            name="default_sales_uom"
+                   <label>Default Sales Unit of Measure</label>
+          <SearchableSelect
             value={formData.default_sales_uom}
-            onChange={handleChange}
-            placeholder="e.g., Nos, Kg"
+            onChange={(val) => setFormData({ ...formData, default_sales_uom: val })}
+            options={uomList}
+            placeholder="Select sales UOM"
           />
+
         </div>
         <div className="form-group">
           <label>Max Discount (%)</label>
@@ -1204,7 +1657,7 @@ export default function ItemForm() {
         <label htmlFor="include_item_in_manufacturing">Include Item In Manufacturing</label>
       </div>
 
-      <div className="form-group checkbox">
+      <div className="form-group checkbox mt-4">
         <input
           type="checkbox"
           name="supply_raw_materials_for_purchase"
@@ -1245,7 +1698,7 @@ export default function ItemForm() {
       <Card>
         <div className="page-header">
           <h2>{isEditMode ? 'Edit Item' : 'Create Item'}</h2>
-          <Button 
+          <Button
             onClick={() => navigate('/buying/items')}
             variant="secondary"
           >
@@ -1257,7 +1710,7 @@ export default function ItemForm() {
         {success && <Alert type="success">{success}</Alert>}
 
         {isEditMode && item && (
-          <AuditTrail 
+          <AuditTrail
             createdAt={item.created_at}
             createdBy={item.created_by}
             updatedAt={item.updated_at}
@@ -1288,14 +1741,14 @@ export default function ItemForm() {
             <div className="form-actions">
               <div></div>
               <div className="flex gap-2">
-                <Button 
+                <Button
                   type="submit"
                   variant="primary"
                   disabled={loading}
                 >
                   {loading ? 'Saving...' : 'Save'}
                 </Button>
-                <Button 
+                <Button
                   type="button"
                   variant="secondary"
                   onClick={() => navigate('/buying/items')}
@@ -1307,239 +1760,6 @@ export default function ItemForm() {
             </div>
           </form>
         </div>
-
-        {editingDimension !== null && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h3>Edit Parameter</h3>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => {
-                    setEditingDimension(null)
-                    setEditingType(null)
-                    setEditFormData({})
-                  }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Parameter Name</label>
-                  <input
-                    type="text"
-                    value={editFormData.name || editFormData.parameter || ''}
-                    onChange={(e) => setEditFormData({
-                      ...editFormData,
-                      name: e.target.value,
-                      parameter: e.target.value
-                    })}
-                    placeholder="Enter parameter name"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Value</label>
-                  <input
-                    type="text"
-                    value={editFormData.value || ''}
-                    onChange={(e) => setEditFormData({
-                      ...editFormData,
-                      value: e.target.value
-                    })}
-                    placeholder="Enter value"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Status</label>
-                  <select
-                    value={editFormData.status || ''}
-                    onChange={(e) => setEditFormData({
-                      ...editFormData,
-                      status: e.target.value
-                    })}
-                  >
-                    <option value="">Select Status</option>
-                    <option value="Match">Match</option>
-                    <option value="No Match">No Match</option>
-                    <option value="Pending">Pending</option>
-                  </select>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setEditingDimension(null)
-                    setEditingType(null)
-                    setEditFormData({})
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={handleSaveDimension}
-                >
-                  Save
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {editingBarcode !== null && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h3>Edit Barcode</h3>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => {
-                    setEditingBarcode(null)
-                    setBarcodeEditData({})
-                  }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Barcode</label>
-                  <input
-                    type="text"
-                    value={barcodeEditData.barcode || ''}
-                    onChange={(e) => setBarcodeEditData({
-                      ...barcodeEditData,
-                      barcode: e.target.value
-                    })}
-                    placeholder="Enter barcode"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Barcode Name</label>
-                  <input
-                    type="text"
-                    value={barcodeEditData.barcode_name || ''}
-                    onChange={(e) => setBarcodeEditData({
-                      ...barcodeEditData,
-                      barcode_name: e.target.value
-                    })}
-                    placeholder="Enter barcode name"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Barcode Type</label>
-                  <select
-                    value={barcodeEditData.barcode_type || ''}
-                    onChange={(e) => setBarcodeEditData({
-                      ...barcodeEditData,
-                      barcode_type: e.target.value
-                    })}
-                  >
-                    <option value="">Select Barcode Type</option>
-                    <option value="EAN">EAN</option>
-                    <option value="CODE128">CODE128</option>
-                    <option value="CODE39">CODE39</option>
-                    <option value="QR">QR</option>
-                    <option value="UPC">UPC</option>
-                  </select>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setEditingBarcode(null)
-                    setBarcodeEditData({})
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={handleSaveBarcode}
-                >
-                  Save
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {editingSupplier !== null && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h3>Edit Supplier</h3>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => {
-                    setEditingSupplier(null)
-                    setSupplierEditData({})
-                  }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Supplier Name</label>
-                  <select
-                    value={supplierEditData.supplier_name || ''}
-                    onChange={(e) => setSupplierEditData({
-                      ...supplierEditData,
-                      supplier_name: e.target.value
-                    })}
-                  >
-                    <option value="">Select Supplier</option>
-                    {suppliers.map(supp => (
-                      <option key={supp.supplier_id} value={supp.supplier_name}>{supp.supplier_name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Supplier Code</label>
-                  <input
-                    type="text"
-                    value={supplierEditData.supplier_code || ''}
-                    onChange={(e) => setSupplierEditData({
-                      ...supplierEditData,
-                      supplier_code: e.target.value
-                    })}
-                    placeholder="Enter supplier code"
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setEditingSupplier(null)
-                    setSupplierEditData({})
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={handleSaveSupplier}
-                >
-                  Save
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   )

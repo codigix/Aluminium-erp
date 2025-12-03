@@ -1,4 +1,4 @@
-﻿import axios from 'axios'
+import axios from 'axios'
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL ;
 
@@ -44,6 +44,15 @@ export const suppliersAPI = {
   create: (data) => api.post('/suppliers', data),
   update: (id, data) => api.put(`/suppliers/${id}`, data),
   delete: (id) => api.delete(`/suppliers/${id}`),
+}
+
+// Employees API
+export const employeesAPI = {
+  list: () => api.get('/hr/employees'),
+  get: (id) => api.get(`/hr/employees/${id}`),
+  create: (data) => api.post('/hr/employees', data),
+  update: (id, data) => api.put(`/hr/employees/${id}`, data),
+  delete: (id) => api.delete(`/hr/employees/${id}`),
 }
 
 // Purchase Orders API

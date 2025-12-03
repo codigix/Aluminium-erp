@@ -182,7 +182,7 @@ export default function ReorderManagement() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (val, row) => (
+      render: (row) => (
         <div className="inventory-actions-cell">
           <button className="btn-edit" onClick={() => handleEdit(row)}>
             <Edit2 size={14} />

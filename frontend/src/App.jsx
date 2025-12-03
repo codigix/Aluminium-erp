@@ -1,12 +1,16 @@
-﻿import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './hooks/AuthContext'
+import { ToastProvider } from './components/ToastContainer'
 import ProtectedRoute from './components/ProtectedRoute'
 import DepartmentProtectedRoute from './components/DepartmentProtectedRoute'
 import DepartmentLayout from './components/DepartmentLayout'
 import LoginPage from './pages/LoginPage'
 import DepartmentDashboard from './pages/DepartmentDashboard'
 import SupplierList from './pages/Suppliers/SupplierList'
+import EmployeeList from './pages/Masters/EmployeeList'
 import PurchaseOrderList from './pages/PurchaseOrder/PurchaseOrderList'
+
+
 import {
   PurchaseOrders,
   PurchaseOrderForm,
@@ -34,6 +38,7 @@ import {
 import SalesQuotationForm from './pages/Selling/SalesQuotationForm'
 import SalesOrderForm from './pages/Selling/SalesOrderForm'
 import {
+  InventoryDashboard,
   Warehouses,
   StockBalance,
   StockEntries,
@@ -58,15 +63,28 @@ import {
   ProductionEntries,
   BatchTracking as ProductionBatchTracking,
   QualityRecords,
-  ProductionAnalytics
+  ProductionAnalytics,
+  BOM,
+  ProductionPlan,
+  ProductionPlanForm,
+  WorkOrder,
+  WorkOrderTracking,
+  JobCard,
+  BOMForm
 } from './pages/Production'
 import './App.css'
+import WorkOrderForm from './pages/Production/WorkOrderForm'
+import Operations from './pages/Production/Operations'
+import OperationForm from './pages/Production/OperationForm'
+import Workstations from './pages/Production/Workstations'
+import WorkstationForm from './pages/Production/WorkstationForm'
 
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <Routes>
+      <ToastProvider>
+        <AuthProvider>
+          <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           
@@ -83,6 +101,37 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/production/operations/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><OperationForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+<Route path="/production/operations/form/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><OperationForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+
+<Route
+  path="/production/operations"
+  element={
+    <ProtectedRoute>
+      <DepartmentLayout>
+        <DepartmentProtectedRoute departments={['production', 'admin']}>
+          <Operations />
+        </DepartmentProtectedRoute>
+      </DepartmentLayout>
+    </ProtectedRoute>
+  }
+/>
+
+<Route path="/production/workstations/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><WorkstationForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+<Route path="/production/workstations/form/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><WorkstationForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+
+<Route
+  path="/production/workstations"
+  element={
+    <ProtectedRoute>
+      <DepartmentLayout>
+        <DepartmentProtectedRoute departments={['production', 'admin']}>
+          <Workstations />
+        </DepartmentProtectedRoute>
+      </DepartmentLayout>
+    </ProtectedRoute>
+  }
+/>
 
           {/* Legacy Routes */}
           <Route
@@ -136,6 +185,9 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/production/work-orders/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><WorkOrderForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+<Route path="/production/work-orders/form/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><WorkOrderForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+
           <Route
             path="/buying/material-request/:id"
             element={
@@ -339,6 +391,19 @@ function App() {
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['buying', 'admin']}>
                     <Items />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/masters/employees"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['admin']}>
+                    <EmployeeList />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>
@@ -609,6 +674,20 @@ function App() {
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
                     <SellingAnalytics />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Inventory Module - Dashboard */}
+          <Route
+            path="/inventory/dashboard"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['inventory', 'admin']}>
+                    <InventoryDashboard />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>
@@ -887,6 +966,72 @@ function App() {
             }
           />
           <Route
+            path="/production/boms"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <BOM />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/production/boms/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><BOMForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+          <Route path="/production/boms/form/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><BOMForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+          <Route
+            path="/production/plans"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <ProductionPlan />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/production/plans/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><ProductionPlanForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+          <Route path="/production/plans/form/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><ProductionPlanForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+          <Route
+            path="/production/work-orders"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <WorkOrder />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/production/work-orders/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><WorkOrderForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+          <Route path="/production/work-orders/form/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><WorkOrderForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+          <Route
+            path="/production/work-orders/track/:id"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <WorkOrderTracking />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production/job-cards"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <JobCard />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/analytics/production"
             element={
               <ProtectedRoute>
@@ -902,7 +1047,8 @@ function App() {
           {/* Catch all - redirect to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-      </AuthProvider>
+        </AuthProvider>
+      </ToastProvider>
     </Router>
   )
 }

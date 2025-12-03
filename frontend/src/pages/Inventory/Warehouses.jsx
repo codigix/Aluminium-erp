@@ -149,7 +149,7 @@ export default function Warehouses() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (val, row) => (
+      render: (row) => (
         <div className="inventory-actions-cell">
           <button className="btn-edit" onClick={() => handleEdit(row)}>
             <Edit2 size={14} />
@@ -166,15 +166,16 @@ export default function Warehouses() {
     <div className="inventory-container">
       <div className="inventory-header">
         <h1>
-          <Warehouse size={28} style={{ display: 'inline', marginRight: '10px' }} />
-          Warehouse Management
+          <Warehouse size={18} style={{ display: 'inline', marginRight: '6px' }} />
+          Warehouses
         </h1>
         <Button
           variant="primary"
           onClick={() => setShowForm(!showForm)}
           icon={Plus}
+          style={{ padding: '6px 10px', fontSize: '11px' }}
         >
-          {showForm ? 'Cancel' : 'Add Warehouse'}
+          {showForm ? 'Cancel' : 'Add'}
         </Button>
       </div>
 
@@ -182,7 +183,7 @@ export default function Warehouses() {
       {success && <Alert type="success">{success}</Alert>}
 
       {showForm && (
-        <Card title={editingId ? 'Edit Warehouse' : 'Add New Warehouse'} className="inventory-form">
+        <Card title={editingId ? 'Edit' : 'Add Warehouse'} className="inventory-form">
           <form onSubmit={handleSubmit}>
             <div className="form-row">
               <div className="form-group">
@@ -275,17 +276,16 @@ export default function Warehouses() {
 
       {!showForm && warehouses.length > 0 && (
         <div className="inventory-filters">
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <input
-              type="text"
-              placeholder="Search by name, code, or location..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value)
-                setCurrentPage(1)
-              }}
-            />
-          </div>
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setCurrentPage(1)
+            }}
+            style={{ minWidth: '150px' }}
+          />
           <select 
             value={locationFilter} 
             onChange={(e) => {
@@ -303,8 +303,9 @@ export default function Warehouses() {
               variant="secondary" 
               onClick={handleClearFilters}
               icon={X}
+              style={{ padding: '6px 10px', fontSize: '11px' }}
             >
-              Clear Filters
+              Clear
             </Button>
           )}
         </div>

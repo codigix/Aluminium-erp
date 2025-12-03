@@ -198,7 +198,7 @@ import './Buying.css'
 ### Font Sizes
 ```css
 --text-xs: 0.75rem      /* 12px */
---text-sm: 0.875rem     /* 14px */
+--text-sm: 12px     /* 14px */
 --text-base: 1rem       /* 16px */
 --text-lg: 1.125rem     /* 18px */
 --text-xl: 1.25rem      /* 20px */

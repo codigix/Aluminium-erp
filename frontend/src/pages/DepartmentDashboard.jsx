@@ -2,34 +2,29 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/AuthContext'
 import { 
   FileText, Send, DollarSign, Building2, Clipboard, Receipt,
-  TrendingUp, Activity, Calendar, AlertCircle, Zap, Eye, Plus,
-  ArrowUp, ArrowDown, Minus, BarChart3, Users, ShoppingCart, Package, Truck, CreditCard, CheckCircle
+  Package, BarChart3, Zap, Activity, AlertCircle, Plus, Clock,
+  CheckCircle, Truck, ShoppingCart, Users, ArrowUp, ArrowDown, ChevronRight,
+  TrendingUp, TrendingDown, Warehouse, AlertTriangle, Archive, ArrowRight
 } from 'lucide-react'
-import '../styles/Dashboard.css'
+import './DepartmentDashboard.css'
 
-// Buying Department Dashboard
-function BuyingDashboard({ user }) {
-  const [stats, setStats] = useState({
-    materialRequests: 0,
-    rfqs: 0,
-    quotations: 0,
-    suppliers: 0,
-    purchaseOrders: 0,
-    invoices: 0
-  })
-  const [recentActivity, setRecentActivity] = useState([])
+export default function DepartmentDashboard() {
+  const { user } = useAuth()
+  const userDept = user?.department?.toLowerCase() || 'buying'
+  const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        const headers = {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+    fetchDepartmentStats()
+  }, [userDept])
 
-        const [mrRes, rfqRes, quotRes, supplierRes, poRes, invoiceRes] = await Promise.all([
+  const fetchDepartmentStats = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+      if (userDept === 'buying' || userDept === 'procurement') {
+        const [mrRes, rfqRes, quotRes, supplierRes, poRes, invRes] = await Promise.all([
           fetch(`${import.meta.env.VITE_API_URL}/material-requests`, { headers }).catch(() => ({})),
           fetch(`${import.meta.env.VITE_API_URL}/rfqs`, { headers }).catch(() => ({})),
           fetch(`${import.meta.env.VITE_API_URL}/quotations`, { headers }).catch(() => ({})),
@@ -37,16 +32,10 @@ function BuyingDashboard({ user }) {
           fetch(`${import.meta.env.VITE_API_URL}/purchase-orders`, { headers }).catch(() => ({})),
           fetch(`${import.meta.env.VITE_API_URL}/purchase-invoices`, { headers }).catch(() => ({}))
         ])
-
         const [mrs, rfqs, quotations, suppliers, pos, invoices] = await Promise.all([
-          mrRes.json?.().catch(() => []),
-          rfqRes.json?.().catch(() => []),
-          quotRes.json?.().catch(() => []),
-          supplierRes.json?.().catch(() => []),
-          poRes.json?.().catch(() => []),
-          invoiceRes.json?.().catch(() => [])
+          mrRes.json?.().catch(() => []), rfqRes.json?.().catch(() => []), quotRes.json?.().catch(() => []),
+          supplierRes.json?.().catch(() => []), poRes.json?.().catch(() => []), invRes.json?.().catch(() => [])
         ])
-
         setStats({
           materialRequests: Array.isArray(mrs) ? mrs.length : 0,
           rfqs: Array.isArray(rfqs) ? rfqs.length : 0,
@@ -55,1392 +44,988 @@ function BuyingDashboard({ user }) {
           purchaseOrders: Array.isArray(pos) ? pos.length : 0,
           invoices: Array.isArray(invoices) ? invoices.length : 0
         })
-
-        setRecentActivity([
-          { type: 'Material Request', action: 'Created', time: '2 hours ago', status: 'draft' },
-          { type: 'RFQ', action: 'Sent to Suppliers', time: '4 hours ago', status: 'sent' },
-          { type: 'Quotation', action: 'Received from Supplier', time: '6 hours ago', status: 'received' },
-          { type: 'Purchase Order', action: 'Created', time: '1 day ago', status: 'draft' }
-        ])
-      } catch (error) {
-        console.error('Error fetching stats:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchStats()
-  }, [])
-
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Buying Module, {user?.full_name}! 👋</h1>
-          <p>Manage your procurement operations with ease</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#4F46E5', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🔵 Buying Department
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon material-requests">
-            <FileText size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Material Requests</h3>
-            <p className="stat-value">{stats.materialRequests}</p>
-            <span className="stat-label">Total MRs</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon rfqs">
-            <Send size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>RFQs</h3>
-            <p className="stat-value">{stats.rfqs}</p>
-            <span className="stat-label">Active RFQs</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon quotations">
-            <DollarSign size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Quotations</h3>
-            <p className="stat-value">{stats.quotations}</p>
-            <span className="stat-label">Supplier Quotes</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon suppliers">
-            <Building2 size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Suppliers</h3>
-            <p className="stat-value">{stats.suppliers}</p>
-            <span className="stat-label">Active Suppliers</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon purchase-orders">
-            <Clipboard size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Purchase Orders</h3>
-            <p className="stat-value">{stats.purchaseOrders}</p>
-            <span className="stat-label">Total POs</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon invoices">
-            <Receipt size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Invoices</h3>
-            <p className="stat-value">{stats.invoices}</p>
-            <span className="stat-label">Total Invoices</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/buying/material-requests/new" className="action-btn primary">
-            <Plus size={18} /> Create Material Request
-          </a>
-          <a href="/buying/rfqs/new" className="action-btn secondary">
-            <Send size={18} /> Create RFQ
-          </a>
-          <a href="/buying/quotations/new" className="action-btn tertiary">
-            <DollarSign size={18} /> Add Quotation
-          </a>
-          <a href="/buying/material-requests" className="action-btn outline">
-            <FileText size={18} /> View All Requests
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Selling Department Dashboard
-function SellingDashboard({ user }) {
-  const [stats, setStats] = useState({
-    quotations: 0,
-    salesOrders: 0,
-    deliveryNotes: 0,
-    invoices: 0,
-    customers: 0,
-    totalSales: 0
-  })
-  const [recentActivity, setRecentActivity] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        const headers = {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-
+      } else if (userDept === 'production') {
         setStats({
-          quotations: 12,
-          salesOrders: 8,
-          deliveryNotes: 15,
-          invoices: 20,
-          customers: 45,
-          totalSales: 950000
+          workOrders: 15, boms: 8, plans: 5, jobCards: 22,
+          completedToday: 6, inProgress: 9, pending: 3
         })
-
-        setRecentActivity([
-          { type: 'Quotation', action: 'Sent to Customer', time: '2 hours ago', status: 'sent' },
-          { type: 'Sales Order', action: 'Confirmed', time: '4 hours ago', status: 'confirmed' },
-          { type: 'Delivery Note', action: 'Created', time: '6 hours ago', status: 'draft' },
-          { type: 'Invoice', action: 'Paid', time: '1 day ago', status: 'paid' }
-        ])
-      } catch (error) {
-        console.error('Error fetching stats:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchStats()
-  }, [])
-
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Selling Module, {user?.full_name}! 📈</h1>
-          <p>Manage your sales pipeline and customer relationships</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#7C3AED', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🟣 Selling Department
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#7C3AED', backgroundColor: '#7C3AED15' }}>
-            <DollarSign size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Quotations</h3>
-            <p className="stat-value">{stats.quotations}</p>
-            <span className="stat-label">Active Quotes</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#7C3AED', backgroundColor: '#7C3AED15' }}>
-            <ShoppingCart size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Sales Orders</h3>
-            <p className="stat-value">{stats.salesOrders}</p>
-            <span className="stat-label">Pending Orders</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#7C3AED', backgroundColor: '#7C3AED15' }}>
-            <Truck size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Deliveries</h3>
-            <p className="stat-value">{stats.deliveryNotes}</p>
-            <span className="stat-label">Delivery Notes</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#7C3AED', backgroundColor: '#7C3AED15' }}>
-            <CreditCard size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Invoices</h3>
-            <p className="stat-value">{stats.invoices}</p>
-            <span className="stat-label">Total Invoices</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#7C3AED', backgroundColor: '#7C3AED15' }}>
-            <Users size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Customers</h3>
-            <p className="stat-value">{stats.customers}</p>
-            <span className="stat-label">Total Customers</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#7C3AED', backgroundColor: '#7C3AED15' }}>
-            <TrendingUp size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Total Sales</h3>
-            <p className="stat-value">₹{(stats.totalSales / 100000).toFixed(1)}L</p>
-            <span className="stat-label">This Month</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/selling/quotations/new" className="action-btn primary" style={{ backgroundColor: '#7C3AED' }}>
-            <Plus size={18} /> Create Quotation
-          </a>
-          <a href="/selling/sales-orders/new" className="action-btn secondary" style={{ backgroundColor: '#7C3AED' }}>
-            <ShoppingCart size={18} /> Create Sales Order
-          </a>
-          <a href="/selling/customers/new" className="action-btn tertiary" style={{ backgroundColor: '#7C3AED' }}>
-            <Users size={18} /> Add Customer
-          </a>
-          <a href="/selling/quotations" className="action-btn outline">
-            <DollarSign size={18} /> View All Quotations
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Admin Department Dashboard
-function AdminDashboard({ user }) {
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeDepartments: 3,
-    systemHealth: '98%',
-    lastBackup: 'Today'
-  })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
+      } else if (userDept === 'selling' || userDept === 'sales') {
         setStats({
-          totalUsers: 25,
-          activeDepartments: 3,
-          systemHealth: '98%',
-          lastBackup: 'Today 3:45 PM'
+          orders: 28, quotations: 12, invoices: 35, customers: 42,
+          pending: 5, delivered: 23, cancelled: 2
         })
-      } catch (error) {
-        console.error('Error fetching stats:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchStats()
-  }, [])
-
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Admin Panel, {user?.full_name}! ⚙️</h1>
-          <p>System administration and user management</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#DC2626', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🔴 Admin Department
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#DC2626', backgroundColor: '#DC262615' }}>
-            <Users size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Total Users</h3>
-            <p className="stat-value">{stats.totalUsers}</p>
-            <span className="stat-label">Active & Inactive</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#DC2626', backgroundColor: '#DC262615' }}>
-            <Building2 size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Departments</h3>
-            <p className="stat-value">{stats.activeDepartments}</p>
-            <span className="stat-label">Active Departments</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#DC2626', backgroundColor: '#DC262615' }}>
-            <Activity size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>System Health</h3>
-            <p className="stat-value">{stats.systemHealth}</p>
-            <span className="stat-label">All Systems OK</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#DC2626', backgroundColor: '#DC262615' }}>
-            <Package size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Last Backup</h3>
-            <p className="stat-value">Today</p>
-            <span className="stat-label">{stats.lastBackup}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Admin Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/admin/users" className="action-btn primary" style={{ backgroundColor: '#DC2626' }}>
-            <Users size={18} /> Manage Users
-          </a>
-          <a href="/admin/departments" className="action-btn secondary" style={{ backgroundColor: '#DC2626' }}>
-            <Building2 size={18} /> Manage Departments
-          </a>
-          <a href="/admin/system" className="action-btn tertiary" style={{ backgroundColor: '#DC2626' }}>
-            <Activity size={18} /> System Settings
-          </a>
-          <a href="/admin/reports" className="action-btn outline">
-            <BarChart3 size={18} /> View Reports
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Inventory/Stock Department Dashboard
-function InventoryDashboard({ user }) {
-  const [stats, setStats] = useState({
-    warehouseLocations: 0,
-    totalStock: 0,
-    lowStockItems: 0,
-    stockMovements: 0,
-    stockTransfers: 0,
-    reconciliations: 0
-  })
-  const [recentActivity, setRecentActivity] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        const headers = {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-
-        // Fetch warehouse and stock statistics
-        const [warehouseRes, balanceRes, ledgerRes, transferRes] = await Promise.all([
-          fetch(`${import.meta.env.VITE_API_URL}/stock/warehouses`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/stock/stock-balance`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/stock/ledger`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/stock/transfers`, { headers }).catch(() => ({}))
-        ])
-
-        const [warehouses, balances, ledger, transfers] = await Promise.all([
-          warehouseRes.json?.().catch(() => []),
-          balanceRes.json?.().catch(() => []),
-          ledgerRes.json?.().catch(() => []),
-          transferRes.json?.().catch(() => [])
-        ])
-
-        // Calculate low stock items
-        const lowStockCount = Array.isArray(balances) 
-          ? balances.filter(item => item.reorder_level && item.quantity_on_hand < item.reorder_level).length 
-          : 0
-
+      } else if (userDept === 'inventory' || userDept === 'stock') {
         setStats({
-          warehouseLocations: Array.isArray(warehouses) ? warehouses.length : 0,
-          totalStock: Array.isArray(balances) ? balances.length : 0,
-          lowStockItems: lowStockCount,
-          stockMovements: Array.isArray(ledger) ? ledger.length : 0,
-          stockTransfers: Array.isArray(transfers) ? transfers.length : 0,
-          reconciliations: 0
+          warehouseLocations: 5, totalStock: 150, lowStockItems: 8,
+          stockMovements: 245, stockTransfers: 18, grnRequests: 12,
+          grnPending: 3, grnApproved: 9
         })
-
-        setRecentActivity([
-          { type: 'Stock Entry', action: 'Goods Received', time: '1 hour ago', status: 'completed' },
-          { type: 'Stock Transfer', action: 'Inter-warehouse Movement', time: '3 hours ago', status: 'completed' },
-          { type: 'Low Stock Alert', action: '5 items below reorder level', time: '2 hours ago', status: 'alert' },
-          { type: 'Stock Reconciliation', action: 'Physical count initiated', time: '5 hours ago', status: 'in-progress' }
-        ])
-      } catch (error) {
-        console.error('Error fetching inventory stats:', error)
-      } finally {
-        setLoading(false)
       }
+    } catch (error) {
+      console.error('Error fetching stats:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) return <div className="dashboard"><p>Loading department dashboard...</p></div>
+
+  const renderBuyingDashboard = () => {
+    const statCardStyle = {
+      backgroundColor: '#fff',
+      borderRadius: '8px',
+      padding: '16px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+      border: '1px solid #e5e7eb'
     }
 
-    fetchStats()
-  }, [])
+    const statHeaderStyle = {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: '8px'
+    }
 
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Inventory Module, {user?.full_name}! 📦</h1>
-          <p>Manage warehouse stock, transfers, and inventory reconciliation</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#059669', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🟢 Inventory/Stock Department
-        </div>
-      </div>
+    const statLabelStyle = {
+      fontSize: '12px',
+      color: '#6b7280',
+      fontWeight: '500',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#059669', backgroundColor: '#05966915' }}>
-            <Building2 size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Warehouse Locations</h3>
-            <p className="stat-value">{stats.warehouseLocations}</p>
-            <span className="stat-label">Total Warehouses</span>
-          </div>
-        </div>
+    const statIconStyle = {
+      width: '32px',
+      height: '32px',
+      borderRadius: '6px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#059669', backgroundColor: '#05966915' }}>
-            <Package size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Total Stock Items</h3>
-            <p className="stat-value">{stats.totalStock}</p>
-            <span className="stat-label">Items in Stock</span>
-          </div>
-        </div>
+    const statValueStyle = {
+      fontSize: '24px',
+      fontWeight: 'bold',
+      color: '#1f2937',
+      marginBottom: '4px'
+    }
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#DC2626', backgroundColor: '#DC262615' }}>
-            <AlertCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Low Stock Items</h3>
-            <p className="stat-value">{stats.lowStockItems}</p>
-            <span className="stat-label">Below Reorder Level</span>
-          </div>
-        </div>
+    const statTrendStyle = {
+      fontSize: '11px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px'
+    }
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#059669', backgroundColor: '#05966915' }}>
-            <Activity size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Stock Movements</h3>
-            <p className="stat-value">{stats.stockMovements}</p>
-            <span className="stat-label">Total Transactions</span>
-          </div>
-        </div>
+    const actionButtonStyle = {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '12px',
+      marginBottom: '8px',
+      backgroundColor: '#f9fafb',
+      border: '1px solid #e5e7eb',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      textDecoration: 'none',
+      color: '#374151',
+      fontSize: '13px',
+      fontWeight: '500',
+      transition: 'all 0.2s'
+    }
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#059669', backgroundColor: '#05966915' }}>
-            <Truck size={28} />
+    return (
+      <div style={{ maxWidth: '100%', margin: '2rem', padding: '0' }}>
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '8px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          border: '1px solid #e5e7eb',
+          padding: '20px'
+        }}>
+          <div style={{
+            marginBottom: '24px',
+            paddingBottom: '16px',
+            borderBottom: '2px solid #e5e7eb',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <div>
+              <h1 style={{ fontSize: '28px', fontWeight: '700', margin: '0', color: '#1f2937' }}>
+                Welcome to Buying Module, {user?.full_name}! 🛍️
+              </h1>
+              <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                Manage procurement, vendors, quotations, and purchase orders
+              </p>
+            </div>
+            <p style={{ fontSize: '12px', color: '#6b7280' }}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
           </div>
-          <div className="stat-content">
-            <h3>Stock Transfers</h3>
-            <p className="stat-value">{stats.stockTransfers}</p>
-            <span className="stat-label">Inter-warehouse Moves</span>
-          </div>
-        </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#059669', backgroundColor: '#05966915' }}>
-            <BarChart3 size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Reconciliations</h3>
-            <p className="stat-value">{stats.reconciliations}</p>
-            <span className="stat-label">Physical Counts</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="recent-activity">
-        <div className="activity-header">
-          <Activity size={24} />
-          <h2>Recent Activity</h2>
-        </div>
-        <div className="activity-list">
-          {recentActivity.map((activity, idx) => {
-            let IconComponent = Activity
-            if (activity.type === 'Stock Entry') IconComponent = FileText
-            else if (activity.type === 'Stock Transfer') IconComponent = Truck
-            else if (activity.type === 'Low Stock Alert') IconComponent = AlertCircle
-            else if (activity.type === 'Stock Reconciliation') IconComponent = BarChart3
-            
-            return (
-            <div key={idx} className="activity-item">
-              <div className="activity-icon">
-                <IconComponent size={20} />
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            <div style={{...statCardStyle, borderLeft: '4px solid #007bff'}}>
+              <div style={statHeaderStyle}>
+                <span style={statLabelStyle}>Material Requests</span>
+                <div style={{...statIconStyle, backgroundColor: '#eff6ff'}}>📋</div>
               </div>
-              <div className="activity-details">
-                <h4>{activity.type}</h4>
-                <p>{activity.action}</p>
-              </div>
-              <div className="activity-meta">
-                <span className={`status ${activity.status}`}>{activity.status}</span>
-                <span className="time">{activity.time}</span>
+              <div style={statValueStyle}>{stats.materialRequests || 0}</div>
+              <div style={{...statTrendStyle, color: '#0284c7'}}>
+                <FileText size={12} /> Active requests
               </div>
             </div>
-            )
-          })}
-        </div>
-      </div>
 
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/inventory/stock-entries/new" className="action-btn primary" style={{ backgroundColor: '#059669' }}>
-            <Plus size={18} /> Create Stock Entry
-          </a>
-          <a href="/inventory/transfers/new" className="action-btn secondary" style={{ backgroundColor: '#059669' }}>
-            <Truck size={18} /> Stock Transfer
-          </a>
-          <a href="/inventory/reconciliation/new" className="action-btn tertiary" style={{ backgroundColor: '#059669' }}>
-            <BarChart3 size={18} /> Stock Reconciliation
-          </a>
-          <a href="/inventory/stock-balance" className="action-btn outline">
-            <Package size={18} /> View Stock Balance
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
+            <div style={{...statCardStyle, borderLeft: '4px solid #8b5cf6'}}>
+              <div style={statHeaderStyle}>
+                <span style={statLabelStyle}>RFQs Sent</span>
+                <div style={{...statIconStyle, backgroundColor: '#faf5ff'}}>📤</div>
+              </div>
+              <div style={statValueStyle}>{stats.rfqs || 0}</div>
+              <div style={{...statTrendStyle, color: '#7c3aed'}}>
+                <Send size={12} /> Awaiting quotes
+              </div>
+            </div>
 
-// Production Department Dashboard
-function ProductionDashboard({ user }) {
-  const [stats, setStats] = useState({
-    activeOrders: 0,
-    completedToday: 0,
-    inProgress: 0,
-    quality: 0,
-    downtime: 0,
-    efficiency: 0
-  })
-  const [loading, setLoading] = useState(true)
+            <div style={{...statCardStyle, borderLeft: '4px solid #10b981'}}>
+              <div style={statHeaderStyle}>
+                <span style={statLabelStyle}>Quotations</span>
+                <div style={{...statIconStyle, backgroundColor: '#f0fdf4'}}>💰</div>
+              </div>
+              <div style={statValueStyle}>{stats.quotations || 0}</div>
+              <div style={{...statTrendStyle, color: '#10b981'}}>
+                <TrendingUp size={12} /> {Math.round((stats.quotations || 0) * 0.75)} evaluating
+              </div>
+            </div>
 
-  useEffect(() => {
-    setStats({
-      activeOrders: 12,
-      completedToday: 8,
-      inProgress: 5,
-      quality: '98.5%',
-      downtime: '0.5h',
-      efficiency: '92%'
-    })
-    setLoading(false)
-  }, [])
+            <div style={{...statCardStyle, borderLeft: '4px solid #f59e0b'}}>
+              <div style={statHeaderStyle}>
+                <span style={statLabelStyle}>Suppliers</span>
+                <div style={{...statIconStyle, backgroundColor: '#fffbeb'}}>🏢</div>
+              </div>
+              <div style={statValueStyle}>{stats.suppliers || 0}</div>
+              <div style={{...statTrendStyle, color: '#f59e0b'}}>
+                <AlertCircle size={12} /> Active vendors
+              </div>
+            </div>
 
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Production, {user?.full_name}! 🏭</h1>
-          <p>Manage manufacturing orders and production schedules</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#F59E0B', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🟡 Production/Manufacturing
-        </div>
-      </div>
+            <div style={{...statCardStyle, borderLeft: '4px solid #ef4444'}}>
+              <div style={statHeaderStyle}>
+                <span style={statLabelStyle}>Purchase Orders</span>
+                <div style={{...statIconStyle, backgroundColor: '#fef2f2'}}>📦</div>
+              </div>
+              <div style={statValueStyle}>{stats.purchaseOrders || 0}</div>
+              <div style={{...statTrendStyle, color: '#ef4444'}}>
+                <TrendingDown size={12} /> {Math.round((stats.purchaseOrders || 0) * 0.4)} pending
+              </div>
+            </div>
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#F59E0B', backgroundColor: '#F59E0B15' }}>
-            <Clipboard size={28} />
+            <div style={{...statCardStyle, borderLeft: '4px solid #06b6d4'}}>
+              <div style={statHeaderStyle}>
+                <span style={statLabelStyle}>Invoices</span>
+                <div style={{...statIconStyle, backgroundColor: '#ecfdf5'}}>💵</div>
+              </div>
+              <div style={statValueStyle}>{stats.invoices || 0}</div>
+              <div style={{...statTrendStyle, color: '#06b6d4'}}>
+                <Receipt size={12} /> Received
+              </div>
+            </div>
           </div>
-          <div className="stat-content">
-            <h3>Active Orders</h3>
-            <p className="stat-value">{stats.activeOrders}</p>
-            <span className="stat-label">Production Orders</span>
-          </div>
-        </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#F59E0B', backgroundColor: '#F59E0B15' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Completed Today</h3>
-            <p className="stat-value">{stats.completedToday}</p>
-            <span className="stat-label">Finished Orders</span>
-          </div>
-        </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            <div style={statCardStyle}>
+              <div style={statLabelStyle}>Average Lead Time</div>
+              <div style={{fontSize: '20px', fontWeight: 'bold', color: '#1f2937', marginTop: '8px'}}>
+                7.2 days
+              </div>
+              <div style={{...statTrendStyle, color: '#10b981', marginTop: '8px'}}>
+                <ArrowDown size={12} /> 1 day improvement
+              </div>
+            </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#F59E0B', backgroundColor: '#F59E0B15' }}>
-            <Activity size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>In Progress</h3>
-            <p className="stat-value">{stats.inProgress}</p>
-            <span className="stat-label">Currently Running</span>
-          </div>
-        </div>
+            <div style={statCardStyle}>
+              <div style={statLabelStyle}>Quote Success Rate</div>
+              <div style={{fontSize: '20px', fontWeight: 'bold', color: '#1f2937', marginTop: '8px'}}>
+                87%
+              </div>
+              <div style={{...statTrendStyle, color: '#10b981', marginTop: '8px'}}>
+                <ArrowUp size={12} /> 5% increase
+              </div>
+            </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#10B981', backgroundColor: '#10B98115' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Quality Rate</h3>
-            <p className="stat-value">{stats.quality}</p>
-            <span className="stat-label">Pass Rate</span>
-          </div>
-        </div>
+            <div style={statCardStyle}>
+              <div style={statLabelStyle}>Avg PO Value</div>
+              <div style={{fontSize: '20px', fontWeight: 'bold', color: '#1f2937', marginTop: '8px'}}>
+                ₹75K
+              </div>
+              <div style={{...statTrendStyle, color: '#6b7280', marginTop: '8px'}}>
+                <Clock size={12} /> This quarter
+              </div>
+            </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#DC2626', backgroundColor: '#DC262615' }}>
-            <AlertCircle size={28} />
+            <div style={statCardStyle}>
+              <div style={statLabelStyle}>Pending Approvals</div>
+              <div style={{fontSize: '20px', fontWeight: 'bold', color: '#1f2937', marginTop: '8px'}}>
+                {Math.round((stats.purchaseOrders || 0) * 0.15)}
+              </div>
+              <div style={{...statTrendStyle, color: '#f59e0b', marginTop: '8px'}}>
+                <AlertCircle size={12} /> Need action
+              </div>
+            </div>
           </div>
-          <div className="stat-content">
-            <h3>Downtime</h3>
-            <p className="stat-value">{stats.downtime}</p>
-            <span className="stat-label">Today</span>
-          </div>
-        </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#F59E0B', backgroundColor: '#F59E0B15' }}>
-            <TrendingUp size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Efficiency</h3>
-            <p className="stat-value">{stats.efficiency}</p>
-            <span className="stat-label">Line Efficiency</span>
-          </div>
-        </div>
-      </div>
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            padding: '16px'
+          }}>
+            <h2 style={{
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#1f2937',
+              margin: '0 0 16px 0'
+            }}>
+              Quick Actions
+            </h2>
+            
+            <a 
+              href="/buying/material-requests/new" 
+              style={{...actionButtonStyle, backgroundColor: '#eff6ff', borderColor: '#bfdbfe'}}
+              onMouseEnter={(e) => { e.target.style.backgroundColor = '#dbeafe'; e.target.style.borderColor = '#93c5fd' }}
+              onMouseLeave={(e) => { e.target.style.backgroundColor = '#eff6ff'; e.target.style.borderColor = '#bfdbfe' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Plus size={16} />
+                <span>Create Material Request</span>
+              </div>
+              <ChevronRight size={16} color="#0284c7" />
+            </a>
 
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/production/orders/new" className="action-btn primary" style={{ backgroundColor: '#F59E0B' }}>
-            <Plus size={18} /> Create Production Order
-          </a>
-          <a href="/production/schedules" className="action-btn secondary" style={{ backgroundColor: '#F59E0B' }}>
-            <Calendar size={18} /> View Schedule
-          </a>
-          <a href="/production/batch-tracking" className="action-btn tertiary" style={{ backgroundColor: '#F59E0B' }}>
-            <Package size={18} /> Batch Tracking
-          </a>
-          <a href="/production/analytics" className="action-btn outline">
-            <BarChart3 size={18} /> Production Analytics
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
+            <a 
+              href="/buying/rfqs/new" 
+              style={{...actionButtonStyle, backgroundColor: '#faf5ff', borderColor: '#e9d5ff'}}
+              onMouseEnter={(e) => { e.target.style.backgroundColor = '#f3e8ff'; e.target.style.borderColor = '#ddd6fe' }}
+              onMouseLeave={(e) => { e.target.style.backgroundColor = '#faf5ff'; e.target.style.borderColor = '#e9d5ff' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Send size={16} />
+                <span>Send RFQ to Suppliers</span>
+              </div>
+              <ChevronRight size={16} color="#8b5cf6" />
+            </a>
 
-// Quality Control Dashboard
-function QualityDashboard({ user }) {
-  const [stats, setStats] = useState({
-    inspections: 0,
-    passed: 0,
-    rejected: 0,
-    defectRate: 0,
-    samplesChecked: 0,
-    certifications: 0
-  })
-  const [loading, setLoading] = useState(true)
+            <a 
+              href="/buying/quotations" 
+              style={{...actionButtonStyle, backgroundColor: '#f0fdf4', borderColor: '#bbf7d0'}}
+              onMouseEnter={(e) => { e.target.style.backgroundColor = '#dcfce7'; e.target.style.borderColor = '#86efac' }}
+              onMouseLeave={(e) => { e.target.style.backgroundColor = '#f0fdf4'; e.target.style.borderColor = '#bbf7d0' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <DollarSign size={16} />
+                <span>View Quotations</span>
+              </div>
+              <ChevronRight size={16} color="#10b981" />
+            </a>
 
-  useEffect(() => {
-    setStats({
-      inspections: 45,
-      passed: 44,
-      rejected: 1,
-      defectRate: '2.2%',
-      samplesChecked: 320,
-      certifications: 98
-    })
-    setLoading(false)
-  }, [])
+            <a 
+              href="/buying/purchase-orders" 
+              style={{...actionButtonStyle, backgroundColor: '#fef2f2', borderColor: '#fecaca'}}
+              onMouseEnter={(e) => { e.target.style.backgroundColor = '#fee2e2'; e.target.style.borderColor = '#fca5a5' }}
+              onMouseLeave={(e) => { e.target.style.backgroundColor = '#fef2f2'; e.target.style.borderColor = '#fecaca' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clipboard size={16} />
+                <span>View Purchase Orders</span>
+              </div>
+              <ChevronRight size={16} color="#ef4444" />
+            </a>
 
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Quality Control, {user?.full_name}! ✓</h1>
-          <p>Monitor and ensure product quality standards</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#06B6D4', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🔵 Quality Control/QC
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#06B6D4', backgroundColor: '#06B6D415' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Inspections</h3>
-            <p className="stat-value">{stats.inspections}</p>
-            <span className="stat-label">Today</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#10B981', backgroundColor: '#10B98115' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Passed</h3>
-            <p className="stat-value">{stats.passed}</p>
-            <span className="stat-label">Quality OK</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#DC2626', backgroundColor: '#DC262615' }}>
-            <AlertCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Rejected</h3>
-            <p className="stat-value">{stats.rejected}</p>
-            <span className="stat-label">Failed Inspection</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#06B6D4', backgroundColor: '#06B6D415' }}>
-            <BarChart3 size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Defect Rate</h3>
-            <p className="stat-value">{stats.defectRate}</p>
-            <span className="stat-label">Overall</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#06B6D4', backgroundColor: '#06B6D415' }}>
-            <Package size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Samples Checked</h3>
-            <p className="stat-value">{stats.samplesChecked}</p>
-            <span className="stat-label">This Week</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#10B981', backgroundColor: '#10B98115' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Certifications</h3>
-            <p className="stat-value">{stats.certifications}</p>
-            <span className="stat-label">Valid</span>
+            <a 
+              href="/buying/suppliers" 
+              style={{...actionButtonStyle, backgroundColor: '#fffbeb', borderColor: '#fde68a'}}
+              onMouseEnter={(e) => { e.target.style.backgroundColor = '#fef3c7'; e.target.style.borderColor = '#fcd34d' }}
+              onMouseLeave={(e) => { e.target.style.backgroundColor = '#fffbeb'; e.target.style.borderColor = '#fde68a' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Building2 size={16} />
+                <span>Manage Suppliers</span>
+              </div>
+              <ChevronRight size={16} color="#f59e0b" />
+            </a>
           </div>
         </div>
       </div>
-
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/quality/inspections/new" className="action-btn primary" style={{ backgroundColor: '#06B6D4' }}>
-            <Plus size={18} /> Create Inspection
-          </a>
-          <a href="/quality/defects" className="action-btn secondary" style={{ backgroundColor: '#06B6D4' }}>
-            <AlertCircle size={18} /> Log Defect
-          </a>
-          <a href="/quality/reports" className="action-btn tertiary" style={{ backgroundColor: '#06B6D4' }}>
-            <BarChart3 size={18} /> Quality Reports
-          </a>
-          <a href="/quality/certifications" className="action-btn outline">
-            <CheckCircle size={18} /> Certifications
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Dispatch/Logistics Dashboard
-function DispatchDashboard({ user }) {
-  const [stats, setStats] = useState({
-    pendingShipments: 0,
-    shipped: 0,
-    delivered: 0,
-    inTransit: 0,
-    routes: 0,
-    vehicles: 0
-  })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setStats({
-      pendingShipments: 8,
-      shipped: 15,
-      delivered: 42,
-      inTransit: 6,
-      routes: 12,
-      vehicles: 8
-    })
-    setLoading(false)
-  }, [])
-
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Dispatch & Logistics, {user?.full_name}! 🚚</h1>
-          <p>Manage shipments, deliveries, and vehicle fleet</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#EC4899', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🟩 Dispatch/Logistics
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#EC4899', backgroundColor: '#EC489915' }}>
-            <FileText size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Pending Shipments</h3>
-            <p className="stat-value">{stats.pendingShipments}</p>
-            <span className="stat-label">Awaiting Pickup</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#EC4899', backgroundColor: '#EC489915' }}>
-            <Send size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Shipped</h3>
-            <p className="stat-value">{stats.shipped}</p>
-            <span className="stat-label">Today</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#10B981', backgroundColor: '#10B98115' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Delivered</h3>
-            <p className="stat-value">{stats.delivered}</p>
-            <span className="stat-label">This Month</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#EC4899', backgroundColor: '#EC489915' }}>
-            <Truck size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>In Transit</h3>
-            <p className="stat-value">{stats.inTransit}</p>
-            <span className="stat-label">Active Shipments</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#EC4899', backgroundColor: '#EC489915' }}>
-            <Activity size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Active Routes</h3>
-            <p className="stat-value">{stats.routes}</p>
-            <span className="stat-label">Delivery Routes</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#EC4899', backgroundColor: '#EC489915' }}>
-            <Truck size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Vehicles</h3>
-            <p className="stat-value">{stats.vehicles}</p>
-            <span className="stat-label">Active Fleet</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/dispatch/shipments/new" className="action-btn primary" style={{ backgroundColor: '#EC4899' }}>
-            <Plus size={18} /> Create Shipment
-          </a>
-          <a href="/dispatch/routes" className="action-btn secondary" style={{ backgroundColor: '#EC4899' }}>
-            <Activity size={18} /> Manage Routes
-          </a>
-          <a href="/dispatch/vehicles" className="action-btn tertiary" style={{ backgroundColor: '#EC4899' }}>
-            <Truck size={18} /> Vehicle Fleet
-          </a>
-          <a href="/dispatch/tracking" className="action-btn outline">
-            <Eye size={18} /> Track Shipments
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Accounts/Finance Dashboard
-function AccountsDashboard({ user }) {
-  const [stats, setStats] = useState({
-    revenue: 0,
-    expenses: 0,
-    balance: 0,
-    invoices: 0,
-    payments: 0,
-    accounts: 0
-  })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setStats({
-      revenue: 2500000,
-      expenses: 1800000,
-      balance: 700000,
-      invoices: 145,
-      payments: 89,
-      accounts: 45
-    })
-    setLoading(false)
-  }, [])
-
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Accounts & Finance, {user?.full_name}! 💰</h1>
-          <p>Manage financial operations and accounting</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#14B8A6', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🟢 Accounts/Finance
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#14B8A6', backgroundColor: '#14B8A615' }}>
-            <DollarSign size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Revenue</h3>
-            <p className="stat-value">₹{(stats.revenue / 100000).toFixed(1)}L</p>
-            <span className="stat-label">This Month</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#14B8A6', backgroundColor: '#14B8A615' }}>
-            <DollarSign size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Expenses</h3>
-            <p className="stat-value">₹{(stats.expenses / 100000).toFixed(1)}L</p>
-            <span className="stat-label">This Month</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#10B981', backgroundColor: '#10B98115' }}>
-            <TrendingUp size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Balance</h3>
-            <p className="stat-value">₹{(stats.balance / 100000).toFixed(1)}L</p>
-            <span className="stat-label">Net Profit</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#14B8A6', backgroundColor: '#14B8A615' }}>
-            <Receipt size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Invoices</h3>
-            <p className="stat-value">{stats.invoices}</p>
-            <span className="stat-label">Total Invoices</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#14B8A6', backgroundColor: '#14B8A615' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Payments Received</h3>
-            <p className="stat-value">{stats.payments}</p>
-            <span className="stat-label">This Month</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#14B8A6', backgroundColor: '#14B8A615' }}>
-            <Building2 size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Accounts</h3>
-            <p className="stat-value">{stats.accounts}</p>
-            <span className="stat-label">Ledger Accounts</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/accounts/invoices/new" className="action-btn primary" style={{ backgroundColor: '#14B8A6' }}>
-            <Plus size={18} /> Create Invoice
-          </a>
-          <a href="/accounts/payments" className="action-btn secondary" style={{ backgroundColor: '#14B8A6' }}>
-            <DollarSign size={18} /> Record Payment
-          </a>
-          <a href="/accounts/statements" className="action-btn tertiary" style={{ backgroundColor: '#14B8A6' }}>
-            <FileText size={18} /> Financial Statements
-          </a>
-          <a href="/accounts/reports" className="action-btn outline">
-            <BarChart3 size={18} /> Financial Reports
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// HR/Payroll Dashboard
-function HRDashboard({ user }) {
-  const [stats, setStats] = useState({
-    totalEmployees: 0,
-    attendanceRate: 0,
-    pendingSalaries: 0,
-    leaves: 0,
-    performances: 0,
-    trainings: 0
-  })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setStats({
-      totalEmployees: 125,
-      attendanceRate: '94.5%',
-      pendingSalaries: 45,
-      leaves: 12,
-      performances: 8,
-      trainings: 3
-    })
-    setLoading(false)
-  }, [])
-
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to HR & Payroll, {user?.full_name}! 👥</h1>
-          <p>Manage employees, payroll, and human resources</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#3B82F6', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🔵 HR/Payroll
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#3B82F6', backgroundColor: '#3B82F615' }}>
-            <Users size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Total Employees</h3>
-            <p className="stat-value">{stats.totalEmployees}</p>
-            <span className="stat-label">Active Staff</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#10B981', backgroundColor: '#10B98115' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Attendance Rate</h3>
-            <p className="stat-value">{stats.attendanceRate}</p>
-            <span className="stat-label">This Month</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#3B82F6', backgroundColor: '#3B82F615' }}>
-            <DollarSign size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Pending Salaries</h3>
-            <p className="stat-value">{stats.pendingSalaries}</p>
-            <span className="stat-label">To be Processed</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#F59E0B', backgroundColor: '#F59E0B15' }}>
-            <Calendar size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Leave Applications</h3>
-            <p className="stat-value">{stats.leaves}</p>
-            <span className="stat-label">Pending Approval</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#3B82F6', backgroundColor: '#3B82F615' }}>
-            <Activity size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Performances</h3>
-            <p className="stat-value">{stats.performances}</p>
-            <span className="stat-label">Pending Reviews</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#3B82F6', backgroundColor: '#3B82F615' }}>
-            <CheckCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Trainings</h3>
-            <p className="stat-value">{stats.trainings}</p>
-            <span className="stat-label">Scheduled</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/hr/employees/new" className="action-btn primary" style={{ backgroundColor: '#3B82F6' }}>
-            <Plus size={18} /> Add Employee
-          </a>
-          <a href="/hr/attendance" className="action-btn secondary" style={{ backgroundColor: '#3B82F6' }}>
-            <CheckCircle size={18} /> Manage Attendance
-          </a>
-          <a href="/hr/payroll/new" className="action-btn tertiary" style={{ backgroundColor: '#3B82F6' }}>
-            <DollarSign size={18} /> Process Payroll
-          </a>
-          <a href="/hr/analytics" className="action-btn outline">
-            <BarChart3 size={18} /> HR Analytics
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ToolRoom Department Dashboard
-function ToolRoomDashboard({ user }) {
-  const [stats, setStats] = useState({
-    totalTools: 0,
-    dieInUse: 0,
-    maintenanceDue: 0,
-    utilization: 0,
-    reworks: 0,
-    downtime: 0
-  })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setStats({
-      totalTools: 285,
-      dieInUse: 42,
-      maintenanceDue: 8,
-      utilization: '87%',
-      reworks: 3,
-      downtime: '2.5h'
-    })
-    setLoading(false)
-  }, [])
-
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Welcome to Tool Room, {user?.full_name}! 🔧</h1>
-          <p>Manage tools, dies, maintenance, and equipment</p>
-        </div>
-        <div className="header-date" style={{ backgroundColor: '#8B5CF6', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
-          🟣 Tool Room/Maintenance
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#8B5CF6', backgroundColor: '#8B5CF615' }}>
-            <Package size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Total Tools</h3>
-            <p className="stat-value">{stats.totalTools}</p>
-            <span className="stat-label">In Inventory</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#8B5CF6', backgroundColor: '#8B5CF615' }}>
-            <Activity size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Dies In Use</h3>
-            <p className="stat-value">{stats.dieInUse}</p>
-            <span className="stat-label">Active Dies</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#DC2626', backgroundColor: '#DC262615' }}>
-            <AlertCircle size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Maintenance Due</h3>
-            <p className="stat-value">{stats.maintenanceDue}</p>
-            <span className="stat-label">Scheduled</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#8B5CF6', backgroundColor: '#8B5CF615' }}>
-            <TrendingUp size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Utilization Rate</h3>
-            <p className="stat-value">{stats.utilization}</p>
-            <span className="stat-label">Tool Usage</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#8B5CF6', backgroundColor: '#8B5CF615' }}>
-            <Clipboard size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Reworks</h3>
-            <p className="stat-value">{stats.reworks}</p>
-            <span className="stat-label">Pending Rework</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ color: '#8B5CF6', backgroundColor: '#8B5CF615' }}>
-            <Activity size={28} />
-          </div>
-          <div className="stat-content">
-            <h3>Downtime</h3>
-            <p className="stat-value">{stats.downtime}</p>
-            <span className="stat-label">Today</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="quick-actions">
-        <div className="action-header">
-          <Zap size={24} />
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="action-buttons">
-          <a href="/toolroom/tools/new" className="action-btn primary" style={{ backgroundColor: '#8B5CF6' }}>
-            <Plus size={18} /> Add Tool
-          </a>
-          <a href="/toolroom/maintenance/new" className="action-btn secondary" style={{ backgroundColor: '#8B5CF6' }}>
-            <AlertCircle size={18} /> Schedule Maintenance
-          </a>
-          <a href="/toolroom/die-register" className="action-btn tertiary" style={{ backgroundColor: '#8B5CF6' }}>
-            <Package size={18} /> Die Register
-          </a>
-          <a href="/toolroom/analytics" className="action-btn outline">
-            <BarChart3 size={18} /> Analytics
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Main Department Dashboard Component
-export default function DepartmentDashboard() {
-  const { user } = useAuth()
-
-  if (!user) {
-    return <div style={{ textAlign: 'center', padding: '40px' }}>Loading...</div>
+    )
   }
 
-  const department = user.department || 'buying'
+  const renderProductionDashboard = () => (
+    <div className="prod-dashboard">
+      <div className="prod-dashboard-header">
+        <div className="prod-header-content">
+          <h1>Production Dashboard</h1>
+          <p>Welcome back, <span className="prod-user-name">{user?.full_name}</span></p>
+          <p className="prod-header-subtitle">Manage work orders, BOMs, production plans, and job cards</p>
+        </div>
+        <div className="prod-header-badge">
+          <div className="prod-badge-status">
+            <span className="prod-status-indicator"></span>
+            Production Department
+          </div>
+        </div>
+      </div>
 
-  switch (department) {
-    case 'selling':
-      return <SellingDashboard user={user} />
-    case 'admin':
-      return <AdminDashboard user={user} />
-    case 'inventory':
-      return <InventoryDashboard user={user} />
-    case 'production':
-      return <ProductionDashboard user={user} />
-    case 'toolroom':
-      return <ToolRoomDashboard user={user} />
-    case 'quality':
-      return <QualityDashboard user={user} />
-    case 'dispatch':
-      return <DispatchDashboard user={user} />
-    case 'accounts':
-      return <AccountsDashboard user={user} />
-    case 'hr':
-      return <HRDashboard user={user} />
-    case 'buying':
-    default:
-      return <BuyingDashboard user={user} />
+      <div className="prod-kpi-section">
+        <div className="prod-kpi-row">
+          <div className="prod-kpi-card prod-kpi-primary">
+            <div className="prod-kpi-icon">
+              <Truck size={24} />
+            </div>
+            <div className="prod-kpi-details">
+              <span className="prod-kpi-label">Work Orders</span>
+              <div className="prod-kpi-value-row">
+                <span className="prod-kpi-value">{stats.workOrders}</span>
+                <span className="prod-kpi-subtitle">Total</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="prod-kpi-card prod-kpi-warning">
+            <div className="prod-kpi-icon">
+              <Activity size={24} />
+            </div>
+            <div className="prod-kpi-details">
+              <span className="prod-kpi-label">In Progress</span>
+              <div className="prod-kpi-value-row">
+                <span className="prod-kpi-value prod-highlight">{stats.inProgress}</span>
+                <span className="prod-kpi-subtitle">Active</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="prod-kpi-card prod-kpi-success">
+            <div className="prod-kpi-icon">
+              <CheckCircle size={24} />
+            </div>
+            <div className="prod-kpi-details">
+              <span className="prod-kpi-label">Completed</span>
+              <div className="prod-kpi-value-row">
+                <span className="prod-kpi-value">{stats.completedToday}</span>
+                <span className="prod-kpi-subtitle">Today</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="prod-kpi-card prod-kpi-info">
+            <div className="prod-kpi-icon">
+              <AlertCircle size={24} />
+            </div>
+            <div className="prod-kpi-details">
+              <span className="prod-kpi-label">Pending</span>
+              <div className="prod-kpi-value-row">
+                <span className="prod-kpi-value">{stats.pending}</span>
+                <span className="prod-kpi-subtitle">Awaiting</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="prod-content-grid">
+        <div className="prod-col-main">
+          <div className="prod-stats-section">
+            <div className="prod-section-header">
+              <h2>Production Resources</h2>
+            </div>
+            <div className="prod-stat-cards-grid">
+              <div className="prod-stat-card-item">
+                <div className="prod-stat-card-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
+                  <BarChart3 size={20} style={{ color: '#F59E0B' }} />
+                </div>
+                <div className="prod-stat-card-info">
+                  <span className="prod-stat-card-label">BOMs</span>
+                  <span className="prod-stat-card-number">{stats.boms}</span>
+                </div>
+              </div>
+
+              <div className="prod-stat-card-item">
+                <div className="prod-stat-card-icon" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)' }}>
+                  <Clipboard size={20} style={{ color: '#3B82F6' }} />
+                </div>
+                <div className="prod-stat-card-info">
+                  <span className="prod-stat-card-label">Production Plans</span>
+                  <span className="prod-stat-card-number">{stats.plans}</span>
+                </div>
+              </div>
+
+              <div className="prod-stat-card-item">
+                <div className="prod-stat-card-icon" style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)' }}>
+                  <FileText size={20} style={{ color: '#8B5CF6' }} />
+                </div>
+                <div className="prod-stat-card-info">
+                  <span className="prod-stat-card-label">Job Cards</span>
+                  <span className="prod-stat-card-number">{stats.jobCards}</span>
+                </div>
+              </div>
+
+              <div className="prod-stat-card-item">
+                <div className="prod-stat-card-icon" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
+                  <TrendingUp size={20} style={{ color: '#10B981' }} />
+                </div>
+                <div className="prod-stat-card-info">
+                  <span className="prod-stat-card-label">Efficiency Rate</span>
+                  <span className="prod-stat-card-number">85%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="prod-activity-section">
+            <div className="prod-section-header">
+              <h2>Recent Activity</h2>
+            </div>
+            <div className="prod-activity-list">
+              <div className="prod-activity-row prod-activity-completed">
+                <div className="prod-activity-icon">
+                  <CheckCircle size={18} />
+                </div>
+                <div className="prod-activity-content">
+                  <h4>Work Order Completed</h4>
+                  <p>WO-2024-001 finished assembly stage</p>
+                </div>
+                <div className="prod-activity-time">
+                  <span className="prod-status-badge prod-badge-completed">completed</span>
+                  <span className="prod-time-text">15 mins ago</span>
+                </div>
+              </div>
+
+              <div className="prod-activity-row prod-activity-in-progress">
+                <div className="prod-activity-icon">
+                  <Activity size={18} />
+                </div>
+                <div className="prod-activity-content">
+                  <h4>Production Plan Updated</h4>
+                  <p>Daily plan for QC stage revised</p>
+                </div>
+                <div className="prod-activity-time">
+                  <span className="prod-status-badge prod-badge-in-progress">in-progress</span>
+                  <span className="prod-time-text">1 hour ago</span>
+                </div>
+              </div>
+
+              <div className="prod-activity-row prod-activity-pending">
+                <div className="prod-activity-icon">
+                  <Truck size={18} />
+                </div>
+                <div className="prod-activity-content">
+                  <h4>New Work Order Created</h4>
+                  <p>WO-2024-015 added to production queue</p>
+                </div>
+                <div className="prod-activity-time">
+                  <span className="prod-status-badge prod-badge-pending">pending</span>
+                  <span className="prod-time-text">2 hours ago</span>
+                </div>
+              </div>
+
+              <div className="prod-activity-row prod-activity-alert">
+                <div className="prod-activity-icon">
+                  <AlertCircle size={18} />
+                </div>
+                <div className="prod-activity-content">
+                  <h4>Quality Issue Reported</h4>
+                  <p>Rework required for batch #JC-2024-008</p>
+                </div>
+                <div className="prod-activity-time">
+                  <span className="prod-status-badge prod-badge-alert">alert</span>
+                  <span className="prod-time-text">3 hours ago</span>
+                </div>
+              </div>
+
+              <div className="prod-activity-row prod-activity-completed">
+                <div className="prod-activity-icon">
+                  <BarChart3 size={18} />
+                </div>
+                <div className="prod-activity-content">
+                  <h4>Daily Report Generated</h4>
+                  <p>Production metrics for 01-Dec-2024</p>
+                </div>
+                <div className="prod-activity-time">
+                  <span className="prod-status-badge prod-badge-completed">completed</span>
+                  <span className="prod-time-text">5 hours ago</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="prod-col-sidebar">
+          <div className="prod-actions-section">
+            <div className="prod-section-header">
+              <h2>Quick Actions</h2>
+            </div>
+            <div className="prod-action-list">
+              <a href="/production/work-orders/new" className="prod-action-btn prod-action-primary">
+                <Plus size={18} />
+                <div className="prod-action-content">
+                  <span className="prod-action-title">Create Work Order</span>
+                  <span className="prod-action-meta">New production task</span>
+                </div>
+                <ArrowRight size={16} />
+              </a>
+              <a href="/production/work-orders" className="prod-action-btn prod-action-primary">
+                <Truck size={18} />
+                <div className="prod-action-content">
+                  <span className="prod-action-title">Work Orders</span>
+                  <span className="prod-action-meta">{stats.inProgress} in progress</span>
+                </div>
+                <ArrowRight size={16} />
+              </a>
+              <a href="/production/boms" className="prod-action-btn prod-action-secondary">
+                <BarChart3 size={18} />
+                <div className="prod-action-content">
+                  <span className="prod-action-title">BOMs</span>
+                  <span className="prod-action-meta">Bill of materials</span>
+                </div>
+                <ArrowRight size={16} />
+              </a>
+              <a href="/production/job-cards" className="prod-action-btn prod-action-secondary">
+                <FileText size={18} />
+                <div className="prod-action-content">
+                  <span className="prod-action-title">Job Cards</span>
+                  <span className="prod-action-meta">Track tasks</span>
+                </div>
+                <ArrowRight size={16} />
+              </a>
+              <a href="/production/plans" className="prod-action-btn prod-action-tertiary">
+                <Clipboard size={18} />
+                <div className="prod-action-content">
+                  <span className="prod-action-title">Production Plans</span>
+                  <span className="prod-action-meta">View schedules</span>
+                </div>
+                <ArrowRight size={16} />
+              </a>
+            </div>
+          </div>
+
+          <div className="prod-alert-section">
+            <div className="prod-section-header">
+              <h2>Alerts</h2>
+            </div>
+            <div className="prod-alert-card">
+              <AlertCircle size={20} />
+              <div className="prod-alert-content">
+                <h4>Quality Alert</h4>
+                <p>1 batch requires rework inspection</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderSellingDashboard = () => {
+    const sellingStatCards = [
+      { label: 'Sales Orders', value: stats.orders || 0, icon: ShoppingCart, color: 'from-green-500 to-green-600', bgColor: 'bg-green-100' },
+      { label: 'Quotations', value: stats.quotations || 0, icon: FileText, color: 'from-blue-500 to-blue-600', bgColor: 'bg-blue-100' },
+      { label: 'Invoices', value: stats.invoices || 0, icon: DollarSign, color: 'from-purple-500 to-purple-600', bgColor: 'bg-purple-100' },
+      { label: 'Customers', value: stats.customers || 0, icon: Users, color: 'from-orange-500 to-orange-600', bgColor: 'bg-orange-100' },
+      { label: 'Pending', value: stats.pending || 0, icon: Clock, color: 'from-red-500 to-red-600', bgColor: 'bg-red-100' },
+      { label: 'Delivered', value: stats.delivered || 0, icon: CheckCircle, color: 'from-cyan-500 to-cyan-600', bgColor: 'bg-cyan-100' }
+    ]
+
+    const getSellingIconColor = (color) => {
+      const colorMap = {
+        'from-green-500': 'text-green-600',
+        'from-blue-500': 'text-blue-600',
+        'from-purple-500': 'text-purple-600',
+        'from-orange-500': 'text-orange-600',
+        'from-red-500': 'text-red-600',
+        'from-cyan-500': 'text-cyan-600'
+      }
+      return colorMap[color] || 'text-gray-600'
+    }
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex justify-between items-start mb-8">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Welcome back, {user?.full_name}! 👋</h1>
+              <p className="text-gray-600 mt-2">Sales Dashboard - Manage quotations, orders, invoices & customers</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {sellingStatCards.map((stat, idx) => {
+              const Icon = stat.icon
+              return (
+                <div key={idx} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-100">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-gray-600 text-sm font-medium mb-2">{stat.label}</p>
+                      <h3 className="text-4xl font-bold text-gray-900">{stat.value}</h3>
+                      <p className="text-xs text-green-600 mt-3 flex items-center gap-1">
+                        <ArrowUp size={14} /> 8% from last month
+                      </p>
+                    </div>
+                    <div className={`${stat.bgColor} p-3 rounded-lg flex-shrink-0`}>
+                      <Icon size={24} className={getSellingIconColor(stat.color)} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Sales Performance</h2>
+                <div className="flex gap-2">
+                  <button className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition">This Week</button>
+                  <button className="px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg">This Month</button>
+                </div>
+              </div>
+              <div className="h-64 bg-gradient-to-t from-green-50 to-transparent rounded-lg flex items-end justify-center gap-2 p-4">
+                <div className="w-12 h-32 bg-green-500 rounded-t opacity-80"></div>
+                <div className="w-12 h-40 bg-green-600 rounded-t"></div>
+                <div className="w-12 h-28 bg-green-500 rounded-t opacity-80"></div>
+                <div className="w-12 h-36 bg-green-600 rounded-t"></div>
+                <div className="w-12 h-24 bg-green-500 rounded-t opacity-80"></div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Sales Metrics</h2>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 pb-4 border-b border-gray-100">
+                  <div className="mt-1">
+                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                      <TrendingUp size={16} className="text-green-600" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">Avg Order Value</p>
+                    <p className="text-xs text-gray-500">₹18,500</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 pb-4 border-b border-gray-100">
+                  <div className="mt-1">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <ShoppingCart size={16} className="text-blue-600" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">Total Revenue</p>
+                    <p className="text-xs text-gray-500">₹5.2M</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 pb-4 border-b border-gray-100">
+                  <div className="mt-1">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <Users size={16} className="text-purple-600" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">New Customers</p>
+                    <p className="text-xs text-gray-500">+12 this month</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Recent Orders</h2>
+                <a href="/selling/orders" className="text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1">
+                  View All <ChevronRight size={16} />
+                </a>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Order ID</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Amount</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { id: 'SO-001', amount: '₹25,000', status: 'Delivered' },
+                      { id: 'SO-002', amount: '₹18,500', status: 'Processing' },
+                      { id: 'SO-003', amount: '₹32,000', status: 'Pending' }
+                    ].map((order, idx) => (
+                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-gray-900 font-medium">{order.id}</td>
+                        <td className="py-3 px-4 text-gray-700">{order.amount}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                            order.status === 'Delivered' ? 'bg-green-100 text-green-700' :
+                            order.status === 'Processing' ? 'bg-blue-100 text-blue-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {order.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+              <div className="space-y-3">
+                <a href="/selling/quotations/new" className="w-full flex items-center justify-between p-3 hover:bg-blue-50 rounded-lg transition text-gray-700 hover:text-blue-600 group">
+                  <div className="flex items-center gap-2">
+                    <Plus size={18} />
+                    <span className="text-sm font-medium">Create Quote</span>
+                  </div>
+                  <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition" />
+                </a>
+                <a href="/selling/orders" className="w-full flex items-center justify-between p-3 hover:bg-green-50 rounded-lg transition text-gray-700 hover:text-green-600 group">
+                  <div className="flex items-center gap-2">
+                    <ShoppingCart size={18} />
+                    <span className="text-sm font-medium">Create Order</span>
+                  </div>
+                  <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition" />
+                </a>
+                <a href="/selling/invoices" className="w-full flex items-center justify-between p-3 hover:bg-purple-50 rounded-lg transition text-gray-700 hover:text-purple-600 group">
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={18} />
+                    <span className="text-sm font-medium">Create Invoice</span>
+                  </div>
+                  <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition" />
+                </a>
+                <a href="/selling/customers" className="w-full flex items-center justify-between p-3 hover:bg-orange-50 rounded-lg transition text-gray-700 hover:text-orange-600 group">
+                  <div className="flex items-center gap-2">
+                    <Users size={18} />
+                    <span className="text-sm font-medium">View Customers</span>
+                  </div>
+                  <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
+
+  const renderDashboard = () => {
+    switch (userDept) {
+      case 'buying':
+      case 'procurement':
+        return renderBuyingDashboard()
+      case 'production':
+        return renderProductionDashboard()
+      case 'selling':
+      case 'sales':
+        return renderSellingDashboard()
+      case 'inventory':
+      case 'stock':
+        return (
+          <div className="inv-dashboard">
+            <div className="inv-dashboard-header">
+              <div className="inv-header-content">
+                <h1>Inventory Dashboard</h1>
+                <p>Welcome back, <span className="inv-user-name">{user?.full_name}</span></p>
+                <p className="inv-header-subtitle">Manage warehouse stock, transfers, GRN requests, and inventory reconciliation</p>
+              </div>
+              <div className="inv-header-badge">
+                <div className="inv-badge-status">
+                  <span className="inv-status-indicator"></span>
+                  Inventory Department
+                </div>
+              </div>
+            </div>
+
+            <div className="inv-kpi-section">
+              <div className="inv-kpi-row">
+                <div className="inv-kpi-card inv-kpi-primary">
+                  <div className="inv-kpi-icon">
+                    <CheckCircle size={24} />
+                  </div>
+                  <div className="inv-kpi-details">
+                    <span className="inv-kpi-label">GRN Requests</span>
+                    <div className="inv-kpi-value-row">
+                      <span className="inv-kpi-value">{stats.grnRequests || 0}</span>
+                      <span className="inv-kpi-subtitle">Total</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="inv-kpi-card inv-kpi-warning">
+                  <div className="inv-kpi-icon">
+                    <Clock size={24} />
+                  </div>
+                  <div className="inv-kpi-details">
+                    <span className="inv-kpi-label">Pending Approval</span>
+                    <div className="inv-kpi-value-row">
+                      <span className="inv-kpi-value inv-highlight">{stats.grnPending || 0}</span>
+                      <span className="inv-kpi-subtitle">Awaiting</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="inv-kpi-card inv-kpi-success">
+                  <div className="inv-kpi-icon">
+                    <Archive size={24} />
+                  </div>
+                  <div className="inv-kpi-details">
+                    <span className="inv-kpi-label">GRN Approved</span>
+                    <div className="inv-kpi-value-row">
+                      <span className="inv-kpi-value">{stats.grnApproved || 0}</span>
+                      <span className="inv-kpi-subtitle">Stored</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="inv-kpi-card inv-kpi-danger">
+                  <div className="inv-kpi-icon">
+                    <AlertTriangle size={24} />
+                  </div>
+                  <div className="inv-kpi-details">
+                    <span className="inv-kpi-label">Low Stock Items</span>
+                    <div className="inv-kpi-value-row">
+                      <span className="inv-kpi-value">{stats.lowStockItems || 0}</span>
+                      <span className="inv-kpi-subtitle">Alert</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="inv-content-grid">
+              <div className="inv-col-main">
+                <div className="inv-stats-section">
+                  <div className="inv-section-header">
+                    <h2>Warehouse & Inventory</h2>
+                  </div>
+                  <div className="inv-stat-cards-grid">
+                    <div className="inv-stat-card-item">
+                      <div className="inv-stat-card-icon" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
+                        <Warehouse size={20} style={{ color: '#10B981' }} />
+                      </div>
+                      <div className="inv-stat-card-info">
+                        <span className="inv-stat-card-label">Warehouse Locations</span>
+                        <span className="inv-stat-card-number">{stats.warehouseLocations || 0}</span>
+                      </div>
+                    </div>
+
+                    <div className="inv-stat-card-item">
+                      <div className="inv-stat-card-icon" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)' }}>
+                        <Package size={20} style={{ color: '#3B82F6' }} />
+                      </div>
+                      <div className="inv-stat-card-info">
+                        <span className="inv-stat-card-label">Total Stock Items</span>
+                        <span className="inv-stat-card-number">{stats.totalStock || 0}</span>
+                      </div>
+                    </div>
+
+                    <div className="inv-stat-card-item">
+                      <div className="inv-stat-card-icon" style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)' }}>
+                        <Activity size={20} style={{ color: '#8B5CF6' }} />
+                      </div>
+                      <div className="inv-stat-card-info">
+                        <span className="inv-stat-card-label">Stock Movements</span>
+                        <span className="inv-stat-card-number">{stats.stockMovements || 0}</span>
+                      </div>
+                    </div>
+
+                    <div className="inv-stat-card-item">
+                      <div className="inv-stat-card-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
+                        <Truck size={20} style={{ color: '#F59E0B' }} />
+                      </div>
+                      <div className="inv-stat-card-info">
+                        <span className="inv-stat-card-label">Stock Transfers</span>
+                        <span className="inv-stat-card-number">{stats.stockTransfers || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="inv-col-sidebar">
+                <div className="inv-actions-section">
+                  <div className="inv-section-header">
+                    <h2>Quick Actions</h2>
+                  </div>
+                  <div className="inv-action-list">
+                    <a href="/inventory/grn-requests" className="inv-action-btn inv-action-primary">
+                      <CheckCircle size={18} />
+                      <div className="inv-action-content">
+                        <span className="inv-action-title">GRN Requests</span>
+                        <span className="inv-action-meta">{stats.grnPending || 0} pending</span>
+                      </div>
+                      <ArrowRight size={16} />
+                    </a>
+                    <a href="/inventory/stock-entries" className="inv-action-btn inv-action-primary">
+                      <Plus size={18} />
+                      <div className="inv-action-content">
+                        <span className="inv-action-title">Create Stock Entry</span>
+                        <span className="inv-action-meta">Record goods</span>
+                      </div>
+                      <ArrowRight size={16} />
+                    </a>
+                    <a href="/inventory/stock-transfers" className="inv-action-btn inv-action-secondary">
+                      <Truck size={18} />
+                      <div className="inv-action-content">
+                        <span className="inv-action-title">Stock Transfer</span>
+                        <span className="inv-action-meta">Inter-warehouse move</span>
+                      </div>
+                      <ArrowRight size={16} />
+                    </a>
+                    <a href="/inventory/stock-balance" className="inv-action-btn inv-action-tertiary">
+                      <Package size={18} />
+                      <div className="inv-action-content">
+                        <span className="inv-action-title">View Stock Balance</span>
+                        <span className="inv-action-meta">Check inventory</span>
+                      </div>
+                      <ArrowRight size={16} />
+                    </a>
+                  </div>
+                </div>
+
+                <div className="inv-alert-section">
+                  <div className="inv-section-header">
+                    <h2>Alerts</h2>
+                  </div>
+                  <div className="inv-alert-card">
+                    <AlertCircle size={20} />
+                    <div className="inv-alert-content">
+                      <h4>Low Stock Warning</h4>
+                      <p>{stats.lowStockItems || 0} items are below reorder level</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      default:
+        return renderBuyingDashboard()
+    }
+  }
+
+  return renderDashboard()
 }

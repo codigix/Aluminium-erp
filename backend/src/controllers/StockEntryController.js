@@ -58,8 +58,15 @@ export const createStockEntry = async (req, res) => {
       }
     }
 
+    if (['Material Receipt'].includes(entry_type)) {
+      if (!to_warehouse_id) {
+        return res.status(400).json({ success: false, error: 'Destination warehouse required for Material Receipt' })
+      }
+    }
+
     // Auto-generate entry number
     const entry_no = await StockEntryModel.generateEntryNo(entry_type)
+    const userId = req.user?.id || 1
 
     const entry = await StockEntryModel.create({
       entry_no,
@@ -71,11 +78,32 @@ export const createStockEntry = async (req, res) => {
       reference_doctype,
       reference_name,
       remarks,
-      created_by: req.user?.id,
+      created_by: userId,
       items
     })
 
-    res.status(201).json({ success: true, data: entry })
+    const isAutoSubmitEntry = reference_doctype === 'GRN' || entry_type === 'Material Receipt'
+    
+    if (isAutoSubmitEntry && entry.id) {
+      try {
+        const submittedEntry = await StockEntryModel.submit(entry.id, userId)
+        res.status(201).json({ 
+          success: true, 
+          data: submittedEntry,
+          message: 'Stock entry created and submitted successfully. Items added to stock balance.'
+        })
+      } catch (submitError) {
+        console.error('Failed to auto-submit stock entry:', submitError)
+        res.status(201).json({ 
+          success: true, 
+          data: entry,
+          message: 'Stock entry created. Please submit manually.',
+          warning: submitError.message
+        })
+      }
+    } else {
+      res.status(201).json({ success: true, data: entry })
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message })
   }

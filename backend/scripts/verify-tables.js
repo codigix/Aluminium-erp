@@ -1,59 +1,55 @@
-import { createPool } from 'mysql2/promise'
+import mysql from 'mysql2/promise'
 import dotenv from 'dotenv'
-import path from 'path'
-import { fileURLToPath } from 'url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config()
 
-dotenv.config({ path: path.join(__dirname, '../.env') })
+const config = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'aluminium_erp'
+}
 
 async function verifyTables() {
-  const pool = createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'aluminium_erp',
-    port: process.env.DB_PORT || 3306
-  })
-
+  let connection
   try {
-    const [tables] = await pool.query(`
-      SELECT TABLE_NAME FROM information_schema.TABLES 
-      WHERE TABLE_SCHEMA = 'aluminium_erp' 
-      AND (TABLE_NAME = 'sales_order' 
-           OR TABLE_NAME = 'work_order'
-           OR TABLE_NAME = 'production_plan'
-           OR TABLE_NAME = 'production_entry'
-           OR TABLE_NAME = 'machine_master'
-           OR TABLE_NAME = 'operator_master')
-      ORDER BY TABLE_NAME
-    `)
+    connection = await mysql.createConnection(config)
     
-    console.log('📊 Production-related tables status:')
-    const expectedTables = [
-      'sales_order',
+    const requiredTables = [
       'work_order',
-      'production_plan',
-      'production_entry',
-      'machine_master',
-      'operator_master'
+      'work_order_item',
+      'work_order_operation',
+      'job_card'
     ]
-    
-    const existingTables = tables.map(t => t.TABLE_NAME)
-    
-    expectedTables.forEach(table => {
-      if (existingTables.includes(table)) {
-        console.log(`  ✅ ${table}`)
-      } else {
-        console.log(`  ❌ ${table} (MISSING)`)
+
+    console.log('Verifying database tables...\n')
+
+    for (const table of requiredTables) {
+      try {
+        const [rows] = await connection.query(
+          `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES 
+           WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`,
+          [process.env.DB_NAME || 'aluminium_erp', table]
+        )
+        
+        if (rows.length > 0) {
+          console.log(`✓ Table '${table}' exists`)
+        } else {
+          console.log(`✗ Table '${table}' NOT found`)
+        }
+      } catch (error) {
+        console.log(`✗ Error checking '${table}':`, error.message)
       }
-    })
-    
-    console.log(`\n✅ Total: ${tables.length}/${expectedTables.length} tables created`)
-    
-    await pool.end()
+    }
+
+    process.exit(0)
   } catch (error) {
-    console.error('Error:', error.message)
+    console.error('Connection error:', error.message)
+    process.exit(1)
+  } finally {
+    if (connection) {
+      await connection.end()
+    }
   }
 }
 

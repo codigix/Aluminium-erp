@@ -68,14 +68,14 @@ export default {
         info: '#3b82f6',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['InterVariable', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', 'sans-serif'],
         mono: ['Fira Code', 'monospace'],
         display: ['Poppins', 'sans-serif'],
       },
       fontSize: {
         xs: '0.75rem',
         sm: '0.875rem',
-        base: '1rem',
+        base: '12px',
         lg: '1.125rem',
         xl: '1.25rem',
         '2xl': '1.5rem',

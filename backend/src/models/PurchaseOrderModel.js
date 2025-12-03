@@ -9,59 +9,77 @@ export class PurchaseOrderModel {
     const po_no = `PO-${Date.now()}`
 
     try {
-      await this.db.execute(
-        `INSERT INTO purchase_order 
-         (po_no, supplier_id, order_date, expected_date, currency, total_value, status,
-          shipping_address_line1, shipping_address_line2, shipping_city, shipping_state,
-          shipping_pincode, shipping_country, payment_terms_description, due_date,
-          invoice_portion, payment_amount, advance_paid, tax_category, tax_rate,
-          subtotal, tax_amount, final_amount, incoterm, shipping_rule)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
+      let query, params
+      
+      if (data.tax_template_id) {
+        query = `INSERT INTO purchase_order 
+                 (po_no, supplier_id, order_date, expected_date, currency, tax_template_id, total_value, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        params = [
           po_no,
-          data.supplier_id,
+          data.supplier_id || null,
           data.order_date || new Date().toISOString().split('T')[0],
           data.expected_date || null,
           data.currency || 'INR',
-          0,
-          'draft',
-          data.shipping_address_line1 || null,
-          data.shipping_address_line2 || null,
-          data.shipping_city || null,
-          data.shipping_state || null,
-          data.shipping_pincode || null,
-          data.shipping_country || null,
-          data.payment_terms_description || null,
-          data.due_date || null,
-          data.invoice_portion || 100,
-          data.payment_amount || 0,
-          data.advance_paid || 0,
-          data.tax_category || null,
-          data.tax_rate || 0,
-          data.subtotal || 0,
-          data.tax_amount || 0,
-          data.final_amount || 0,
-          data.incoterm || null,
-          data.shipping_rule || null
+          data.tax_template_id,
+          parseFloat(data.total_value) || parseFloat(data.subtotal) || 0,
+          'draft'
         ]
-      )
+      } else {
+        query = `INSERT INTO purchase_order 
+                 (po_no, supplier_id, order_date, expected_date, currency, total_value, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`
+        params = [
+          po_no,
+          data.supplier_id || null,
+          data.order_date || new Date().toISOString().split('T')[0],
+          data.expected_date || null,
+          data.currency || 'INR',
+          parseFloat(data.total_value) || parseFloat(data.subtotal) || 0,
+          'draft'
+        ]
+      }
 
-      // Add items
+      await this.db.execute(query, params)
+
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
-          await this.db.execute(
-            `INSERT INTO purchase_order_item 
-             (po_no, item_code, qty, uom, rate, schedule_date)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-              po_no,
-              item.item_code || null,
-              item.qty || null,
-              item.uom || null,
-              item.rate || null,
-              item.schedule_date || null
-            ]
-          )
+          try {
+            const po_item_id = uuidv4()
+            await this.db.execute(
+              `INSERT INTO purchase_order_item 
+               (po_item_id, po_no, item_code, qty, uom, rate, schedule_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [
+                po_item_id,
+                po_no,
+                item.item_code || null,
+                parseFloat(item.qty) || null,
+                item.uom || null,
+                parseFloat(item.rate) || null,
+                item.schedule_date || null
+              ]
+            )
+          } catch (itemError) {
+            // If po_item_id column doesn't exist, try without it
+            if (itemError.message.includes('po_item_id')) {
+              await this.db.execute(
+                `INSERT INTO purchase_order_item 
+                 (po_no, item_code, qty, uom, rate, schedule_date)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [
+                  po_no,
+                  item.item_code || null,
+                  parseFloat(item.qty) || null,
+                  item.uom || null,
+                  parseFloat(item.rate) || null,
+                  item.schedule_date || null
+                ]
+              )
+            } else {
+              throw itemError
+            }
+          }
         }
       }
 
@@ -99,7 +117,7 @@ export class PurchaseOrderModel {
 
   async getAll(filters = {}) {
     try {
-      let query = `SELECT po.*, s.name as supplier_name
+      let query = `SELECT po.*, s.name as supplier_name, s.gstin
                    FROM purchase_order po
                    JOIN supplier s ON po.supplier_id = s.supplier_id
                    WHERE 1=1`
@@ -142,11 +160,7 @@ export class PurchaseOrderModel {
       const params = []
 
       const allowedFields = [
-        'expected_date', 'status', 'shipping_address_line1', 'shipping_address_line2',
-        'shipping_city', 'shipping_state', 'shipping_pincode', 'shipping_country',
-        'payment_terms_description', 'due_date', 'invoice_portion', 'payment_amount',
-        'advance_paid', 'tax_category', 'tax_rate', 'subtotal', 'tax_amount',
-        'final_amount', 'incoterm', 'shipping_rule'
+        'expected_date', 'status', 'currency', 'tax_template_id', 'total_value', 'taxes_amount'
       ]
       const updateFields = []
 

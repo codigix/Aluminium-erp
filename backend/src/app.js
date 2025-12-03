@@ -28,6 +28,8 @@ import { createHRPayrollRoutes } from './routes/hrpayroll.js'
 import { createFinanceRoutes } from './routes/finance.js'
 import sellingRoutes from './routes/selling.js'
 import grnRequestRoutes from './routes/grnRequests.js'
+import companyRoutes from './routes/company.js'
+import taxTemplateRoutes from './routes/taxTemplates.js'
 
 // Load environment variables
 dotenv.config()
@@ -108,6 +110,7 @@ function setupRoutes() {
   app.use('/api/purchase-orders', purchaseOrderRoutes)
   app.use('/api/purchase-receipts', purchaseReceiptRoutes)
   app.use('/api/purchase-invoices', purchaseInvoiceRoutes)
+  app.use('/api/tax-templates', taxTemplateRoutes)
   app.use('/api/analytics', analyticsRoutes)
   
   // API Routes - Stock Module
@@ -143,6 +146,9 @@ function setupRoutes() {
 
   // API Routes - GRN Requests
   app.use('/api/grn-requests', grnRequestRoutes)
+
+  // API Routes - Company Information
+  app.use('/api/company-info', companyRoutes)
   
   // Error handling middleware (must be after all routes)
   app.use((err, req, res, next) => {

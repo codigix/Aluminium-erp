@@ -49,6 +49,13 @@ class GRNRequestModel {
           )
         }
 
+        if (po_no) {
+          await connection.query(
+            `UPDATE purchase_order SET status = 'to_receive' WHERE po_no = ? AND status = 'submitted'`,
+            [po_no]
+          )
+        }
+
         await connection.commit()
         return this.getById(grnRequestId)
       } catch (error) {
@@ -141,7 +148,18 @@ class GRNRequestModel {
       query += ' GROUP BY gr.id ORDER BY gr.created_at DESC'
 
       const [rows] = await db.query(query, params)
-      return rows
+      
+      const grnsWithItems = await Promise.all(
+        rows.map(async (grn) => {
+          const [items] = await db.query(
+            'SELECT * FROM grn_request_items WHERE grn_request_id = ?',
+            [grn.id]
+          )
+          return { ...grn, items }
+        })
+      )
+
+      return grnsWithItems
     } catch (error) {
       throw new Error(`Failed to fetch GRN requests: ${error.message}`)
     }

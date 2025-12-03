@@ -6,11 +6,11 @@
 :root {
   /* Typography */
   --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-heading: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
   /* Font Sizes */
   --text-xs: 0.75rem;      /* 12px */
-  --text-sm: 0.875rem;     /* 14px */
+  --text-sm: 12px;     /* 14px */
   --text-base: 1rem;       /* 16px */
   --text-lg: 1.125rem;     /* 18px */
   --text-xl: 1.25rem;      /* 20px */
@@ -155,8 +155,8 @@
   --card-bg: var(--neutral-0);
   --card-border: var(--neutral-100);
 
-  --sidebar-bg: var(--neutral-900);
-  --sidebar-text: var(--neutral-50);
+  --sidebar-bg: var(--neutral-50);
+  --sidebar-text: var(--neutral-900);
 
   --header-bg: var(--neutral-0);
   --header-border: var(--neutral-200);
@@ -188,8 +188,8 @@
   --card-bg: var(--neutral-800);
   --card-border: var(--neutral-700);
 
-  --sidebar-bg: var(--neutral-950);
-  --sidebar-text: var(--neutral-100);
+  --sidebar-bg: var(--neutral-900);
+  --sidebar-text: var(--neutral-50);
 
   --header-bg: var(--neutral-800);
   --header-border: var(--neutral-700);

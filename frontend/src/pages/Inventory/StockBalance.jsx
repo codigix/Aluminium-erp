@@ -44,8 +44,8 @@ export default function StockBalance() {
       const stockData = response.data.data || []
       
       // Calculate statistics
-      const lowStock = stockData.filter(s => s.quantity <= (s.reorder_level || 0)).length
-      const outOfStock = stockData.filter(s => s.quantity === 0).length
+      const lowStock = stockData.filter(s => s.current_qty <= (s.reorder_level || 0)).length
+      const outOfStock = stockData.filter(s => s.current_qty === 0).length
       
       setStocks(stockData)
       setStats({
@@ -64,20 +64,20 @@ export default function StockBalance() {
 
   const getStockStatus = (quantity, reorderLevel) => {
     if (quantity === 0) return { text: 'Out of Stock', class: 'status-out-of-stock' }
-    if (quantity <= reorderLevel) return { text: 'Low Stock', class: 'status-low-stock' }
+    if (quantity <= (reorderLevel || 0)) return { text: 'Low Stock', class: 'status-low-stock' }
     return { text: 'In Stock', class: 'status-in-stock' }
   }
 
   const getStockStatusValue = (quantity, reorderLevel) => {
     if (quantity === 0) return 'out-of-stock'
-    if (quantity <= reorderLevel) return 'low-stock'
+    if (quantity <= (reorderLevel || 0)) return 'low-stock'
     return 'in-stock'
   }
 
   const filteredStocks = stocks.filter(stock => {
     const matchesSearch = stock.item_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           stock.item_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === '' || getStockStatusValue(stock.quantity, stock.reorder_level) === statusFilter
+    const matchesStatus = statusFilter === '' || getStockStatusValue(stock.current_qty || 0, stock.reorder_level) === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -96,30 +96,72 @@ export default function StockBalance() {
   const columns = [
     { key: 'item_code', label: 'Item Code' },
     { key: 'item_name', label: 'Item Name' },
+    { key: 'item_group', label: 'Item Group' },
     { key: 'warehouse_name', label: 'Warehouse' },
     {
-      key: 'quantity',
+      key: 'current_qty',
       label: 'Current Stock',
-      render: (row) => <strong>{row.quantity}</strong>
+      render: (value) => <strong>{Number(value || 0).toFixed(2)}</strong>
     },
     { key: 'uom', label: 'UOM' },
     {
-      key: 'reorder_level',
-      label: 'Reorder Level',
-      render: (row) => row.reorder_level || 'N/A'
+      key: 'available_qty',
+      label: 'Balance Qty',
+      render: (value) => Number(value || 0).toFixed(2)
+    },
+    {
+      key: 'total_value',
+      label: 'Balance Value',
+      render: (value) => `₹${Number(value || 0).toFixed(2)}`
+    },
+    {
+      key: 'opening_qty',
+      label: 'Opening Qty',
+      render: (value) => Number(value || 0).toFixed(2)
+    },
+    {
+      key: 'opening_value',
+      label: 'Opening Value',
+      render: (value) => `₹${Number(value || 0).toFixed(2)}`
+    },
+    {
+      key: 'in_quantity',
+      label: 'IN Quantity',
+      render: (value) => Number(value || 0).toFixed(2)
+    },
+    {
+      key: 'in_value',
+      label: 'IN Value',
+      render: (value) => `₹${Number(value || 0).toFixed(2)}`
+    },
+    {
+      key: 'out_quantity',
+      label: 'OUT Quantity',
+      render: (value) => Number(value || 0).toFixed(2)
+    },
+    {
+      key: 'out_value',
+      label: 'OUT Value',
+      render: (value) => `₹${Number(value || 0).toFixed(2)}`
+    },
+    {
+      key: 'valuation_rate',
+      label: 'Valuation Rate',
+      render: (value) => `₹${Number(value || 0).toFixed(4)}`
+    },
+    {
+      key: 'reserved_qty',
+      label: 'Reserved Stock',
+      render: (value) => Number(value || 0).toFixed(2)
     },
     {
       key: 'stock_status',
       label: 'Status',
-      render: (row) => {
-        const status = getStockStatus(row.quantity, row.reorder_level)
+      render: (value, row) => {
+        if (!row) return null
+        const status = getStockStatus(row.current_qty, row.reorder_level)
         return <Badge className={status.class}>{status.text}</Badge>
       }
-    },
-    {
-      key: 'value',
-      label: 'Stock Value',
-      render: (row) => `₹${((row.quantity || 0) * (row.rate || 0)).toFixed(2)}`
     }
   ]
 
@@ -127,56 +169,46 @@ export default function StockBalance() {
     <div className="inventory-container">
       <div className="inventory-header">
         <h1>
-          <BarChart3 size={28} style={{ display: 'inline', marginRight: '10px' }} />
+          <BarChart3 size={18} style={{ display: 'inline', marginRight: '6px' }} />
           Stock Balance
         </h1>
       </div>
 
       {error && <Alert type="danger">{error}</Alert>}
 
-      {/* Statistics */}
       <div className="inventory-stats">
         <div className="inventory-stat-card" style={{ borderLeftColor: '#3b82f6' }}>
           <div>
-            <div className="inventory-stat-label">Total Items</div>
+            <div className="inventory-stat-label">Total</div>
             <div className="inventory-stat-value">{stats.total}</div>
           </div>
-          <div style={{ fontSize: '32px', opacity: 0.2 }}>📦</div>
         </div>
         <div className="inventory-stat-card" style={{ borderLeftColor: '#f59e0b' }}>
           <div>
-            <div className="inventory-stat-label">Low Stock Items</div>
-            <div className="inventory-stat-value" style={{ color: '#f59e0b' }}>
-              {stats.low}
-            </div>
+            <div className="inventory-stat-label">Low Stock</div>
+            <div className="inventory-stat-value" style={{ color: '#f59e0b' }}>{stats.low}</div>
           </div>
-          <div style={{ fontSize: '32px', opacity: 0.2 }}>⚠️</div>
         </div>
         <div className="inventory-stat-card" style={{ borderLeftColor: '#ef4444' }}>
           <div>
             <div className="inventory-stat-label">Out of Stock</div>
-            <div className="inventory-stat-value" style={{ color: '#ef4444' }}>
-              {stats.outOfStock}
-            </div>
+            <div className="inventory-stat-value" style={{ color: '#ef4444' }}>{stats.outOfStock}</div>
           </div>
-          <div style={{ fontSize: '32px', opacity: 0.2 }}>❌</div>
         </div>
       </div>
 
-      {/* Filters */}
       {stocks.length > 0 && (
         <div className="inventory-filters">
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <input
-              type="text"
-              placeholder="Search by item code or name..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value)
-                setCurrentPage(1)
-              }}
-            />
-          </div>
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setCurrentPage(1)
+            }}
+            style={{ minWidth: '150px' }}
+          />
           <select 
             value={warehouseFilter} 
             onChange={(e) => {
@@ -184,7 +216,7 @@ export default function StockBalance() {
               setCurrentPage(1)
             }}
           >
-            <option value="">All Warehouses</option>
+            <option value="">All WH</option>
             {warehouses.map(wh => (
               <option key={wh.warehouse_id} value={wh.warehouse_id}>
                 {wh.warehouse_name}
@@ -201,15 +233,16 @@ export default function StockBalance() {
             <option value="">All Status</option>
             <option value="in-stock">In Stock</option>
             <option value="low-stock">Low Stock</option>
-            <option value="out-of-stock">Out of Stock</option>
+            <option value="out-of-stock">Out</option>
           </select>
           {(searchTerm || statusFilter || warehouseFilter) && (
             <Button 
               variant="secondary" 
               onClick={handleClearFilters}
               icon={X}
+              style={{ padding: '6px 10px', fontSize: '11px' }}
             >
-              Clear Filters
+              Clear
             </Button>
           )}
         </div>
@@ -221,29 +254,26 @@ export default function StockBalance() {
           <BarChart3 size={48} style={{ opacity: 0.5 }} />
           <p>Loading stock balance...</p>
         </div>
-      ) : stocks.length === 0 ? (
-        <div className="no-data">
-          <BarChart3 size={48} style={{ opacity: 0.5 }} />
-          <p>📊 No stock items available.</p>
-          <p style={{ fontSize: '14px', marginTop: '10px' }}>Stock entries will appear here once created.</p>
-        </div>
-      ) : filteredStocks.length === 0 ? (
-        <div className="no-data">
-          <BarChart3 size={48} style={{ opacity: 0.5 }} />
-          <p>❌ No items match your filters.</p>
-          <p style={{ fontSize: '14px', marginTop: '10px' }}>Try adjusting your search or filters.</p>
-        </div>
       ) : (
         <>
-          <DataTable columns={columns} data={paginatedData} />
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            itemsPerPage={itemsPerPage}
-            totalItems={filteredStocks.length}
-            onItemsPerPageChange={setItemsPerPage}
+          <DataTable 
+            columns={columns} 
+            data={paginatedData}
+            pageSize={itemsPerPage}
+            disablePagination={true}
+            filterable={true}
+            sortable={true}
           />
+          {filteredStocks.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              itemsPerPage={itemsPerPage}
+              totalItems={filteredStocks.length}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          )}
         </>
       )}
     </div>

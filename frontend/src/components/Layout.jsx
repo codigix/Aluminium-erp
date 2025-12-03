@@ -1,12 +1,10 @@
 import React from 'react'
-import Sidebar from './Sidebar'
 import '../styles/Layout.css'
 
 export default function Layout({ children }) {
   return (
-    <div className="layout">
-      <Sidebar />
-      <main className="main-content">
+    <div className="layout-wrapper">
+      <main className="layout-content">
         {children}
       </main>
     </div>

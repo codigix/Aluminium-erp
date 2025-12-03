@@ -5,6 +5,7 @@ import Badge from '../../components/Badge/Badge'
 import DataTable from '../../components/Table/DataTable'
 import AdvancedFilters from '../../components/AdvancedFilters'
 import CreatePurchaseOrderModal from '../../components/Buying/CreatePurchaseOrderModal'
+import CreateGRNModal from '../../components/Buying/CreateGRNModal'
 import { useNavigate } from 'react-router-dom'
 import { 
   FileText, Edit2, Send, Download, Eye, Package, AlertCircle, CheckCircle, XCircle, 
@@ -33,6 +34,9 @@ export default function PurchaseOrders() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [actionLoading, setActionLoading] = useState(null)
+  const [showGRNModal, setShowGRNModal] = useState(false)
+  const [selectedPO, setSelectedPO] = useState(null)
 
   useEffect(() => {
     fetchOrders()
@@ -81,6 +85,34 @@ export default function PurchaseOrders() {
     })
 
     setStats(newStats)
+  }
+
+  const handleSubmitPO = async (po_no) => {
+    try {
+      setActionLoading(po_no)
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/purchase-orders/${po_no}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        setError(null)
+        fetchOrders()
+      } else {
+        setError(data.error || 'Failed to submit PO')
+      }
+    } catch (err) {
+      console.error('Error submitting PO:', err)
+      setError('Error submitting PO')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleReceiveMaterial = (po) => {
+    setSelectedPO(po)
+    setShowGRNModal(true)
   }
 
   const getStatusColor = (status) => {
@@ -172,7 +204,8 @@ export default function PurchaseOrders() {
       key: 'expected_date', 
       label: 'Expected Delivery', 
       width: '12%',
-      render: (val, row) => {
+      render: (row) => {
+        const val = row.expected_date
         const days = getDaysUntilExpiry(val)
         if (!val) return 'N/A'
         const dateStr = new Date(val).toLocaleDateString()
@@ -227,7 +260,7 @@ export default function PurchaseOrders() {
   ]
 
   const renderActions = (row) => (
-    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
       <Button
         size="sm"
         variant="icon"
@@ -262,11 +295,11 @@ export default function PurchaseOrders() {
           variant="icon-info"
           onClick={(e) => {
             e.stopPropagation()
-            // TODO: Add submit action
-            alert('Submit action - to be implemented')
+            handleSubmitPO(row.po_no)
           }}
-          title="Submit Purchase Order"
+          title="Submit Purchase Order to Supplier"
           className="min-w-max flex items-center justify-center p-2"
+          disabled={actionLoading === row.po_no}
         >
           <Send size={16} />
         </Button>
@@ -275,12 +308,12 @@ export default function PurchaseOrders() {
       {(row.status === 'submitted' || row.status === 'to_receive' || row.status === 'partially_received') && (
         <Button
           size="sm"
-          variant="icon-info"
+          variant="icon-success"
           onClick={(e) => {
             e.stopPropagation()
-            navigate(`/buying/purchase-receipt/new?po_no=${row.po_no}`)
+            handleReceiveMaterial(row)
           }}
-          title="Create Receipt"
+          title="Receive Material - Create GRN"
           className="min-w-max flex items-center justify-center p-2"
         >
           <Download size={16} />
@@ -302,7 +335,7 @@ export default function PurchaseOrders() {
   const StatCard = ({ label, value, icon, color, trend, onClick }) => (
     <div
       onClick={onClick}
-      className={`bg-white dark:bg-neutral-800 rounded-lg p-6 border-l-4 transition-all hover:shadow-lg cursor-pointer`}
+      className={`bg-white dark:bg-neutral-800 rounded-sm border p-3 border-l-4 transition-all hover:shadow-lg cursor-pointer`}
       style={{ borderLeftColor: getBorderColor(color) }}
     >
       <div className="flex items-start justify-between">
@@ -310,20 +343,20 @@ export default function PurchaseOrders() {
           <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
             {label}
           </p>
-          <p className="text-4xl font-bold text-neutral-900 dark:text-neutral-100 mt-3">{value}</p>
+          <p className="text-xl font-bold text-neutral-900 dark:text-neutral-100">{value}</p>
         </div>
         <div className="text-4xl opacity-20">
           {icon}
         </div>
       </div>
       {trend && (
-        <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-4 font-medium">{trend}</p>
+        <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2 font-medium">{trend}</p>
       )}
     </div>
   )
 
   return (
-    <div>
+    <div className='p-5'>
       {/* Header Section */}
       <div className="flex-between mb-8">
         <div>
@@ -461,6 +494,19 @@ export default function PurchaseOrders() {
         onClose={() => setShowCreateModal(false)}
         onSuccess={fetchOrders}
       />
+
+      {/* Create GRN Modal */}
+      {selectedPO && (
+        <CreateGRNModal
+          isOpen={showGRNModal}
+          onClose={() => {
+            setShowGRNModal(false)
+            setSelectedPO(null)
+          }}
+          poNo={selectedPO.po_no}
+          onSuccess={fetchOrders}
+        />
+      )}
     </div>
   )
 }

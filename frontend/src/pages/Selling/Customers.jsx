@@ -119,7 +119,10 @@ export default function Customers() {
     { label: 'Status', key: 'status', render: (val) => <Badge color={getStatusColor(val)}>{val}</Badge> },
     {
       label: 'Actions',
-      render: (val, row) => (
+      key: 'actions',
+      render: (value, row) => {
+        if (!row) return null
+        return (
         <div className="action-buttons">
           <button 
             onClick={() => navigate(`/selling/customers/${row.id}`)}
@@ -144,6 +147,7 @@ export default function Customers() {
           </button>
         </div>
       )
+      }
     }
   ]
 
