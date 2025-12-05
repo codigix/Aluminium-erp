@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import Button from '../../components/Button/Button'
 import Alert from '../../components/Alert/Alert'
@@ -126,8 +126,10 @@ const styles = {
 
 export default function SalesQuotationForm() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const isEditMode = id && id !== 'new'
+  const bomId = searchParams.get('bom_id')
 
   const tabs = [
     { id: 'basicDetails', label: 'Basic Details' },
@@ -208,6 +210,38 @@ export default function SalesQuotationForm() {
       fetchQuotation()
     }
   }, [])
+
+  useEffect(() => {
+    if (bomId) {
+      loadBOMData()
+    }
+  }, [bomId])
+
+  const loadBOMData = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/production/boms/${bomId}`)
+      const bom = response.data.data || response.data
+      
+      if (bom && bom.items) {
+        const quotationItems = bom.items.map(item => ({
+          item_code: item.item_code || item.name || '',
+          item_name: item.item_name || item.name || '',
+          description: item.description || '',
+          qty: item.qty || 1,
+          uom: item.uom || '',
+          rate: item.rate || 0,
+          amount: (item.qty || 1) * (item.rate || 0)
+        }))
+        
+        setFormData(prev => ({
+          ...prev,
+          items: quotationItems
+        }))
+      }
+    } catch (err) {
+      console.error('Error loading BOM:', err)
+    }
+  }
 
   const fetchRequiredData = async () => {
     try {
@@ -509,6 +543,11 @@ export default function SalesQuotationForm() {
                   <h3 style={{ margin: '0', fontSize: '14px', fontWeight: '600' }}>Quotation Items</h3>
                   <Button type="button" variant="primary" onClick={handleAddItem} style={{ fontSize: '12px', padding: '6px 12px' }}>+ Add Item</Button>
                 </div>
+                {bomId && formData.items.length > 0 && (
+                  <div style={{ backgroundColor: '#e3f2fd', border: '1px solid #2196f3', color: '#1976d2', padding: '12px', borderRadius: '4px', marginBottom: '12px', fontSize: '13px' }}>
+                    ✓ BOM items have been loaded. You can modify quantities and rates as needed.
+                  </div>
+                )}
                 {formData.items.length > 0 ? (
                   <div style={{ overflowX: 'auto' }}>
                     <table style={styles.table}>

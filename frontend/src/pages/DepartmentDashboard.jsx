@@ -12,6 +12,7 @@ export default function DepartmentDashboard() {
   const { user } = useAuth()
   const userDept = user?.department?.toLowerCase() || 'buying'
   const [stats, setStats] = useState({})
+  const [boms, setBOMs] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -54,6 +55,14 @@ export default function DepartmentDashboard() {
           orders: 28, quotations: 12, invoices: 35, customers: 42,
           pending: 5, delivered: 23, cancelled: 2
         })
+        
+        try {
+          const bomRes = await fetch(`${import.meta.env.VITE_API_URL}/production/boms`, { headers }).catch(() => ({}))
+          const bomData = await bomRes.json?.().catch(() => [])
+          setBOMs(Array.isArray(bomData?.data) ? bomData.data.slice(0, 5) : [])
+        } catch (err) {
+          console.error('Error fetching BOMs:', err)
+        }
       } else if (userDept === 'inventory' || userDept === 'stock') {
         setStats({
           warehouseLocations: 5, totalStock: 150, lowStockItems: 8,
@@ -747,6 +756,62 @@ export default function DepartmentDashboard() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 mb-8">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Available BOMs</h2>
+                <a href="/production/boms" className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1">
+                  View All <ChevronRight size={16} />
+                </a>
+              </div>
+              {boms.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">BOM ID</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Item Code</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Item Name</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
+                        <th className="text-right py-3 px-4 font-semibold text-gray-700">Total Cost</th>
+                        <th className="text-center py-3 px-4 font-semibold text-gray-700">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {boms.map((bom, idx) => (
+                        <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4 text-gray-900 font-medium">{bom.bom_id}</td>
+                          <td className="py-3 px-4 text-gray-700">{bom.item_code || 'N/A'}</td>
+                          <td className="py-3 px-4 text-gray-700">{bom.product_name || 'N/A'}</td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              bom.status === 'active' ? 'bg-green-100 text-green-700' :
+                              bom.status === 'draft' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {bom.status || 'Draft'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right text-gray-700 font-medium">₹{parseFloat(bom.total_cost || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4 text-center">
+                            <a href={`/selling/quotations/new?bom_id=${bom.bom_id}`} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-xs font-medium transition">
+                              Use in Quote
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Package size={32} className="mx-auto mb-2 opacity-50" />
+                  <p>No BOMs available. Create one in Production module.</p>
+                </div>
+              )}
             </div>
           </div>
 
