@@ -95,7 +95,7 @@
         [supplier_id, name, supplier_group_id, gstin, payment_terms_days, lead_time_days, rating, is_active]
       )
 
-      return { supplier_id, ...supplierData }
+      return { supplier_id, name, supplier_group_id, gstin, payment_terms_days, lead_time_days, rating, is_active }
     } catch (error) {
       throw new Error('Failed to create supplier: ' + error.message)
     }
@@ -106,9 +106,27 @@
    */
   static async update(db, supplierId, supplierData) {
     try {
-      // Filter out empty values and supplier_id
+      const validColumns = [
+        'name',
+        'supplier_group_id',
+        'gstin',
+        'contact_person_id',
+        'address_id',
+        'bank_details',
+        'payment_terms_days',
+        'lead_time_days',
+        'rating',
+        'is_active'
+      ]
+
+      // Filter out empty values, supplier_id, and invalid columns
       const updateData = Object.entries(supplierData)
-        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .filter(([key, value]) => 
+          validColumns.includes(key) && 
+          value !== undefined && 
+          value !== null && 
+          value !== ''
+        )
         .reduce((acc, [key, value]) => {
           acc[key] = value
           return acc
@@ -119,8 +137,8 @@
       }
 
       // Handle supplier_group conversion
-      if (updateData.supplier_group) {
-        const groupValue = updateData.supplier_group
+      if (updateData.supplier_group_id === undefined && supplierData.supplier_group) {
+        const groupValue = supplierData.supplier_group
         let supplier_group_id = null
         
         if (typeof groupValue === 'number') {
@@ -133,7 +151,6 @@
           supplier_group_id = groups.length > 0 ? groups[0].id : null
         }
         
-        delete updateData.supplier_group
         updateData.supplier_group_id = supplier_group_id
       }
 

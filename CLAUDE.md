@@ -2,6 +2,49 @@
 
 ## Recent Changes & Fixes
 
+### 7. Supplier & Item Model Fixes - Fixed Database Column Errors ✅
+**Date**: Dec 5, 2025
+**Issue**: 
+- Supplier: "Failed to update supplier: Unknown column 'email' in 'field list'"
+- Item: "Failed to fetch item: Unknown column 'qty_on_hand' in 'field list'"
+- ItemForm: `TypeError: group.toLowerCase is not a function`
+
+**Files**:
+- `backend/src/models/SupplierModel.js` (fixed)
+- `backend/src/models/ItemModel.js` (fixed)
+- `frontend/src/pages/Suppliers/SupplierList.jsx` (fixed)
+- `frontend/src/pages/Buying/ItemForm.jsx` (fixed)
+
+**Root Cause**:
+1. **Supplier**: Frontend form was sending `email` and `phone` fields that don't exist in the supplier table
+2. **Item**: ItemModel was querying non-existent columns (`qty_on_hand`, `qty_available`) from stock table
+3. **ItemForm**: itemGroups array contains objects `{ label, value }` but filter was treating them as strings
+
+**Solution**:
+1. **Supplier**:
+   - Added column validation in `update()` to filter out invalid fields
+   - Only allows valid columns: name, supplier_group_id, gstin, contact_person_id, address_id, bank_details, payment_terms_days, lead_time_days, rating, is_active
+   - Removed email/phone fields from frontend form (both add form and inline edit)
+   - Updated return value in `create()` to only include valid columns
+
+2. **Item**:
+   - Fixed `getById()` to select `qty` instead of `qty_on_hand, qty_available` from stock table
+   - Fixed `getStockInfo()` to select only `warehouse_code, qty` (not qty_on_hand/qty_available/qty_reserved)
+   - Fixed `getTotalStock()` to sum `qty` instead of qty_on_hand/available_qty/reserved_qty
+
+3. **ItemForm**:
+   - Updated filter to handle both string and object types for itemGroups
+   - Extracts label or value from object if needed
+   - Added null-safety checks with optional chaining
+
+**Testing**:
+- ✅ Frontend build: Successful (2341 modules)
+- ✅ Supplier update: No longer throws "Unknown column 'email'" error
+- ✅ Item fetch: No longer throws "Unknown column 'qty_on_hand'" error
+- ✅ ItemForm: Item group filter works with object array
+
+---
+
 ### 6. Stock Entry Creation - Fixed 'Unknown Column ID' Error ✅
 **Date**: Nov 24, 2025
 **Issue**: "Failed to create stock entry: Unknown column 'id' in 'field list'"

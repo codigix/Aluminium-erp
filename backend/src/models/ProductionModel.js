@@ -99,7 +99,7 @@ class ProductionModel {
         `INSERT INTO work_order (wo_id, item_code, bom_no, quantity, priority, notes, planned_start_date, planned_end_date, actual_start_date, actual_end_date, expected_delivery_date, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [data.wo_id, data.item_code, data.bom_no, data.quantity, data.priority, data.notes, 
-         data.planned_start_date, data.planned_end_date, data.actual_start_date, data.actual_end_date, data.expected_delivery_date, data.status]
+         data.planned_start_date || null, data.planned_end_date || null, data.actual_start_date || null, data.actual_end_date || null, data.expected_delivery_date || null, data.status]
       )
       return { wo_id: data.wo_id, ...data }
     } catch (error) {

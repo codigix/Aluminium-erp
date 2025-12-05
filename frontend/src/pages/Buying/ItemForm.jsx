@@ -118,6 +118,8 @@ export default function ItemForm() {
     { label: 'No Match', value: 'No Match' },
     { label: 'Pending', value: 'Pending' }
   ])
+  const [itemGroupInput, setItemGroupInput] = useState('')
+  const [showItemGroupDropdown, setShowItemGroupDropdown] = useState(false)
 
 
 
@@ -159,9 +161,10 @@ export default function ItemForm() {
     setShowItemGroupDropdown(false)
   }
 
-  const filteredItemGroups = itemGroups.filter(group =>
-    group.toLowerCase().includes(itemGroupInput.toLowerCase())
-  )
+  const filteredItemGroups = itemGroups.filter(group => {
+    const groupLabel = typeof group === 'string' ? group : (group?.label || group?.value || '')
+    return groupLabel.toLowerCase().includes((itemGroupInput || '').toLowerCase())
+  })
 
   const fetchDropdownData = async () => {
     try {

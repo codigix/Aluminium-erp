@@ -190,7 +190,7 @@ export class ItemModel {
       )
 
       const [stock] = await this.db.execute(
-        `SELECT warehouse_code, qty_on_hand, qty_available FROM stock WHERE item_code = ?`,
+        `SELECT warehouse_code, qty FROM stock WHERE item_code = ?`,
         [item_code]
       )
 
@@ -328,7 +328,7 @@ export class ItemModel {
   async getStockInfo(item_code) {
     try {
       const [stock] = await this.db.execute(
-        `SELECT warehouse_code, qty_on_hand, qty_available, qty_reserved FROM stock WHERE item_code = ?`,
+        `SELECT warehouse_code, qty FROM stock WHERE item_code = ?`,
         [item_code]
       )
       return stock
@@ -340,14 +340,10 @@ export class ItemModel {
   async getTotalStock(item_code) {
     try {
       const [result] = await this.db.execute(
-        `SELECT 
-          SUM(qty_on_hand) as total_qty,
-          SUM(qty_available) as available_qty,
-          SUM(qty_reserved) as reserved_qty
-         FROM stock WHERE item_code = ?`,
+        `SELECT SUM(qty) as total_qty FROM stock WHERE item_code = ?`,
         [item_code]
       )
-      return result[0] || { total_qty: 0, available_qty: 0, reserved_qty: 0 }
+      return result[0] || { total_qty: 0 }
     } catch (error) {
       throw new Error(`Failed to calculate total stock: ${error.message}`)
     }
