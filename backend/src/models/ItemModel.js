@@ -169,30 +169,60 @@ export class ItemModel {
 
       const itemData = items[0]
 
-      const [barcodes] = await this.db.execute(
-        `SELECT barcode, barcode_name, barcode_type FROM item_barcode WHERE item_code = ?`,
-        [item_code]
-      )
+      let barcodes = []
+      try {
+        const [barcodesResult] = await this.db.execute(
+          `SELECT barcode, barcode_name, barcode_type FROM item_barcode WHERE item_code = ?`,
+          [item_code]
+        )
+        barcodes = barcodesResult || []
+      } catch (err) {
+        console.warn(`Could not fetch barcodes for item ${item_code}:`, err.message)
+      }
 
-      const [suppliers] = await this.db.execute(
-        `SELECT supplier_id, supplier_name, supplier_code FROM item_supplier WHERE item_code = ?`,
-        [item_code]
-      )
+      let suppliers = []
+      try {
+        const [suppliersResult] = await this.db.execute(
+          `SELECT supplier_id, supplier_name, supplier_code FROM item_supplier WHERE item_code = ?`,
+          [item_code]
+        )
+        suppliers = suppliersResult || []
+      } catch (err) {
+        console.warn(`Could not fetch suppliers for item ${item_code}:`, err.message)
+      }
 
-      const [customers] = await this.db.execute(
-        `SELECT customer_name, customer_group, ref_code FROM item_customer_detail WHERE item_code = ?`,
-        [item_code]
-      )
+      let customers = []
+      try {
+        const [customersResult] = await this.db.execute(
+          `SELECT customer_name, customer_group, ref_code FROM item_customer_detail WHERE item_code = ?`,
+          [item_code]
+        )
+        customers = customersResult || []
+      } catch (err) {
+        console.warn(`Could not fetch customers for item ${item_code}:`, err.message)
+      }
 
-      const [dimensions] = await this.db.execute(
-        `SELECT parameter_type, name, parameter, value, status FROM item_dimension_parameter WHERE item_code = ?`,
-        [item_code]
-      )
+      let dimensions = []
+      try {
+        const [dimensionsResult] = await this.db.execute(
+          `SELECT parameter_type, name, parameter, value, status FROM item_dimension_parameter WHERE item_code = ?`,
+          [item_code]
+        )
+        dimensions = dimensionsResult || []
+      } catch (err) {
+        console.warn(`Could not fetch dimensions for item ${item_code}:`, err.message)
+      }
 
-      const [stock] = await this.db.execute(
-        `SELECT warehouse_code, qty FROM stock WHERE item_code = ?`,
-        [item_code]
-      )
+      let stock = []
+      try {
+        const [stockResult] = await this.db.execute(
+          `SELECT warehouse_code, qty FROM stock WHERE item_code = ?`,
+          [item_code]
+        )
+        stock = stockResult || []
+      } catch (err) {
+        console.warn(`Could not fetch stock for item ${item_code}:`, err.message)
+      }
 
       const groupedDimensions = {
         gdc_dimensional_parameters: [],
@@ -288,6 +318,12 @@ export class ItemModel {
           updateFields.push(`${field} = ?`)
           params.push(data[field])
         }
+      }
+
+      // Handle item_name -> name mapping
+      if (data.item_name !== undefined && data.name === undefined) {
+        updateFields.push(`name = ?`)
+        params.push(data.item_name)
       }
 
       if (updateFields.length === 0) return { success: true }

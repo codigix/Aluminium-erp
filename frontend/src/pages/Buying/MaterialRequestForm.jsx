@@ -5,7 +5,7 @@ import Button from '../../components/Button/Button'
 import Alert from '../../components/Alert/Alert'
 import Card from '../../components/Card/Card'
 import AuditTrail from '../../components/AuditTrail'
-import { Edit } from 'lucide-react'
+import { Edit, CheckCircle, XCircle, Trash2 } from 'lucide-react'
 import './Buying.css'
 
 export default function MaterialRequestForm() {
@@ -193,6 +193,51 @@ export default function MaterialRequestForm() {
     }
   }
 
+  const handleApprove = async () => {
+    if (!window.confirm('Are you sure you want to approve this material request?')) return
+    try {
+      setLoading(true)
+      await axios.patch(`/api/material-requests/${id}/approve`)
+      setSuccess('Material request approved successfully')
+      setTimeout(() => {
+        fetchMaterialRequest()
+        setLoading(false)
+      }, 1000)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to approve')
+      setLoading(false)
+    }
+  }
+
+  const handleReject = async () => {
+    if (!window.confirm('Are you sure you want to reject this material request?')) return
+    try {
+      setLoading(true)
+      await axios.patch(`/api/material-requests/${id}/reject`)
+      setSuccess('Material request rejected')
+      setTimeout(() => {
+        fetchMaterialRequest()
+        setLoading(false)
+      }, 1000)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to reject')
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this material request? This action cannot be undone.')) return
+    try {
+      setLoading(true)
+      await axios.delete(`/api/material-requests/${id}`)
+      setSuccess('Material request deleted successfully')
+      setTimeout(() => navigate('/buying/material-requests'), 1500)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete')
+      setLoading(false)
+    }
+  }
+
   const getItemName = (code) => {
     const item = items.find(i => i.item_code === code)
     return item ? item.name : code
@@ -203,12 +248,42 @@ export default function MaterialRequestForm() {
       <Card>
         <div className="page-header">
           <h2>{isEditMode ? 'Edit Material Request' : 'Create Material Request'}</h2>
-          <Button 
-            onClick={() => navigate('/buying/material-requests')}
-            variant="secondary"
-          >
-            Back
-          </Button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {isEditMode && materialRequest && materialRequest.status === 'draft' && (
+              <>
+                <Button 
+                  onClick={handleApprove}
+                  variant="primary"
+                  disabled={loading}
+                  className="flex items-center gap-2"
+                >
+                  <CheckCircle size={18} /> Approve
+                </Button>
+                <Button 
+                  onClick={handleReject}
+                  variant="warning"
+                  disabled={loading}
+                  className="flex items-center gap-2"
+                >
+                  <XCircle size={18} /> Reject
+                </Button>
+                <Button 
+                  onClick={handleDelete}
+                  variant="danger"
+                  disabled={loading}
+                  className="flex items-center gap-2"
+                >
+                  <Trash2 size={18} /> Delete
+                </Button>
+              </>
+            )}
+            <Button 
+              onClick={() => navigate('/buying/material-requests')}
+              variant="secondary"
+            >
+              Back
+            </Button>
+          </div>
         </div>
 
         {error && <Alert type="danger">{error}</Alert>}

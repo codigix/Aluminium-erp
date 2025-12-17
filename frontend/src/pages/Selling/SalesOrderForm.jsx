@@ -291,7 +291,13 @@ export default function SalesOrderForm() {
         currency: orderData.currency || 'INR',
         price_list: orderData.price_list || '',
         ignore_pricing_rule: orderData.ignore_pricing_rule || false,
-        items: orderData.items || [],
+        items: (orderData.items || []).map(item => ({
+          ...item,
+          qty: parseFloat(item.qty) || 0,
+          rate: parseFloat(item.rate) || 0,
+          amount: parseFloat(item.amount) || 0,
+          id: item.id || Date.now() + Math.random()
+        })),
         payment_terms_template: orderData.payment_terms_template || '',
         payment_schedule: orderData.payment_schedule || [],
         status: orderData.status || 'Draft',
@@ -419,7 +425,7 @@ export default function SalesOrderForm() {
   }
 
   const calculateSubtotal = () => {
-    return formData.items.reduce((sum, item) => sum + (item.amount || 0), 0)
+    return formData.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
   }
 
   const calculateGrandTotal = () => {
@@ -441,9 +447,17 @@ export default function SalesOrderForm() {
 
     try {
       setLoading(true)
+      const subtotal = parseFloat(calculateSubtotal() || 0)
       const submitData = {
         ...formData,
-        items: formData.items.map(({ id, ...item }) => item),
+        order_amount: subtotal,
+        total_value: subtotal,
+        items: formData.items.map(({ id, ...item }) => ({
+          ...item,
+          qty: parseFloat(item.qty) || 0,
+          rate: parseFloat(item.rate) || 0,
+          amount: parseFloat(item.amount) || 0
+        })),
         payment_schedule: formData.payment_schedule.map(({ id, ...row }) => row)
       }
 
@@ -1138,19 +1152,19 @@ export default function SalesOrderForm() {
                     <div>
                       <div style={{ marginBottom: '8px', fontSize: '12px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
                         <span>Subtotal:</span>
-                        <strong>₹{calculateSubtotal().toFixed(2)}</strong>
+                        <strong>₹{parseFloat(calculateSubtotal() || 0).toFixed(2)}</strong>
                       </div>
                       {formData.additional_discount_percentage > 0 && (
                         <div style={{ marginBottom: '8px', fontSize: '12px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
                           <span>Discount ({formData.additional_discount_percentage}%):</span>
-                          <strong>-₹{(calculateSubtotal() * formData.additional_discount_percentage / 100).toFixed(2)}</strong>
+                          <strong>-₹{parseFloat((calculateSubtotal() * formData.additional_discount_percentage / 100) || 0).toFixed(2)}</strong>
                         </div>
                       )}
                     </div>
                     <div>
                       <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: 'bold', color: '#007bff', display: 'flex', justifyContent: 'space-between' }}>
                         <span>Grand Total:</span>
-                        <strong>₹{calculateGrandTotal().toFixed(2)}</strong>
+                        <strong>₹{parseFloat(calculateGrandTotal() || 0).toFixed(2)}</strong>
                       </div>
                     </div>
                   </div>

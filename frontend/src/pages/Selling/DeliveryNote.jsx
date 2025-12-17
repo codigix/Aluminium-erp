@@ -4,18 +4,21 @@ import Button from '../../components/Button/Button'
 import Badge from '../../components/Badge/Badge'
 import DataTable from '../../components/Table/DataTable'
 import AdvancedFilters from '../../components/AdvancedFilters'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { 
   FileText, Edit2, Send, Download, Eye, Package, AlertCircle, CheckCircle, XCircle, 
   Clock, Plus, TrendingUp, AlertTriangle, Truck, Trash2, MapPin
 } from 'lucide-react'
 import CreateDeliveryNoteModal from '../../components/Selling/CreateDeliveryNoteModal'
+import ViewDeliveryNoteModal from '../../components/Selling/ViewDeliveryNoteModal'
 import './Selling.css'
 
 export default function DeliveryNote() {
   const navigate = useNavigate()
+  const { id } = useParams()
   const [deliveryNotes, setDeliveryNotes] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const [viewNoteId, setViewNoteId] = useState(id || null)
   const [stats, setStats] = useState({
     total: 0,
     draft: 0,
@@ -146,7 +149,7 @@ export default function DeliveryNote() {
         return (
         <div className="action-buttons">
           <button 
-            onClick={() => navigate(`/selling/delivery-notes/${row.delivery_note_id}`)}
+            onClick={() => setViewNoteId(row.delivery_note_id)}
             className="flex items-center justify-center p-2 text-primary-600 hover:bg-primary-100 rounded transition-colors duration-200"
             title="View"
           >
@@ -281,6 +284,13 @@ export default function DeliveryNote() {
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         onSuccess={fetchDeliveryNotes}
+      />
+
+      {/* View Delivery Note Modal */}
+      <ViewDeliveryNoteModal 
+        isOpen={!!viewNoteId}
+        noteId={viewNoteId}
+        onClose={() => setViewNoteId(null)}
       />
     </div>
   )

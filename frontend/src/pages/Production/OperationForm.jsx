@@ -62,13 +62,23 @@ export default function OperationForm() {
 
   const fetchOperationDetails = async (opId) => {
     try {
+      setLoading(true)
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/operations/${opId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/production/operations/${opId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (response.ok) {
-        const data = await response.json()
-        setFormData(data)
+        const result = await response.json()
+        const data = result.data || result
+        setFormData({
+          name: data.name || '',
+          is_corrective_operation: data.is_corrective_operation || false,
+          default_workstation: data.default_workstation || '',
+          create_job_card_based_on_batch_size: data.create_job_card_based_on_batch_size || false,
+          batch_size: data.batch_size || 1,
+          quality_inspection_template: data.quality_inspection_template || '',
+          description: data.description || ''
+        })
         if (data.sub_operations && data.sub_operations.length > 0) {
           setSubOperations(data.sub_operations.map((op, idx) => ({
             ...op,
@@ -76,9 +86,14 @@ export default function OperationForm() {
             no: idx + 1
           })))
         }
+      } else {
+        const errorResult = await response.json()
+        setError(errorResult.message || 'Failed to load operation details')
       }
     } catch (err) {
-      setError('Failed to load operation details')
+      setError('Failed to load operation details: ' + err.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -133,7 +148,7 @@ export default function OperationForm() {
 
       const token = localStorage.getItem('token')
       const response = await fetch(
-        id ? `${import.meta.env.VITE_API_URL}/operations/${id}` : `${import.meta.env.VITE_API_URL}/operations`,
+        id ? `${import.meta.env.VITE_API_URL}/production/operations/${id}` : `${import.meta.env.VITE_API_URL}/production/operations`,
         {
           method: id ? 'PUT' : 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },

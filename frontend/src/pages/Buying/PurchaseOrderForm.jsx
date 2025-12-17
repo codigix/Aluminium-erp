@@ -17,6 +17,7 @@ export default function PurchaseOrderForm() {
   const [itemSearchResults, setItemSearchResults] = useState([])
   const [itemSearchLoading, setItemSearchLoading] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [dataLoading, setDataLoading] = useState(po_no && po_no !== 'new')
   const [po, setPo] = useState({
     supplier_id: '',
     supplier_name: '',
@@ -152,17 +153,41 @@ export default function PurchaseOrderForm() {
   }
 
   const fetchPO = async () => {
-    setLoading(true)
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-orders/${po_no}`)
       const data = await res.json()
-      if (data.success) {
-        setPo(data.data)
+      if (data.success && data.data) {
+        const apiData = data.data
+        setPo(prevPo => ({
+          ...prevPo,
+          po_no: apiData.po_no || prevPo.po_no,
+          supplier_id: apiData.supplier_id || prevPo.supplier_id,
+          supplier_name: apiData.supplier_name || prevPo.supplier_name,
+          order_date: apiData.order_date || prevPo.order_date,
+          expected_date: apiData.expected_date || prevPo.expected_date,
+          currency: apiData.currency || prevPo.currency,
+          status: apiData.status || prevPo.status,
+          items: (Array.isArray(apiData.items) && apiData.items.length > 0) 
+            ? apiData.items.map(item => ({
+                item_code: item.item_code || '',
+                item_name: item.item_name || '',
+                qty: parseFloat(item.qty) || 0,
+                uom: item.uom || item.item_uom || 'PCS',
+                rate: parseFloat(item.rate) || 0,
+                tax_rate: parseFloat(item.tax_rate) || 0,
+                description: item.description || '',
+                schedule_date: item.schedule_date || ''
+              }))
+            : prevPo.items
+        }))
+        console.log('PO loaded successfully:', apiData)
+      } else {
+        console.error('Failed to load PO:', data.error)
       }
     } catch (error) {
       console.error('Error fetching PO:', error)
     } finally {
-      setLoading(false)
+      setDataLoading(false)
     }
   }
 
@@ -273,6 +298,25 @@ export default function PurchaseOrderForm() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (dataLoading) {
+    return (
+      <div className='p-6'>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-neutral-100 mb-2">
+            ✏️ Loading Purchase Order
+          </h1>
+        </div>
+        <Card>
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mb-4"></div>
+            <p className="text-lg text-neutral-600 dark:text-neutral-400">Loading purchase order details...</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-500 mt-2">Please wait while we fetch the data</p>
+          </div>
+        </Card>
+      </div>
+    )
   }
 
   return (

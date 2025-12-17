@@ -201,10 +201,12 @@ export default function ItemForm() {
       setItem(itemData)
       setFormData(prev => ({
         ...prev,
-        ...itemData
+        ...itemData,
+        item_name: itemData.name || itemData.item_name || ''
       }))
     } catch (err) {
       setError('Failed to fetch item details')
+      console.error('Error fetching item:', err)
     }
   }
 
@@ -424,11 +426,15 @@ export default function ItemForm() {
     try {
       setLoading(true)
       const apiUrl = import.meta.env.VITE_API_URL
+      const submitData = {
+        ...formData,
+        name: formData.item_name
+      }
       if (isEditMode) {
-        await axios.put(`${apiUrl}/items/${item_code}`, formData)
+        await axios.put(`${apiUrl}/items/${item_code}`, submitData)
         setSuccess('Item updated successfully')
       } else {
-        await axios.post(`${apiUrl}/items`, formData)
+        await axios.post(`${apiUrl}/items`, submitData)
         setSuccess('Item created successfully')
       }
 

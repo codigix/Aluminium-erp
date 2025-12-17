@@ -31,7 +31,14 @@ class ProductionModel {
   async getOperationById(operation_id) {
     try {
       const [operations] = await this.db.query('SELECT * FROM operation WHERE name = ?', [operation_id])
-      return operations[0] || null
+      const operation = operations[0] || null
+
+      if (operation) {
+        const [subOps] = await this.db.query('SELECT * FROM operation_sub_operation WHERE operation_name = ? ORDER BY no ASC', [operation_id])
+        operation.sub_operations = subOps || []
+      }
+
+      return operation
     } catch (error) {
       throw error
     }
@@ -74,7 +81,7 @@ class ProductionModel {
   async addSubOperation(operation_id, subOp) {
     try {
       await this.db.query(
-        `INSERT INTO sub_operation (operation_id, operation_no, sub_operation_code, op_time)
+        `INSERT INTO operation_sub_operation (operation_name, no, operation, operation_time)
          VALUES (?, ?, ?, ?)`,
         [operation_id, subOp.no, subOp.operation, subOp.operation_time]
       )
@@ -85,7 +92,7 @@ class ProductionModel {
 
   async deleteSubOperations(operation_id) {
     try {
-      await this.db.query('DELETE FROM sub_operation WHERE operation_id = ?', [operation_id])
+      await this.db.query('DELETE FROM operation_sub_operation WHERE operation_name = ?', [operation_id])
     } catch (error) {
       throw error
     }
@@ -793,9 +800,9 @@ class ProductionModel {
       const response = await this.db.query(
         `INSERT INTO workstation (name, workstation_name, description, location, capacity_per_hour, is_active, status)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [data.id, data.name, data.description, data.location, data.capacity_per_hour, data.is_active !== false, 'active']
+        [data.name, data.workstation_name, data.description, data.location, data.capacity_per_hour, data.is_active !== false, 'active']
       )
-      return { id: data.id, ...data }
+      return { ...data, status: 'active' }
     } catch (error) {
       throw error
     }
@@ -824,7 +831,7 @@ class ProductionModel {
       const fields = []
       const values = []
 
-      if (data.name) { fields.push('workstation_name = ?'); values.push(data.name) }
+      if (data.workstation_name) { fields.push('workstation_name = ?'); values.push(data.workstation_name) }
       if (data.description) { fields.push('description = ?'); values.push(data.description) }
       if (data.location) { fields.push('location = ?'); values.push(data.location) }
       if (data.capacity_per_hour) { fields.push('capacity_per_hour = ?'); values.push(data.capacity_per_hour) }

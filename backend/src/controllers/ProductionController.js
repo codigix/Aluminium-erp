@@ -10,16 +10,16 @@ class ProductionController {
     try {
       const { name, operation_name, default_workstation, is_corrective_operation, create_job_card_based_on_batch_size, batch_size, quality_inspection_template, description, sub_operations } = req.body
 
-      if (!name || !operation_name) {
+      if (!name) {
         return res.status(400).json({
           success: false,
-          message: 'Missing required fields: name, operation_name'
+          message: 'Missing required field: name'
         })
       }
 
       const operation = await this.productionModel.createOperation({
         name,
-        operation_name,
+        operation_name: operation_name || name,
         default_workstation,
         is_corrective_operation,
         create_job_card_based_on_batch_size,

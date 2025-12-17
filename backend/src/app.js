@@ -30,6 +30,9 @@ import sellingRoutes from './routes/selling.js'
 import grnRequestRoutes from './routes/grnRequests.js'
 import companyRoutes from './routes/company.js'
 import taxTemplateRoutes from './routes/taxTemplates.js'
+import setupMasterDataRoutes from './routes/setup.js'
+import crmRoutes from './routes/crm.js'
+import { SetupModel } from './models/SetupModel.js'
 
 // Load environment variables
 dotenv.config()
@@ -85,6 +88,143 @@ async function initializeDatabase() {
     global.db = db
 
     console.log('✓ Database pool created successfully')
+
+    // Create sales_order_items table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS sales_order_items (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          sales_order_id VARCHAR(50) NOT NULL,
+          item_code VARCHAR(100),
+          item_name VARCHAR(255),
+          delivery_date DATE,
+          qty DECIMAL(10, 2) NOT NULL DEFAULT 1,
+          rate DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          amount DECIMAL(15, 2) GENERATED ALWAYS AS (qty * rate) STORED,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (sales_order_id) REFERENCES selling_sales_order(sales_order_id) ON DELETE CASCADE,
+          INDEX idx_sales_order (sales_order_id),
+          INDEX idx_item_code (item_code)
+        )
+      `)
+      console.log('✓ sales_order_items table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ sales_order_items table already exists')
+      } else {
+        console.warn('⚠ Could not initialize sales_order_items table:', err.message)
+      }
+    }
+
+    // Add deleted_at column to supplier table if it doesn't exist
+    try {
+      await db.execute(`
+        ALTER TABLE supplier ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL
+      `)
+      console.log('✓ deleted_at column added to supplier table')
+    } catch (err) {
+      if (err.code === 'ER_DUP_FIELDNAME') {
+        console.log('✓ deleted_at column already exists in supplier table')
+      } else {
+        console.warn('⚠ Could not add deleted_at column to supplier table:', err.message)
+      }
+    }
+
+    // Create item_barcode table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS item_barcode (
+          barcode_id VARCHAR(50) NOT NULL PRIMARY KEY,
+          item_code VARCHAR(100) NOT NULL,
+          barcode VARCHAR(100),
+          barcode_name VARCHAR(255),
+          barcode_type VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY barcode_unique (barcode),
+          KEY idx_item_code (item_code),
+          CONSTRAINT item_barcode_ibfk FOREIGN KEY (item_code) REFERENCES item(item_code) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+      `)
+      console.log('✓ item_barcode table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ item_barcode table already exists')
+      } else {
+        console.warn('⚠ Could not initialize item_barcode table:', err.message)
+      }
+    }
+
+    // Create item_supplier table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS item_supplier (
+          item_supplier_id VARCHAR(50) NOT NULL PRIMARY KEY,
+          item_code VARCHAR(100) NOT NULL,
+          supplier_id VARCHAR(50),
+          supplier_name VARCHAR(255),
+          supplier_code VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          KEY idx_item_code (item_code),
+          CONSTRAINT item_supplier_ibfk FOREIGN KEY (item_code) REFERENCES item(item_code) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+      `)
+      console.log('✓ item_supplier table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ item_supplier table already exists')
+      } else {
+        console.warn('⚠ Could not initialize item_supplier table:', err.message)
+      }
+    }
+
+    // Create item_customer_detail table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS item_customer_detail (
+          customer_detail_id VARCHAR(50) NOT NULL PRIMARY KEY,
+          item_code VARCHAR(100) NOT NULL,
+          customer_name VARCHAR(255),
+          customer_group VARCHAR(100),
+          ref_code VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          KEY idx_item_code (item_code),
+          CONSTRAINT item_customer_detail_ibfk FOREIGN KEY (item_code) REFERENCES item(item_code) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+      `)
+      console.log('✓ item_customer_detail table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ item_customer_detail table already exists')
+      } else {
+        console.warn('⚠ Could not initialize item_customer_detail table:', err.message)
+      }
+    }
+
+    // Create item_dimension_parameter table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS item_dimension_parameter (
+          parameter_id VARCHAR(50) NOT NULL PRIMARY KEY,
+          item_code VARCHAR(100) NOT NULL,
+          parameter_type VARCHAR(100),
+          name VARCHAR(255),
+          parameter VARCHAR(255),
+          value VARCHAR(255),
+          status VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          KEY idx_item_code (item_code),
+          CONSTRAINT item_dimension_parameter_ibfk FOREIGN KEY (item_code) REFERENCES item(item_code) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+      `)
+      console.log('✓ item_dimension_parameter table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ item_dimension_parameter table already exists')
+      } else {
+        console.warn('⚠ Could not initialize item_dimension_parameter table:', err.message)
+      }
+    }
   } catch (error) {
     console.error('Database connection failed:', error)
     process.exit(1)
@@ -97,7 +237,16 @@ app.get('/api/health', (req, res) => {
 })
 
 // Setup routes function - called after DB initialization
-function setupRoutes() {
+async function setupRoutes() {
+  // Initialize Setup Model tables
+  try {
+    const setupModel = new SetupModel(db)
+    await setupModel.ensureTablesExist()
+    console.log('✓ Setup tables initialized')
+  } catch (error) {
+    console.warn('⚠ Could not initialize setup tables:', error.message)
+  }
+
   // API Routes - Authentication (requires db)
   app.use('/api/auth', authRoutes(db))
   
@@ -149,6 +298,12 @@ function setupRoutes() {
 
   // API Routes - Company Information
   app.use('/api/company-info', companyRoutes)
+
+  // API Routes - Setup Master Data
+  app.use('/api/setup', setupMasterDataRoutes)
+
+  // API Routes - CRM
+  app.use('/api/crm', crmRoutes)
   
   // Error handling middleware (must be after all routes)
   app.use((err, req, res, next) => {
@@ -170,7 +325,7 @@ const PORT = process.env.PORT || 5000
 // Start server
 async function start() {
   await initializeDatabase()
-  setupRoutes() // Setup routes after DB is initialized
+  await setupRoutes() // Setup routes after DB is initialized
   
   app.listen(PORT, () => {
     console.log(`✓ Server running on http://localhost:${PORT}`)

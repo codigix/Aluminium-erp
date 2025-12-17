@@ -1,5 +1,6 @@
 import express from 'express'
 import { SellingController } from '../controllers/SellingController.js'
+import { SetupController } from '../controllers/SetupController.js'
 
 const router = express.Router()
 
@@ -8,7 +9,10 @@ const router = express.Router()
 // ============================================
 router.post('/customers', SellingController.createCustomer)
 router.get('/customers', SellingController.getCustomers)
+// Specific routes must come before generic :id routes
 router.get('/customers/:id', SellingController.getCustomerById)
+router.put('/customers/:id', SellingController.updateCustomer)
+router.delete('/customers/:id', SellingController.deleteCustomer)
 
 // ============================================
 // QUOTATION ROUTES
@@ -36,8 +40,11 @@ router.delete('/sales-orders/:id', SellingController.deleteSalesOrder)
 // ============================================
 router.post('/delivery-notes', SellingController.createDeliveryNote)
 router.get('/delivery-notes', SellingController.getDeliveryNotes)
+// Specific routes must come before generic :id routes
 router.get('/delivery-notes/delivered', SellingController.getDeliveredNotes)
 router.put('/delivery-notes/:id/submit', SellingController.submitDeliveryNote)
+// Generic :id routes
+router.get('/delivery-notes/:id', SellingController.getDeliveryNoteById)
 router.delete('/delivery-notes/:id', SellingController.deleteDeliveryNote)
 
 // ============================================
@@ -47,9 +54,24 @@ router.post('/invoices', SellingController.createInvoice)
 router.post('/sales-invoices', SellingController.createInvoice) // Alias for compatibility
 router.get('/invoices', SellingController.getInvoices)
 router.get('/sales-invoices', SellingController.getInvoices) // Alias for compatibility
+// Specific routes must come before generic :id routes
 router.put('/invoices/:id/submit', SellingController.submitInvoice)
 router.put('/sales-invoices/:id/submit', SellingController.submitInvoice) // Alias for compatibility
+// Generic :id routes
+router.get('/invoices/:id', SellingController.getInvoiceById)
+router.get('/sales-invoices/:id', SellingController.getInvoiceById) // Alias for compatibility
 router.delete('/invoices/:id', SellingController.deleteInvoice)
 router.delete('/sales-invoices/:id', SellingController.deleteInvoice) // Alias for compatibility
+
+// ============================================
+// COUPON CODES ROUTES
+// ============================================
+router.get('/coupon-codes', SetupController.getCouponCodes)
+
+// ============================================
+// ANALYTICS ROUTES
+// ============================================
+router.get('/analytics', SellingController.getAnalytics)
+router.get('/analytics/export', SellingController.exportAnalytics)
 
 export default router

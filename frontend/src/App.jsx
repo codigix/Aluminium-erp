@@ -37,6 +37,8 @@ import {
 } from './pages/Selling'
 import SalesQuotationForm from './pages/Selling/SalesQuotationForm'
 import SalesOrderForm from './pages/Selling/SalesOrderForm'
+import SalesInvoiceDetail from './pages/Selling/SalesInvoiceDetail'
+import CustomerDetail from './pages/Selling/CustomerDetail'
 import {
   InventoryDashboard,
   Warehouses,
@@ -621,7 +623,7 @@ function App() {
               <ProtectedRoute>
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesInvoice />
+                    <SalesInvoiceDetail />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>
@@ -659,7 +661,7 @@ function App() {
               <ProtectedRoute>
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <Customers />
+                    <CustomerDetail />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>

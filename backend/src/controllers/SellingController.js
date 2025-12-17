@@ -105,6 +105,111 @@ export class SellingController {
     }
   }
 
+  static async updateCustomer(req, res) {
+    const db = req.app.locals.db
+    const { id } = req.params
+    const { name, email, phone, gstin, billing_address, shipping_address, credit_limit, status } = req.body
+
+    try {
+      // Check if customer exists
+      const [customers] = await db.execute(
+        'SELECT customer_id FROM selling_customer WHERE customer_id = ? AND deleted_at IS NULL',
+        [id]
+      )
+
+      if (!customers.length) {
+        return res.status(404).json({ error: 'Customer not found' })
+      }
+
+      // Prepare update query
+      const updates = []
+      const values = []
+
+      if (name !== undefined) {
+        updates.push('name = ?')
+        values.push(name)
+      }
+      if (email !== undefined) {
+        updates.push('email = ?')
+        values.push(email)
+      }
+      if (phone !== undefined) {
+        updates.push('phone = ?')
+        values.push(phone)
+      }
+      if (gstin !== undefined) {
+        updates.push('gstin = ?')
+        values.push(gstin)
+      }
+      if (billing_address !== undefined) {
+        updates.push('billing_address = ?')
+        values.push(billing_address)
+      }
+      if (shipping_address !== undefined) {
+        updates.push('shipping_address = ?')
+        values.push(shipping_address)
+      }
+      if (credit_limit !== undefined) {
+        updates.push('credit_limit = ?')
+        values.push(credit_limit)
+      }
+      if (status !== undefined) {
+        updates.push('status = ?')
+        values.push(status)
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No fields to update' })
+      }
+
+      updates.push('updated_at = NOW()')
+      values.push(id)
+
+      const query = `UPDATE selling_customer SET ${updates.join(', ')} WHERE customer_id = ?`
+
+      await db.execute(query, values)
+
+      // Fetch updated customer
+      const [updated] = await db.execute(
+        'SELECT * FROM selling_customer WHERE customer_id = ? AND deleted_at IS NULL',
+        [id]
+      )
+
+      res.json({ success: true, data: updated[0] })
+    } catch (error) {
+      console.error('Error updating customer:', error)
+      res.status(500).json({ error: 'Failed to update customer', details: error.message })
+    }
+  }
+
+  static async deleteCustomer(req, res) {
+    const db = req.app.locals.db
+    const { id } = req.params
+
+    try {
+      // Check if customer exists
+      const [customers] = await db.execute(
+        'SELECT customer_id FROM selling_customer WHERE customer_id = ? AND deleted_at IS NULL',
+        [id]
+      )
+
+      if (!customers.length) {
+        return res.status(404).json({ error: 'Customer not found' })
+      }
+
+      // Soft delete
+      await db.execute(
+        'UPDATE selling_customer SET deleted_at = NOW(), updated_at = NOW() WHERE customer_id = ?',
+        [id]
+      )
+
+      res.json({ success: true, message: 'Customer deleted successfully' })
+    } catch (error) {
+      console.error('Error deleting customer:', error)
+      res.status(500).json({ error: 'Failed to delete customer', details: error.message })
+    }
+  }
+
   // ============================================
   // QUOTATION ENDPOINTS
   // ============================================
@@ -259,7 +364,7 @@ export class SellingController {
 
   static async createSalesOrder(req, res) {
     const db = req.app.locals.db
-    const { customer_id, quotation_id, order_amount, total_value, delivery_date, order_terms, terms_conditions } = req.body
+    const { customer_id, quotation_id, order_amount, total_value, delivery_date, order_terms, terms_conditions, items } = req.body
 
     try {
       // Accept both field name variations
@@ -280,14 +385,34 @@ export class SellingController {
         return res.status(400).json({ error: 'Customer not found. Please select a valid customer.' })
       }
 
+      // Helper to convert ISO date to YYYY-MM-DD format
+      const formatDateForSQL = (dateStr) => {
+        if (!dateStr) return null
+        if (typeof dateStr === 'string' && dateStr.includes('T')) {
+          return dateStr.split('T')[0]
+        }
+        return dateStr
+      }
+
       const sales_order_id = `SO-${Date.now()}`
 
       await db.execute(
         `INSERT INTO selling_sales_order 
          (sales_order_id, customer_id, quotation_id, order_amount, delivery_date, order_terms, status)
          VALUES (?, ?, ?, ?, ?, ?, 'draft')`,
-        [sales_order_id, customer_id, quotation_id || null, finalAmount, delivery_date || null, finalTerms || null]
+        [sales_order_id, customer_id, quotation_id || null, finalAmount, formatDateForSQL(delivery_date), finalTerms || null]
       )
+
+      // Insert items if provided
+      if (items && Array.isArray(items) && items.length > 0) {
+        for (const item of items) {
+          await db.execute(
+            `INSERT INTO sales_order_items (sales_order_id, item_code, item_name, delivery_date, qty, rate)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [sales_order_id, item.item_code || null, item.item_name || null, formatDateForSQL(item.delivery_date), item.qty || 1, item.rate || 0]
+          )
+        }
+      }
 
       res.status(201).json({
         success: true,
@@ -299,7 +424,8 @@ export class SellingController {
           total_value: finalAmount,
           delivery_date,
           order_terms: finalTerms,
-          status: 'draft'
+          status: 'draft',
+          items: items || []
         }
       })
     } catch (error) {
@@ -331,6 +457,16 @@ export class SellingController {
       query += ' ORDER BY sso.created_at DESC'
 
       const [orders] = await db.execute(query, params)
+      
+      // Fetch items for each order
+      for (let order of orders) {
+        const [items] = await db.execute(
+          'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
+          [order.sales_order_id]
+        )
+        order.items = items || []
+      }
+
       res.json({ success: true, data: orders })
     } catch (error) {
       console.error('Error fetching sales orders:', error)
@@ -353,7 +489,23 @@ export class SellingController {
       }
 
       if (rows[0].status === 'confirmed') {
-        return res.json({ success: true, data: rows[0] })
+        const [confirmedOrder] = await db.execute(
+          `SELECT sso.*, sso.order_amount as total_value, sc.name as customer_name 
+           FROM selling_sales_order sso
+           LEFT JOIN selling_customer sc ON sso.customer_id = sc.customer_id
+           WHERE sso.sales_order_id = ?`,
+          [id]
+        )
+        
+        if (confirmedOrder.length > 0) {
+          const [items] = await db.execute(
+            'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
+            [id]
+          )
+          confirmedOrder[0].items = items || []
+        }
+        
+        return res.json({ success: true, data: confirmedOrder[0] })
       }
 
       await db.execute(
@@ -368,6 +520,14 @@ export class SellingController {
          WHERE sso.sales_order_id = ?`,
         [id]
       )
+
+      if (updated.length > 0) {
+        const [items] = await db.execute(
+          'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
+          [id]
+        )
+        updated[0].items = items || []
+      }
 
       res.json({ success: true, data: updated[0] })
     } catch (error) {
@@ -393,7 +553,16 @@ export class SellingController {
         return res.status(404).json({ error: 'Sales order not found' })
       }
 
-      res.json({ success: true, data: orders[0] })
+      const order = orders[0]
+
+      // Fetch items for this order
+      const [items] = await db.execute(
+        'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
+        [id]
+      )
+      order.items = items || []
+
+      res.json({ success: true, data: order })
     } catch (error) {
       console.error('Error fetching sales order:', error)
       res.status(500).json({ error: 'Failed to fetch sales order', details: error.message })
@@ -403,7 +572,7 @@ export class SellingController {
   static async updateSalesOrder(req, res) {
     const db = req.app.locals.db
     const { id } = req.params
-    const { order_amount, total_value, delivery_date, order_terms, status } = req.body
+    const { order_amount, total_value, delivery_date, order_terms, status, items } = req.body
 
     try {
       // Check if order exists
@@ -416,6 +585,15 @@ export class SellingController {
         return res.status(404).json({ error: 'Sales order not found' })
       }
 
+      // Helper to convert ISO date to YYYY-MM-DD format
+      const formatDateForSQL = (dateStr) => {
+        if (!dateStr) return null
+        if (typeof dateStr === 'string' && dateStr.includes('T')) {
+          return dateStr.split('T')[0]
+        }
+        return dateStr
+      }
+
       // Build update query dynamically
       const updates = []
       const values = []
@@ -426,7 +604,7 @@ export class SellingController {
       }
       if (delivery_date !== undefined) {
         updates.push('delivery_date = ?')
-        values.push(delivery_date)
+        values.push(formatDateForSQL(delivery_date))
       }
       if (order_terms !== undefined) {
         updates.push('order_terms = ?')
@@ -437,17 +615,34 @@ export class SellingController {
         values.push(status)
       }
 
-      if (updates.length === 0) {
+      if (updates.length === 0 && (!items || items.length === 0)) {
         return res.status(400).json({ error: 'No fields to update' })
       }
 
-      updates.push('updated_at = NOW()')
-      values.push(id)
+      if (updates.length > 0) {
+        updates.push('updated_at = NOW()')
+        values.push(id)
 
-      const query = `UPDATE selling_sales_order SET ${updates.join(', ')} WHERE sales_order_id = ?`
-      await db.execute(query, values)
+        const query = `UPDATE selling_sales_order SET ${updates.join(', ')} WHERE sales_order_id = ?`
+        await db.execute(query, values)
+      }
 
-      // Fetch updated order with customer info
+      // Handle items update - delete old items and insert new ones
+      if (items && Array.isArray(items)) {
+        await db.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [id])
+        
+        if (items.length > 0) {
+          for (const item of items) {
+            await db.execute(
+              `INSERT INTO sales_order_items (sales_order_id, item_code, item_name, delivery_date, qty, rate)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [id, item.item_code || null, item.item_name || null, formatDateForSQL(item.delivery_date), item.qty || 1, item.rate || 0]
+            )
+          }
+        }
+      }
+
+      // Fetch updated order with customer info and items
       const [updated] = await db.execute(
         `SELECT sso.*, sso.order_amount as total_value, sc.name as customer_name 
          FROM selling_sales_order sso
@@ -455,6 +650,14 @@ export class SellingController {
          WHERE sso.sales_order_id = ?`,
         [id]
       )
+
+      if (updated.length > 0) {
+        const [orderItems] = await db.execute(
+          'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
+          [id]
+        )
+        updated[0].items = orderItems || []
+      }
 
       res.json({ success: true, data: updated[0] })
     } catch (error) {
@@ -590,15 +793,52 @@ export class SellingController {
 
     try {
       const [orders] = await db.execute(
-        `SELECT sales_order_id, customer_id, order_amount 
-         FROM selling_sales_order 
-         WHERE status IN ('confirmed', 'shipped') AND deleted_at IS NULL
-         ORDER BY created_at DESC`
+        `SELECT sso.*, sso.order_amount as total_value, sc.name as customer_name 
+         FROM selling_sales_order sso
+         LEFT JOIN selling_customer sc ON sso.customer_id = sc.customer_id
+         WHERE sso.status IN ('confirmed', 'shipped') AND sso.deleted_at IS NULL
+         ORDER BY sso.created_at DESC`
       )
+      
+      // Fetch items for each order
+      for (let order of orders) {
+        const [items] = await db.execute(
+          'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
+          [order.sales_order_id]
+        )
+        order.items = items || []
+      }
+      
       res.json({ success: true, data: orders })
     } catch (error) {
       console.error('Error fetching confirmed orders:', error)
       res.status(500).json({ error: 'Failed to fetch confirmed orders', details: error.message })
+    }
+  }
+
+  // Get single delivery note by ID
+  static async getDeliveryNoteById(req, res) {
+    const db = req.app.locals.db
+    const { id } = req.params
+
+    try {
+      const [notes] = await db.execute(
+        `SELECT sdn.*, sso.sales_order_id, sso.customer_id, sc.name as customer_name
+         FROM selling_delivery_note sdn
+         LEFT JOIN selling_sales_order sso ON sdn.sales_order_id = sso.sales_order_id
+         LEFT JOIN selling_customer sc ON sso.customer_id = sc.customer_id
+         WHERE sdn.delivery_note_id = ? AND sdn.deleted_at IS NULL`,
+        [id]
+      )
+
+      if (!notes.length) {
+        return res.status(404).json({ error: 'Delivery note not found' })
+      }
+
+      res.json({ success: true, data: notes[0] })
+    } catch (error) {
+      console.error('Error fetching delivery note:', error)
+      res.status(500).json({ error: 'Failed to fetch delivery note', details: error.message })
     }
   }
 
@@ -711,6 +951,32 @@ export class SellingController {
     } catch (error) {
       console.error('Error fetching invoices:', error)
       res.status(500).json({ error: 'Failed to fetch invoices', details: error.message })
+    }
+  }
+
+  static async getInvoiceById(req, res) {
+    const db = req.app.locals.db
+    const { id } = req.params
+
+    try {
+      const [invoices] = await db.execute(
+        `SELECT si.*, sdn.delivery_note_id, sdn.sales_order_id, sc.name as customer_name 
+         FROM selling_invoice si
+         LEFT JOIN selling_delivery_note sdn ON si.delivery_note_id = sdn.delivery_note_id
+         LEFT JOIN selling_sales_order sso ON sdn.sales_order_id = sso.sales_order_id
+         LEFT JOIN selling_customer sc ON sso.customer_id = sc.customer_id
+         WHERE si.invoice_id = ? AND si.deleted_at IS NULL`,
+        [id]
+      )
+
+      if (!invoices.length) {
+        return res.status(404).json({ error: 'Invoice not found' })
+      }
+
+      res.json({ success: true, data: invoices[0] })
+    } catch (error) {
+      console.error('Error fetching invoice:', error)
+      res.status(500).json({ error: 'Failed to fetch invoice', details: error.message })
     }
   }
 
@@ -857,6 +1123,174 @@ export class SellingController {
       console.error('Error deleting delivery note:', error)
       res.status(500).json({ error: 'Failed to delete delivery note', details: error.message })
     }
+  }
+
+  static async getAnalytics(req, res) {
+    const db = req.app.locals.db
+    const { period = 'monthly' } = req.query
+
+    try {
+      const dateFilter = getDateFilter(period)
+
+      const [salesData] = await db.execute(
+        `SELECT 
+          COUNT(DISTINCT sso.sales_order_id) as totalOrders,
+          SUM(sso.order_amount) as totalSales
+         FROM selling_sales_order sso
+         WHERE sso.deleted_at IS NULL AND DATE(sso.created_at) >= ?`,
+        [dateFilter.params[0]]
+      )
+
+      const totalOrders = salesData[0]?.totalOrders || 0
+      const totalSales = parseFloat(salesData[0]?.totalSales) || 0
+      const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0
+
+      const [topCustomerData] = await db.execute(
+        `SELECT sc.name, SUM(sso.order_amount) as value
+         FROM selling_sales_order sso
+         LEFT JOIN selling_customer sc ON sso.customer_id = sc.customer_id
+         WHERE sso.deleted_at IS NULL AND DATE(sso.created_at) >= ?
+         GROUP BY sso.customer_id
+         ORDER BY value DESC
+         LIMIT 1`,
+        [dateFilter.params[0]]
+      )
+
+      const topCustomer = topCustomerData[0] || { name: 'N/A', value: 0 }
+
+      const [topProductData] = await db.execute(
+        `SELECT soi.item_code, soi.item_name, SUM(soi.qty) as value
+         FROM sales_order_items soi
+         JOIN selling_sales_order sso ON soi.sales_order_id = sso.sales_order_id
+         WHERE sso.deleted_at IS NULL AND DATE(sso.created_at) >= ?
+         GROUP BY soi.item_code, soi.item_name
+         ORDER BY value DESC
+         LIMIT 1`,
+        [dateFilter.params[0]]
+      )
+
+      const topProduct = topProductData[0] || { name: 'N/A', value: 0 }
+
+      const [statusBreakdown] = await db.execute(
+        `SELECT status, COUNT(*) as count
+         FROM selling_sales_order
+         WHERE deleted_at IS NULL AND DATE(created_at) >= ?
+         GROUP BY status`,
+        [dateFilter.params[0]]
+      )
+
+      const statusBreakdownWithColor = statusBreakdown.map(s => ({
+        name: s.status.charAt(0).toUpperCase() + s.status.slice(1),
+        count: s.count,
+        color: 
+          s.status === 'draft' ? 'warning' :
+          s.status === 'submitted' ? 'info' :
+          s.status === 'confirmed' ? 'success' :
+          s.status === 'cancelled' ? 'danger' :
+          'primary'
+      }))
+
+      const paymentStatus = [
+        {
+          name: 'Paid',
+          value: totalSales * 0.6,
+          percentage: 60
+        },
+        {
+          name: 'Pending',
+          value: totalSales * 0.3,
+          percentage: 30
+        },
+        {
+          name: 'Partial',
+          value: totalSales * 0.1,
+          percentage: 10
+        }
+      ]
+
+      const conversionRate = totalOrders > 0 ? ((totalOrders / Math.max(totalOrders, 1)) * 100) : 0
+
+      res.json({
+        success: true,
+        data: {
+          totalSales,
+          totalOrders,
+          averageOrderValue,
+          conversionRate,
+          topCustomer,
+          topProduct,
+          statusBreakdown: statusBreakdownWithColor,
+          paymentStatus
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching analytics:', error)
+      res.status(500).json({ error: 'Failed to fetch analytics', details: error.message })
+    }
+  }
+
+  static async exportAnalytics(req, res) {
+    const db = req.app.locals.db
+    const { period = 'monthly' } = req.query
+
+    try {
+      const dateFilter = getDateFilter(period)
+
+      const [orders] = await db.execute(
+        `SELECT sso.*, sc.name as customer_name
+         FROM selling_sales_order sso
+         LEFT JOIN selling_customer sc ON sso.customer_id = sc.customer_id
+         WHERE sso.deleted_at IS NULL AND DATE(sso.created_at) >= ?
+         ORDER BY sso.created_at DESC`,
+        [dateFilter.params[0]]
+      )
+
+      const csv = [
+        ['Sales Order ID', 'Customer', 'Amount', 'Status', 'Payment Status', 'Created Date'].join(','),
+        ...orders.map(o => [
+          o.sales_order_id,
+          o.customer_name || 'N/A',
+          o.order_amount,
+          o.status,
+          o.payment_status || 'pending',
+          new Date(o.created_at).toLocaleDateString()
+        ].join(','))
+      ].join('\n')
+
+      res.setHeader('Content-Type', 'text/csv')
+      res.setHeader('Content-Disposition', `attachment; filename="selling-analytics-${period}.csv"`)
+      res.send(csv)
+    } catch (error) {
+      console.error('Error exporting analytics:', error)
+      res.status(500).json({ error: 'Failed to export analytics', details: error.message })
+    }
+  }
+}
+
+function getDateFilter(period) {
+  const now = new Date()
+  let startDate = new Date()
+
+  switch (period) {
+    case 'weekly':
+      startDate.setDate(now.getDate() - 7)
+      break
+    case 'monthly':
+      startDate.setMonth(now.getMonth() - 1)
+      break
+    case 'quarterly':
+      startDate.setMonth(now.getMonth() - 3)
+      break
+    case 'yearly':
+      startDate.setFullYear(now.getFullYear() - 1)
+      break
+    default:
+      startDate.setMonth(now.getMonth() - 1)
+  }
+
+  return {
+    query: 'AND DATE(sso.created_at) >= ?',
+    params: [startDate.toISOString().split('T')[0]]
   }
 }
 

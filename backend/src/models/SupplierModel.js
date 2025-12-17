@@ -5,7 +5,7 @@
   static async getAll(db) {
     try {
       const [rows] = await db.execute(
-        'SELECT * FROM supplier ORDER BY name'
+        'SELECT * FROM supplier WHERE deleted_at IS NULL ORDER BY name'
       )
       return rows
     } catch (error) {
@@ -19,7 +19,7 @@
   static async getActive(db) {
     try {
       const [rows] = await db.execute(
-        'SELECT * FROM supplier WHERE is_active = true ORDER BY name'
+        'SELECT * FROM supplier WHERE is_active = true AND deleted_at IS NULL ORDER BY name'
       )
       return rows
     } catch (error) {
@@ -33,7 +33,7 @@
   static async getById(db, supplierId) {
     try {
       const [rows] = await db.execute(
-        'SELECT * FROM supplier WHERE supplier_id = ?',
+        'SELECT * FROM supplier WHERE supplier_id = ? AND deleted_at IS NULL',
         [supplierId]
       )
       return rows[0] || null
@@ -48,7 +48,7 @@
   static async getByName(db, name) {
     try {
       const [rows] = await db.execute(
-        'SELECT * FROM supplier WHERE name = ? COLLATE utf8mb4_general_ci',
+        'SELECT * FROM supplier WHERE name = ? COLLATE utf8mb4_general_ci AND deleted_at IS NULL',
         [name]
       )
       return rows[0] || null
@@ -183,11 +183,14 @@
   }
 
   /**
-   * Hard delete supplier
+   * Soft delete supplier
    */
   static async delete(db, supplierId) {
     try {
-      await db.execute('DELETE FROM supplier WHERE supplier_id = ?', [supplierId])
+      await db.execute(
+        'UPDATE supplier SET deleted_at = NOW(), updated_at = NOW() WHERE supplier_id = ?',
+        [supplierId]
+      )
       return true
     } catch (error) {
       throw new Error('Failed to delete supplier: ' + error.message)
@@ -214,7 +217,7 @@
   static async getByGroup(db, groupName) {
     try {
       const [rows] = await db.execute(
-        'SELECT * FROM supplier WHERE supplier_group = ? AND is_active = true ORDER BY name',
+        'SELECT * FROM supplier WHERE supplier_group = ? AND is_active = true AND deleted_at IS NULL ORDER BY name',
         [groupName]
       )
       return rows
@@ -228,7 +231,7 @@
    */
   static async search(db, searchTerm, filters = {}) {
     try {
-      let query = 'SELECT * FROM supplier WHERE 1=1'
+      let query = 'SELECT * FROM supplier WHERE deleted_at IS NULL'
       const params = []
 
       if (searchTerm) {
@@ -363,6 +366,7 @@
           ROUND(AVG(rating), 2) as avg_rating,
           MAX(rating) as highest_rating
         FROM supplier
+        WHERE deleted_at IS NULL
       `)
       return rows[0] || {}
     } catch (error) {
