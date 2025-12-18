@@ -225,6 +225,109 @@ async function initializeDatabase() {
         console.warn('⚠ Could not initialize item_dimension_parameter table:', err.message)
       }
     }
+
+    // Create production_entry table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS production_entry (
+          pe_id VARCHAR(50) PRIMARY KEY,
+          job_card_id VARCHAR(50),
+          machine_id VARCHAR(100),
+          operator_id VARCHAR(100),
+          planned_run_time DECIMAL(10,2),
+          actual_run_time DECIMAL(10,2),
+          quantity_produced DECIMAL(18,6) DEFAULT 0,
+          quantity_rejected DECIMAL(18,6) DEFAULT 0,
+          status VARCHAR(50) DEFAULT 'open',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_job_card (job_card_id),
+          INDEX idx_machine (machine_id),
+          INDEX idx_status (status)
+        )
+      `)
+      console.log('✓ production_entry table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ production_entry table already exists')
+      } else {
+        console.warn('⚠ Could not initialize production_entry table:', err.message)
+      }
+    }
+
+    // Create machine_master table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS machine_master (
+          machine_id VARCHAR(100) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          type VARCHAR(100),
+          model VARCHAR(100),
+          capacity DECIMAL(10,2),
+          purchase_date DATE,
+          cost DECIMAL(15,2),
+          maintenance_interval INT,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_name (name)
+        )
+      `)
+      console.log('✓ machine_master table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ machine_master table already exists')
+      } else {
+        console.warn('⚠ Could not initialize machine_master table:', err.message)
+      }
+    }
+
+    // Create operator_master table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS operator_master (
+          operator_id VARCHAR(100) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          department VARCHAR(100),
+          phone VARCHAR(20),
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_name (name)
+        )
+      `)
+      console.log('✓ operator_master table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ operator_master table already exists')
+      } else {
+        console.warn('⚠ Could not initialize operator_master table:', err.message)
+      }
+    }
+
+    // Create rejection table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS rejection (
+          rejection_id VARCHAR(50) PRIMARY KEY,
+          production_entry_id VARCHAR(50) NOT NULL,
+          rejection_reason VARCHAR(255) NOT NULL,
+          rejection_count DECIMAL(18,6) NOT NULL,
+          root_cause VARCHAR(500),
+          corrective_action VARCHAR(500),
+          reported_by_id VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_production_entry_id (production_entry_id),
+          INDEX idx_rejection_reason (rejection_reason),
+          INDEX idx_created_at (created_at)
+        )
+      `)
+      console.log('✓ rejection table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ rejection table already exists')
+      } else {
+        console.warn('⚠ Could not initialize rejection table:', err.message)
+      }
+    }
   } catch (error) {
     console.error('Database connection failed:', error)
     process.exit(1)

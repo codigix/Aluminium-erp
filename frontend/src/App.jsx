@@ -80,6 +80,17 @@ import Operations from './pages/Production/Operations'
 import OperationForm from './pages/Production/OperationForm'
 import Workstations from './pages/Production/Workstations'
 import WorkstationForm from './pages/Production/WorkstationForm'
+import {
+  QualityDashboard,
+  QualityChecks,
+  NonConformance,
+  ReviewAndAction,
+  QualityMeetings,
+  SupplierQuality,
+  QualityFeedback,
+  QualityReports
+} from './pages/Quality'
+import QualityLayout from './components/QualityLayout'
 
 function App() {
   return (
@@ -1042,6 +1053,104 @@ function App() {
                     <ProductionAnalytics />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Quality Module - QMS */}
+          <Route
+            path="/quality/dashboard"
+            element={
+              <ProtectedRoute>
+                <QualityLayout>
+                  <DepartmentProtectedRoute departments={['quality', 'admin']}>
+                    <QualityDashboard />
+                  </DepartmentProtectedRoute>
+                </QualityLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quality/checks"
+            element={
+              <ProtectedRoute>
+                <QualityLayout>
+                  <DepartmentProtectedRoute departments={['quality', 'admin']}>
+                    <QualityChecks />
+                  </DepartmentProtectedRoute>
+                </QualityLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quality/ncr"
+            element={
+              <ProtectedRoute>
+                <QualityLayout>
+                  <DepartmentProtectedRoute departments={['quality', 'admin']}>
+                    <NonConformance />
+                  </DepartmentProtectedRoute>
+                </QualityLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quality/capa"
+            element={
+              <ProtectedRoute>
+                <QualityLayout>
+                  <DepartmentProtectedRoute departments={['quality', 'admin']}>
+                    <ReviewAndAction />
+                  </DepartmentProtectedRoute>
+                </QualityLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quality/meetings"
+            element={
+              <ProtectedRoute>
+                <QualityLayout>
+                  <DepartmentProtectedRoute departments={['quality', 'admin']}>
+                    <QualityMeetings />
+                  </DepartmentProtectedRoute>
+                </QualityLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quality/supplier-quality"
+            element={
+              <ProtectedRoute>
+                <QualityLayout>
+                  <DepartmentProtectedRoute departments={['quality', 'admin']}>
+                    <SupplierQuality />
+                  </DepartmentProtectedRoute>
+                </QualityLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quality/feedback"
+            element={
+              <ProtectedRoute>
+                <QualityLayout>
+                  <DepartmentProtectedRoute departments={['quality', 'admin']}>
+                    <QualityFeedback />
+                  </DepartmentProtectedRoute>
+                </QualityLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quality/reports"
+            element={
+              <ProtectedRoute>
+                <QualityLayout>
+                  <DepartmentProtectedRoute departments={['quality', 'admin']}>
+                    <QualityReports />
+                  </DepartmentProtectedRoute>
+                </QualityLayout>
               </ProtectedRoute>
             }
           />

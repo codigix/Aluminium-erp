@@ -950,6 +950,53 @@ class ProductionModel {
       throw error
     }
   }
+
+  async getMachineUtilization(date_from, date_to) {
+    try {
+      const [results] = await this.db.query(
+        `SELECT 
+          m.machine_id,
+          m.name,
+          COUNT(pe.pe_id) as total_entries,
+          SUM(CASE WHEN pe.status = 'completed' THEN 1 ELSE 0 END) as completed_entries,
+          AVG(CASE WHEN pe.actual_run_time > 0 THEN (pe.actual_run_time / pe.planned_run_time * 100) ELSE 0 END) as avg_efficiency
+        FROM machine_master m
+        LEFT JOIN production_entry pe ON m.machine_id = pe.machine_id 
+          AND DATE(pe.created_at) >= ? 
+          AND DATE(pe.created_at) <= ?
+        GROUP BY m.machine_id, m.name
+        ORDER BY avg_efficiency DESC`,
+        [date_from, date_to]
+      )
+      return results || []
+    } catch (error) {
+      throw error
+    }
+  }
+
+  async getOperatorEfficiency(date_from, date_to) {
+    try {
+      const [results] = await this.db.query(
+        `SELECT 
+          o.operator_id,
+          o.name,
+          COUNT(pe.pe_id) as total_entries,
+          SUM(pe.quantity_produced) as total_produced,
+          SUM(pe.quantity_rejected) as total_rejected,
+          (SUM(pe.quantity_produced) / (SUM(pe.quantity_produced) + SUM(pe.quantity_rejected)) * 100) as efficiency_rate
+        FROM operator_master o
+        LEFT JOIN production_entry pe ON o.operator_id = pe.operator_id 
+          AND DATE(pe.created_at) >= ? 
+          AND DATE(pe.created_at) <= ?
+        GROUP BY o.operator_id, o.name
+        ORDER BY efficiency_rate DESC`,
+        [date_from, date_to]
+      )
+      return results || []
+    } catch (error) {
+      throw error
+    }
+  }
 }
 
 export default ProductionModel

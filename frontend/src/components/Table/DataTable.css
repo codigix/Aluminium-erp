@@ -236,6 +236,7 @@
   text-align: center;
   min-width: 120px;
   white-space: normal;
+  overflow: visible !important;
 }
 
 .table-pagination {

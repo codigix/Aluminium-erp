@@ -62,14 +62,8 @@ export const createWarehouse = async (req, res) => {
 
 export const updateWarehouse = async (req, res) => {
   try {
-    const { warehouse_name, warehouse_type, location, capacity, is_active } = req.body
-
     const warehouse = await WarehouseModel.update(req.params.id, {
-      warehouse_name,
-      warehouse_type,
-      location,
-      capacity,
-      is_active,
+      ...req.body,
       updated_by: req.user?.id
     })
 

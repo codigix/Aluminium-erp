@@ -22,10 +22,16 @@ export default function ViewJobCardModal({ isOpen, onClose, onSuccess, jobCardId
     try {
       setLoading(true)
       const response = await productionService.getJobCardDetails(jobCardId)
-      setJobCard(response.data)
-      setNewStatus(response.data?.status || '')
+      const jobCardData = response.data
+      if (!jobCardData) {
+        throw new Error('No job card data received')
+      }
+      setJobCard(jobCardData)
+      setNewStatus(jobCardData.status || '')
     } catch (err) {
+      console.error('Error fetching job card:', err)
       toast.addToast(err.message || 'Failed to load job card details', 'error')
+      setJobCard(null)
     } finally {
       setLoading(false)
     }
@@ -58,14 +64,14 @@ export default function ViewJobCardModal({ isOpen, onClose, onSuccess, jobCardId
     }
   }
 
-  if (!jobCard && !loading) {
-    return null
-  }
-
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="View Job Card" size="lg">
       {loading ? (
-        <div className="text-center py-10">Loading...</div>
+        <div className="text-center py-10">Loading job card details...</div>
+      ) : !jobCard ? (
+        <div className="text-center py-10 text-red-600">
+          <p>Failed to load job card details. Please try again.</p>
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-5 mb-5">

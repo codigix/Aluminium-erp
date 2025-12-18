@@ -6,7 +6,7 @@ export const config = {
   database: {
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
+    password: process.env.DB_PASSWORD || 'backend',
     database: process.env.DB_NAME || 'aluminium_erp',
     port: parseInt(process.env.DB_PORT || '3306'),
   },

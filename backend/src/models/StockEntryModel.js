@@ -412,13 +412,13 @@
     }
   }
 
-  // Delete stock entry (only if Draft)
+  // Delete stock entry (only if Draft or Submitted)
   static async delete(id) {
     try {
       const db = this.getDb()
       const entry = await this.getById(id)
-      if (entry && entry.status !== 'Draft') {
-        throw new Error('Cannot delete submitted or cancelled stock entries')
+      if (entry && entry.status === 'Cancelled') {
+        throw new Error('Cannot delete cancelled stock entries')
       }
 
       await db.query('DELETE FROM stock_entry_items WHERE stock_entry_id = ?', [id])

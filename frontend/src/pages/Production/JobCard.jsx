@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Edit2, Trash2, Eye, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import * as productionService from '../../services/productionService'
 import CreateJobCardModal from '../../components/Production/CreateJobCardModal'
@@ -8,6 +9,7 @@ import { useToast } from '../../components/ToastContainer'
 import './Production.css'
 
 export default function JobCard() {
+  const navigate = useNavigate()
   const toast = useToast()
   const [workOrders, setWorkOrders] = useState([])
   const [jobCardsByWO, setJobCardsByWO] = useState({})
@@ -381,7 +383,7 @@ export default function JobCard() {
                     <td>{wo.required_date ? new Date(wo.required_date).toLocaleDateString() : 'N/A'}</td>
                     <td className="w-28">
                       <div className="entry-actions" onClick={(e) => e.stopPropagation()}>
-                        <button className="btn-view" title="View"><Eye size={16} /></button>
+                        <button className="btn-view" title="View" onClick={() => navigate(`/production/work-orders/form/${wo.wo_id}`)}><Eye size={16} /></button>
                       </div>
                     </td>
                   </tr>
@@ -514,9 +516,9 @@ export default function JobCard() {
                             <td>{card.scheduled_end_date ? new Date(card.scheduled_end_date).toLocaleDateString() : 'N/A'}</td>
                             <td>
                               <div className="entry-actions flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                <button className="btn-view" title="View" onClick={() => handleViewJobCard(card.job_card_id)}><Eye size={16} /></button>
-                                <button className="btn-edit" title="Edit Inline" onClick={() => handleInlineEdit(card)}><Edit2 size={16} /></button>
-                                <button className="btn-delete" title="Delete" onClick={() => handleDelete(card.job_card_id)}><Trash2 size={16} /></button>
+                                <button type="button" className="btn-view" title="View Job Card" onClick={() => handleViewJobCard(card.job_card_id)}><Eye size={16} /></button>
+                                <button type="button" className="btn-edit" title="Edit Inline" onClick={() => handleInlineEdit(card)}><Edit2 size={16} /></button>
+                                <button type="button" className="btn-delete" title="Delete Job Card" onClick={() => handleDelete(card.job_card_id)}><Trash2 size={16} /></button>
                               </div>
                             </td>
                           </tr>

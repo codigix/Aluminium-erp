@@ -286,7 +286,7 @@ export default function StockEntries() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (row) => (
+      render: (value, row) => (
         <div className="inventory-actions-cell">
           <button className="btn-delete" onClick={() => handleDelete(row.entry_id)}>
             <Trash2 size={14} />

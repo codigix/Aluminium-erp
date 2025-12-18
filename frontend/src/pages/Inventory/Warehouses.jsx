@@ -86,7 +86,14 @@ export default function Warehouses() {
   }
 
   const handleEdit = (warehouse) => {
-    setFormData(warehouse)
+    setFormData({
+      warehouse_code: warehouse.warehouse_code || '',
+      warehouse_name: warehouse.warehouse_name || '',
+      warehouse_type: warehouse.warehouse_type || 'Raw Material',
+      location: warehouse.location || '',
+      capacity: warehouse.capacity || '',
+      parent_warehouse_id: warehouse.parent_warehouse_id || ''
+    })
     setEditingId(warehouse.id)
     setShowForm(true)
   }
@@ -149,7 +156,7 @@ export default function Warehouses() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (row) => (
+      render: (value, row) => (
         <div className="inventory-actions-cell">
           <button className="btn-edit" onClick={() => handleEdit(row)}>
             <Edit2 size={14} />

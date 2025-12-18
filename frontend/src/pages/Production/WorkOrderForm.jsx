@@ -55,7 +55,8 @@ export default function WorkOrderForm() {
   const fetchItems = async () => {
     try {
       const response = await productionService.getItemsList()
-      setItems(response.data || [])
+      const itemsData = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : [])
+      setItems(itemsData)
     } catch (err) {
       console.error('Failed to fetch items:', err)
     }
@@ -71,7 +72,8 @@ export default function WorkOrderForm() {
   const fetchBOMs = async () => {
     try {
       const response = await productionService.getBOMs({ status: 'active' })
-      setBOMsData(response.data || [])
+      const bomsData = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : [])
+      setBOMsData(bomsData)
     } catch (err) {
       console.error('Failed to fetch BOMs:', err)
     }
@@ -80,7 +82,7 @@ export default function WorkOrderForm() {
   const fetchWarehouses = async () => {
     try {
       const response = await productionService.getWarehouses()
-      const warehouseList = response.data || []
+      const warehouseList = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : [])
       const warehouseOptions = warehouseList.map(wh => ({
         label: `${wh.warehouse_name || wh.name}`,
         value: wh.warehouse_name || wh.name
@@ -94,9 +96,38 @@ export default function WorkOrderForm() {
   const fetchWorkOrderDetails = async (workOrderId) => {
     try {
       const response = await productionService.getWorkOrder(workOrderId)
-      setFormData(response.data)
+      const workOrderData = response.data || response
+      
+      if (workOrderData && typeof workOrderData === 'object') {
+        setFormData(prev => ({
+          ...prev,
+          series: workOrderData.series || prev.series,
+          company: workOrderData.company || prev.company,
+          item_to_manufacture: workOrderData.item_code || workOrderData.item_to_manufacture || '',
+          bom_no: workOrderData.bom_no || '',
+          qty_to_manufacture: (workOrderData.quantity !== null && workOrderData.quantity !== undefined) ? workOrderData.quantity : '',
+          project: workOrderData.project || '',
+          sales_order: workOrderData.sales_order || '',
+          source_warehouse: workOrderData.source_warehouse || '',
+          target_warehouse: workOrderData.target_warehouse || '',
+          wip_warehouse: workOrderData.wip_warehouse || '',
+          scrap_warehouse: workOrderData.scrap_warehouse || '',
+          allow_alternative_item: workOrderData.allow_alternative_item || false,
+          use_multi_level_bom: workOrderData.use_multi_level_bom !== false,
+          skip_material_transfer_to_wip: workOrderData.skip_material_transfer_to_wip || false,
+          update_consumed_material_cost: workOrderData.update_consumed_material_cost !== false,
+          priority: workOrderData.priority || 'medium',
+          notes: workOrderData.notes || '',
+          planned_start_date: workOrderData.planned_start_date ? new Date(workOrderData.planned_start_date).toISOString().split('T')[0] : '',
+          planned_end_date: workOrderData.planned_end_date ? new Date(workOrderData.planned_end_date).toISOString().split('T')[0] : '',
+          actual_start_date: workOrderData.actual_start_date ? new Date(workOrderData.actual_start_date).toISOString().split('T')[0] : '',
+          actual_end_date: workOrderData.actual_end_date ? new Date(workOrderData.actual_end_date).toISOString().split('T')[0] : '',
+          expected_delivery_date: workOrderData.expected_delivery_date ? new Date(workOrderData.expected_delivery_date).toISOString().split('T')[0] : ''
+        }))
+      }
     } catch (err) {
       console.error('Failed to fetch work order details:', err)
+      setError(`Failed to load work order details: ${err.response?.data?.message || err.message}`)
     }
   }
 
@@ -121,7 +152,7 @@ export default function WorkOrderForm() {
     try {
       setLoading(true)
       const response = await productionService.getBOMs({ item_code: itemCode, status: 'active' })
-      const bomsForItem = response.data || []
+      const bomsForItem = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : [])
       
       if (bomsForItem.length > 0) {
         const firstBOM = bomsForItem[0]
@@ -152,21 +183,23 @@ export default function WorkOrderForm() {
     try {
       setLoading(true)
       const response = await productionService.getBOMDetails(bomId)
-      const bomData = response.data
+      const bomData = response.data || response
 
       let itemsMap = {}
       try {
         const itemsResponse = await productionService.getItems()
-        const itemsData = itemsResponse.data || []
-        itemsMap = itemsData.reduce((acc, item) => {
-          acc[item.item_code] = item
-          return acc
-        }, {})
+        const itemsData = itemsResponse.data || itemsResponse || []
+        if (Array.isArray(itemsData)) {
+          itemsMap = itemsData.reduce((acc, item) => {
+            acc[item.item_code] = item
+            return acc
+          }, {})
+        }
       } catch (err) {
         console.error('Failed to fetch items:', err)
       }
 
-      if (bomData.lines && Array.isArray(bomData.lines)) {
+      if (bomData && bomData.lines && Array.isArray(bomData.lines)) {
         const requiredItemsFromBOM = bomData.lines.map(line => {
           let defaultWarehouse = ''
           const itemData = itemsMap[line.component_code]
@@ -351,7 +384,7 @@ export default function WorkOrderForm() {
                   </div>
                   <div className="form-group">
                     <label>Company *</label>
-                    <input type="text" name="company" value={formData.company}  />
+                    <input type="text" name="company" value={formData.company || ''} onChange={handleInputChange} />
                   </div>
                 </div>
 
@@ -360,7 +393,7 @@ export default function WorkOrderForm() {
                     <label>Item To Manufacture *</label>
                     <select
                       name="item_to_manufacture"
-                      value={formData.item_to_manufacture}
+                      value={formData.item_to_manufacture || ''}
                       onChange={handleInputChange}
                       required
                     >
@@ -377,7 +410,7 @@ export default function WorkOrderForm() {
                     <input
                       type="number"
                       name="qty_to_manufacture"
-                      value={formData.qty_to_manufacture}
+                      value={formData.qty_to_manufacture || ''}
                       onChange={handleInputChange}
                       required
                       step="0.01"
@@ -390,7 +423,7 @@ export default function WorkOrderForm() {
                     <label>BOM No *</label>
                     <select
                       name="bom_no"
-                      value={formData.bom_no}
+                      value={formData.bom_no || ''}
                       onChange={handleInputChange}
                       required
                     >
@@ -404,7 +437,7 @@ export default function WorkOrderForm() {
                   </div>
                   <div className="form-group">
                     <label>Project</label>
-                    <input type="text" name="project" value={formData.project} onChange={handleInputChange} />
+                    <input type="text" name="project" value={formData.project || ''} onChange={handleInputChange} />
                   </div>
                 </div>
 
@@ -782,7 +815,7 @@ export default function WorkOrderForm() {
                     <input
                       type="datetime-local"
                       name="planned_start_date"
-                      value={formData.planned_start_date}
+                      value={formData.planned_start_date || ''}
                       onChange={handleInputChange}
                     />
                     <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '8px' }}>Asia/Kolkata</p>
@@ -792,7 +825,7 @@ export default function WorkOrderForm() {
                     <input
                       type="datetime-local"
                       name="actual_start_date"
-                      value={formData.actual_start_date}
+                      value={formData.actual_start_date || ''}
                       onChange={handleInputChange}
                     />
                     <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '8px' }}>Asia/Kolkata</p>
@@ -805,7 +838,7 @@ export default function WorkOrderForm() {
                     <input
                       type="datetime-local"
                       name="planned_end_date"
-                      value={formData.planned_end_date}
+                      value={formData.planned_end_date || ''}
                       onChange={handleInputChange}
                     />
                     <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '8px' }}>Asia/Kolkata</p>
@@ -815,7 +848,7 @@ export default function WorkOrderForm() {
                     <input
                       type="datetime-local"
                       name="actual_end_date"
-                      value={formData.actual_end_date}
+                      value={formData.actual_end_date || ''}
                       onChange={handleInputChange}
                     />
                     <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '8px' }}>Asia/Kolkata</p>
@@ -827,7 +860,7 @@ export default function WorkOrderForm() {
                   <input
                     type="date"
                     name="expected_delivery_date"
-                    value={formData.expected_delivery_date}
+                    value={formData.expected_delivery_date || ''}
                     onChange={handleInputChange}
                   />
                 </div>
@@ -838,7 +871,7 @@ export default function WorkOrderForm() {
               <div className="tab-pane">
                 <div className="form-group">
                   <label>Priority</label>
-                  <select name="priority" value={formData.priority} onChange={handleInputChange}>
+                  <select name="priority" value={formData.priority || 'medium'} onChange={handleInputChange}>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
@@ -846,7 +879,7 @@ export default function WorkOrderForm() {
                 </div>
                 <div className="form-group">
                   <label>Notes</label>
-                  <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows="6" />
+                  <textarea name="notes" value={formData.notes || ''} onChange={handleInputChange} rows="6" />
                 </div>
               </div>
             )}

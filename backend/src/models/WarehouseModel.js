@@ -109,16 +109,41 @@ class WarehouseModel {
   static async update(id, data) {
     try {
       const db = this.getDb()
-      const { warehouse_name, warehouse_type, location, department, capacity, is_active, updated_by } = data
+      
+      // Define allowed fields for update
+      const allowedFields = ['warehouse_name', 'warehouse_type', 'location', 'department', 'capacity', 'is_active', 'parent_warehouse_id', 'updated_by']
+      const updateData = {}
+      const updateFields = []
+      const updateValues = []
 
-      await db.query(
-        `UPDATE warehouses SET 
-          warehouse_name = ?, warehouse_type = ?, location = ?, 
-          department = ?, capacity = ?, is_active = ?, updated_by = ?
-        WHERE id = ?`,
-        [warehouse_name, warehouse_type, location, department, capacity, is_active, updated_by, id]
-      )
+      for (const field of allowedFields) {
+        if (field in data && data[field] !== undefined) {
+          if (field === 'parent_warehouse_id' && data[field] === '') {
+            updateFields.push(`${field} = ?`)
+            updateValues.push(null)
+          } else {
+            updateFields.push(`${field} = ?`)
+            updateValues.push(data[field])
+          }
+        }
+      }
 
+      if (updateFields.length === 0) {
+        return await this.getById(id)
+      }
+
+      // Validate parent warehouse if provided
+      if ('parent_warehouse_id' in data && data.parent_warehouse_id && data.parent_warehouse_id !== '' && data.parent_warehouse_id !== null) {
+        const parentWarehouse = await this.getById(data.parent_warehouse_id)
+        if (!parentWarehouse) {
+          throw new Error(`Parent warehouse with ID ${data.parent_warehouse_id} does not exist`)
+        }
+      }
+
+      updateValues.push(id)
+      const query = `UPDATE warehouses SET ${updateFields.join(', ')} WHERE id = ?`
+      
+      await db.query(query, updateValues)
       return await this.getById(id)
     } catch (error) {
       throw new Error(`Failed to update warehouse: ${error.message}`)

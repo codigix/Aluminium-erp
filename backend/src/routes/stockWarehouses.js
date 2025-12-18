@@ -7,9 +7,9 @@ const router = express.Router()
 router.get('/', StockWarehouseController.getAllWarehouses)
 router.post('/', StockWarehouseController.createWarehouse)
 router.get('/hierarchy', StockWarehouseController.getWarehouseHierarchy)
+router.get('/:id/capacity', StockWarehouseController.getWarehouseCapacity)
 router.get('/:id', StockWarehouseController.getWarehouse)
 router.put('/:id', StockWarehouseController.updateWarehouse)
 router.delete('/:id', StockWarehouseController.deleteWarehouse)
-router.get('/:id/capacity', StockWarehouseController.getWarehouseCapacity)
 
 export default router
