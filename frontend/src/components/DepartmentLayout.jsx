@@ -26,7 +26,8 @@ import {
   Activity,
   Eye,
   Wrench,
-  Grid3x3
+  Grid3x3,
+  Briefcase
 } from 'lucide-react'
 
 /**
@@ -184,55 +185,13 @@ export default function DepartmentLayout({ children }) {
       return [
         dashboardItem,
         {
-          id: 'buying',
-          label: 'Buying Module',
-          icon: ShoppingCart,
+          id: 'clientManagement',
+          label: 'Client Management',
+          icon: Briefcase,
           section: 'APPS',
           submenu: [
-            { label: 'Material Requests', path: '/buying/material-requests', icon: FileText },
-            { label: 'RFQs', path: '/buying/rfqs', icon: Send },
-            { label: 'Quotations', path: '/buying/quotations', icon: DollarSign },
-            { label: 'Purchase Orders', path: '/buying/purchase-orders', icon: Clipboard },
-            { label: 'Purchase Receipts', path: '/buying/purchase-receipts', icon: Package },
-            { label: 'Purchase Invoices', path: '/buying/purchase-invoices', icon: Receipt }
-          ]
-        },
-        {
-          id: 'selling',
-          label: 'Selling Module',
-          icon: TrendingUp,
-          section: 'APPS',
-          submenu: [
-            { label: 'Quotations', path: '/selling/quotations', icon: DollarSign },
-            { label: 'Sales Orders', path: '/selling/sales-orders', icon: Clipboard },
-            { label: 'Delivery Notes', path: '/selling/delivery-notes', icon: Package },
-            { label: 'Sales Invoices', path: '/selling/sales-invoices', icon: Receipt },
-            { label: 'Customers', path: '/selling/customers', icon: Building2 }
-          ]
-        },
-        {
-          id: 'inventory',
-          label: 'Inventory Module',
-          icon: Warehouse,
-          section: 'APPS',
-          submenu: [
-            { label: 'GRN Requests', path: '/inventory/grn-requests', icon: CheckCircle },
-            { label: 'Stock Entries', path: '/inventory/stock-entries', icon: FileText },
-            { label: 'Stock Balance', path: '/inventory/stock-balance', icon: Package },
-            { label: 'Stock Ledger', path: '/inventory/stock-ledger', icon: BarChart3 },
-            { label: 'Warehouses', path: '/inventory/warehouses', icon: Warehouse }
-          ]
-        },
-        masterItems,
-        {
-          id: 'analytics',
-          label: 'Analytics',
-          icon: TrendingUp,
-          section: 'APPS',
-          submenu: [
-            { label: 'Buying Analytics', path: '/analytics/buying', icon: TrendingUp },
-            { label: 'Sales Analytics', path: '/analytics/selling', icon: TrendingUp },
-            { label: 'Inventory Analytics', path: '/analytics/inventory', icon: TrendingUp }
+            { label: 'Clients', path: '/client-management/clients', icon: Building2 },
+            { label: 'Client POs', path: '/client-management/client-pos', icon: Clipboard }
           ]
         },
         {
@@ -423,6 +382,23 @@ export default function DepartmentLayout({ children }) {
           section: 'APPS',
           submenu: [
             { label: 'HR Analytics', path: '/analytics/hr', icon: TrendingUp }
+          ]
+        }
+      ]
+    }
+
+    // CLIENT MANAGEMENT DEPARTMENT MENU
+    if (userDept === 'client_management') {
+      return [
+        dashboardItem,
+        {
+          id: 'clientManagement',
+          label: 'Client Management',
+          icon: Briefcase,
+          section: 'APPS',
+          submenu: [
+            { label: 'Clients', path: '/client-management/clients', icon: Building2 },
+            { label: 'Client POs', path: '/client-management/client-pos', icon: Clipboard }
           ]
         }
       ]

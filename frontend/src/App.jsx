@@ -40,6 +40,13 @@ import SalesOrderForm from './pages/Selling/SalesOrderForm'
 import SalesInvoiceDetail from './pages/Selling/SalesInvoiceDetail'
 import CustomerDetail from './pages/Selling/CustomerDetail'
 import {
+  Clients,
+  ClientForm,
+  ClientPOs,
+  ClientPOForm,
+  ClientPOReview
+} from './pages/ClientManagement'
+import {
   InventoryDashboard,
   Warehouses,
   StockBalance,
@@ -687,6 +694,118 @@ function App() {
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
                     <SellingAnalytics />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Client Management Module - Clients */}
+          <Route
+            path="/client-management/clients"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <Clients />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client-management/clients/new"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <ClientForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client-management/clients/:client_id"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <ClientForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client-management/clients/:client_id/edit"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <ClientForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Client Management Module - Client POs */}
+          <Route
+            path="/client-management/client-pos"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <ClientPOs />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client-management/client-pos/new"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <ClientPOForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client-management/client-pos/:po_id"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <ClientPOForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client-management/client-pos/:po_id/edit"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <ClientPOForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client-management/client-pos/:po_id/review"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['client_management', 'admin']}>
+                    <ClientPOReview />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>

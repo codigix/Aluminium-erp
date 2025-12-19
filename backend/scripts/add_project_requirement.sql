@@ -1,0 +1,1 @@
+ALTER TABLE client_po_projects ADD COLUMN project_requirement TEXT;

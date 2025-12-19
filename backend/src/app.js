@@ -1,4 +1,4 @@
-﻿import express from 'express'
+import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { createPool } from 'mysql2/promise'
@@ -32,6 +32,8 @@ import companyRoutes from './routes/company.js'
 import taxTemplateRoutes from './routes/taxTemplates.js'
 import setupMasterDataRoutes from './routes/setup.js'
 import crmRoutes from './routes/crm.js'
+import clientPORoutes from './routes/clientPOs.js'
+import clientRoutes from './routes/clients.js'
 import { SetupModel } from './models/SetupModel.js'
 
 // Load environment variables
@@ -407,6 +409,10 @@ async function setupRoutes() {
 
   // API Routes - CRM
   app.use('/api/crm', crmRoutes)
+
+  // API Routes - Client Management (Client POs)
+  app.use('/api', clientPORoutes)
+  app.use('/api', clientRoutes)
   
   // Error handling middleware (must be after all routes)
   app.use((err, req, res, next) => {

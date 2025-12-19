@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Client Purchase Order</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 12mm;
+    }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      color: #000;
+      margin: 0;
+      padding: 0;
+    }
+    .po-container {
+      width: 100%;
+      border: 2px solid #000;
+      padding: 6px;
+    }
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .header-table td {
+      border: 1px solid #000;
+      vertical-align: top;
+      padding: 4px;
+    }
+    .logo {
+      width: 70px;
+    }
+    .title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .company-name {
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+      color: #333;
+      letter-spacing: 1px;
+    }
+    .section-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+    .section-table td {
+      border: 1px solid #000;
+      padding: 6px;
+      vertical-align: top;
+      font-size: 10px;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+    }
+    .items-table th,
+    .items-table td {
+      border: 1px solid #000;
+      padding: 6px;
+    }
+    .items-table th {
+      text-align: center;
+      font-weight: bold;
+      background: #f0f0f0;
+    }
+    .right {
+      text-align: right;
+    }
+    .center {
+      text-align: center;
+    }
+    .bold {
+      font-weight: bold;
+    }
+    .terms {
+      border: 2px solid #000;
+      padding: 8px;
+      margin-top: 6px;
+      line-height: 1.4;
+      font-size: 10px;
+    }
+    .totals-table {
+      width: 45%;
+      float: right;
+      border-collapse: collapse;
+      margin-top: 6px;
+    }
+    .totals-table td {
+      border: 1px solid #000;
+      padding: 6px;
+      font-size: 10px;
+    }
+    .totals-table .label {
+      width: 60%;
+    }
+    .totals-table .amount {
+      width: 40%;
+      text-align: right;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    .total-row {
+      font-weight: bold;
+      background: #f0f0f0;
+    }
+    p {
+      margin: 4px 0;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="po-container">
+
+  <!-- HEADER -->
+  <table class="header-table">
+    <tr>
+      <td style="width:15%;text-align:center">
+        <b>PO</b>
+      </td>
+      <td style="width:85%">
+        <div class="title">PURCHASE ORDER</div>
+        <div class="company-name"><%= data.po.client_name %></div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- PARTY DETAILS -->
+  <table class="section-table">
+    <tr>
+      <td style="width:50%">
+        <b>Client Information:</b><br />
+        <b>Name:</b> <%= data.po.client_name %><br />
+        <b>Contact:</b> <%= data.po.contact_person || '-' %><br />
+        <b>Email:</b> <%= data.po.email_reference || '-' %><br />
+        <b>Address:</b> <%= data.po.billing_address || '-' %><br />
+        <b>GSTIN:</b> <%= data.po.gstin || '-' %>
+      </td>
+      <td style="width:50%">
+        <b>PO Details:</b><br />
+        <b>PO No:</b> <%= data.po.po_number %><br />
+        <b>Date:</b> <%= new Date(data.po.po_date).toLocaleDateString('en-IN') %><br />
+        <b>Status:</b> <%= data.po.po_status.toUpperCase() %><br />
+        <b>Phone:</b> <%= data.po.phone || '-' %>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin-top: 8px;">
+    Dear Sir/Madam,<br />
+    We hereby request you to provide the following as per our terms and conditions.
+  </p>
+
+  <!-- PROJECT INFO -->
+  <% if (data.project) { %>
+  <table class="section-table">
+    <tr>
+      <td>
+        <b>Project Information:</b><br />
+        <b>Name:</b> <%= data.project.project_name %><br />
+        <b>Code:</b> <%= data.project.project_code || '-' %><br />
+        <b>Type:</b> <%= data.project.project_type || '-' %><br />
+        <b>Sales Engineer:</b> <%= data.project.sales_engineer || '-' %>
+      </td>
+    </tr>
+  </table>
+  <% } %>
+
+  <!-- DRAWINGS TABLE -->
+  <% if (data.drawings && data.drawings.length > 0) { %>
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width:5%">Sr No</th>
+        <th style="width:15%">Drawing No</th>
+        <th style="width:8%">Rev</th>
+        <th style="width:40%">Description</th>
+        <th style="width:10%">Qty</th>
+        <th style="width:10%">Unit</th>
+        <th style="width:12%">Delivery Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% data.drawings.forEach(function(item, i){ %>
+      <tr>
+        <td class="center"><%= i+1 %></td>
+        <td><%= item.drawing_no %></td>
+        <td class="center"><%= item.revision || '-' %></td>
+        <td><pre style="margin:0;font-family:Arial;font-size:10px"><%= item.description || '-' %></pre></td>
+        <td class="center"><%= item.quantity %></td>
+        <td class="center"><%= item.unit %></td>
+        <td class="center"><%= item.delivery_date ? new Date(item.delivery_date).toLocaleDateString('en-IN') : '-' %></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+
+  <!-- COMMERCIALS / TOTALS -->
+  <% if (data.commercials) { %>
+  <table class="totals-table">
+    <tr>
+      <td class="label">Subtotal</td>
+      <td class="amount">₹<%= (data.commercials.subtotal || 0).toLocaleString('en-IN') %></td>
+    </tr>
+    <tr>
+      <td class="label">Tax (<%= data.commercials.tax_rate %>%)</td>
+      <td class="amount">₹<%= ((data.commercials.subtotal * data.commercials.tax_rate) / 100).toLocaleString('en-IN') %></td>
+    </tr>
+    <tr>
+      <td class="label">Freight Charges</td>
+      <td class="amount">₹<%= (data.commercials.freight_charges || 0).toLocaleString('en-IN') %></td>
+    </tr>
+    <tr class="total-row">
+      <td class="label"><b>Grand Total</b></td>
+      <td class="amount"><b>₹<%= ((data.commercials.subtotal || 0) + ((data.commercials.subtotal * data.commercials.tax_rate) / 100) + (data.commercials.freight_charges || 0)).toLocaleString('en-IN') %></b></td>
+    </tr>
+    <tr>
+      <td class="label">Currency</td>
+      <td class="amount"><%= data.commercials.currency %></td>
+    </tr>
+  </table>
+  <% } %>
+
+  <div style="clear:both"></div>
+
+  <!-- PAYMENT & DELIVERY TERMS -->
+  <% if (data.terms) { %>
+  <% if (data.terms.payment_terms_description) { %>
+  <p style="margin-top: 8px;">
+    <b>Payment Terms:</b><br />
+    <pre style="margin:0;font-family:Arial;font-size:10px"><%= data.terms.payment_terms_description %></pre>
+  </p>
+  <% } %>
+
+  <% if (data.terms.delivery_schedule) { %>
+  <p>
+    <b>Delivery Schedule:</b><br />
+    <pre style="margin:0;font-family:Arial;font-size:10px"><%= data.terms.delivery_schedule %></pre>
+  </p>
+  <% } %>
+
+  <% if (data.terms.packing_instructions) { %>
+  <p>
+    <b>Packing Instructions:</b><br />
+    <pre style="margin:0;font-family:Arial;font-size:10px"><%= data.terms.packing_instructions %></pre>
+  </p>
+  <% } %>
+
+  <% if (data.terms.special_remarks) { %>
+  <div class="terms">
+    <b>Special Remarks:</b><br />
+    <%= data.terms.special_remarks %>
+  </div>
+  <% } %>
+  <% } %>
+
+  <!-- FOOTER -->
+  <div style="margin-top: 12px;border-top: 1px solid #000;padding-top: 6px;font-size: 9px;text-align: center;">
+    <p>Generated on <%= new Date().toLocaleDateString('en-IN') %> at <%= new Date().toLocaleTimeString('en-IN') %></p>
+    <p>This is a system-generated document from Aluminium ERP</p>
+  </div>
+
+</div>
+
+</body>
+</html>
