@@ -382,6 +382,28 @@ export class SetupModel {
     }
   }
 
+  async getUOMs() {
+    try {
+      // Try to fetch from database if table exists, otherwise return defaults
+      const [rows] = await this.db.execute('SELECT DISTINCT uom FROM item WHERE uom IS NOT NULL ORDER BY uom')
+      const dbUoms = rows.map(r => ({ name: r.uom }))
+      
+      // Merge with defaults
+      const defaults = this.getDefaultUOMs()
+      const allUoms = [...defaults]
+      
+      dbUoms.forEach(u => {
+        if (!allUoms.some(d => d.name === u.name)) {
+          allUoms.push(u)
+        }
+      })
+      
+      return allUoms
+    } catch (error) {
+      return this.getDefaultUOMs()
+    }
+  }
+
   getDefaultPaymentTerms() {
     return [
       { id: 1, name: 'Immediate (COD)', days: 0, months: 0 },
@@ -517,6 +539,18 @@ export class SetupModel {
       { id: 4, name: 'Accounts Payable', account_type: 'Liability' },
       { id: 5, name: 'Revenue', account_type: 'Income' },
       { id: 6, name: 'Expenses', account_type: 'Expense' }
+    ]
+  }
+
+  getDefaultUOMs() {
+    return [
+      { name: 'Nos' },
+      { name: 'Kg' },
+      { name: 'Meter' },
+      { name: 'Litre' },
+      { name: 'Box' },
+      { name: 'Bar' },
+      { name: 'Set' }
     ]
   }
 }

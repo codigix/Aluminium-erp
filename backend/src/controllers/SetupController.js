@@ -187,4 +187,15 @@ export class SetupController {
       res.status(500).json({ success: false, error: error.message })
     }
   }
+
+  static async getUOMs(req, res) {
+    try {
+      const { db } = req.app.locals
+      const setupModel = new SetupModel(db)
+      const data = await setupModel.getUOMs()
+      res.json({ success: true, data })
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message })
+    }
+  }
 }

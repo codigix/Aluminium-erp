@@ -6,25 +6,49 @@ export default function SearchableSelect({
   value, 
   onChange, 
   options = [], 
-  placeholder = 'Search or type...',
+  placeholder = 'Select...',
   isLoading = false,
   error = '',
   required = false,
-  onSearch = null
+  onSearch = null,
+  allowCustom = false,
+  className = ''
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filteredOptions, setFilteredOptions] = useState(options)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const containerRef = useRef(null)
+
+  const filteredOptions = React.useMemo(() => {
+    if (onSearch) return options
+
+    if (!searchTerm) return options
+
+    const lower = searchTerm.toLowerCase()
+    const filtered = options.filter(opt => 
+      opt.label.toLowerCase().includes(lower)
+    )
+    
+    if (allowCustom && searchTerm.trim() && !options.some(opt => opt.label.toLowerCase() === lower)) {
+      filtered.push({ 
+        label: `Add "${searchTerm}"`, 
+        value: searchTerm, 
+        isCustom: true 
+      })
+    }
+    
+    return filtered
+  }, [options, searchTerm, onSearch, allowCustom])
 
   useEffect(() => {
     if (onSearch) {
       onSearch(searchTerm)
     }
-    setFilteredOptions(options)
+  }, [searchTerm, onSearch])
+
+  useEffect(() => {
     setHighlightedIndex(-1)
-  }, [searchTerm, options, onSearch])
+  }, [filteredOptions])
 
   useEffect(() => {
     if (isOpen && !searchTerm && onSearch && options.length === 0) {
@@ -38,29 +62,38 @@ export default function SearchableSelect({
       if (selectedOption && selectedOption.label !== searchTerm) {
         setSearchTerm(selectedOption.label)
       }
+    } else if (!isOpen) {
+      setSearchTerm('')
     }
-  }, [value, options])
+  }, [value, options, isOpen])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
         setIsOpen(false)
+        // Reset search term to selected value on close if valid
+        if (value) {
+          const selectedOption = options.find(opt => opt.value === value)
+          if (selectedOption) setSearchTerm(selectedOption.label)
+        } else {
+          setSearchTerm('')
+        }
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [value, options])
 
   const handleSelect = (option) => {
     onChange(option.value)
-    setSearchTerm(option.label)
+    setSearchTerm(option.isCustom ? option.value : option.label)
     setIsOpen(false)
   }
 
   const handleInputChange = (e) => {
     setSearchTerm(e.target.value)
     if (!onSearch) {
-      onChange(e.target.value)
+      // Don't trigger onChange here, only on selection
     }
     setIsOpen(true)
   }
@@ -85,6 +118,12 @@ export default function SearchableSelect({
         break
       case 'Escape':
         setIsOpen(false)
+        if (value) {
+          const selectedOption = options.find(opt => opt.value === value)
+          if (selectedOption) setSearchTerm(selectedOption.label)
+        } else {
+          setSearchTerm('')
+        }
         break
       default:
         break
@@ -92,95 +131,65 @@ export default function SearchableSelect({
   }
 
   return (
-    <div className="form-group" ref={containerRef}>
-      {label && <label>{label}{required && ' *'}</label>}
-      <div style={{ position: 'relative' }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          border: '1px solid #d1d5db',
-          borderRadius: '4px',
-          background: 'white'
-        }}>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={handleInputChange}
-            onFocus={() => {
-              setIsOpen(true)
-              if (onSearch && !searchTerm) {
-                onSearch('')
-              }
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            style={{
-              flex: 1,
-              padding: '6px',
-              border: 'none',
-              outline: 'none',
-              fontSize: '12px'
-            }}
-            disabled={isLoading}
-          />
-          <ChevronDown 
-            size={18} 
-            style={{
-              marginRight: '8px',
-              color: '#6b7280',
-              transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s'
-            }}
-          />
-        </div>
-
-        {isOpen && (
-          <div style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            marginTop: '4px',
-            background: 'white',
-            border: '1px solid #d1d5db',
-            borderRadius: '4px',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-            zIndex: 10,
-            maxHeight: '200px',
-            overflowY: 'auto'
-          }}>
-            {isLoading && (
-              <div style={{ padding: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                Loading...
-              </div>
-            )}
-            {!isLoading && filteredOptions.length === 0 && options.length === 0 && (
-              <div style={{ padding: '10px', color: '#9ca3af', textAlign: 'center', fontSize: '10px' }}>
-                No options found
-              </div>
-            )}
-            {!isLoading && filteredOptions.map((option, index) => (
-              <div
-                key={option.value}
-                onClick={() => handleSelect(option)}
-                style={{
-                  padding: '6px',
-                  cursor: 'pointer',
-                  background: highlightedIndex === index ? '#f3f4f6' : 'white',
-                  color: option.value === value ? '#2563eb' : '#1f2937',
-                  fontWeight: option.value === value ? '600' : 'normal',
-                  borderBottom: '1px solid #f3f3f3',
-                  fontSize: '10px'
-                }}
-                onMouseEnter={() => setHighlightedIndex(index)}
-              >
-                {option.label}
-              </div>
-            ))}
-          </div>
-        )}
+    <div className={`relative ${className}`} ref={containerRef}>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {label}{required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
+      <div 
+        className={`
+          flex items-center w-full border rounded-md bg-white transition-all duration-200
+          ${isOpen ? 'ring-2 ring-blue-100 border-blue-400' : 'border-gray-300 hover:border-gray-400'}
+          ${error ? 'border-red-500' : ''}
+        `}
+      >
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={handleInputChange}
+          onFocus={() => {
+            setIsOpen(true)
+            if (onSearch && !searchTerm) onSearch('')
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className="w-full p-2 bg-transparent outline-none text-sm text-gray-900 placeholder-gray-400 rounded-md"
+          disabled={isLoading}
+        />
+        <ChevronDown 
+          size={18} 
+          className={`mr-2 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        />
       </div>
-      {error && <span style={{ color: '#ef4444', fontSize: '12px' }}>{error}</span>}
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+          {isLoading && (
+            <div className="px-4 py-2 text-sm text-gray-500 text-center">Loading...</div>
+          )}
+          
+          {!isLoading && filteredOptions.length === 0 && (
+            <div className="px-4 py-2 text-sm text-gray-500 text-center">No options found</div>
+          )}
+
+          {!isLoading && filteredOptions.map((option, index) => (
+            <div
+              key={option.value}
+              onClick={() => handleSelect(option)}
+              className={`
+                px-4 py-2 text-sm cursor-pointer transition-colors border-b border-gray-50 last:border-0
+                ${highlightedIndex === index ? 'bg-gray-50' : ''}
+                ${option.value === value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}
+              `}
+              onMouseEnter={() => setHighlightedIndex(index)}
+            >
+              {option.label}
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   )
 }

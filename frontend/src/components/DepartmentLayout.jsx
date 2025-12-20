@@ -217,7 +217,7 @@ export default function DepartmentLayout({ children }) {
           icon: Package,
           section: 'APPS',
           submenu: [
-            { label: 'Customers', path: '/selling/customers', icon: Users },
+            { label: 'Customers', path: '/production/customers', icon: Users },
             { label: 'Items', path: '/masters/items', icon: Package },
             { label: 'BOM', path: '/production/boms', icon: Clipboard },
             { label: 'Sales Orders', path: '/selling/sales-orders', icon: Clipboard },

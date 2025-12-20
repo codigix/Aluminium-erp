@@ -59,16 +59,20 @@ export class SellingController {
 
   static async getCustomers(req, res) {
     const db = req.app.locals.db
-    const { name, status } = req.query
+    const { name, status, search } = req.query
 
     try {
       let query = 'SELECT * FROM selling_customer WHERE deleted_at IS NULL'
       const params = []
 
-      if (name) {
+      if (search) {
+        query += ' AND (name LIKE ? OR email LIKE ?)'
+        params.push(`%${search}%`, `%${search}%`)
+      } else if (name) {
         query += ' AND name LIKE ?'
         params.push(`%${name}%`)
       }
+
       if (status) {
         query += ' AND status = ?'
         params.push(status)

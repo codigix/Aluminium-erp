@@ -1,0 +1,2 @@
+ALTER TABLE bom_line ADD COLUMN warehouse VARCHAR(100);
+ALTER TABLE bom_line ADD COLUMN operation VARCHAR(100);

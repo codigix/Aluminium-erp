@@ -550,18 +550,19 @@ class ProductionModel {
 
   async createBOM(data) {
     try {
-      const query = `INSERT INTO bom (bom_id, item_code, product_name, description, quantity, uom, status, revision, effective_date, created_by)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      const query = `INSERT INTO bom (bom_id, item_code, product_name, description, quantity, uom, status, revision, effective_date, created_by, process_loss_percentage)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       await this.db.query(
         query,
         [data.bom_id, data.item_code, data.product_name, data.description, data.quantity || 1, 
-         data.uom, data.status, data.revision, data.effective_date, data.created_by]
+         data.uom, data.status, data.revision, data.effective_date, data.created_by, data.process_loss_percentage || 0]
       )
       return data
     } catch (error) {
       if (error.code !== 'ER_BAD_FIELD_ERROR') {
         throw error
       }
+      // Fallback if column doesn't exist
       await this.db.query(
         `INSERT INTO bom (bom_id, item_code, description, quantity, uom, status, revision, effective_date, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -574,14 +575,44 @@ class ProductionModel {
 
   async addBOMLine(bom_id, line) {
     try {
+      const query = `INSERT INTO bom_line (bom_id, component_code, quantity, uom, component_description, component_type, sequence, notes, warehouse, operation)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      
       await this.db.query(
-        `INSERT INTO bom_line (bom_id, component_code, quantity, uom, component_description, component_type, sequence, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [bom_id, line.component_code, line.qty || line.quantity, line.uom, 
-         line.component_name || line.component_description, line.type || line.component_type, line.sequence, line.notes]
+        query,
+        [
+          bom_id, 
+          line.component_code || line.item_code, 
+          line.qty || line.quantity, 
+          line.uom, 
+          line.component_name || line.item_name || line.component_description, 
+          line.type || line.item_group || line.component_type, 
+          line.sequence, 
+          line.notes,
+          line.warehouse,
+          line.operation
+        ]
       )
     } catch (error) {
-      throw error
+      // If warehouse/operation columns don't exist yet (migration not run), fall back to old query
+      if (error.code === 'ER_BAD_FIELD_ERROR') {
+        await this.db.query(
+          `INSERT INTO bom_line (bom_id, component_code, quantity, uom, component_description, component_type, sequence, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            bom_id, 
+            line.component_code || line.item_code, 
+            line.qty || line.quantity, 
+            line.uom, 
+            line.component_name || line.item_name || line.component_description, 
+            line.type || line.item_group || line.component_type, 
+            line.sequence, 
+            line.notes
+          ]
+        )
+      } else {
+        throw error
+      }
     }
   }
 
@@ -597,6 +628,7 @@ class ProductionModel {
       if (data.status) { fields.push('status = ?'); values.push(data.status) }
       if (data.revision) { fields.push('revision = ?'); values.push(data.revision) }
       if (data.effective_date) { fields.push('effective_date = ?'); values.push(data.effective_date) }
+      if (data.process_loss_percentage !== undefined) { fields.push('process_loss_percentage = ?'); values.push(data.process_loss_percentage) }
 
       fields.push('updated_at = NOW()')
       values.push(bom_id)

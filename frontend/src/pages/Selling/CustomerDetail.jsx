@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import Card from '../../components/Card/Card'
 import Button from '../../components/Button/Button'
 import Badge from '../../components/Badge/Badge'
@@ -10,6 +10,8 @@ import EditCustomerModal from '../../components/Selling/EditCustomerModal'
 export default function CustomerDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const basePath = location.pathname.includes('/production') ? '/production/customers' : '/selling/customers'
   const [customer, setCustomer] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -56,7 +58,7 @@ export default function CustomerDetail() {
         method: 'DELETE'
       })
       if (res.ok) {
-        navigate('/selling/customers')
+        navigate(basePath)
       }
     } catch (error) {
       console.error('Error deleting customer:', error)
@@ -84,7 +86,7 @@ export default function CustomerDetail() {
     return (
       <div>
         <Alert variant="danger" className="mb-6">{error}</Alert>
-        <Button variant="secondary" onClick={() => navigate('/selling/customers')}>
+        <Button variant="secondary" onClick={() => navigate(basePath)}>
           <ArrowLeft size={18} /> Back to Customers
         </Button>
       </div>
@@ -95,7 +97,7 @@ export default function CustomerDetail() {
     return (
       <div>
         <Alert variant="warning" className="mb-6">Customer not found</Alert>
-        <Button variant="secondary" onClick={() => navigate('/selling/customers')}>
+        <Button variant="secondary" onClick={() => navigate(basePath)}>
           <ArrowLeft size={18} /> Back to Customers
         </Button>
       </div>
@@ -109,7 +111,7 @@ export default function CustomerDetail() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <button
-              onClick={() => navigate('/selling/customers')}
+              onClick={() => navigate(basePath)}
               className="text-primary-600 hover:text-primary-700 transition"
             >
               <ArrowLeft size={24} />

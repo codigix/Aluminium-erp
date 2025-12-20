@@ -25,7 +25,7 @@ import RFQs from './pages/Buying/RFQs'
 import RFQForm from './pages/Buying/RFQForm'
 import SupplierQuotations from './pages/Buying/SupplierQuotations'
 import QuotationForm from './pages/Buying/QuotationForm'
-import ItemForm from './pages/Buying/ItemForm'
+import ItemForm from './pages/Masters/ItemForm'
 import BuyingAnalytics from './pages/Buying/BuyingAnalytics'
 import {
   Quotation,
@@ -461,7 +461,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['buying', 'admin']}>
+                  <DepartmentProtectedRoute departments={['buying', 'admin', 'production']}>
                     <ItemForm />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
@@ -474,7 +474,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['buying', 'admin']}>
+                  <DepartmentProtectedRoute departments={['buying', 'admin', 'production']}>
                     <ItemForm />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
@@ -656,6 +656,42 @@ function App() {
                 <DepartmentLayout>
                   <DepartmentProtectedRoute departments={['selling', 'admin']}>
                     <Customers />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production/customers"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <Customers />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production/customers/new"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <Customers />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production/customers/:id"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <CustomerDetail />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
               </ProtectedRoute>

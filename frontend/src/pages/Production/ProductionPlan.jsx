@@ -82,13 +82,33 @@ export default function ProductionPlan() {
     <div className="production-container">
       <div className="production-header">
         <div>
-          <h1>📅 Production Plans</h1>
-          <p style={{ color: '#666', margin: '5px 0 0 0' }}>Schedule and track production planning</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ 
+              backgroundColor: '#3b82f6', 
+              padding: '10px', 
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <div style={{ color: 'white', fontSize: '20px' }}>📊</div>
+            </div>
+            <div>
+              <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>Production Planning</h1>
+              <p className="header-subtitle" style={{ margin: 0 }}>Create and manage production plans</p>
+            </div>
+          </div>
         </div>
         <button 
           onClick={() => navigate('/production/plans/form')}
           className="btn-submit w-auto"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            backgroundColor: '#3b82f6',
+            border: 'none'
+          }}
         >
           <Plus size={18} /> New Plan
         </button>
@@ -131,61 +151,83 @@ export default function ProductionPlan() {
         planId={viewingPlanId}
       />
 
-      <div className="filter-section">
-        <div className="filter-group">
-          <label>Status</label>
-          <select name="status" value={filters.status} onChange={handleFilterChange}>
-            <option value="">All Status</option>
-            <option value="draft">Draft</option>
-            <option value="planned">Planned</option>
-            <option value="in-progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-        <div className="filter-group">
-          <label>Search</label>
-          <input type="text" name="search" placeholder="Search plan ID or product..." value={filters.search} onChange={handleFilterChange} />
+      <div className="filter-section" style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '20px' }}>
+        <div className="filter-group" style={{ width: '100%' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>Search</label>
+          <input 
+            type="text" 
+            name="search" 
+            placeholder="Search plan ID or company..." 
+            value={filters.search} 
+            onChange={handleFilterChange} 
+            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+          />
         </div>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Loading production plans...</div>
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#666' }}>Loading production plans...</div>
       ) : plans.length > 0 ? (
-        <div className="production-entries-container">
-          <table className="entries-table">
+        <div style={{ overflowX: 'auto', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+          <table className="entries-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr>
-                <th style={{ width: '40px' }}><input type="checkbox" /></th>
-                <th>ID</th>
-                <th>Status</th>
-                <th>Company</th>
-                <th>Last Updated On</th>
-                <th>Actions</th>
+              <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Plan ID</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Company</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Posting Date</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Status</th>
+                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {plans.map(plan => (
-                <tr key={plan.plan_id}>
-                  <td style={{ textAlign: 'center' }}><input type="checkbox" /></td>
-                  <td><strong>{plan.plan_id}</strong></td>
-                  <td><span className={`work-order-status ${getStatusColor(plan.status)}`}>{plan.status}</span></td>
-                  <td>{plan.company || 'N/A'}</td>
-                  <td>{plan.updated_at ? new Date(plan.updated_at).toLocaleDateString() : new Date(plan.created_at).toLocaleDateString()}</td>
-                  <td>
-                    <div className="entry-actions">
-                      <button className="btn-view" onClick={() => handleViewPlan(plan)} title="View"><Eye size={16} /></button>
-                      <button className="btn-edit" onClick={() => handleEdit(plan)} title="Edit"><Edit2 size={16} /></button>
-                      <button className="btn-delete" onClick={() => handleDelete(plan.plan_id)} title="Delete"><Trash2 size={16} /></button>
+                <tr key={plan.plan_id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '16px', fontWeight: '600', color: '#111827' }}>{plan.plan_id}</td>
+                  <td style={{ padding: '16px', color: '#374151' }}>{plan.company || '-'}</td>
+                  <td style={{ padding: '16px', color: '#374151' }}>{plan.posting_date ? new Date(plan.posting_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</td>
+                  <td style={{ padding: '16px' }}>
+                    <span style={{ 
+                      backgroundColor: plan.status === 'draft' ? '#fef9c3' : '#dcfce7', 
+                      color: plan.status === 'draft' ? '#854d0e' : '#166534',
+                      padding: '4px 12px',
+                      borderRadius: '9999px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      textTransform: 'lowercase'
+                    }}>
+                      {plan.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                      <button 
+                        onClick={() => handleEdit(plan)} 
+                        title="Edit"
+                        style={{ padding: '6px', color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(plan.plan_id)} 
+                        title="Delete"
+                        style={{ padding: '6px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <div style={{ padding: '16px', textAlign: 'right', color: '#6b7280', fontSize: '0.875rem', borderTop: '1px solid #e5e7eb' }}>
+            Showing {plans.length} of {plans.length} production plans
+          </div>
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '40px', background: '#f9fafb', borderRadius: '6px' }}>No production plans found</div>
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', color: '#6b7280' }}>
+          <p>No production plans found</p>
+        </div>
       )}
     </div>
   )

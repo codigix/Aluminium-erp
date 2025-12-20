@@ -4,7 +4,7 @@ import Button from '../../components/Button/Button'
 import Badge from '../../components/Badge/Badge'
 import DataTable from '../../components/Table/DataTable'
 import AdvancedFilters from '../../components/AdvancedFilters'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { 
   Plus, Eye, Edit2, Trash2, Users, Mail, MapPin, Phone, TrendingUp
 } from 'lucide-react'
@@ -13,6 +13,9 @@ import './Selling.css'
 
 export default function Customers() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const basePath = location.pathname.includes('/production') ? '/production/customers' : '/selling/customers'
+  
   const [customers, setCustomers] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [stats, setStats] = useState({
@@ -24,7 +27,6 @@ export default function Customers() {
   })
   const [filters, setFilters] = useState({
     status: '',
-    group: '',
     search: ''
   })
   const [loading, setLoading] = useState(false)
@@ -125,14 +127,14 @@ export default function Customers() {
         return (
         <div className="action-buttons">
           <button 
-            onClick={() => navigate(`/selling/customers/${row.customer_id}`)}
+            onClick={() => navigate(`${basePath}/${row.customer_id}`)}
             className="flex items-center justify-center p-2 text-primary-600 hover:bg-primary-100 rounded transition-colors duration-200"
             title="View"
           >
             <Eye size={16} />
           </button>
           <button 
-            onClick={() => navigate(`/selling/customers/${row.customer_id}`)}
+            onClick={() => navigate(`${basePath}/${row.customer_id}`)}
             className="flex items-center justify-center p-2 text-green-600 hover:bg-green-50 rounded transition-colors duration-200"
             title="Edit"
           >

@@ -31,6 +31,7 @@ import grnRequestRoutes from './routes/grnRequests.js'
 import companyRoutes from './routes/company.js'
 import taxTemplateRoutes from './routes/taxTemplates.js'
 import setupMasterDataRoutes from './routes/setup.js'
+import uomRoutes from './routes/uom.js'
 import crmRoutes from './routes/crm.js'
 import clientPORoutes from './routes/clientPOs.js'
 import clientRoutes from './routes/clients.js'
@@ -406,6 +407,7 @@ async function setupRoutes() {
 
   // API Routes - Setup Master Data
   app.use('/api/setup', setupMasterDataRoutes)
+  app.use('/api/uom', uomRoutes)
 
   // API Routes - CRM
   app.use('/api/crm', crmRoutes)

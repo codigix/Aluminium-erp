@@ -3,13 +3,23 @@ import Card from '../../components/Card/Card'
 import Button from '../../components/Button/Button'
 import Table from '../../components/Table/Table'
 import Input from '../../components/Input/Input'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Plus, Search, Edit2, Trash2, Package } from 'lucide-react'
 import './Buying.css'
 
 export default function Items() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [items, setItems] = useState([])
+  
+  // Determine base path for navigation
+  const getBasePath = () => {
+    if (location.pathname.includes('/masters')) return '/masters/item'
+    if (location.pathname.includes('/buying')) return '/buying/item'
+    return '/masters/item' // Default
+  }
+  
+  const basePath = getBasePath()
   const [groups, setGroups] = useState([])
   const [stats, setStats] = useState({
     totalItems: 0,
@@ -190,7 +200,7 @@ export default function Items() {
           icon={Edit2}
           label="Edit"
           variant="edit"
-          onClick={() => navigate(`/masters/item/${item.item_code}`)}
+          onClick={() => navigate(`${basePath}/${item.item_code}`)}
         />
         <ActionButton
           icon={Trash2}
@@ -234,7 +244,7 @@ export default function Items() {
             Manage your product catalog and inventory
           </p>
         </div>
-        <Link to="/masters/item/new">
+        <Link to={`${basePath}/new`}>
           <Button variant="primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} /> Create Item
           </Button>
@@ -357,7 +367,7 @@ export default function Items() {
           }}>
             <Package size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
             <div style={{ fontSize: '14px' }}>No items found</div>
-            <Link to="/masters/item/new">
+            <Link to={`${basePath}/new`}>
               <Button variant="primary" style={{ marginTop: '16px' }}>
                 Create First Item
               </Button>
