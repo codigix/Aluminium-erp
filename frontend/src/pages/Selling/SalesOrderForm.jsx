@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import axios from 'axios'
+import { Plus, Trash2 } from 'lucide-react'
 import Button from '../../components/Button/Button'
 import Alert from '../../components/Alert/Alert'
 import Card from '../../components/Card/Card'
-import AuditTrail from '../../components/AuditTrail'
-import SearchableSelect from '../../components/SearchableSelect'
 import './Selling.css'
 
 const styles = {
@@ -72,6 +71,14 @@ const styles = {
     borderRadius: '4px',
     fontFamily: 'inherit'
   },
+  select: {
+    padding: '8px',
+    fontSize: '13px',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontFamily: 'inherit',
+    backgroundColor: 'white'
+  },
   table: {
     width: '100%',
     borderCollapse: 'collapse',
@@ -104,23 +111,12 @@ const styles = {
     paddingTop: '20px',
     borderTop: '1px solid #e5e7eb'
   },
-  wizardProgress: {
-    display: 'flex',
-    gap: '4px',
-    justifyContent: 'center',
-    marginBottom: '20px'
-  },
-  progressDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    backgroundColor: '#e5e7eb',
-    transition: 'all 0.3s'
-  },
-  progressDotActive: {
-    backgroundColor: '#007bff',
-    width: '24px',
-    borderRadius: '4px'
+  analysisCard: {
+    backgroundColor: '#f0f9ff',
+    border: '1px solid #0ea5e9',
+    borderRadius: '4px',
+    padding: '16px',
+    marginTop: '16px'
   }
 }
 
@@ -131,207 +127,95 @@ export default function SalesOrderForm() {
 
   const tabs = [
     { id: 'basicDetails', label: 'Basic Details' },
-    { id: 'accountingDimensions', label: 'Accounting Dimensions' },
-    { id: 'currencyPriceList', label: 'Currency & Price List' },
     { id: 'items', label: 'Items' },
-    { id: 'paymentTerms', label: 'Payment Terms' },
-    { id: 'additionalInfo', label: 'Additional Info' },
-    { id: 'printSettings', label: 'Print Settings' },
-    { id: 'totals', label: 'Totals & Discounts' }
+    { id: 'bomDetails', label: 'BOM Details' }
   ]
 
   const [activeTabIndex, setActiveTabIndex] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(null)
 
   const [formData, setFormData] = useState({
-    series: '',
+    series: 'SO',
     date: new Date().toISOString().split('T')[0],
     customer_id: '',
     customer_name: '',
     customer_email: '',
     customer_phone: '',
+    bom_id: '',
+    quantity: 1,
+    source_warehouse: '',
     delivery_date: '',
     order_type: 'Sales',
+    status: 'Draft',
     cost_center: '',
     project: '',
-    currency: 'INR',
-    price_list: '',
-    ignore_pricing_rule: false,
-    items: [],
-    payment_terms_template: '',
-    payment_schedule: [],
-    status: 'Draft',
-    is_internal_customer: false,
-    source: '',
-    campaign: '',
-    territory: '',
-    letter_head: '',
-    print_heading: '',
-    group_same_items: false,
-    terms_and_conditions: '',
-    notes: '',
-    tax_category: '',
-    shipping_rule: '',
-    incoterm: '',
-    sales_taxes_charges_template: '',
-    taxes_charges: [],
-    rounding_adjustment: 0,
-    disable_rounded_total: false,
-    apply_discount_on: 'Grand Total',
-    coupon_code: '',
-    additional_discount_percentage: 0,
-    additional_discount_amount: 0,
-    sales_partner: '',
-    commission_rate: 0,
-    amount_eligible_for_commission: 0,
-    total_commission: 0,
-    sales_team: [],
-    auto_repeat: '',
-    from_date: '',
-    to_date: ''
+    order_amount: 0,
+    items: []
   })
 
   const [customers, setCustomers] = useState([])
-  const [allItems, setAllItems] = useState([])
-  const [orderTypes, setOrderTypes] = useState([{ label: 'Sales', value: 'Sales' }])
-  const [costCenters, setCostCenters] = useState([])
-  const [projects, setProjects] = useState([])
-  const [currencies, setCurrencies] = useState([{ label: 'INR', value: 'INR' }])
-  const [priceLists, setPriceLists] = useState([])
-  const [statuses, setStatuses] = useState([{ label: 'Draft', value: 'Draft' }, { label: 'Submitted', value: 'Submitted' }, { label: 'Confirmed', value: 'Confirmed' }])
-  const [sources, setSources] = useState([])
-  const [campaigns, setCampaigns] = useState([])
-  const [territories, setTerritories] = useState([])
-  const [letterHeads, setLetterHeads] = useState([])
-  const [taxCategories, setTaxCategories] = useState([])
-  const [shippingRules, setShippingRules] = useState([])
-  const [incoterms, setIncoterms] = useState([])
-  const [taxChargesTemplates, setTaxChargesTemplates] = useState([])
-  const [salesPartners, setSalesPartners] = useState([])
-  const [couponCodes, setCouponCodes] = useState([])
-  const [accountHeads, setAccountHeads] = useState([])
-  const [paymentTermsTemplates, setPaymentTermsTemplates] = useState([])
-
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [success, setSuccess] = useState(null)
-  const [order, setOrder] = useState(null)
-  const [dataLoading, setDataLoading] = useState(false)
+  const [boms, setBoms] = useState([])
+  const [warehouses, setWarehouses] = useState([])
+  const [bomDetails, setBomDetails] = useState(null)
+  const [bomAnalysis, setBomAnalysis] = useState(null)
 
   useEffect(() => {
     fetchRequiredData()
-    if (isEditMode) {
-      fetchOrder()
+    if (id && id !== 'new') {
+      fetchSalesOrder(id)
     }
-  }, [])
+  }, [id])
 
   const fetchRequiredData = async () => {
     try {
-      setDataLoading(true)
-      const [custRes, itemRes, costRes, projRes, priceRes, sourceRes, campRes, terrRes, letterRes, taxRes, shipRes, incoRes, stRes, partRes, couponRes, accRes, payRes] = await Promise.all([
+      const [custRes, bomRes, whRes] = await Promise.all([
         axios.get('http://localhost:5000/api/selling/customers').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/items?limit=1000').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/cost-centers').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/projects').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/price-lists').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/lead-sources').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/campaigns').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/territories').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/letter-heads').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/tax-categories').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/shipping-rules').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/incoterms').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/sales-taxes-charges-template').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/crm/sales-partners').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/selling/coupon-codes').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/account-heads').catch(() => ({ data: { data: [] } })),
-        axios.get('/api/setup/payment-terms').catch(() => ({ data: { data: [] } }))
+        axios.get('http://localhost:5000/api/selling/bom-list').catch(() => ({ data: { data: [] } })),
+        axios.get('http://localhost:5000/api/stock/warehouses').catch(() => ({ data: { data: [] } }))
       ])
 
       setCustomers(custRes.data.data || [])
-      setAllItems(itemRes.data.data || [])
-      setCostCenters((costRes.data.data || []).map(c => ({ label: c.name || c.cost_center || '', value: c.id || c.name || '' })))
-      setProjects((projRes.data.data || []).map(p => ({ label: p.name || p.project || '', value: p.id || p.name || '' })))
-      setPriceLists((priceRes.data.data || []).map(p => ({ label: p.name || p.price_list || '', value: p.id || p.name || '' })))
-      setSources((sourceRes.data.data || []).map(s => ({ label: s.name || s.source_name || '', value: s.id || s.name || '' })))
-      setCampaigns((campRes.data.data || []).map(c => ({ label: c.name || c.campaign_name || '', value: c.id || c.name || '' })))
-      setTerritories((terrRes.data.data || []).map(t => ({ label: t.name || t.territory_name || '', value: t.id || t.name || '' })))
-      setLetterHeads((letterRes.data.data || []).map(l => ({ label: l.name || l.letter_head_name || '', value: l.id || l.name || '' })))
-      setTaxCategories((taxRes.data.data || []).map(t => ({ label: t.name || t.tax_category || '', value: t.id || t.name || '' })))
-      setShippingRules((shipRes.data.data || []).map(s => ({ label: s.name || s.shipping_rule || '', value: s.id || s.name || '' })))
-      setIncoterms((incoRes.data.data || []).map(i => ({ label: i.name || i.incoterm || '', value: i.id || i.name || '' })))
-      setTaxChargesTemplates((stRes.data.data || []).map(s => ({ label: s.name || s.sales_taxes_charges_template || '', value: s.id || s.name || '' })))
-      setSalesPartners((partRes.data.data || []).map(p => ({ label: p.name || p.sales_partner || '', value: p.id || p.name || '' })))
-      setCouponCodes((couponRes.data.data || []).map(c => ({ label: c.name || c.coupon_code || '', value: c.id || c.name || '' })))
-      setAccountHeads((accRes.data.data || []).map(a => ({ label: a.name || a.account_head || '', value: a.id || a.name || '' })))
-      setPaymentTermsTemplates((payRes.data.data || []).map(p => ({ label: p.name || p.payment_terms || '', value: p.id || p.name || '' })))
+      setBoms(bomRes.data.data || [])
+      setWarehouses((whRes.data.data || []).map(w => ({ label: w.name || w.warehouse_name, value: w.name || w.id })))
     } catch (err) {
-      console.error('Failed to fetch required data:', err)
-    } finally {
-      setDataLoading(false)
+      console.error('Failed to fetch data:', err)
     }
   }
 
-  const fetchOrder = async () => {
+  const fetchSalesOrder = async (orderId) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/selling/sales-orders/${id}`)
+      const response = await axios.get(`http://localhost:5000/api/selling/sales-orders/${orderId}`)
       const orderData = response.data.data
-      setOrder(orderData)
       setFormData(prev => ({
         ...prev,
-        series: orderData.series || '',
-        date: orderData.date || new Date().toISOString().split('T')[0],
-        customer_id: orderData.customer_id || '',
-        customer_name: orderData.customer_name || '',
-        customer_email: orderData.customer_email || '',
-        customer_phone: orderData.customer_phone || '',
-        delivery_date: orderData.delivery_date || '',
-        order_type: orderData.order_type || 'Sales',
-        cost_center: orderData.cost_center || '',
-        project: orderData.project || '',
-        currency: orderData.currency || 'INR',
-        price_list: orderData.price_list || '',
-        ignore_pricing_rule: orderData.ignore_pricing_rule || false,
-        items: (orderData.items || []).map(item => ({
-          ...item,
-          qty: parseFloat(item.qty) || 0,
-          rate: parseFloat(item.rate) || 0,
-          amount: parseFloat(item.amount) || 0,
-          id: item.id || Date.now() + Math.random()
-        })),
-        payment_terms_template: orderData.payment_terms_template || '',
-        payment_schedule: orderData.payment_schedule || [],
-        status: orderData.status || 'Draft',
-        is_internal_customer: orderData.is_internal_customer || false,
-        source: orderData.source || '',
-        campaign: orderData.campaign || '',
-        territory: orderData.territory || '',
-        letter_head: orderData.letter_head || '',
-        print_heading: orderData.print_heading || '',
-        group_same_items: orderData.group_same_items || false,
-        terms_and_conditions: orderData.terms_and_conditions || '',
-        notes: orderData.notes || '',
-        tax_category: orderData.tax_category || '',
-        shipping_rule: orderData.shipping_rule || '',
-        incoterm: orderData.incoterm || '',
-        sales_taxes_charges_template: orderData.sales_taxes_charges_template || '',
-        taxes_charges: orderData.taxes_charges || [],
-        rounding_adjustment: orderData.rounding_adjustment || 0,
-        disable_rounded_total: orderData.disable_rounded_total || false,
-        apply_discount_on: orderData.apply_discount_on || 'Grand Total',
-        coupon_code: orderData.coupon_code || '',
-        additional_discount_percentage: orderData.additional_discount_percentage || 0,
-        additional_discount_amount: orderData.additional_discount_amount || 0,
-        sales_partner: orderData.sales_partner || '',
-        commission_rate: orderData.commission_rate || 0,
-        amount_eligible_for_commission: orderData.amount_eligible_for_commission || 0,
-        total_commission: orderData.total_commission || 0,
-        sales_team: orderData.sales_team || [],
-        auto_repeat: orderData.auto_repeat || '',
-        from_date: orderData.from_date || '',
-        to_date: orderData.to_date || ''
+        ...orderData
       }))
+      if (orderData.bom_id) {
+        fetchBOMDetails(orderData.bom_id)
+        fetchBOMAnalysis(orderData.bom_id)
+      }
     } catch (err) {
       setError('Failed to fetch sales order')
+    }
+  }
+
+  const fetchBOMDetails = async (bomId) => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/selling/bom/${bomId}`)
+      setBomDetails(response.data.data)
+    } catch (err) {
+      console.error('Failed to fetch BOM details:', err)
+    }
+  }
+
+  const fetchBOMAnalysis = async (bomId) => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/selling/orders-by-bom/${bomId}`)
+      setBomAnalysis(response.data.data)
+    } catch (err) {
+      console.error('Failed to fetch BOM analysis:', err)
     }
   }
 
@@ -341,10 +225,6 @@ export default function SalesOrderForm() {
       ...formData,
       [name]: type === 'checkbox' ? checked : value
     })
-  }
-
-  const handleSearchableChange = (fieldName, value) => {
-    setFormData({ ...formData, [fieldName]: value })
   }
 
   const handleCustomerChange = (value) => {
@@ -358,6 +238,20 @@ export default function SalesOrderForm() {
     })
   }
 
+  const handleBOMChange = (value) => {
+    setFormData({
+      ...formData,
+      bom_id: value
+    })
+    if (value) {
+      fetchBOMDetails(value)
+      fetchBOMAnalysis(value)
+    } else {
+      setBomDetails(null)
+      setBomAnalysis(null)
+    }
+  }
+
   const handleAddItem = () => {
     setFormData({
       ...formData,
@@ -366,7 +260,6 @@ export default function SalesOrderForm() {
         {
           item_code: '',
           item_name: '',
-          delivery_date: '',
           qty: 1,
           rate: 0,
           amount: 0,
@@ -393,72 +286,26 @@ export default function SalesOrderForm() {
     setFormData({ ...formData, items: updatedItems })
   }
 
-  const handleAddPaymentScheduleRow = () => {
-    setFormData({
-      ...formData,
-      payment_schedule: [
-        ...formData.payment_schedule,
-        {
-          payment_term: '',
-          description: '',
-          due_date: '',
-          invoice_portion: 0,
-          payment_amount: 0,
-          id: Date.now() + Math.random()
-        }
-      ]
-    })
-  }
-
-  const handleRemovePaymentScheduleRow = (idx) => {
-    const updatedSchedule = formData.payment_schedule.filter((_, i) => i !== idx)
-    setFormData({ ...formData, payment_schedule: updatedSchedule })
-  }
-
-  const handlePaymentScheduleChange = (idx, field, value) => {
-    const updatedSchedule = [...formData.payment_schedule]
-    updatedSchedule[idx] = {
-      ...updatedSchedule[idx],
-      [field]: value
+  const calculateTotal = () => {
+    if (bomDetails && bomDetails.total_cost) {
+      return bomDetails.total_cost * formData.quantity
     }
-    setFormData({ ...formData, payment_schedule: updatedSchedule })
-  }
-
-  const calculateSubtotal = () => {
     return formData.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
-  }
-
-  const calculateGrandTotal = () => {
-    const subtotal = calculateSubtotal()
-    const discountAmount = formData.discount_type === 'percentage'
-      ? (subtotal * (formData.additional_discount_percentage || 0)) / 100
-      : formData.additional_discount_amount || 0
-    const taxAmount = (subtotal - discountAmount) * 0.18
-    return subtotal - discountAmount + taxAmount
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!formData.customer_id || formData.items.length === 0 || !formData.delivery_date) {
+    if (!formData.customer_id || !formData.delivery_date) {
       setError('Please fill all required fields')
       return
     }
 
     try {
       setLoading(true)
-      const subtotal = parseFloat(calculateSubtotal() || 0)
       const submitData = {
         ...formData,
-        order_amount: subtotal,
-        total_value: subtotal,
-        items: formData.items.map(({ id, ...item }) => ({
-          ...item,
-          qty: parseFloat(item.qty) || 0,
-          rate: parseFloat(item.rate) || 0,
-          amount: parseFloat(item.amount) || 0
-        })),
-        payment_schedule: formData.payment_schedule.map(({ id, ...row }) => row)
+        order_amount: calculateTotal()
       }
 
       if (isEditMode) {
@@ -498,11 +345,8 @@ export default function SalesOrderForm() {
       <Card>
         <div style={styles.header}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2>{isEditMode ? 'Edit Sales Order' : 'New Sales Order'} <span style={{ color: '#ef4444', fontSize: '0.8em' }}>Not Saved</span></h2>
-            <Button
-              onClick={() => navigate('/selling/sales-orders')}
-              variant="secondary"
-            >
+            <h2>{isEditMode ? 'Edit Sales Order' : 'New Sales Order'}</h2>
+            <Button onClick={() => navigate('/selling/sales-orders')} variant="secondary">
               Back
             </Button>
           </div>
@@ -511,41 +355,12 @@ export default function SalesOrderForm() {
         {error && <Alert type="danger">{error}</Alert>}
         {success && <Alert type="success">{success}</Alert>}
 
-        {isEditMode && order && (
-          <AuditTrail
-            createdAt={order.created_at}
-            createdBy={order.created_by}
-            updatedAt={order.updated_at}
-            updatedBy={order.updated_by}
-            status={order.status}
-          />
-        )}
-
-        <div style={styles.wizardProgress}>
-          {tabs.map((_, idx) => (
-            <div
-              key={idx}
-              style={{
-                ...styles.progressDot,
-                ...(idx === activeTabIndex ? styles.progressDotActive : {})
-              }}
-              onClick={() => {
-                setActiveTabIndex(idx)
-                window.scrollTo({ top: 0, behavior: 'smooth' })
-              }}
-            />
-          ))}
-        </div>
-
         <div style={styles.tabsContainer}>
           <div style={styles.tabsList}>
             {tabs.map((tab, idx) => (
               <button
                 key={tab.id}
-                onClick={() => {
-                  setActiveTabIndex(idx)
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
+                onClick={() => setActiveTabIndex(idx)}
                 style={{
                   ...styles.tab,
                   ...(idx === activeTabIndex ? styles.tabActive : {})
@@ -569,7 +384,7 @@ export default function SalesOrderForm() {
                     name="series"
                     value={formData.series}
                     onChange={handleChange}
-                    placeholder="SAL-ORD-YYYY-"
+                    placeholder="SO"
                   />
                 </div>
                 <div style={styles.formGroup}>
@@ -583,27 +398,100 @@ export default function SalesOrderForm() {
                     required
                   />
                 </div>
+              </div>
+
+              <div style={styles.gridRow}>
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Customer's Purchase Order</label>
+                  <label style={styles.label}>Customer *</label>
+                  <select
+                    style={styles.select}
+                    value={formData.customer_id}
+                    onChange={(e) => handleCustomerChange(e.target.value)}
+                    required
+                  >
+                    <option value="">Search customer...</option>
+                    {customers.map(c => (
+                      <option key={c.customer_id} value={c.customer_id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={styles.gridRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Customer Name</label>
                   <input
                     style={styles.input}
                     type="text"
-                    name="customer_po"
-                    placeholder="Enter PO number"
+                    value={formData.customer_name}
+                    readOnly
+                  />
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Email</label>
+                  <input
+                    style={styles.input}
+                    type="email"
+                    value={formData.customer_email}
+                    readOnly
+                  />
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Phone</label>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    value={formData.customer_phone}
+                    readOnly
                   />
                 </div>
               </div>
 
               <div style={styles.gridRow}>
                 <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Customer *"
-                    value={formData.customer_id}
-                    onChange={handleCustomerChange}
-                    options={customers.map(c => ({ label: c.name, value: c.customer_id }))}
-                    placeholder="Search customer..."
+                  <label style={styles.label}>BOM *</label>
+                  <select
+                    style={styles.select}
+                    value={formData.bom_id}
+                    onChange={(e) => handleBOMChange(e.target.value)}
+                    required
+                  >
+                    <option value="">Search BOM...</option>
+                    {boms.map(b => (
+                      <option key={b.bom_id} value={b.bom_id}>
+                        {b.product_name} ({b.bom_id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Quantity *</label>
+                  <input
+                    style={styles.input}
+                    type="number"
+                    name="quantity"
+                    value={formData.quantity}
+                    onChange={handleChange}
+                    min="1"
                     required
                   />
+                </div>
+              </div>
+
+              <div style={styles.gridRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Source Warehouse</label>
+                  <select
+                    style={styles.select}
+                    name="source_warehouse"
+                    value={formData.source_warehouse}
+                    onChange={handleChange}
+                  >
+                    <option value="">Select warehouse...</option>
+                    {warehouses.map(w => (
+                      <option key={w.value} value={w.value}>{w.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Delivery Date *</label>
@@ -621,73 +509,29 @@ export default function SalesOrderForm() {
               <div style={styles.gridRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Order Type</label>
-                  <select style={styles.input} name="order_type" value={formData.order_type} onChange={handleChange}>
+                  <select
+                    style={styles.select}
+                    name="order_type"
+                    value={formData.order_type}
+                    onChange={handleChange}
+                  >
                     <option value="Sales">Sales</option>
-                    <option value="Purchase">Purchase</option>
+                    <option value="Custom">Custom</option>
+                    <option value="Service">Service</option>
                   </select>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {currentTab.id === 'accountingDimensions' && (
-            <div style={styles.tabContent}>
-              <div style={styles.gridRow}>
                 <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Cost Center"
-                    value={formData.cost_center}
-                    onChange={(val) => handleSearchableChange('cost_center', val)}
-                    options={costCenters}
-                    placeholder="Search cost center..."
-                  />
-                </div>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Project"
-                    value={formData.project}
-                    onChange={(val) => handleSearchableChange('project', val)}
-                    options={projects}
-                    placeholder="Search project..."
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentTab.id === 'currencyPriceList' && (
-            <div style={styles.tabContent}>
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Currency"
-                    value={formData.currency}
-                    onChange={(val) => handleSearchableChange('currency', val)}
-                    options={currencies}
-                    placeholder="Search currency..."
-                  />
-                </div>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Price List"
-                    value={formData.price_list}
-                    onChange={(val) => handleSearchableChange('price_list', val)}
-                    options={priceLists}
-                    placeholder="Search price list..."
-                  />
-                </div>
-              </div>
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <input
-                    style={{ ...styles.input, cursor: 'pointer' }}
-                    type="checkbox"
-                    name="ignore_pricing_rule"
-                    checked={formData.ignore_pricing_rule}
+                  <label style={styles.label}>Status</label>
+                  <select
+                    style={styles.select}
+                    name="status"
+                    value={formData.status}
                     onChange={handleChange}
-                    id="ignore_pricing_rule"
-                  />
-                  <label style={styles.label} htmlFor="ignore_pricing_rule">Ignore Pricing Rule</label>
+                  >
+                    <option value="Draft">Draft</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="Confirmed">Confirmed</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -695,14 +539,26 @@ export default function SalesOrderForm() {
 
           {currentTab.id === 'items' && (
             <div style={styles.tabContent}>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleAddItem}
-                style={{ marginBottom: '15px', fontSize: '0.85rem', padding: '6px 12px' }}
-              >
-                + Add Row
-              </Button>
+              <div style={{ marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 16px',
+                    backgroundColor: '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '13px'
+                  }}
+                >
+                  <Plus size={16} /> Add Item
+                </button>
+              </div>
 
               {formData.items.length > 0 ? (
                 <div style={{ overflowX: 'auto' }}>
@@ -711,16 +567,15 @@ export default function SalesOrderForm() {
                       <tr>
                         <th style={styles.tableHeader}>Item Code</th>
                         <th style={styles.tableHeader}>Item Name</th>
-                        <th style={styles.tableHeader}>Delivery Date</th>
                         <th style={styles.tableHeader}>Qty</th>
-                        <th style={styles.tableHeader}>Rate (INR)</th>
-                        <th style={styles.tableHeader}>Amount (INR)</th>
+                        <th style={styles.tableHeader}>Rate</th>
+                        <th style={styles.tableHeader}>Amount</th>
                         <th style={styles.tableHeader}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {formData.items.map((item, idx) => (
-                        <tr key={idx}>
+                        <tr key={item.id}>
                           <td style={styles.tableCell}>
                             <input
                               style={styles.input}
@@ -742,20 +597,10 @@ export default function SalesOrderForm() {
                           <td style={styles.tableCell}>
                             <input
                               style={styles.input}
-                              type="date"
-                              value={item.delivery_date}
-                              onChange={(e) => handleItemChange(idx, 'delivery_date', e.target.value)}
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              style={styles.input}
                               type="number"
                               value={item.qty}
                               onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
                               placeholder="0"
-                              step="0.01"
-                              min="0"
                             />
                           </td>
                           <td style={styles.tableCell}>
@@ -765,22 +610,26 @@ export default function SalesOrderForm() {
                               value={item.rate}
                               onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
                               placeholder="0.00"
-                              step="0.01"
-                              min="0"
                             />
                           </td>
                           <td style={styles.tableCell}>
-                            {(item.qty * item.rate).toFixed(2)}
+                            {item.amount.toFixed(2)}
                           </td>
                           <td style={styles.tableCell}>
-                            <Button
+                            <button
                               type="button"
-                              variant="danger"
                               onClick={() => handleRemoveItem(idx)}
-                              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                              style={{
+                                padding: '4px 8px',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
                             >
-                              Remove
-                            </Button>
+                              <Trash2 size={14} />
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -788,420 +637,153 @@ export default function SalesOrderForm() {
                   </table>
                 </div>
               ) : (
-                <div style={{ textAlign: 'center', padding: '30px', backgroundColor: '#f9f9f9', borderRadius: '6px', color: '#999' }}>
-                  No items added yet
-                </div>
-              )}
-            </div>
-          )}
-
-          {currentTab.id === 'paymentTerms' && (
-            <div style={styles.tabContent}>
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Payment Terms Template"
-                    value={formData.payment_terms_template}
-                    onChange={(val) => handleSearchableChange('payment_terms_template', val)}
-                    options={paymentTermsTemplates}
-                    placeholder="Search payment terms..."
-                  />
-                </div>
-              </div>
-
-              <h4 style={{ marginTop: '20px', marginBottom: '10px' }}>Payment Schedule</h4>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleAddPaymentScheduleRow}
-                style={{ marginBottom: '15px', fontSize: '0.85rem', padding: '6px 12px' }}
-              >
-                + Add Row
-              </Button>
-
-              {formData.payment_schedule.length > 0 ? (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={styles.table}>
-                    <thead>
-                      <tr>
-                        <th style={styles.tableHeader}>Payment Term</th>
-                        <th style={styles.tableHeader}>Description</th>
-                        <th style={styles.tableHeader}>Due Date</th>
-                        <th style={styles.tableHeader}>Invoice Portion (%)</th>
-                        <th style={styles.tableHeader}>Payment Amount</th>
-                        <th style={styles.tableHeader}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {formData.payment_schedule.map((row, idx) => (
-                        <tr key={idx}>
-                          <td style={styles.tableCell}>
-                            <input
-                              style={styles.input}
-                              type="text"
-                              value={row.payment_term}
-                              onChange={(e) => handlePaymentScheduleChange(idx, 'payment_term', e.target.value)}
-                              placeholder="Payment term"
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              style={styles.input}
-                              type="text"
-                              value={row.description}
-                              onChange={(e) => handlePaymentScheduleChange(idx, 'description', e.target.value)}
-                              placeholder="Description"
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              style={styles.input}
-                              type="date"
-                              value={row.due_date}
-                              onChange={(e) => handlePaymentScheduleChange(idx, 'due_date', e.target.value)}
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              style={styles.input}
-                              type="number"
-                              value={row.invoice_portion}
-                              onChange={(e) => handlePaymentScheduleChange(idx, 'invoice_portion', e.target.value)}
-                              placeholder="0"
-                              step="0.01"
-                              min="0"
-                              max="100"
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <input
-                              style={styles.input}
-                              type="number"
-                              value={row.payment_amount}
-                              onChange={(e) => handlePaymentScheduleChange(idx, 'payment_amount', e.target.value)}
-                              placeholder="0.00"
-                              step="0.01"
-                              min="0"
-                            />
-                          </td>
-                          <td style={styles.tableCell}>
-                            <Button
-                              type="button"
-                              variant="danger"
-                              onClick={() => handleRemovePaymentScheduleRow(idx)}
-                              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                            >
-                              Remove
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '30px', backgroundColor: '#f9f9f9', borderRadius: '6px', color: '#999' }}>
-                  No payment schedule added yet
-                </div>
+                <Alert type="info">No items added. Click "Add Item" to add items to this order.</Alert>
               )}
 
-              <h4 style={{ marginTop: '20px', marginBottom: '10px' }}>Terms & Conditions</h4>
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <textarea
-                    style={{ ...styles.input, resize: 'vertical', minHeight: '100px' }}
-                    name="terms_and_conditions"
-                    value={formData.terms_and_conditions}
-                    onChange={handleChange}
-                    placeholder="Add terms and conditions..."
-                  />
+              <div style={styles.totalsBox}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span>Subtotal:</span>
+                  <span>₹{calculateTotal().toFixed(2)}</span>
                 </div>
               </div>
             </div>
           )}
 
-          {currentTab.id === 'additionalInfo' && (
+          {currentTab.id === 'bomDetails' && (
             <div style={styles.tabContent}>
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Status"
-                    value={formData.status}
-                    onChange={(val) => handleSearchableChange('status', val)}
-                    options={statuses}
-                    placeholder="Select status..."
-                  />
-                </div>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Source"
-                    value={formData.source}
-                    onChange={(val) => handleSearchableChange('source', val)}
-                    options={sources}
-                    placeholder="Search source..."
-                  />
-                </div>
-              </div>
+              {bomDetails ? (
+                <div>
+                  <div style={styles.gridRow}>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>BOM ID</label>
+                      <input style={styles.input} type="text" value={bomDetails.bom_id} readOnly />
+                    </div>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>Product</label>
+                      <input style={styles.input} type="text" value={bomDetails.product_name} readOnly />
+                    </div>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>Total Cost</label>
+                      <input style={styles.input} type="text" value={`₹${bomDetails.total_cost || 0}`} readOnly />
+                    </div>
+                  </div>
 
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Campaign"
-                    value={formData.campaign}
-                    onChange={(val) => handleSearchableChange('campaign', val)}
-                    options={campaigns}
-                    placeholder="Search campaign..."
-                  />
-                </div>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Territory"
-                    value={formData.territory}
-                    onChange={(val) => handleSearchableChange('territory', val)}
-                    options={territories}
-                    placeholder="Search territory..."
-                  />
-                </div>
-              </div>
+                  <h3 style={{ marginTop: '24px', marginBottom: '12px' }}>Materials</h3>
+                  {bomDetails.materials && bomDetails.materials.length > 0 ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={styles.table}>
+                        <thead>
+                          <tr>
+                            <th style={styles.tableHeader}>Item Code</th>
+                            <th style={styles.tableHeader}>Qty</th>
+                            <th style={styles.tableHeader}>UOM</th>
+                            <th style={styles.tableHeader}>Rate</th>
+                            <th style={styles.tableHeader}>Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bomDetails.materials.map((material, idx) => (
+                            <tr key={idx}>
+                              <td style={styles.tableCell}>{material.item_code}</td>
+                              <td style={styles.tableCell}>{material.qty}</td>
+                              <td style={styles.tableCell}>{material.uom}</td>
+                              <td style={styles.tableCell}>₹{material.rate}</td>
+                              <td style={styles.tableCell}>₹{material.amount}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <Alert type="info">No materials in this BOM</Alert>
+                  )}
 
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <input
-                    style={{ ...styles.input, cursor: 'pointer' }}
-                    type="checkbox"
-                    name="is_internal_customer"
-                    checked={formData.is_internal_customer}
-                    onChange={handleChange}
-                    id="is_internal_customer"
-                  />
-                  <label style={styles.label} htmlFor="is_internal_customer">Is Internal Customer</label>
-                </div>
-              </div>
-
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Notes</label>
-                  <textarea
-                    style={{ ...styles.input, resize: 'vertical', minHeight: '80px' }}
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleChange}
-                    placeholder="Add notes..."
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentTab.id === 'printSettings' && (
-            <div style={styles.tabContent}>
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Letter Head"
-                    value={formData.letter_head}
-                    onChange={(val) => handleSearchableChange('letter_head', val)}
-                    options={letterHeads}
-                    placeholder="Search letter head..."
-                  />
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Print Heading</label>
-                  <input
-                    style={styles.input}
-                    type="text"
-                    name="print_heading"
-                    value={formData.print_heading}
-                    onChange={handleChange}
-                    placeholder="Enter print heading"
-                  />
-                </div>
-              </div>
-
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <input
-                    style={{ ...styles.input, cursor: 'pointer' }}
-                    type="checkbox"
-                    name="group_same_items"
-                    checked={formData.group_same_items}
-                    onChange={handleChange}
-                    id="group_same_items"
-                  />
-                  <label style={styles.label} htmlFor="group_same_items">Group same items</label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentTab.id === 'totals' && (
-            <div style={styles.tabContent}>
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Tax Category"
-                    value={formData.tax_category}
-                    onChange={(val) => handleSearchableChange('tax_category', val)}
-                    options={taxCategories}
-                    placeholder="Search tax category..."
-                  />
-                </div>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Shipping Rule"
-                    value={formData.shipping_rule}
-                    onChange={(val) => handleSearchableChange('shipping_rule', val)}
-                    options={shippingRules}
-                    placeholder="Search shipping rule..."
-                  />
-                </div>
-              </div>
-
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Incoterm"
-                    value={formData.incoterm}
-                    onChange={(val) => handleSearchableChange('incoterm', val)}
-                    options={incoterms}
-                    placeholder="Search incoterm..."
-                  />
-                </div>
-              </div>
-
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <SearchableSelect
-                    label="Taxes & Charges Template"
-                    value={formData.sales_taxes_charges_template}
-                    onChange={(val) => handleSearchableChange('sales_taxes_charges_template', val)}
-                    options={taxChargesTemplates}
-                    placeholder="Search taxes & charges template..."
-                  />
-                </div>
-              </div>
-
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Apply Discount On</label>
-                  <select style={styles.input} name="apply_discount_on" value={formData.apply_discount_on} onChange={handleChange}>
-                    <option value="Grand Total">Grand Total</option>
-                    <option value="Pre Tax Total">Pre Tax Total</option>
-                  </select>
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Additional Discount Percentage (%)</label>
-                  <input
-                    style={styles.input}
-                    type="number"
-                    name="additional_discount_percentage"
-                    value={formData.additional_discount_percentage}
-                    onChange={handleChange}
-                    placeholder="0"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-              </div>
-
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Additional Discount Amount (₹)</label>
-                  <input
-                    style={styles.input}
-                    type="number"
-                    name="additional_discount_amount"
-                    value={formData.additional_discount_amount}
-                    onChange={handleChange}
-                    placeholder="0"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Rounding Adjustment</label>
-                  <input
-                    style={styles.input}
-                    type="number"
-                    name="rounding_adjustment"
-                    value={formData.rounding_adjustment}
-                    onChange={handleChange}
-                    placeholder="0"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-
-              <div style={styles.gridRow}>
-                <div style={styles.formGroup}>
-                  <input
-                    style={{ ...styles.input, cursor: 'pointer' }}
-                    type="checkbox"
-                    name="disable_rounded_total"
-                    checked={formData.disable_rounded_total}
-                    onChange={handleChange}
-                    id="disable_rounded_total"
-                  />
-                  <label style={styles.label} htmlFor="disable_rounded_total">Disable Rounded Total</label>
-                </div>
-              </div>
-
-              {formData.items.length > 0 && (
-                <div style={styles.totalsBox}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                    <div>
-                      <div style={{ marginBottom: '8px', fontSize: '12px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Subtotal:</span>
-                        <strong>₹{parseFloat(calculateSubtotal() || 0).toFixed(2)}</strong>
+                  {bomAnalysis && bomAnalysis.summary && (
+                    <div style={styles.analysisCard}>
+                      <h3 style={{ marginTop: '0' }}>Sales Order Analysis for this BOM</h3>
+                      <div style={styles.gridRow}>
+                        <div>
+                          <label style={styles.label}>Total Orders</label>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                            {bomAnalysis.summary.total_orders || 0}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={styles.label}>Total Sales Amount</label>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                            ₹{bomAnalysis.summary.total_amount || 0}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={styles.label}>Unique Customers</label>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                            {bomAnalysis.summary.unique_customers || 0}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={styles.label}>Avg Order Value</label>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                            ₹{bomAnalysis.summary.avg_amount || 0}
+                          </div>
+                        </div>
                       </div>
-                      {formData.additional_discount_percentage > 0 && (
-                        <div style={{ marginBottom: '8px', fontSize: '12px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Discount ({formData.additional_discount_percentage}%):</span>
-                          <strong>-₹{parseFloat((calculateSubtotal() * formData.additional_discount_percentage / 100) || 0).toFixed(2)}</strong>
+
+                      {bomAnalysis.recent_orders && bomAnalysis.recent_orders.length > 0 && (
+                        <div>
+                          <h4 style={{ marginTop: '16px' }}>Recent Orders</h4>
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={styles.table}>
+                              <thead>
+                                <tr>
+                                  <th style={styles.tableHeader}>Order ID</th>
+                                  <th style={styles.tableHeader}>Customer ID</th>
+                                  <th style={styles.tableHeader}>Amount</th>
+                                  <th style={styles.tableHeader}>Quantity</th>
+                                  <th style={styles.tableHeader}>Status</th>
+                                  <th style={styles.tableHeader}>Date</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {bomAnalysis.recent_orders.map((order, idx) => (
+                                  <tr key={idx}>
+                                    <td style={styles.tableCell}>{order.sales_order_id}</td>
+                                    <td style={styles.tableCell}>{order.customer_id}</td>
+                                    <td style={styles.tableCell}>₹{order.order_amount}</td>
+                                    <td style={styles.tableCell}>{order.quantity}</td>
+                                    <td style={styles.tableCell}>{order.status}</td>
+                                    <td style={styles.tableCell}>
+                                      {new Date(order.created_at).toLocaleDateString()}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       )}
                     </div>
-                    <div>
-                      <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: 'bold', color: '#007bff', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Grand Total:</span>
-                        <strong>₹{parseFloat(calculateGrandTotal() || 0).toFixed(2)}</strong>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
+              ) : (
+                <Alert type="info">Select a BOM to view details and analysis</Alert>
               )}
             </div>
           )}
 
           <div style={styles.wizardNav}>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={prevTab}
-              disabled={activeTabIndex === 0}
-            >
-              ← Previous
-            </Button>
-
-            <span style={{ fontSize: '12px', color: '#666', alignSelf: 'center' }}>
-              Step {activeTabIndex + 1} of {tabs.length}
-            </span>
-
-            {activeTabIndex === tabs.length - 1 ? (
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : 'Save Sales Order'}
+            {activeTabIndex > 0 && (
+              <Button type="button" onClick={prevTab} variant="secondary">
+                ← Previous
+              </Button>
+            )}
+            <div style={{ flex: 1 }}></div>
+            {activeTabIndex < tabs.length - 1 ? (
+              <Button type="button" onClick={nextTab} variant="primary">
+                Next →
               </Button>
             ) : (
-              <Button
-                type="button"
-                variant="primary"
-                onClick={nextTab}
-              >
-                Next →
+              <Button type="submit" variant="success" disabled={loading}>
+                {loading ? 'Saving...' : 'Save Sales Order'}
               </Button>
             )}
           </div>

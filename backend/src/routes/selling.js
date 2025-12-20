@@ -74,4 +74,12 @@ router.get('/coupon-codes', SetupController.getCouponCodes)
 router.get('/analytics', SellingController.getAnalytics)
 router.get('/analytics/export', SellingController.exportAnalytics)
 
+// ============================================
+// BOM INTEGRATION ROUTES
+// ============================================
+router.get('/bom-list', SellingController.getBOMList)
+router.get('/bom/:bomId', SellingController.getBOMDetails)
+router.get('/orders-by-bom/:bomId', SellingController.getSalesOrderAnalysisByBOM)
+router.get('/orders-by-customer/:customerId', SellingController.getSalesOrderAnalysisByCustomer)
+
 export default router

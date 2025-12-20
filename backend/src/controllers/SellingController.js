@@ -1269,6 +1269,151 @@ export class SellingController {
       res.status(500).json({ error: 'Failed to export analytics', details: error.message })
     }
   }
+
+  // ============================================
+  // SALES ORDER BOM INTEGRATION
+  // ============================================
+
+  static async getBOMList(req, res) {
+    const db = req.app.locals.db
+    try {
+      const [boms] = await db.execute(
+        `SELECT bom_id, item_code, product_name, quantity, uom, status 
+         FROM bom 
+         WHERE status IN ('active', 'draft') 
+         ORDER BY created_at DESC`
+      )
+      res.json({ success: true, data: boms })
+    } catch (error) {
+      console.error('Error fetching BOM list:', error)
+      res.status(500).json({ error: 'Failed to fetch BOM list', details: error.message })
+    }
+  }
+
+  static async getBOMDetails(req, res) {
+    const db = req.app.locals.db
+    const { bomId } = req.params
+
+    try {
+      const [bom] = await db.execute(
+        'SELECT * FROM bom WHERE bom_id = ?',
+        [bomId]
+      )
+
+      if (!bom || bom.length === 0) {
+        return res.status(404).json({ error: 'BOM not found' })
+      }
+
+      const bomData = bom[0]
+
+      const [lines] = await db.execute(
+        'SELECT * FROM bom_line WHERE bom_id = ? ORDER BY idx ASC',
+        [bomId]
+      )
+
+      const [scrap] = await db.execute(
+        'SELECT * FROM bom_scrap WHERE bom_id = ?',
+        [bomId]
+      )
+
+      const [operations] = await db.execute(
+        'SELECT * FROM bom_operation WHERE bom_id = ? ORDER BY idx ASC',
+        [bomId]
+      )
+
+      bomData.materials = lines || []
+      bomData.scrap_items = scrap || []
+      bomData.operations = operations || []
+
+      res.json({ success: true, data: bomData })
+    } catch (error) {
+      console.error('Error fetching BOM details:', error)
+      res.status(500).json({ error: 'Failed to fetch BOM details', details: error.message })
+    }
+  }
+
+  static async getSalesOrderAnalysisByBOM(req, res) {
+    const db = req.app.locals.db
+    const { bomId } = req.params
+
+    try {
+      const [analysis] = await db.execute(
+        `SELECT 
+          COUNT(*) as total_orders,
+          SUM(quantity) as total_quantity,
+          SUM(order_amount) as total_amount,
+          AVG(order_amount) as avg_amount,
+          COUNT(DISTINCT customer_id) as unique_customers,
+          MIN(created_at) as first_order_date,
+          MAX(created_at) as last_order_date,
+          status
+        FROM selling_sales_order
+        WHERE bom_id = ? AND deleted_at IS NULL
+        GROUP BY status`,
+        [bomId]
+      )
+
+      const [orders] = await db.execute(
+        `SELECT sales_order_id, customer_id, order_amount, quantity, status, created_at
+         FROM selling_sales_order
+         WHERE bom_id = ? AND deleted_at IS NULL
+         ORDER BY created_at DESC
+         LIMIT 10`,
+        [bomId]
+      )
+
+      res.json({
+        success: true,
+        data: {
+          summary: analysis && analysis.length > 0 ? analysis[0] : null,
+          recent_orders: orders || []
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching sales order analysis:', error)
+      res.status(500).json({ error: 'Failed to fetch analysis', details: error.message })
+    }
+  }
+
+  static async getSalesOrderAnalysisByCustomer(req, res) {
+    const db = req.app.locals.db
+    const { customerId } = req.params
+
+    try {
+      const [analysis] = await db.execute(
+        `SELECT 
+          COUNT(*) as total_orders,
+          SUM(order_amount) as total_amount,
+          AVG(order_amount) as avg_amount,
+          status,
+          DATE(created_at) as order_date
+        FROM selling_sales_order
+        WHERE customer_id = ? AND deleted_at IS NULL
+        GROUP BY status, DATE(created_at)
+        ORDER BY order_date DESC`,
+        [customerId]
+      )
+
+      const [orders] = await db.execute(
+        `SELECT sales_order_id, bom_id, order_amount, quantity, status, created_at
+         FROM selling_sales_order
+         WHERE customer_id = ? AND deleted_at IS NULL
+         ORDER BY created_at DESC`,
+        [customerId]
+      )
+
+      res.json({
+        success: true,
+        data: {
+          summary: analysis || [],
+          orders: orders || []
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching customer analysis:', error)
+      res.status(500).json({ error: 'Failed to fetch analysis', details: error.message })
+    }
+  }
 }
 
 function getDateFilter(period) {

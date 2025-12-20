@@ -534,44 +534,6 @@ function App() {
             }
           />
 
-          {/* Selling Module - Sales Orders */}
-          <Route
-            path="/selling/sales-orders"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin', 'production']}>
-                    <SalesOrder />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/sales-orders/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesOrderForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/sales-orders/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesOrderForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-
           {/* Selling Module - Delivery Notes */}
           <Route
             path="/selling/delivery-notes"
@@ -1147,6 +1109,45 @@ function App() {
           />
           <Route path="/production/boms/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><BOMForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
           <Route path="/production/boms/form/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><BOMForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+
+          {/* Production Module - Sales Orders (BOM-based) */}
+          <Route
+            path="/production/sales-orders"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <SalesOrder />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production/sales-orders/new"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <SalesOrderForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production/sales-orders/:id"
+            element={
+              <ProtectedRoute>
+                <DepartmentLayout>
+                  <DepartmentProtectedRoute departments={['production', 'admin']}>
+                    <SalesOrderForm />
+                  </DepartmentProtectedRoute>
+                </DepartmentLayout>
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/production/plans"
             element={
