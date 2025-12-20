@@ -212,27 +212,20 @@ export default function DepartmentLayout({ children }) {
       return [
         dashboardItem,
         {
-          id: 'billOfMaterials',
-          label: 'Bill of Materials',
-          icon: Clipboard,
-          section: 'APPS',
-          submenu: [
-            { label: 'BOM', path: '/production/boms', icon: Clipboard },
-            { label: 'Workstations', path: '/production/workstations', icon: Grid3x3 },
-            { label: 'Operations', path: '/production/operations', icon: Wrench }
-          ]
-        },
-        {
-          id: 'production',
-          label: 'Production',
+          id: 'manufacturing',
+          label: 'Manufacturing',
           icon: Package,
           section: 'APPS',
           submenu: [
-            { label: 'Work Order', path: '/production/work-orders', icon: Clipboard },
-            { label: 'Job Card', path: '/production/job-cards', icon: FileText },
-            { label: 'Production Plan', path: '/production/plans', icon: Calendar },
-            { label: 'Production Orders', path: '/production/orders', icon: Package },
-            { label: 'Quality Records', path: '/production/quality', icon: CheckCircle }
+            { label: 'Customers', path: '/selling/customers', icon: Users },
+            { label: 'Items', path: '/masters/items', icon: Package },
+            { label: 'BOM', path: '/production/boms', icon: Clipboard },
+            { label: 'Sales Orders', path: '/selling/sales-orders', icon: Clipboard },
+            { label: 'Production Planning', path: '/production/plans', icon: Calendar },
+            { label: 'Work Orders', path: '/production/work-orders', icon: Clipboard },
+            { label: 'Job Cards', path: '/production/job-cards', icon: FileText },
+            { label: 'Workstations', path: '/production/workstations', icon: Grid3x3 },
+            { label: 'Operations', path: '/production/operations', icon: Wrench }
           ]
         },
         {

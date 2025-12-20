@@ -409,7 +409,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['buying', 'admin']}>
+                  <DepartmentProtectedRoute departments={['buying', 'admin', 'production']}>
                     <Items />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
@@ -540,7 +540,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
+                  <DepartmentProtectedRoute departments={['selling', 'admin', 'production']}>
                     <SalesOrder />
                   </DepartmentProtectedRoute>
                 </DepartmentLayout>
