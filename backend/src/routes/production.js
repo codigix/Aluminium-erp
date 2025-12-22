@@ -51,13 +51,34 @@ export function createProductionRoutes(db) {
     authMiddleware,
     productionController.getWorkOrder.bind(productionController)
   )
+  router.post(
+    '/work-orders/:wo_id/job-cards/auto-create',
+    authMiddleware,
+    productionController.autoCreateJobCards.bind(productionController)
+  )
+
   router.put(
     '/work-orders/:wo_id',
     authMiddleware,
     productionController.updateWorkOrder.bind(productionController)
   )
+  router.delete(
+    '/work-orders/:wo_id',
+    authMiddleware,
+    productionController.deleteWorkOrder.bind(productionController)
+  )
 
   // ============= PRODUCTION PLANS =============
+  router.get(
+    '/sales-orders',
+    productionController.getSalesOrders.bind(productionController)
+  )
+
+  router.get(
+    '/sales-orders/:id',
+    productionController.getSalesOrderById.bind(productionController)
+  )
+  
   router.post(
     '/plans',
     authMiddleware,
@@ -67,6 +88,11 @@ export function createProductionRoutes(db) {
     '/plans',
     authMiddleware,
     productionController.getProductionPlans.bind(productionController)
+  )
+  router.post(
+    '/plans/items',
+    authMiddleware,
+    productionController.getProductionPlanItems.bind(productionController)
   )
 router.get(
   '/plans/:plan_id',

@@ -153,7 +153,7 @@ export default function WorkOrderTracking() {
         <div className="wot-info-item">
           <span className="wot-label">Due Date:</span>
           <span className="wot-value">
-            {workOrder.required_date ? new Date(workOrder.required_date).toLocaleDateString() : 'N/A'}
+            {workOrder.expected_delivery_date ? new Date(workOrder.expected_delivery_date).toLocaleDateString() : 'N/A'}
           </span>
         </div>
         <div className="wot-info-item">

@@ -368,15 +368,15 @@ export class SellingController {
 
   static async createSalesOrder(req, res) {
     const db = req.app.locals.db
-    const { customer_id, quotation_id, order_amount, total_value, delivery_date, order_terms, terms_conditions, items } = req.body
+    const { customer_id, quotation_id, order_amount, total_value, delivery_date, order_terms, terms_conditions, items, bom_id, quantity } = req.body
 
     try {
       // Accept both field name variations
-      const finalAmount = order_amount || total_value
+      const finalAmount = order_amount || total_value || 0
       const finalTerms = order_terms || terms_conditions
 
-      if (!customer_id || !finalAmount) {
-        return res.status(400).json({ error: 'Customer and order amount are required' })
+      if (!customer_id) {
+        return res.status(400).json({ error: 'Customer is required' })
       }
 
       // Validate customer exists
@@ -402,9 +402,9 @@ export class SellingController {
 
       await db.execute(
         `INSERT INTO selling_sales_order 
-         (sales_order_id, customer_id, quotation_id, order_amount, delivery_date, order_terms, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'draft')`,
-        [sales_order_id, customer_id, quotation_id || null, finalAmount, formatDateForSQL(delivery_date), finalTerms || null]
+         (sales_order_id, customer_id, quotation_id, order_amount, delivery_date, order_terms, bom_id, quantity, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+        [sales_order_id, customer_id, quotation_id || null, finalAmount, formatDateForSQL(delivery_date), finalTerms || null, bom_id || null, quantity || 1]
       )
 
       // Insert items if provided
@@ -576,7 +576,7 @@ export class SellingController {
   static async updateSalesOrder(req, res) {
     const db = req.app.locals.db
     const { id } = req.params
-    const { order_amount, total_value, delivery_date, order_terms, status, items } = req.body
+    const { order_amount, total_value, delivery_date, order_terms, status, items, bom_id, quantity } = req.body
 
     try {
       // Check if order exists
@@ -604,7 +604,7 @@ export class SellingController {
 
       if (order_amount !== undefined || total_value !== undefined) {
         updates.push('order_amount = ?')
-        values.push(order_amount || total_value)
+        values.push(order_amount || total_value || 0)
       }
       if (delivery_date !== undefined) {
         updates.push('delivery_date = ?')
@@ -617,6 +617,14 @@ export class SellingController {
       if (status !== undefined) {
         updates.push('status = ?')
         values.push(status)
+      }
+      if (bom_id !== undefined) {
+        updates.push('bom_id = ?')
+        values.push(bom_id)
+      }
+      if (quantity !== undefined) {
+        updates.push('quantity = ?')
+        values.push(quantity)
       }
 
       if (updates.length === 0 && (!items || items.length === 0)) {
@@ -1278,9 +1286,8 @@ export class SellingController {
     const db = req.app.locals.db
     try {
       const [boms] = await db.execute(
-        `SELECT bom_id, item_code, product_name, quantity, uom, status 
+        `SELECT bom_id, item_code, status 
          FROM bom 
-         WHERE status IN ('active', 'draft') 
          ORDER BY created_at DESC`
       )
       res.json({ success: true, data: boms })
@@ -1296,7 +1303,10 @@ export class SellingController {
 
     try {
       const [bom] = await db.execute(
-        'SELECT * FROM bom WHERE bom_id = ?',
+        `SELECT b.*, i.standard_selling_rate 
+         FROM bom b
+         LEFT JOIN item i ON b.item_code = i.item_code
+         WHERE b.bom_id = ?`,
         [bomId]
       )
 
@@ -1307,17 +1317,17 @@ export class SellingController {
       const bomData = bom[0]
 
       const [lines] = await db.execute(
-        'SELECT * FROM bom_line WHERE bom_id = ? ORDER BY idx ASC',
+        'SELECT * FROM bom_line WHERE bom_id = ? ORDER BY sequence ASC',
         [bomId]
       )
 
       const [scrap] = await db.execute(
-        'SELECT * FROM bom_scrap WHERE bom_id = ?',
+        'SELECT * FROM bom_scrap WHERE bom_id = ? ORDER BY sequence ASC',
         [bomId]
       )
 
       const [operations] = await db.execute(
-        'SELECT * FROM bom_operation WHERE bom_id = ? ORDER BY idx ASC',
+        'SELECT * FROM bom_operation WHERE bom_id = ? ORDER BY sequence ASC',
         [bomId]
       )
 
@@ -1337,29 +1347,47 @@ export class SellingController {
     const { bomId } = req.params
 
     try {
+      // First get the item_code for this BOM
+      const [bom] = await db.execute('SELECT item_code FROM bom WHERE bom_id = ?', [bomId])
+      
+      if (!bom.length) {
+        return res.status(404).json({ error: 'BOM not found' })
+      }
+      
+      const itemCode = bom[0].item_code
+
       const [analysis] = await db.execute(
         `SELECT 
           COUNT(*) as total_orders,
-          SUM(quantity) as total_quantity,
           SUM(order_amount) as total_amount,
           AVG(order_amount) as avg_amount,
           COUNT(DISTINCT customer_id) as unique_customers,
           MIN(created_at) as first_order_date,
           MAX(created_at) as last_order_date,
           status
-        FROM selling_sales_order
-        WHERE bom_id = ? AND deleted_at IS NULL
+        FROM selling_sales_order sso
+        WHERE sso.deleted_at IS NULL
+        AND EXISTS (
+            SELECT 1 FROM sales_order_items soi 
+            WHERE soi.sales_order_id = sso.sales_order_id 
+            AND soi.item_code = ?
+        )
         GROUP BY status`,
-        [bomId]
+        [itemCode]
       )
 
       const [orders] = await db.execute(
-        `SELECT sales_order_id, customer_id, order_amount, quantity, status, created_at
-         FROM selling_sales_order
-         WHERE bom_id = ? AND deleted_at IS NULL
+        `SELECT sales_order_id, customer_id, order_amount, status, created_at
+         FROM selling_sales_order sso
+         WHERE sso.deleted_at IS NULL
+         AND EXISTS (
+            SELECT 1 FROM sales_order_items soi 
+            WHERE soi.sales_order_id = sso.sales_order_id 
+            AND soi.item_code = ?
+         )
          ORDER BY created_at DESC
          LIMIT 10`,
-        [bomId]
+        [itemCode]
       )
 
       res.json({
@@ -1395,10 +1423,11 @@ export class SellingController {
       )
 
       const [orders] = await db.execute(
-        `SELECT sales_order_id, bom_id, order_amount, quantity, status, created_at
-         FROM selling_sales_order
-         WHERE customer_id = ? AND deleted_at IS NULL
-         ORDER BY created_at DESC`,
+        `SELECT sso.sales_order_id, sso.order_amount, sso.status, sso.created_at,
+         (SELECT COALESCE(SUM(qty), 0) FROM sales_order_items WHERE sales_order_id = sso.sales_order_id) as quantity
+         FROM selling_sales_order sso
+         WHERE sso.customer_id = ? AND sso.deleted_at IS NULL
+         ORDER BY sso.created_at DESC`,
         [customerId]
       )
 

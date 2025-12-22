@@ -116,24 +116,34 @@ class ProductionModel {
 
   async getWorkOrders(filters = {}) {
     try {
-      let query = 'SELECT * FROM work_order WHERE 1=1'
+      let query = `
+        SELECT wo.*, b.total_cost as bom_cost, b.process_loss_percentage
+        FROM work_order wo
+        LEFT JOIN bom b ON wo.bom_no = b.bom_id
+        WHERE 1=1
+      `
       const params = []
 
       if (filters.status) {
-        query += ' AND status = ?'
+        query += ' AND wo.status = ?'
         params.push(filters.status)
       }
       if (filters.search) {
-        query += ' AND (wo_id LIKE ? OR item_code LIKE ?)'
+        query += ' AND (wo.wo_id LIKE ? OR wo.item_code LIKE ?)'
         params.push(`%${filters.search}%`, `%${filters.search}%`)
       }
       if (filters.assigned_to_id) {
-        query += ' AND assigned_to_id = ?'
+        query += ' AND wo.assigned_to_id = ?'
         params.push(filters.assigned_to_id)
       }
 
       const [workOrders] = await this.db.query(query, params)
-      return workOrders
+      
+      // Calculate estimated cost
+      return workOrders.map(wo => ({
+        ...wo,
+        estimated_cost: (parseFloat(wo.bom_cost) || 0) * (parseFloat(wo.quantity) || 0)
+      }))
     } catch (error) {
       throw error
     }
@@ -141,8 +151,19 @@ class ProductionModel {
 
   async getWorkOrderById(wo_id) {
     try {
-      const [workOrders] = await this.db.query('SELECT * FROM work_order WHERE wo_id = ?', [wo_id])
-      return workOrders && workOrders.length > 0 ? workOrders[0] : null
+      const [workOrders] = await this.db.query(`
+        SELECT wo.*, b.total_cost as bom_cost, b.process_loss_percentage
+        FROM work_order wo
+        LEFT JOIN bom b ON wo.bom_no = b.bom_id
+        WHERE wo.wo_id = ?
+      `, [wo_id])
+      
+      if (workOrders && workOrders.length > 0) {
+        const wo = workOrders[0]
+        wo.estimated_cost = (parseFloat(wo.bom_cost) || 0) * (parseFloat(wo.quantity) || 0)
+        return wo
+      }
+      return null
     } catch (error) {
       throw error
     }
@@ -236,9 +257,19 @@ class ProductionModel {
     try {
       const plan_id = `PLAN-${Date.now()}`
       await this.db.query(
-        `INSERT INTO production_plan (plan_id, plan_date, week_number, planned_by_id, status)
-         VALUES (?, ?, ?, ?, ?)`,
-        [plan_id, data.plan_date, data.week_number, data.planned_by_id, 'draft']
+        `INSERT INTO production_plan (plan_id, plan_date, week_number, planned_by_id, status, sales_orders, company, posting_date, naming_series)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          plan_id, 
+          data.plan_date, 
+          data.week_number, 
+          data.planned_by_id, 
+          'draft', 
+          JSON.stringify(data.sales_orders || []),
+          data.company,
+          data.posting_date,
+          data.naming_series
+        ]
       )
       return { plan_id, ...data }
     } catch (error) {
@@ -270,7 +301,139 @@ class ProductionModel {
   async getProductionPlanDetails(plan_id) {
     try {
       const [plans] = await this.db.query('SELECT * FROM production_plan WHERE plan_id = ?', [plan_id])
-      return plans[0] || null
+      const plan = plans[0] || null
+
+      if (plan) {
+        const [items] = await this.db.query('SELECT * FROM production_plan_item WHERE plan_id = ?', [plan_id])
+        plan.items = items.map(item => ({
+          ...item,
+          planned_qty: item.quantity,
+          planned_start_date: item.planned_date
+        }))
+
+        // Parse sales_orders if it's a string
+        if (typeof plan.sales_orders === 'string') {
+          try {
+            plan.sales_orders = JSON.parse(plan.sales_orders)
+          } catch (e) {
+            plan.sales_orders = []
+          }
+        }
+      }
+
+      return plan
+    } catch (error) {
+      throw error
+    }
+  }
+
+  async getProductionPlanItems(sales_order_id) {
+    try {
+      // 1. Get Sales Order Items
+      const [soItems] = await this.db.query(
+        `SELECT soi.*, so.bom_id as so_bom_id, so.quantity as so_quantity
+         FROM sales_order_items soi
+         JOIN selling_sales_order so ON soi.sales_order_id = so.sales_order_id
+         WHERE soi.sales_order_id = ?`,
+        [sales_order_id]
+      )
+
+      // Also check if the SO itself has a BOM (for single product SOs)
+      const [soHeader] = await this.db.query(
+        `SELECT bom_id, quantity FROM selling_sales_order WHERE sales_order_id = ?`,
+        [sales_order_id]
+      )
+
+      const items = []
+      const subAssemblies = []
+      const rawMaterials = []
+
+      // Helper to explode BOM recursively
+      const explodeBOM = async (bomId, qty) => {
+        const [lines] = await this.db.query('SELECT * FROM bom_line WHERE bom_id = ?', [bomId])
+        
+        for (const line of lines) {
+          const requiredQty = (line.quantity || 0) * qty
+          
+          if (line.component_type === 'Sub Assembly') {
+             // Find BOM for sub-assembly
+             const [subBom] = await this.db.query('SELECT bom_id FROM bom WHERE item_code = ? LIMIT 1', [line.component_code])
+             const subBomId = subBom && subBom.length > 0 ? subBom[0].bom_id : null
+             
+             // Add to Sub Assemblies list
+             subAssemblies.push({
+               item_code: line.component_code,
+               target_warehouse: 'Work In Progress',
+               scheduled_date: new Date().toISOString().split('T')[0],
+               required_qty: requiredQty,
+               bom_no: subBomId || '',
+               manufacturing_type: 'In House'
+             })
+
+             // Recursively explode if BOM exists
+             if (subBomId) {
+               await explodeBOM(subBomId, requiredQty)
+             }
+          } else {
+             // Raw Material - Aggregate if exists
+             const existing = rawMaterials.find(rm => rm.item_code === line.component_code)
+             if (existing) {
+               existing.required_qty += requiredQty
+             } else {
+               rawMaterials.push({
+                 item_code: line.component_code,
+                 item_name: line.component_description,
+                 required_qty: requiredQty,
+                 uom: line.uom,
+                 warehouse: line.warehouse || 'Stores'
+               })
+             }
+          }
+        }
+      }
+
+      // Helper to process top-level item
+      const processTopLevelItem = async (bomId, qty) => {
+        const [bom] = await this.db.query('SELECT * FROM bom WHERE bom_id = ?', [bomId])
+        if (!bom || bom.length === 0) return
+
+        const bomData = bom[0]
+        
+        // Add Finished Good
+        items.push({
+          item_code: bomData.item_code,
+          bom_no: bomData.bom_id,
+          planned_qty: qty,
+          uom: bomData.uom,
+          warehouse: 'Finished Goods',
+          planned_start_date: new Date().toISOString().split('T')[0],
+          estimated_cost: (parseFloat(bomData.total_cost) || 0) * qty
+        })
+
+        // Explode BOM
+        await explodeBOM(bomId, qty)
+      }
+
+      // Strategy 1: Use SO Header BOM if available
+      if (soHeader && soHeader.length > 0 && soHeader[0].bom_id) {
+        await processTopLevelItem(soHeader[0].bom_id, soHeader[0].quantity || 1)
+      } 
+      // Strategy 2: Iterate items
+      else if (soItems && soItems.length > 0) {
+        for (const item of soItems) {
+          // Find BOM for item
+          const [bom] = await this.db.query('SELECT bom_id FROM bom WHERE item_code = ? LIMIT 1', [item.item_code])
+          if (bom && bom.length > 0) {
+            await processTopLevelItem(bom[0].bom_id, item.qty || 1)
+          }
+        }
+      }
+
+      return {
+        items,
+        sub_assemblies: subAssemblies,
+        raw_materials: rawMaterials
+      }
     } catch (error) {
       throw error
     }
@@ -284,6 +447,10 @@ class ProductionModel {
       if (data.plan_date) { fields.push('plan_date = ?'); values.push(data.plan_date) }
       if (data.week_number) { fields.push('week_number = ?'); values.push(data.week_number) }
       if (data.status) { fields.push('status = ?'); values.push(data.status) }
+      if (data.company) { fields.push('company = ?'); values.push(data.company) }
+      if (data.posting_date) { fields.push('posting_date = ?'); values.push(data.posting_date) }
+      if (data.naming_series) { fields.push('naming_series = ?'); values.push(data.naming_series) }
+      if (data.sales_orders) { fields.push('sales_orders = ?'); values.push(JSON.stringify(data.sales_orders)) }
 
       if (fields.length === 0) return false
 
@@ -299,6 +466,8 @@ class ProductionModel {
 
   async deleteProductionPlan(plan_id) {
     try {
+      // Delete associated items first to avoid foreign key constraint violation
+      await this.db.query('DELETE FROM production_plan_item WHERE plan_id = ?', [plan_id])
       await this.db.query('DELETE FROM production_plan WHERE plan_id = ?', [plan_id])
       return true
     } catch (error) {
@@ -309,9 +478,18 @@ class ProductionModel {
   async addPlanItem(plan_id, item) {
     try {
       await this.db.query(
-        `INSERT INTO production_plan_item (plan_id, item_code, quantity, planned_date)
-         VALUES (?, ?, ?, ?)`,
-        [plan_id, item.item_code, item.quantity, item.planned_date]
+        `INSERT INTO production_plan_item (plan_id, item_code, quantity, planned_date, bom_no, uom, warehouse, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          plan_id, 
+          item.item_code, 
+          item.quantity || item.planned_qty, 
+          item.planned_date || item.planned_start_date,
+          item.bom_no,
+          item.uom,
+          item.warehouse,
+          item.description || item.item_name
+        ]
       )
     } catch (error) {
       throw error
@@ -487,27 +665,6 @@ class ProductionModel {
       }
 
       const [boms] = await this.db.query(query, params)
-      
-      // Calculate total_cost for each BOM from bom_line items
-      for (let bom of boms) {
-        const [lines] = await this.db.query(
-          `SELECT bl.quantity, i.valuation_rate 
-           FROM bom_line bl
-           LEFT JOIN item i ON bl.component_code = i.item_code
-           WHERE bl.bom_id = ?`,
-          [bom.bom_id]
-        )
-        
-        let totalCost = 0
-        if (lines) {
-          totalCost = lines.reduce((sum, line) => {
-            const cost = (line.quantity || 0) * (line.valuation_rate || 0)
-            return sum + cost
-          }, 0)
-        }
-        bom.total_cost = totalCost
-      }
-      
       return boms
     } catch (error) {
       throw error
@@ -523,22 +680,8 @@ class ProductionModel {
       const [operations] = await this.db.query('SELECT * FROM bom_operation WHERE bom_id = ? ORDER BY sequence', [bom_id])
       const [scrapItems] = await this.db.query('SELECT * FROM bom_scrap WHERE bom_id = ? ORDER BY sequence', [bom_id])
 
-      // Calculate total_cost from bom_line items
-      let totalCost = 0
-      if (lines && lines.length > 0) {
-        const [costData] = await this.db.query(
-          `SELECT COALESCE(SUM(bl.quantity * COALESCE(i.valuation_rate, 0)), 0) as total
-           FROM bom_line bl
-           LEFT JOIN item i ON bl.component_code = i.item_code
-           WHERE bl.bom_id = ?`,
-          [bom_id]
-        )
-        totalCost = costData && costData[0] ? costData[0].total : 0
-      }
-
       return {
         ...bom[0],
-        total_cost: totalCost,
         lines: lines || [],
         operations: operations || [],
         scrapItems: scrapItems || []
@@ -550,12 +693,12 @@ class ProductionModel {
 
   async createBOM(data) {
     try {
-      const query = `INSERT INTO bom (bom_id, item_code, product_name, description, quantity, uom, status, revision, effective_date, created_by, process_loss_percentage)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      const query = `INSERT INTO bom (bom_id, item_code, product_name, description, quantity, uom, status, revision, effective_date, created_by, process_loss_percentage, total_cost, is_default)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       await this.db.query(
         query,
         [data.bom_id, data.item_code, data.product_name, data.description, data.quantity || 1, 
-         data.uom, data.status, data.revision, data.effective_date, data.created_by, data.process_loss_percentage || 0]
+         data.uom, data.status, data.revision, data.effective_date, data.created_by, data.process_loss_percentage || 0, data.total_cost || 0, data.is_default || false]
       )
       return data
     } catch (error) {
@@ -575,8 +718,8 @@ class ProductionModel {
 
   async addBOMLine(bom_id, line) {
     try {
-      const query = `INSERT INTO bom_line (bom_id, component_code, quantity, uom, component_description, component_type, sequence, notes, warehouse, operation)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      const query = `INSERT INTO bom_line (bom_id, component_code, quantity, uom, component_description, component_type, sequence, notes, warehouse, operation, rate, amount)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       
       await this.db.query(
         query,
@@ -590,11 +733,13 @@ class ProductionModel {
           line.sequence, 
           line.notes,
           line.warehouse,
-          line.operation
+          line.operation,
+          line.rate || 0,
+          line.amount || 0
         ]
       )
     } catch (error) {
-      // If warehouse/operation columns don't exist yet (migration not run), fall back to old query
+      // If warehouse/operation/rate/amount columns don't exist yet (migration not run), fall back to old query
       if (error.code === 'ER_BAD_FIELD_ERROR') {
         await this.db.query(
           `INSERT INTO bom_line (bom_id, component_code, quantity, uom, component_description, component_type, sequence, notes)
@@ -629,6 +774,8 @@ class ProductionModel {
       if (data.revision) { fields.push('revision = ?'); values.push(data.revision) }
       if (data.effective_date) { fields.push('effective_date = ?'); values.push(data.effective_date) }
       if (data.process_loss_percentage !== undefined) { fields.push('process_loss_percentage = ?'); values.push(data.process_loss_percentage) }
+      if (data.total_cost !== undefined) { fields.push('total_cost = ?'); values.push(data.total_cost) }
+      if (data.is_default !== undefined) { fields.push('is_default = ?'); values.push(data.is_default) }
 
       fields.push('updated_at = NOW()')
       values.push(bom_id)
@@ -776,10 +923,10 @@ class ProductionModel {
   async createJobCard(data) {
     try {
       await this.db.query(
-        `INSERT INTO job_card (job_card_id, work_order_id, machine_id, operator_id, planned_quantity, scheduled_start_date, scheduled_end_date, status, created_by, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO job_card (job_card_id, work_order_id, machine_id, operator_id, planned_quantity, scheduled_start_date, scheduled_end_date, status, created_by, notes, operation)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [data.job_card_id, data.work_order_id, data.machine_id, data.operator_id, 
-         data.planned_quantity, data.scheduled_start_date, data.scheduled_end_date, data.status, data.created_by, data.notes]
+         data.planned_quantity, data.scheduled_start_date, data.scheduled_end_date, data.status, data.created_by, data.notes, data.operation]
       )
       return data
     } catch (error) {
@@ -803,6 +950,7 @@ class ProductionModel {
       if (data.actual_start_date) { fields.push('actual_start_date = ?'); values.push(data.actual_start_date) }
       if (data.actual_end_date) { fields.push('actual_end_date = ?'); values.push(data.actual_end_date) }
       if (data.notes) { fields.push('notes = ?'); values.push(data.notes) }
+      if (data.operation) { fields.push('operation = ?'); values.push(data.operation) }
 
       if (fields.length === 0) return false
 

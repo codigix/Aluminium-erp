@@ -331,6 +331,20 @@ async function initializeDatabase() {
         console.warn('⚠ Could not initialize rejection table:', err.message)
       }
     }
+
+    // Add sales_orders column to production_plan table if it doesn't exist
+    try {
+      await db.execute(`
+        ALTER TABLE production_plan ADD COLUMN sales_orders JSON
+      `)
+      console.log('✓ sales_orders column added to production_plan table')
+    } catch (err) {
+      if (err.code === 'ER_DUP_FIELDNAME') {
+        console.log('✓ sales_orders column already exists in production_plan table')
+      } else {
+        console.warn('⚠ Could not add sales_orders column to production_plan table:', err.message)
+      }
+    }
   } catch (error) {
     console.error('Database connection failed:', error)
     process.exit(1)

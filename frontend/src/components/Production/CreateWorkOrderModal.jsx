@@ -11,7 +11,7 @@ export default function CreateWorkOrderModal({ isOpen, onClose, onSuccess }) {
     item_code: '',
     quantity: '',
     unit_cost: '',
-    required_date: '',
+    expected_delivery_date: '',
     priority: 'medium',
     notes: ''
   })
@@ -32,7 +32,7 @@ export default function CreateWorkOrderModal({ isOpen, onClose, onSuccess }) {
 
     try {
       // Validate required fields
-      if (!formData.sales_order_id || !formData.item_code || !formData.quantity || !formData.unit_cost || !formData.required_date) {
+      if (!formData.sales_order_id || !formData.item_code || !formData.quantity || !formData.unit_cost || !formData.expected_delivery_date) {
         throw new Error('Please fill in all required fields')
       }
 
@@ -44,7 +44,7 @@ export default function CreateWorkOrderModal({ isOpen, onClose, onSuccess }) {
         item_code: '',
         quantity: '',
         unit_cost: '',
-        required_date: '',
+        expected_delivery_date: '',
         priority: 'medium',
         notes: ''
       })
@@ -178,12 +178,12 @@ export default function CreateWorkOrderModal({ isOpen, onClose, onSuccess }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
           <div>
             <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: '#333' }}>
-              Required Date *
+              Expected Delivery Date *
             </label>
             <input
               type="date"
-              name="required_date"
-              value={formData.required_date}
+              name="expected_delivery_date"
+              value={formData.expected_delivery_date}
               onChange={handleInputChange}
               required
               style={{

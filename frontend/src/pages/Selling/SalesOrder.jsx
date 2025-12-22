@@ -3,7 +3,7 @@ import Card from '../../components/Card/Card'
 import Button from '../../components/Button/Button'
 import Badge from '../../components/Badge/Badge'
 import DataTable from '../../components/Table/DataTable'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { 
   Edit2, Eye, Package, CheckCircle, Trash2, Plus, TrendingUp, AlertTriangle, 
   Truck, Clock, Calendar
@@ -151,6 +151,8 @@ const styles = {
 
 export default function SalesOrder() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isProduction = location.pathname.startsWith('/production')
   const [orders, setOrders] = useState([])
   const [viewOrderId, setViewOrderId] = useState(null)
   const [stats, setStats] = useState({
@@ -182,7 +184,8 @@ export default function SalesOrder() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/sales-orders?${query}`)
+      const endpoint = isProduction ? '/production/sales-orders' : '/selling/sales-orders'
+      const res = await fetch(`${import.meta.env.VITE_API_URL}${endpoint}?${query}`)
       const data = await res.json()
       if (data.success) {
         setOrders(data.data || [])
@@ -314,7 +317,7 @@ export default function SalesOrder() {
             <ActionButton
               icon={Edit2}
              
-              onClick={() => navigate(`/selling/sales-orders/${row.sales_order_id}`)}
+              onClick={() => navigate(isProduction ? `/production/sales-orders/${row.sales_order_id}` : `/selling/sales-orders/${row.sales_order_id}`)}
             />
             <ActionButton
               icon={CheckCircle}
@@ -381,7 +384,7 @@ export default function SalesOrder() {
         <div style={styles.header}>
           <h2 style={styles.title}>Sales Orders</h2>
           <Button 
-            onClick={() => navigate('/selling/sales-orders/new')}
+            onClick={() => navigate(isProduction ? '/production/sales-orders/new' : '/selling/sales-orders/new')}
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             <Plus size={18} /> New Order

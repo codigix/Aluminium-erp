@@ -132,6 +132,22 @@ export const deleteJobCard = async (jc_id) => {
 }
 
 // Production Plans (extended)
+export const getSalesOrders = async (filters = {}) => {
+  const params = new URLSearchParams(filters)
+  const response = await api.get(`/production/sales-orders?${params}`)
+  return response.data
+}
+
+export const getSalesOrderById = async (id) => {
+  const response = await api.get(`/production/sales-orders/${id}`)
+  return response.data
+}
+
+export const getProductionPlanItems = async (data) => {
+  const response = await api.post('/production/plans/items', data)
+  return response.data
+}
+
 export const getProductionPlanDetails = async (plan_id) => {
   const response = await api.get(`/production/plans/${plan_id}`)
   return response.data
@@ -155,6 +171,11 @@ export const getWorkOrder = async (wo_id) => {
 
 export const deleteWorkOrder = async (wo_id) => {
   const response = await api.delete(`/production/work-orders/${wo_id}`)
+  return response.data
+}
+
+export const autoCreateJobCards = async (wo_id) => {
+  const response = await api.post(`/production/work-orders/${wo_id}/job-cards/auto-create`)
   return response.data
 }
 

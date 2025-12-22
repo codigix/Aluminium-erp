@@ -235,7 +235,7 @@ export default function WorkOrder() {
                           {order.priority}
                         </span>
                       </td>
-                      <td>{order.required_date ? new Date(order.required_date).toLocaleDateString() : 'N/A'}</td>
+                      <td>{order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A'}</td>
                       <td><span className={`wo-status-badge ${getStatusColor(order.status)}`}>{order.status}</span></td>
                       <td>
                         <div className="wo-entry-actions">

@@ -212,6 +212,8 @@ export default function WorkOrderForm() {
     try {
       const payload = {
         ...formData,
+        item_code: formData.item_to_manufacture,
+        quantity: formData.qty_to_manufacture,
         required_items: requiredItems,
         operations: operationsData
       }
@@ -343,15 +345,27 @@ export default function WorkOrderForm() {
             </div>
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Planned End Date</label>
-            <input 
-              type="date" 
-              name="planned_end_date" 
-              value={formData.planned_end_date} 
-              onChange={handleInputChange}
-              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Planned End Date</label>
+              <input 
+                type="date" 
+                name="planned_end_date" 
+                value={formData.planned_end_date} 
+                onChange={handleInputChange}
+                style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Expected Delivery Date</label>
+              <input 
+                type="date" 
+                name="expected_delivery_date" 
+                value={formData.expected_delivery_date} 
+                onChange={handleInputChange}
+                style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+              />
+            </div>
           </div>
 
           <div>

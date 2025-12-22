@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS production_plan (
   week_number INT,
   planned_by_id VARCHAR(50),
   status ENUM('draft', 'approved', 'in_progress', 'completed') DEFAULT 'draft',
+  sales_orders JSON,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_plan_date (plan_date),

@@ -61,9 +61,8 @@ export default function ProductionPlanForm() {
 
   const fetchAvailableSalesOrders = async () => {
     try {
-      const response = await fetch('/api/selling/sales-orders')
-      const data = await response.json()
-      setAvailableSalesOrders(data.data || [])
+      const response = await productionService.getSalesOrders()
+      setAvailableSalesOrders(response.data || [])
     } catch (err) {
       console.error('Failed to fetch sales orders:', err)
     }
@@ -76,7 +75,11 @@ export default function ProductionPlanForm() {
       const plan = response.data
       setFormData({
         ...plan,
-        posting_date: plan.posting_date?.split('T')[0] || new Date().toISOString().split('T')[0]
+        posting_date: plan.posting_date?.split('T')[0] || new Date().toISOString().split('T')[0],
+        sales_orders: plan.sales_orders || [],
+        items: plan.items || [],
+        sub_assemblies: plan.sub_assemblies || [],
+        raw_materials: plan.raw_materials || []
       })
     } catch (err) {
       setError('Failed to load plan details')
@@ -93,40 +96,48 @@ export default function ProductionPlanForm() {
     }))
   }
 
-  const handleSalesOrderSelect = (e) => {
+  const handleSalesOrderSelect = async (e) => {
     const soId = e.target.value
     setSelectedSalesOrder(soId)
     
     if (soId) {
-      const so = availableSalesOrders.find(o => o.name === soId)
-      if (so) {
-        // Add to sales orders list if not exists
-        if (!formData.sales_orders.find(item => item.sales_order === soId)) {
-          setFormData(prev => ({
-            ...prev,
-            sales_orders: [...prev.sales_orders, {
-              sales_order: so.name,
-              sales_order_date: so.transaction_date,
+      try {
+        setLoading(true)
+        // Fetch Sales Order Details
+        const soResponse = await productionService.getSalesOrderById(soId)
+        const so = soResponse.data
+
+        if (so) {
+          // Add to sales orders list if not exists
+          if (!formData.sales_orders.find(item => item.sales_order === soId)) {
+            const newSalesOrder = {
+              sales_order: so.sales_order_id,
+              sales_order_date: so.created_at ? so.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
               customer: so.customer_name,
-              grand_total: so.grand_total
-            }]
-          }))
-          
-          // Auto-populate items from SO
-          // In a real app, we'd fetch SO items here
-          // For demo, let's add a dummy item
-          setFormData(prev => ({
-            ...prev,
-            items: [...prev.items, {
-              item_code: 'ITEM-C',
-              bom_no: 'BOM-1765798893184',
-              planned_qty: 1,
-              uom: 'Nos',
-              warehouse: '',
-              planned_start_date: new Date().toISOString().split('T')[0]
-            }]
-          }))
+              grand_total: so.order_amount
+            }
+
+            // Fetch exploded items from backend
+            const itemsResponse = await productionService.getProductionPlanItems({
+              sales_order_id: so.sales_order_id
+            })
+            
+            const { items = [], sub_assemblies = [], raw_materials = [] } = itemsResponse.data || {}
+
+            setFormData(prev => ({
+              ...prev,
+              sales_orders: [...prev.sales_orders, newSalesOrder],
+              items: [...prev.items, ...items],
+              sub_assemblies: [...prev.sub_assemblies, ...sub_assemblies],
+              raw_materials: [...prev.raw_materials, ...raw_materials]
+            }))
+          }
         }
+      } catch (err) {
+        console.error('Error fetching sales order details:', err)
+        setError('Failed to fetch sales order details')
+      } finally {
+        setLoading(false)
       }
     }
   }
@@ -198,7 +209,7 @@ export default function ProductionPlanForm() {
                   >
                     <option value="">Select Sales Order...</option>
                     {availableSalesOrders.map(so => (
-                      <option key={so.name} value={so.name}>{so.name} - {so.customer_name}</option>
+                      <option key={so.sales_order_id} value={so.sales_order_id}>{so.sales_order_id} - {so.customer_name}</option>
                     ))}
                   </select>
                 </div>
@@ -257,7 +268,7 @@ export default function ProductionPlanForm() {
           {expandedSections.salesOrders && (
             <div style={{ padding: '24px' }}>
               <div style={{ marginBottom: '16px', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Get Sales Orders</div>
-              {formData.sales_orders.length > 0 ? (
+              {formData.sales_orders?.length > 0 ? (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
@@ -270,7 +281,7 @@ export default function ProductionPlanForm() {
                     </tr>
                   </thead>
                   <tbody>
-                    {formData.sales_orders.map((so, index) => (
+                    {formData.sales_orders?.map((so, index) => (
                       <tr key={index} style={{ borderBottom: '1px solid #f3f4f6' }}>
                         <td style={{ padding: '12px', color: '#374151' }}>{index + 1}</td>
                         <td style={{ padding: '12px', color: '#3b82f6' }}>{so.sales_order}</td>
@@ -305,7 +316,7 @@ export default function ProductionPlanForm() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ background: '#fee2e2', padding: '6px', borderRadius: '6px' }}>📦</div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Step 2: Finished Goods ({formData.items.length})</h3>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Step 2: Finished Goods ({formData.items?.length || 0})</h3>
             </div>
             {expandedSections.finishedGoods ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
           </div>
@@ -315,10 +326,10 @@ export default function ProductionPlanForm() {
               <div style={{ backgroundColor: '#eff6ff', padding: '12px', borderRadius: '6px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e40af' }}>Item Details</div>
                 <div style={{ fontSize: '12px', color: '#3b82f6' }}>Finished Goods Item Group: Ungrouped</div>
-                <div style={{ backgroundColor: '#2563eb', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>{formData.items.length} items</div>
+                <div style={{ backgroundColor: '#2563eb', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>{formData.items?.length || 0} items</div>
               </div>
 
-              {formData.items.length > 0 ? (
+              {formData.items?.length > 0 ? (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
@@ -333,12 +344,12 @@ export default function ProductionPlanForm() {
                     </tr>
                   </thead>
                   <tbody>
-                    {formData.items.map((item, index) => (
+                    {formData.items?.map((item, index) => (
                       <tr key={index} style={{ borderBottom: '1px solid #f3f4f6' }}>
                         <td style={{ padding: '12px', color: '#374151' }}>{index + 1}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.item_code}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.bom_no}</td>
-                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>{item.planned_qty.toFixed(6)}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>{Number(item.planned_qty || 0).toFixed(6)}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.uom}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.warehouse || '-'}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.planned_start_date}</td>
@@ -369,7 +380,7 @@ export default function ProductionPlanForm() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ background: '#d1fae5', padding: '6px', borderRadius: '6px' }}>⚙️</div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Step 3: Sub-Assembly Items ({formData.sub_assemblies.length})</h3>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Step 3: Sub-Assembly Items ({formData.sub_assemblies?.length || 0})</h3>
             </div>
             {expandedSections.subAssemblies ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
           </div>
@@ -402,9 +413,9 @@ export default function ProductionPlanForm() {
                 </p>
               </div>
 
-              <div style={{ marginBottom: '16px', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Sub Assemblies ({formData.sub_assemblies.length})</div>
+              <div style={{ marginBottom: '16px', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Sub Assemblies ({formData.sub_assemblies?.length || 0})</div>
               
-              {formData.sub_assemblies.length > 0 ? (
+              {formData.sub_assemblies?.length > 0 ? (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
@@ -419,13 +430,13 @@ export default function ProductionPlanForm() {
                     </tr>
                   </thead>
                   <tbody>
-                    {formData.sub_assemblies.map((item, index) => (
+                    {formData.sub_assemblies?.map((item, index) => (
                       <tr key={index} style={{ borderBottom: '1px solid #f3f4f6' }}>
                         <td style={{ padding: '12px', color: '#374151' }}>{index + 1}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.item_code}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.target_warehouse || '-'}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.scheduled_date}</td>
-                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>{item.required_qty.toFixed(6)}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>{Number(item.required_qty || 0).toFixed(6)}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.bom_no || '-'}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.manufacturing_type}</td>
                         <td style={{ padding: '12px', textAlign: 'center' }}>
@@ -441,29 +452,7 @@ export default function ProductionPlanForm() {
                   </tbody>
                 </table>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {/* Dummy data for visualization as per image */}
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: '600' }}>ITEM-CRING16188</span>
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>In House</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6b7280' }}>
-                      <span>Req: 1.000000</span>
-                      <span>2025-12-20</span>
-                    </div>
-                  </div>
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: '600' }}>ITEM-K</span>
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>In House</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6b7280' }}>
-                      <span>Req: 1.000000</span>
-                      <span>2025-12-20</span>
-                    </div>
-                  </div>
-                </div>
+                <p style={{ color: '#6b7280', fontSize: '13px' }}>No sub-assemblies found.</p>
               )}
             </div>
           )}
@@ -477,15 +466,38 @@ export default function ProductionPlanForm() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ background: '#e0e7ff', padding: '6px', borderRadius: '6px' }}>🧱</div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Step 4: Raw Material Planning ({formData.raw_materials.length})</h3>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Step 4: Raw Material Planning ({formData.raw_materials?.length || 0})</h3>
             </div>
             {expandedSections.rawMaterials ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
           </div>
           
           {expandedSections.rawMaterials && (
             <div style={{ padding: '24px' }}>
-              {formData.raw_materials.length > 0 ? (
-                <p>Raw materials table here...</p>
+              {formData.raw_materials?.length > 0 ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', color: '#6b7280' }}>No.</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', color: '#6b7280' }}>Item Code</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', color: '#6b7280' }}>Item Name</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600', color: '#6b7280' }}>Required Qty</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', color: '#6b7280' }}>UOM</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', color: '#6b7280' }}>Warehouse</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {formData.raw_materials?.map((item, index) => (
+                      <tr key={index} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <td style={{ padding: '12px', color: '#374151' }}>{index + 1}</td>
+                        <td style={{ padding: '12px', color: '#374151' }}>{item.item_code}</td>
+                        <td style={{ padding: '12px', color: '#374151' }}>{item.item_name}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>{Number(item.required_qty || 0).toFixed(2)}</td>
+                        <td style={{ padding: '12px', color: '#374151' }}>{item.uom}</td>
+                        <td style={{ padding: '12px', color: '#374151' }}>{item.warehouse}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <p style={{ color: '#6b7280', fontSize: '13px' }}>No raw materials found. Select a sales order first.</p>
               )}

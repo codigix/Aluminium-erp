@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Edit2, Trash2, Eye, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Edit2, Trash2, Eye, CheckCircle, ChevronDown, ChevronRight, Clipboard } from 'lucide-react'
 import * as productionService from '../../services/productionService'
 import CreateJobCardModal from '../../components/Production/CreateJobCardModal'
 import ViewJobCardModal from '../../components/Production/ViewJobCardModal'
@@ -285,6 +285,19 @@ export default function JobCard() {
     return plannedTotal - alreadyProduced
   }
 
+  const handleAutoCreateJobCards = async (wo_id) => {
+    try {
+      setLoading(true)
+      await productionService.autoCreateJobCards(wo_id)
+      toast.addToast('Job cards created successfully', 'success')
+      await fetchJobCardsForWO(wo_id)
+    } catch (err) {
+      toast.addToast(err.message || 'Failed to create job cards', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="production-container">
       <div className="production-header">
@@ -380,7 +393,7 @@ export default function JobCard() {
                       </span>
                     </td>
                     <td><span className={`work-order-status ${getStatusColor(wo.status)}`}>{wo.status}</span></td>
-                    <td>{wo.required_date ? new Date(wo.required_date).toLocaleDateString() : 'N/A'}</td>
+                    <td>{wo.expected_delivery_date ? new Date(wo.expected_delivery_date).toLocaleDateString() : 'N/A'}</td>
                     <td className="w-28">
                       <div className="entry-actions" onClick={(e) => e.stopPropagation()}>
                         <button className="btn-view" title="View" onClick={() => navigate(`/production/work-orders/form/${wo.wo_id}`)}><Eye size={16} /></button>
@@ -528,8 +541,20 @@ export default function JobCard() {
                   )}
                   {expandedWO === wo.wo_id && jobCardsByWO[wo.wo_id] && jobCardsByWO[wo.wo_id].length === 0 && (
                     <tr className="job-card-empty-row">
-                      <td colSpan="10" className="text-center">
-                        No job cards for this work order
+                      <td colSpan="10" className="text-center py-4">
+                        <div className="flex flex-col items-center gap-2">
+                          <span className="text-gray-500">No job cards for this work order</span>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleAutoCreateJobCards(wo.wo_id)
+                            }}
+                            className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center gap-2"
+                          >
+                            <Clipboard size={14} />
+                            Auto-Create from BOM
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )}

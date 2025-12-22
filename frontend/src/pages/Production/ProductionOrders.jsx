@@ -61,7 +61,7 @@ export default function ProductionOrders() {
       highPriorityOrders: workOrders.filter(o => o.priority === 'high').length,
       overdueOrders: workOrders.filter(o => {
         if (o.status === 'completed' || o.status === 'cancelled') return false
-        return o.required_date && new Date(o.required_date) < today
+        return o.expected_delivery_date && new Date(o.expected_delivery_date) < today
       }).length,
       totalCost: workOrders.reduce((sum, o) => sum + (o.total_cost || 0), 0),
       totalQuantity: workOrders.reduce((sum, o) => sum + (o.qty_to_manufacture || 0), 0)

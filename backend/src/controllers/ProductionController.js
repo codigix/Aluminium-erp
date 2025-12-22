@@ -1,6 +1,20 @@
+import { SellingController } from './SellingController.js'
+
 class ProductionController {
   constructor(productionModel) {
     this.productionModel = productionModel
+  }
+
+  // ============= INTEGRATIONS =============
+  
+  // Get Sales Orders (Proxy to SellingController)
+  async getSalesOrders(req, res) {
+    return SellingController.getSalesOrders(req, res)
+  }
+
+  // Get Sales Order by ID (Proxy to SellingController)
+  async getSalesOrderById(req, res) {
+    return SellingController.getSalesOrderById(req, res)
   }
 
   // ============= OPERATIONS =============
@@ -159,7 +173,11 @@ class ProductionController {
   // Create work order
   async createWorkOrder(req, res) {
     try {
-      const { item_code, bom_no, quantity, priority, notes, planned_start_date, planned_end_date, actual_start_date, actual_end_date, expected_delivery_date, required_items, operations } = req.body
+      let { item_code, bom_no, quantity, priority, notes, planned_start_date, planned_end_date, actual_start_date, actual_end_date, expected_delivery_date, required_items, operations } = req.body
+
+      // Fallback for frontend field mismatch
+      if (!item_code && req.body.item_to_manufacture) item_code = req.body.item_to_manufacture
+      if (!quantity && req.body.qty_to_manufacture) quantity = req.body.qty_to_manufacture
 
       if (!item_code || !bom_no || !quantity) {
         return res.status(400).json({
@@ -208,7 +226,8 @@ class ProductionController {
             scheduled_end_date: planned_end_date,
             status: 'Open',
             created_by: req.user?.username || 'system',
-            notes: `Operation: ${operation.operation}, Workstation: ${operation.workstation || 'N/A'}, Time: ${operation.time || 0}h`
+            notes: `Operation: ${operation.operation}, Workstation: ${operation.workstation || 'N/A'}, Time: ${operation.time || 0}h`,
+            operation: operation.operation
           })
         }
       }
@@ -278,11 +297,76 @@ class ProductionController {
     }
   }
 
+  // Auto-create Job Cards from BOM
+  async autoCreateJobCards(req, res) {
+    try {
+      const { wo_id } = req.params
+      const workOrder = await this.productionModel.getWorkOrderById(wo_id)
+      
+      if (!workOrder) {
+        return res.status(404).json({ success: false, message: 'Work order not found' })
+      }
+
+      // Check if job cards already exist
+      const existingJobCards = await this.productionModel.getJobCards('', '', wo_id)
+      if (existingJobCards.length > 0) {
+        return res.status(400).json({ success: false, message: 'Job cards already exist for this work order' })
+      }
+
+      // Get BOM details
+      const bom = await this.productionModel.getBOMDetails(workOrder.bom_no)
+      if (!bom) {
+        return res.status(400).json({ success: false, message: 'BOM not found' })
+      }
+
+      if (!bom.operations || bom.operations.length === 0) {
+        return res.status(400).json({ success: false, message: 'No operations found in BOM' })
+      }
+
+      // Create Job Cards
+      const createdJobCards = []
+      for (let i = 0; i < bom.operations.length; i++) {
+        const operation = bom.operations[i]
+        const jc_id = `JC-${Date.now()}-${i + 1}`
+        
+        const jobCard = {
+            job_card_id: jc_id,
+            work_order_id: wo_id,
+            machine_id: null,
+            operator_id: null,
+            planned_quantity: workOrder.quantity,
+            scheduled_start_date: workOrder.planned_start_date,
+            scheduled_end_date: workOrder.planned_end_date,
+            status: 'Open',
+            created_by: req.user?.username || 'system',
+            notes: `Operation: ${operation.operation_name}, Workstation: ${operation.workstation_type || 'N/A'}, Time: ${operation.operation_time || 0}m`,
+            operation: operation.operation_name
+        }
+
+        await this.productionModel.createJobCard(jobCard)
+        createdJobCards.push(jobCard)
+      }
+
+      res.status(201).json({
+        success: true,
+        message: `${createdJobCards.length} Job cards created successfully`,
+        data: createdJobCards
+      })
+
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Error creating job cards', error: error.message })
+    }
+  }
+
   // Update work order
   async updateWorkOrder(req, res) {
     try {
       const { wo_id } = req.params
-      const { item_code, bom_no, quantity, priority, notes, planned_start_date, planned_end_date, actual_start_date, actual_end_date, expected_delivery_date, required_items, operations } = req.body
+      let { item_code, bom_no, quantity, priority, notes, planned_start_date, planned_end_date, actual_start_date, actual_end_date, expected_delivery_date, required_items, operations } = req.body
+
+      // Fallback for frontend field mismatch
+      if (!item_code && req.body.item_to_manufacture) item_code = req.body.item_to_manufacture
+      if (!quantity && req.body.qty_to_manufacture) quantity = req.body.qty_to_manufacture
 
       const success = await this.productionModel.updateWorkOrder(wo_id, {
         item_code,
@@ -335,17 +419,48 @@ class ProductionController {
     }
   }
 
+  // Delete work order
+  async deleteWorkOrder(req, res) {
+    try {
+      const { wo_id } = req.params
+
+      const success = await this.productionModel.deleteWorkOrder(wo_id)
+
+      if (success) {
+        res.status(200).json({
+          success: true,
+          message: 'Work order deleted successfully'
+        })
+      } else {
+        res.status(404).json({
+          success: false,
+          message: 'Work order not found'
+        })
+      }
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting work order',
+        error: error.message
+      })
+    }
+  }
+
   // ============= PRODUCTION PLANS =============
 
   // Create production plan
   async createProductionPlan(req, res) {
     try {
-      const { items } = req.body
+      const { items, sales_orders, company, posting_date, naming_series } = req.body
 
       const plan = await this.productionModel.createProductionPlan({
         plan_date: new Date(),
         week_number: Math.ceil((new Date().getDate()) / 7),
-        planned_by_id: req.user?.id || 'system'
+        planned_by_id: req.user?.id || 'system',
+        sales_orders: sales_orders,
+        company,
+        posting_date,
+        naming_series
       })
 
       // Add items if provided
@@ -408,6 +523,33 @@ class ProductionController {
       res.status(500).json({
         success: false,
         message: 'Error fetching production plan',
+        error: error.message
+      })
+    }
+  }
+
+  // Get items for production plan from Sales Order
+  async getProductionPlanItems(req, res) {
+    try {
+      const { sales_order_id } = req.body
+
+      if (!sales_order_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required field: sales_order_id'
+        })
+      }
+
+      const data = await this.productionModel.getProductionPlanItems(sales_order_id)
+
+      res.status(200).json({
+        success: true,
+        data: data
+      })
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching production plan items',
         error: error.message
       })
     }
@@ -832,7 +974,26 @@ class ProductionController {
 
   async createBOM(req, res) {
     try {
-      const { item_code, product_name, description, quantity, uom, status, revision, effective_date, lines, operations, scrapItems } = req.body
+      const { 
+        item_code, 
+        product_name, 
+        description, 
+        quantity, 
+        uom, 
+        revision, 
+        is_active, 
+        is_default,
+        materials, 
+        operations, 
+        scrap_loss, 
+        costing,
+        // Keep backward compatibility
+        lines,
+        scrapItems,
+        status: legacyStatus,
+        total_cost: legacyTotalCost,
+        effective_date
+      } = req.body
 
       if (!item_code) {
         return res.status(400).json({
@@ -840,6 +1001,21 @@ class ProductionController {
           message: 'item_code is required'
         })
       }
+
+      // Map status
+      const status = is_active !== undefined ? (is_active ? 'Active' : 'Draft') : (legacyStatus || 'Draft')
+
+      // Map process loss
+      let process_loss_percentage = 0
+      if (scrap_loss && Array.isArray(scrap_loss)) {
+        const percentageLoss = scrap_loss.find(s => s.type === 'Percentage')
+        if (percentageLoss) {
+          process_loss_percentage = percentageLoss.value
+        }
+      }
+
+      // Map total cost
+      const total_cost = costing?.total_bom_cost || legacyTotalCost || 0
 
       const bom_id = `BOM-${Date.now()}`
       const bom = await this.productionModel.createBOM({
@@ -849,24 +1025,49 @@ class ProductionController {
         description,
         quantity,
         uom,
-        status: status || 'Draft',
+        status,
         revision: revision || 1,
-        effective_date,
-        created_by: req.user?.username || 'system'
+        effective_date: effective_date || new Date(),
+        created_by: req.user?.username || 'system',
+        total_cost,
+        process_loss_percentage
       })
 
-      if (lines && lines.length > 0) {
-        for (let i = 0; i < lines.length; i++) {
-          await this.productionModel.addBOMLine(bom_id, { ...lines[i], sequence: i + 1 })
+      // Map and save materials (lines)
+      const materialsToSave = materials || lines
+      if (materialsToSave && materialsToSave.length > 0) {
+        for (let i = 0; i < materialsToSave.length; i++) {
+          const material = materialsToSave[i]
+          await this.productionModel.addBOMLine(bom_id, {
+            item_code: material.item_code || material.component_code,
+            quantity: material.qty || material.quantity,
+            uom: material.uom,
+            item_group: material.item_group || material.type || material.component_type,
+            rate: material.rate,
+            amount: (material.qty || material.quantity || 0) * (material.rate || 0),
+            warehouse: material.warehouse_id || material.warehouse,
+            operation: material.operation_id || material.operation,
+            sequence: i + 1
+          })
         }
       }
 
+      // Map and save operations
       if (operations && operations.length > 0) {
         for (let i = 0; i < operations.length; i++) {
-          await this.productionModel.addBOMOperation(bom_id, { ...operations[i], sequence: i + 1 })
+          const op = operations[i]
+          await this.productionModel.addBOMOperation(bom_id, {
+            operation_name: op.operation_id || op.operation_name,
+            workstation_type: op.workstation_id || op.workstation_type,
+            operation_time: op.cycle_time || op.operation_time,
+            fixed_time: op.setup_time || op.fixed_time,
+            operating_cost: op.cost || op.operating_cost,
+            sequence: i + 1
+          })
         }
       }
 
+      // Handle scrap items if any (legacy support)
       if (scrapItems && scrapItems.length > 0) {
         for (let i = 0; i < scrapItems.length; i++) {
           await this.productionModel.addBOMScrapItem(bom_id, { ...scrapItems[i], sequence: i + 1 })
@@ -890,7 +1091,7 @@ class ProductionController {
   async updateBOM(req, res) {
     try {
       const { bom_id } = req.params
-      const { item_code, description, quantity, uom, status, revision, effective_date, lines, operations, scrapItems } = req.body
+      const { item_code, description, quantity, uom, status, revision, effective_date, lines, operations, scrapItems, total_cost } = req.body
 
       const bom = await this.productionModel.updateBOM(bom_id, {
         item_code,
@@ -899,7 +1100,8 @@ class ProductionController {
         uom,
         status,
         revision,
-        effective_date
+        effective_date,
+        total_cost: total_cost || 0
       })
 
       if (lines && Array.isArray(lines) && lines.length > 0) {
@@ -999,7 +1201,7 @@ class ProductionController {
 
   async createJobCard(req, res) {
     try {
-      const { work_order_id, machine_id, operator_id, planned_quantity, scheduled_start_date, scheduled_end_date, notes } = req.body
+      const { work_order_id, machine_id, operator_id, planned_quantity, scheduled_start_date, scheduled_end_date, notes, operation } = req.body
 
       if (!work_order_id || !machine_id || !planned_quantity) {
         return res.status(400).json({
@@ -1019,7 +1221,8 @@ class ProductionController {
         scheduled_end_date,
         status: 'Open',
         created_by: req.user?.username || 'system',
-        notes
+        notes,
+        operation
       })
 
       res.status(201).json({
@@ -1039,7 +1242,7 @@ class ProductionController {
   async updateJobCard(req, res) {
     try {
       const { job_card_id } = req.params
-      const { machine_id, operator_id, planned_quantity, produced_quantity, rejected_quantity, scheduled_start_date, scheduled_end_date, actual_start_date, actual_end_date, status, notes } = req.body
+      const { machine_id, operator_id, planned_quantity, produced_quantity, rejected_quantity, scheduled_start_date, scheduled_end_date, actual_start_date, actual_end_date, status, notes, operation } = req.body
 
       const success = await this.productionModel.updateJobCard(job_card_id, {
         machine_id,
@@ -1052,7 +1255,8 @@ class ProductionController {
         actual_start_date,
         actual_end_date,
         status,
-        notes
+        notes,
+        operation
       })
 
       if (success) {

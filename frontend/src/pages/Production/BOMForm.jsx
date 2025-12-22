@@ -212,16 +212,20 @@ export default function BOMForm() {
       if (selectedItem) {
         setNewScrapItem(prev => ({
           ...prev,
-          item_name: selectedItem.name,
-          rate: selectedItem.valuation_rate || 0
+          item_name: selectedItem.name
         }))
       }
     }
   }
 
   const addBomLine = () => {
-    if (!newLine.item_code || !newLine.qty) return
-    setBomLines([...bomLines, { ...newLine, id: Date.now() }])
+    if (!newLine.item_code) {
+      setError('Please select an item code')
+      return
+    }
+    
+    const id = `line-${Date.now()}`
+    setBomLines([...bomLines, { ...newLine, id }])
     setNewLine({
       item_code: '',
       item_name: '',
@@ -233,9 +237,18 @@ export default function BOMForm() {
     })
   }
 
+  const removeBomLine = (id) => {
+    setBomLines(bomLines.filter(line => line.id !== id))
+  }
+
   const addOperation = () => {
-    if (!newOperation.operation_name) return
-    setOperations([...operations, { ...newOperation, id: Date.now() }])
+    if (!newOperation.operation_name) {
+      setError('Please select an operation')
+      return
+    }
+    
+    const id = `op-${Date.now()}`
+    setOperations([...operations, { ...newOperation, id }])
     setNewOperation({
       operation_name: '',
       workstation: 'Select',
@@ -246,9 +259,18 @@ export default function BOMForm() {
     })
   }
 
+  const removeOperation = (id) => {
+    setOperations(operations.filter(op => op.id !== id))
+  }
+
   const addScrapItem = () => {
-    if (!newScrapItem.item_code || !newScrapItem.qty) return
-    setScrapItems([...scrapItems, { ...newScrapItem, id: Date.now() }])
+    if (!newScrapItem.item_code) {
+      setError('Please select a scrap item')
+      return
+    }
+    
+    const id = `scrap-${Date.now()}`
+    setScrapItems([...scrapItems, { ...newScrapItem, id }])
     setNewScrapItem({
       item_code: '',
       item_name: '',
@@ -257,46 +279,43 @@ export default function BOMForm() {
     })
   }
 
-  const removeBomLine = (id) => {
-    setBomLines(bomLines.filter(line => line.id !== id))
-  }
-
-  const removeOperation = (id) => {
-    setOperations(operations.filter(op => op.id !== id))
-  }
-
   const removeScrapItem = (id) => {
     setScrapItems(scrapItems.filter(item => item.id !== id))
   }
 
   const calculateCosts = () => {
     const materialCost = bomLines.reduce((sum, line) => sum + (parseFloat(line.qty) * parseFloat(line.rate || 0)), 0)
-    const operationCost = operations.reduce((sum, op) => sum + (parseFloat(op.cost || 0)), 0)
+    const operationCost = operations.reduce((sum, op) => sum + parseFloat(op.cost || 0), 0)
     const scrapCost = scrapItems.reduce((sum, item) => sum + (parseFloat(item.qty) * parseFloat(item.rate || 0)), 0)
-    const overheadCost = (materialCost + operationCost) * 0.1 // Assuming 10% overhead
-    const totalCost = materialCost + operationCost + overheadCost + scrapCost
-    
-    return { materialCost, operationCost, overheadCost, scrapCost, totalCost }
+    const totalCost = materialCost + operationCost + scrapCost
+    return { materialCost, operationCost, scrapCost, totalCost }
   }
-
-  const costs = calculateCosts()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setLoading(true)
+    
+    if (!formData.item_code) {
+      setError('Please select an item code')
+      return
+    }
+
     try {
-      const payload = {
+      setLoading(true)
+      const submitData = {
         ...formData,
-        lines: bomLines,
+        quantity: parseFloat(formData.quantity),
+        process_loss_percentage: parseFloat(formData.process_loss_percentage),
+        materials: bomLines,
         operations: operations,
-        scrapItems: scrapItems
+        scrap_items: scrapItems
       }
-      
+
       if (id) {
-        await productionService.updateBOM(id, payload)
+        await productionService.updateBOM(id, submitData)
       } else {
-        await productionService.createBOM(payload)
+        await productionService.createBOM(submitData)
       }
+
       navigate('/production/boms')
     } catch (err) {
       setError(err.message || 'Failed to save BOM')
@@ -305,53 +324,31 @@ export default function BOMForm() {
     }
   }
 
+  const costs = calculateCosts()
+
   return (
-    <div className="production-container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ backgroundColor: '#f59e0b', padding: '10px', borderRadius: '8px', color: 'white' }}>
-            <FileText size={24} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
-              {id ? 'Edit BOM' : 'Create BOM'}
-            </h1>
-            <p style={{ color: '#6b7280', margin: 0 }}>{id ? 'Edit bill of materials' : 'Create BOM'}</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button 
-            onClick={() => navigate('/production/boms')}
-            style={{ 
-              padding: '8px 16px', 
-              borderRadius: '6px', 
-              border: '1px solid #d1d5db', 
-              background: 'white',
-              color: '#374151',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            <FileText size={16} color="#3b82f6" /> Drafts
-          </button>
-          <button 
-            onClick={() => navigate('/production/boms')}
-            style={{ 
-              padding: '8px 16px', 
-              borderRadius: '6px', 
-              border: '1px solid #d1d5db', 
-              background: 'white',
-              color: '#374151',
-              cursor: 'pointer'
-            }}
-          >
-            ← Back
-          </button>
-        </div>
+        <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
+          {id ? 'Edit BOM' : 'Create BOM'}
+        </h1>
+        <button
+          type="button"
+          onClick={() => navigate('/production/boms')}
+          style={{ padding: '10px 20px', backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+        >
+          <ArrowLeft size={18} style={{ display: 'inline', marginRight: '8px' }} />
+          Back
+        </button>
       </div>
+
+      {error && (
+        <div style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '6px', marginBottom: '20px', display: 'flex', gap: '12px' }}>
+          <AlertCircle size={20} />
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         {/* Product Information */}
@@ -361,56 +358,53 @@ export default function BOMForm() {
             style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: expandedSections.productInfo ? '1px solid #e5e7eb' : 'none' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ background: '#fff7ed', padding: '6px', borderRadius: '6px' }}>📦</div>
+              <div style={{ background: '#f3f4f6', padding: '6px', borderRadius: '6px' }}>📦</div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Product Information</h3>
-                <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>Basics</p>
+                <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>Basic details</p>
               </div>
             </div>
             {expandedSections.productInfo ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
           </div>
-          
+
           {expandedSections.productInfo && (
             <div style={{ padding: '24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Item Code *</label>
                   <select 
                     name="item_code" 
                     value={formData.item_code} 
                     onChange={handleInputChange}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#fff' }}
-                    required
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
                   >
-                    <option value="">Search items...</option>
+                    <option value="">Select item...</option>
                     {items.map(item => (
-                      <option key={item.item_code} value={item.item_code}>{item.item_code} - {item.name}</option>
+                      <option key={item.item_code} value={item.item_code}>{item.item_code}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Product Name</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Product Name *</label>
                   <input 
                     type="text" 
                     name="product_name" 
                     value={formData.product_name} 
                     onChange={handleInputChange}
-                    placeholder="Name"
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Quantity *</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Quantity</label>
                   <input 
                     type="number" 
                     name="quantity" 
                     value={formData.quantity} 
                     onChange={handleInputChange}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
-                    required
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
                   />
                 </div>
                 <div>
@@ -419,11 +413,11 @@ export default function BOMForm() {
                     name="uom" 
                     value={formData.uom} 
                     onChange={handleInputChange}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#fff' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
                   >
                     <option value="Kg">Kg</option>
                     <option value="Nos">Nos</option>
-                    <option value="Mtr">Mtr</option>
+                    <option value="Meter">Meter</option>
                   </select>
                 </div>
                 <div>
@@ -433,32 +427,45 @@ export default function BOMForm() {
                     name="revision" 
                     value={formData.revision} 
                     onChange={handleInputChange}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
                   />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Status</label>
+                  <select 
+                    name="status" 
+                    value={formData.status} 
+                    onChange={handleInputChange}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
                 </div>
               </div>
 
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Description</label>
                 <textarea 
                   name="description" 
                   value={formData.description} 
                   onChange={handleInputChange}
-                  placeholder="Notes..."
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', minHeight: '80px' }}
+                  rows="3"
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px', fontFamily: 'inherit' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                   <input 
                     type="checkbox" 
                     name="is_active" 
                     checked={formData.is_active} 
                     onChange={handleInputChange}
-                    style={{ width: '16px', height: '16px', accentColor: '#3b82f6' }}
+                    style={{ width: '16px', height: '16px' }}
                   />
-                  <span style={{ fontSize: '14px', color: '#374151' }}>Active</span>
+                  <span style={{ fontSize: '13px', color: '#374151' }}>Active</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                   <input 
@@ -466,9 +473,9 @@ export default function BOMForm() {
                     name="is_default" 
                     checked={formData.is_default} 
                     onChange={handleInputChange}
-                    style={{ width: '16px', height: '16px', accentColor: '#3b82f6' }}
+                    style={{ width: '16px', height: '16px' }}
                   />
-                  <span style={{ fontSize: '14px', color: '#374151' }}>Default</span>
+                  <span style={{ fontSize: '13px', color: '#374151' }}>Default</span>
                 </label>
               </div>
             </div>
@@ -482,7 +489,7 @@ export default function BOMForm() {
             style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: expandedSections.materials ? '1px solid #e5e7eb' : 'none' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ background: '#fee2e2', padding: '6px', borderRadius: '6px' }}>📊</div>
+              <div style={{ background: '#fef2f2', padding: '6px', borderRadius: '6px' }}>🧪</div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Materials</h3>
                 <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>{bomLines.length} • ₹{costs.materialCost.toFixed(2)}</p>
@@ -542,6 +549,7 @@ export default function BOMForm() {
                     >
                       <option value="Select">Select</option>
                       <option value="Raw Material">Raw Material</option>
+                      <option value="Sub Assembly">Sub Assembly</option>
                     </select>
                   </div>
                   <div>
@@ -611,6 +619,7 @@ export default function BOMForm() {
                       <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Item Code</th>
                       <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Qty</th>
                       <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>UOM</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Group</th>
                       <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Rate</th>
                       <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Amount</th>
                       <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600' }}>Action</th>
@@ -622,6 +631,7 @@ export default function BOMForm() {
                         <td style={{ padding: '12px', color: '#1f2937', fontWeight: '500' }}>{line.item_code}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{line.qty}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{line.uom}</td>
+                        <td style={{ padding: '12px', color: '#374151' }}>{line.item_group}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>₹{line.rate}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>₹{(parseFloat(line.qty) * parseFloat(line.rate || 0)).toFixed(2)}</td>
                         <td style={{ padding: '12px', textAlign: 'right' }}>
@@ -720,24 +730,11 @@ export default function BOMForm() {
                       style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e9d5ff', fontSize: '13px' }}
                     />
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#6b21a8', marginBottom: '4px' }}>Target Warehouse</label>
-                    <select 
-                      name="target_warehouse" 
-                      value={newOperation.target_warehouse} 
-                      onChange={handleNewOperationChange}
-                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e9d5ff', fontSize: '13px' }}
-                    >
-                      <option value="Select">Select</option>
-                    </select>
-                  </div>
-                </div>
-                <div style={{ marginTop: '12px' }}>
                   <button 
                     type="button"
                     onClick={addOperation}
                     style={{ 
-                      backgroundColor: '#a855f7', 
+                      backgroundColor: '#7c3aed', 
                       color: 'white', 
                       border: 'none', 
                       borderRadius: '6px', 
@@ -745,7 +742,7 @@ export default function BOMForm() {
                       fontSize: '13px',
                       fontWeight: '600',
                       cursor: 'pointer',
-                      width: '100%'
+                      height: '35px'
                     }}
                   >
                     + Add
@@ -759,8 +756,8 @@ export default function BOMForm() {
                     <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
                       <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Operation</th>
                       <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Workstation</th>
-                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Time (min)</th>
-                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Cost</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600' }}>Cycle Time</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600' }}>Cost</th>
                       <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600' }}>Action</th>
                     </tr>
                   </thead>
@@ -769,12 +766,12 @@ export default function BOMForm() {
                       <tr key={op.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                         <td style={{ padding: '12px', color: '#1f2937', fontWeight: '500' }}>{op.operation_name}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{op.workstation}</td>
-                        <td style={{ padding: '12px', color: '#374151' }}>{parseFloat(op.cycle_time) + parseFloat(op.setup_time)}</td>
-                        <td style={{ padding: '12px', color: '#374151' }}>₹{op.cost}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>{op.cycle_time}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>₹{op.cost}</td>
                         <td style={{ padding: '12px', textAlign: 'right' }}>
                           <button 
                             onClick={() => removeOperation(op.id)}
-                            style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                            style={{ color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer' }}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -795,10 +792,10 @@ export default function BOMForm() {
             style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: expandedSections.scrapLoss ? '1px solid #e5e7eb' : 'none' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ background: '#ecfccb', padding: '6px', borderRadius: '6px' }}>♻️</div>
+              <div style={{ background: '#dcfce7', padding: '6px', borderRadius: '6px' }}>♻️</div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Scrap & Loss</h3>
-                <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>0 items</p>
+                <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>{scrapItems.length} • ₹{costs.scrapCost.toFixed(2)}</p>
               </div>
             </div>
             {expandedSections.scrapLoss ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
@@ -806,16 +803,16 @@ export default function BOMForm() {
           
           {expandedSections.scrapLoss && (
             <div style={{ padding: '24px' }}>
-              <div style={{ backgroundColor: '#f7fee7', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
-                <div style={{ color: '#365314', fontSize: '13px', fontWeight: '600', marginBottom: '12px' }}>+ Add Scrap</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr', gap: '12px', alignItems: 'end' }}>
+              <div style={{ backgroundColor: '#f0fdf4', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
+                <div style={{ color: '#166534', fontSize: '13px', fontWeight: '600', marginBottom: '12px' }}>+ Add Scrap</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: '12px', alignItems: 'end' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#3f6212', marginBottom: '4px' }}>Item Code *</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#15803d', marginBottom: '4px' }}>Item Code *</label>
                     <select 
                       name="item_code" 
                       value={newScrapItem.item_code} 
                       onChange={handleNewScrapItemChange}
-                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d9f99d', fontSize: '13px' }}
+                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #86efac', fontSize: '13px' }}
                     >
                       <option value="">Search items...</option>
                       {items.map(item => (
@@ -824,41 +821,42 @@ export default function BOMForm() {
                     </select>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#3f6212', marginBottom: '4px' }}>Name</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#15803d', marginBottom: '4px' }}>Name</label>
                     <input 
                       type="text" 
                       name="item_name" 
                       value={newScrapItem.item_name} 
                       onChange={handleNewScrapItemChange}
-                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d9f99d', fontSize: '13px' }}
+                      disabled
+                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #86efac', fontSize: '13px', backgroundColor: '#f0fdf4' }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#3f6212', marginBottom: '4px' }}>Qty *</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#15803d', marginBottom: '4px' }}>Qty *</label>
                     <input 
                       type="number" 
                       name="qty" 
                       value={newScrapItem.qty} 
                       onChange={handleNewScrapItemChange}
-                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d9f99d', fontSize: '13px' }}
+                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #86efac', fontSize: '13px' }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#3f6212', marginBottom: '4px' }}>Rate (₹)</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#15803d', marginBottom: '4px' }}>Rate (₹)</label>
                     <input 
                       type="number" 
                       name="rate" 
                       value={newScrapItem.rate} 
                       onChange={handleNewScrapItemChange}
-                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d9f99d', fontSize: '13px' }}
+                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #86efac', fontSize: '13px' }}
                     />
                   </div>
                   <button 
                     type="button"
                     onClick={addScrapItem}
                     style={{ 
-                      backgroundColor: '#ea580c', 
-                      color: 'white', 
+                      backgroundColor: '#fbbf24', 
+                      color: '#78350f', 
                       border: 'none', 
                       borderRadius: '6px', 
                       padding: '8px 24px',
@@ -871,17 +869,29 @@ export default function BOMForm() {
                     + Add
                   </button>
                 </div>
+
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#15803d', marginBottom: '4px' }}>Process Loss %</label>
+                  <input 
+                    type="number" 
+                    name="process_loss_percentage" 
+                    value={formData.process_loss_percentage} 
+                    onChange={handleInputChange}
+                    style={{ width: '100%', maxWidth: '200px', padding: '8px', borderRadius: '6px', border: '1px solid #86efac', fontSize: '13px' }}
+                  />
+                  <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>Included in BOM cost</p>
+                </div>
               </div>
 
               {scrapItems.length > 0 && (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: '20px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
                       <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Item Code</th>
-                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Name</th>
-                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Qty</th>
-                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Rate</th>
-                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Amount</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600' }}>Item Name</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600' }}>Qty</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600' }}>Rate</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600' }}>Amount</th>
                       <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600' }}>Action</th>
                     </tr>
                   </thead>
@@ -890,13 +900,13 @@ export default function BOMForm() {
                       <tr key={item.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                         <td style={{ padding: '12px', color: '#1f2937', fontWeight: '500' }}>{item.item_code}</td>
                         <td style={{ padding: '12px', color: '#374151' }}>{item.item_name}</td>
-                        <td style={{ padding: '12px', color: '#374151' }}>{item.qty}</td>
-                        <td style={{ padding: '12px', color: '#374151' }}>₹{item.rate}</td>
-                        <td style={{ padding: '12px', color: '#374151' }}>₹{(parseFloat(item.qty) * parseFloat(item.rate || 0)).toFixed(2)}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>{item.qty}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>₹{item.rate}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#374151' }}>₹{(parseFloat(item.qty) * parseFloat(item.rate || 0)).toFixed(2)}</td>
                         <td style={{ padding: '12px', textAlign: 'right' }}>
                           <button 
                             onClick={() => removeScrapItem(item.id)}
-                            style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                            style={{ color: '#fbbf24', background: 'none', border: 'none', cursor: 'pointer' }}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -906,18 +916,6 @@ export default function BOMForm() {
                   </tbody>
                 </table>
               )}
-
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Loss %</label>
-                <input 
-                  type="number" 
-                  name="process_loss_percentage" 
-                  value={formData.process_loss_percentage} 
-                  onChange={handleInputChange}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', maxWidth: '200px' }}
-                />
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Included in BOM cost</p>
-              </div>
             </div>
           )}
         </div>
@@ -929,7 +927,7 @@ export default function BOMForm() {
             style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: expandedSections.costing ? '1px solid #e5e7eb' : 'none' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ background: '#dbeafe', padding: '6px', borderRadius: '6px' }}>💰</div>
+              <div style={{ background: '#fef3c7', padding: '6px', borderRadius: '6px' }}>💰</div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>BOM Costing</h3>
                 <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>₹{costs.totalCost.toFixed(2)} Total Cost</p>
@@ -940,88 +938,56 @@ export default function BOMForm() {
           
           {expandedSections.costing && (
             <div style={{ padding: '24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-                <div style={{ backgroundColor: '#eff6ff', padding: '16px', borderRadius: '8px', border: '1px solid #dbeafe' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#1e40af', marginBottom: '8px' }}>Material Cost</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', color: '#1e3a8a', marginBottom: '4px' }}>₹{costs.materialCost.toFixed(2)}</div>
-                  <div style={{ fontSize: '11px', color: '#60a5fa' }}>Components + RM</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                  <div style={{ fontSize: '12px', color: '#0369a1', fontWeight: '600', marginBottom: '4px' }}>Material Cost</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#0c4a6e' }}>₹{costs.materialCost.toFixed(2)}</div>
                 </div>
-                <div style={{ backgroundColor: '#faf5ff', padding: '16px', borderRadius: '8px', border: '1px solid #e9d5ff' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b21a8', marginBottom: '8px' }}>Labour Cost</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', color: '#581c87', marginBottom: '4px' }}>₹{costs.operationCost.toFixed(2)}</div>
-                  <div style={{ fontSize: '11px', color: '#a855f7' }}>Operations</div>
+                <div style={{ padding: '16px', backgroundColor: '#faf5ff', borderRadius: '8px', border: '1px solid #e9d5ff' }}>
+                  <div style={{ fontSize: '12px', color: '#7e22ce', fontWeight: '600', marginBottom: '4px' }}>Labour Cost</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#6b21a8' }}>₹{costs.operationCost.toFixed(2)}</div>
                 </div>
-                <div style={{ backgroundColor: '#fffbeb', padding: '16px', borderRadius: '8px', border: '1px solid #fde68a' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#92400e', marginBottom: '8px' }}>Overhead (10%)</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', color: '#78350f', marginBottom: '4px' }}>₹{costs.overheadCost.toFixed(2)}</div>
-                  <div style={{ fontSize: '11px', color: '#d97706' }}>Auto Calculated</div>
+                <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                  <div style={{ fontSize: '12px', color: '#b45309', fontWeight: '600', marginBottom: '4px' }}>Overhead (0%)</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#78350f' }}>₹0.00</div>
                 </div>
-                <div style={{ backgroundColor: '#f0fdf4', padding: '16px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#166534', marginBottom: '8px' }}>Total BOM Cost</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', color: '#14532d', marginBottom: '4px' }}>₹{costs.totalCost.toFixed(2)}</div>
-                  <div style={{ fontSize: '11px', color: '#22c55e' }}>Per 1 Kg</div>
+                <div style={{ padding: '16px', backgroundColor: '#dcfce7', borderRadius: '8px', border: '1px solid #86efac' }}>
+                  <div style={{ fontSize: '12px', color: '#15803d', fontWeight: '600', marginBottom: '4px' }}>Total BOM Cost</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#166534' }}>₹{costs.totalCost.toFixed(2)}</div>
                 </div>
               </div>
-              
-              <div style={{ marginTop: '24px', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#4b5563' }}>
-                  <span>Components Cost:</span>
-                  <span style={{ fontWeight: '600' }}>₹{costs.materialCost.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#4b5563' }}>
-                  <span>Raw Materials Cost:</span>
-                  <span style={{ fontWeight: '600' }}>₹0.00</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#4b5563' }}>
-                  <span>Operations Cost:</span>
-                  <span style={{ fontWeight: '600' }}>₹{costs.operationCost.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: '14px', fontWeight: '700', color: '#1f2937' }}>
-                  <span>Cost Per Unit:</span>
-                  <span>₹{costs.totalCost.toFixed(2)}</span>
+
+              <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', fontSize: '13px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: '12px', lineHeight: '1.8' }}>
+                  <div>Components Cost:</div>
+                  <div style={{ textAlign: 'right', color: '#374151' }}>₹{costs.materialCost.toFixed(2)}</div>
+                  <div>Raw Materials Cost:</div>
+                  <div style={{ textAlign: 'right', color: '#374151' }}>₹{costs.materialCost.toFixed(2)}</div>
+                  <div>Operations Cost:</div>
+                  <div style={{ textAlign: 'right', color: '#374151' }}>₹{costs.operationCost.toFixed(2)}</div>
+                  <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px', fontWeight: '600' }}>Cost Per Unit:</div>
+                  <div style={{ textAlign: 'right', color: '#1f2937', fontWeight: '600', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>₹{(costs.totalCost / parseFloat(formData.quantity || 1)).toFixed(2)}</div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '30px', paddingBottom: '40px' }}>
-          <button 
+        {/* Submit Buttons */}
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+          <button
             type="button"
             onClick={() => navigate('/production/boms')}
-            style={{ 
-              padding: '10px 24px', 
-              borderRadius: '6px', 
-              border: '1px solid #d1d5db', 
-              background: 'white',
-              color: '#374151',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
+            style={{ padding: '12px 24px', backgroundColor: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}
           >
-            <RotateCcw size={16} /> Cancel
+            Cancel
           </button>
-          <button 
+          <button
             type="submit"
             disabled={loading}
-            style={{ 
-              padding: '10px 32px', 
-              borderRadius: '6px', 
-              border: 'none', 
-              background: '#f59e0b',
-              color: 'white',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
+            style={{ padding: '12px 24px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', opacity: loading ? 0.6 : 1 }}
           >
-            <Save size={16} /> {loading ? 'Saving...' : 'Create'}
+            {loading ? 'Saving...' : 'Save BOM'}
           </button>
         </div>
       </form>

@@ -158,6 +158,7 @@ export default function SalesOrderForm() {
   const [customers, setCustomers] = useState([])
   const [boms, setBoms] = useState([])
   const [warehouses, setWarehouses] = useState([])
+  const [allItems, setAllItems] = useState([])
   const [bomDetails, setBomDetails] = useState(null)
   const [bomAnalysis, setBomAnalysis] = useState(null)
 
@@ -168,17 +169,39 @@ export default function SalesOrderForm() {
     }
   }, [id])
 
+  useEffect(() => {
+    if (bomDetails && formData.items.length === 0) {
+      populateBOMItems(bomDetails)
+    }
+  }, [bomDetails])
+
   const fetchRequiredData = async () => {
     try {
-      const [custRes, bomRes, whRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/selling/customers').catch(() => ({ data: { data: [] } })),
-        axios.get('http://localhost:5000/api/selling/bom-list').catch(() => ({ data: { data: [] } })),
-        axios.get('http://localhost:5000/api/stock/warehouses').catch(() => ({ data: { data: [] } }))
+      const [custRes, bomRes, whRes, itemRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/selling/customers').catch(err => {
+          console.error('Customer API error:', err.message)
+          return { data: { data: [] } }
+        }),
+        axios.get('http://localhost:5000/api/selling/bom-list').catch(err => {
+          console.error('BOM API error:', err.message)
+          return { data: { data: [] } }
+        }),
+        axios.get('http://localhost:5000/api/stock/warehouses').catch(err => {
+          console.error('Warehouse API error:', err.message)
+          return { data: { data: [] } }
+        }),
+        axios.get('http://localhost:5000/api/items').catch(err => {
+          console.error('Items API error:', err.message)
+          return { data: { data: [] } }
+        })
       ])
 
       setCustomers(custRes.data.data || [])
       setBoms(bomRes.data.data || [])
       setWarehouses((whRes.data.data || []).map(w => ({ label: w.name || w.warehouse_name, value: w.name || w.id })))
+      setAllItems(itemRes.data.data || [])
+      
+      console.log('Fetched BOMs:', bomRes.data.data || [])
     } catch (err) {
       console.error('Failed to fetch data:', err)
     }
@@ -204,6 +227,7 @@ export default function SalesOrderForm() {
   const fetchBOMDetails = async (bomId) => {
     try {
       const response = await axios.get(`http://localhost:5000/api/selling/bom/${bomId}`)
+      console.log('BOM Details fetched:', response.data.data)
       setBomDetails(response.data.data)
     } catch (err) {
       console.error('Failed to fetch BOM details:', err)
@@ -241,7 +265,8 @@ export default function SalesOrderForm() {
   const handleBOMChange = (value) => {
     setFormData({
       ...formData,
-      bom_id: value
+      bom_id: value,
+      items: []
     })
     if (value) {
       fetchBOMDetails(value)
@@ -250,6 +275,31 @@ export default function SalesOrderForm() {
       setBomDetails(null)
       setBomAnalysis(null)
     }
+  }
+
+  const populateBOMItems = (bom) => {
+    console.log('Populating BOM items from:', bom)
+    
+    if (!bom) {
+      console.warn('BOM is null or undefined')
+      return
+    }
+
+    // For Sales Order, we sell the Product produced by the BOM
+    const bomItem = {
+      item_code: bom.item_code,
+      item_name: bom.product_name || bom.description || bom.item_code,
+      qty: formData.quantity || 1,
+      rate: bom.standard_selling_rate || bom.total_cost || 0,
+      amount: (formData.quantity || 1) * (bom.standard_selling_rate || bom.total_cost || 0),
+      _key: `bom_product_${Date.now()}`
+    }
+    
+    console.log('Setting item:', bomItem)
+    setFormData(prev => ({
+      ...prev,
+      items: [bomItem]
+    }))
   }
 
   const handleAddItem = () => {
@@ -263,7 +313,7 @@ export default function SalesOrderForm() {
           qty: 1,
           rate: 0,
           amount: 0,
-          id: Date.now() + Math.random()
+          _key: `manual_${Date.now()}_${Math.random()}`
         }
       ]
     })
@@ -276,20 +326,28 @@ export default function SalesOrderForm() {
 
   const handleItemChange = (idx, field, value) => {
     const updatedItems = [...formData.items]
-    updatedItems[idx] = {
+    let newItemData = {
       ...updatedItems[idx],
       [field]: field === 'rate' || field === 'qty' ? parseFloat(value) || 0 : value
     }
-    if (field === 'qty' || field === 'rate') {
-      updatedItems[idx].amount = updatedItems[idx].qty * updatedItems[idx].rate
+
+    if (field === 'item_code') {
+      const selectedItem = allItems.find(i => i.item_code === value)
+      if (selectedItem) {
+        newItemData.item_name = selectedItem.name || selectedItem.item_name
+        newItemData.rate = parseFloat(selectedItem.standard_selling_rate) || parseFloat(selectedItem.valuation_rate) || 0
+      }
     }
+
+    if (field === 'qty' || field === 'rate' || field === 'item_code') {
+      newItemData.amount = (parseFloat(newItemData.qty) || 0) * (parseFloat(newItemData.rate) || 0)
+    }
+
+    updatedItems[idx] = newItemData
     setFormData({ ...formData, items: updatedItems })
   }
 
   const calculateTotal = () => {
-    if (bomDetails && bomDetails.total_cost) {
-      return bomDetails.total_cost * formData.quantity
-    }
     return formData.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
   }
 
@@ -305,7 +363,11 @@ export default function SalesOrderForm() {
       setLoading(true)
       const submitData = {
         ...formData,
-        order_amount: calculateTotal()
+        order_amount: calculateTotal(),
+        items: formData.items.map(item => {
+          const { _key, ...cleanItem } = item
+          return cleanItem
+        })
       }
 
       if (isEditMode) {
@@ -459,7 +521,7 @@ export default function SalesOrderForm() {
                     <option value="">Search BOM...</option>
                     {boms.map(b => (
                       <option key={b.bom_id} value={b.bom_id}>
-                        {b.product_name} ({b.bom_id})
+                        {b.item_code} ({b.bom_id})
                       </option>
                     ))}
                   </select>
@@ -575,7 +637,7 @@ export default function SalesOrderForm() {
                     </thead>
                     <tbody>
                       {formData.items.map((item, idx) => (
-                        <tr key={item.id}>
+                        <tr key={item._key || item.id || idx}>
                           <td style={styles.tableCell}>
                             <input
                               style={styles.input}
@@ -583,6 +645,7 @@ export default function SalesOrderForm() {
                               value={item.item_code}
                               onChange={(e) => handleItemChange(idx, 'item_code', e.target.value)}
                               placeholder="Item code"
+                              list="items-list"
                             />
                           </td>
                           <td style={styles.tableCell}>
@@ -646,6 +709,14 @@ export default function SalesOrderForm() {
                   <span>₹{calculateTotal().toFixed(2)}</span>
                 </div>
               </div>
+
+              <datalist id="items-list">
+                {allItems.map(item => (
+                  <option key={item.item_code} value={item.item_code}>
+                    {item.name}
+                  </option>
+                ))}
+              </datalist>
             </div>
           )}
 
@@ -684,11 +755,11 @@ export default function SalesOrderForm() {
                         <tbody>
                           {bomDetails.materials.map((material, idx) => (
                             <tr key={idx}>
-                              <td style={styles.tableCell}>{material.item_code}</td>
-                              <td style={styles.tableCell}>{material.qty}</td>
+                              <td style={styles.tableCell}>{material.component_code || material.item_code}</td>
+                              <td style={styles.tableCell}>{material.quantity || material.qty}</td>
                               <td style={styles.tableCell}>{material.uom}</td>
-                              <td style={styles.tableCell}>₹{material.rate}</td>
-                              <td style={styles.tableCell}>₹{material.amount}</td>
+                              <td style={styles.tableCell}>₹{material.rate || 0}</td>
+                              <td style={styles.tableCell}>₹{material.amount || 0}</td>
                             </tr>
                           ))}
                         </tbody>
