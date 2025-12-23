@@ -36,7 +36,7 @@ export default function ClientPOForm() {
 
   const fetchClients = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/clients`)
+      const res = await fetch(`/api/clients`)
       const data = await res.json()
       if (data.success) {
         setClients(data.data || [])
@@ -48,7 +48,7 @@ export default function ClientPOForm() {
 
   const fetchPO = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/client-pos/${po_id}/review`)
+      const res = await fetch(`/api/client-pos/${po_id}/review`)
       const data = await res.json()
       if (data.success) {
         const po = data.data.po
@@ -285,7 +285,7 @@ export default function ClientPOForm() {
     setError(null)
 
     try {
-      const url = `${import.meta.env.VITE_API_URL}/client-pos/create-full`
+      const url = `/api/client-pos/create-full`
       
       const payload = {
         ...formData,

@@ -131,15 +131,35 @@ export const deleteJobCard = async (jc_id) => {
   return response.data
 }
 
-// Production Plans (extended)
+// Sales Orders
 export const getSalesOrders = async (filters = {}) => {
   const params = new URLSearchParams(filters)
-  const response = await api.get(`/production/sales-orders?${params}`)
+  const response = await api.get(`/selling/sales-orders?${params}`)
   return response.data
 }
 
 export const getSalesOrderById = async (id) => {
-  const response = await api.get(`/production/sales-orders/${id}`)
+  const response = await api.get(`/selling/sales-orders/${id}`)
+  return response.data
+}
+
+export const createSalesOrder = async (data) => {
+  const response = await api.post('/selling/sales-orders', data)
+  return response.data
+}
+
+export const updateSalesOrder = async (id, data) => {
+  const response = await api.put(`/selling/sales-orders/${id}`, data)
+  return response.data
+}
+
+export const confirmSalesOrder = async (id) => {
+  const response = await api.put(`/selling/sales-orders/${id}/confirm`, {})
+  return response.data
+}
+
+export const deleteSalesOrder = async (id) => {
+  const response = await api.delete(`/selling/sales-orders/${id}`)
   return response.data
 }
 

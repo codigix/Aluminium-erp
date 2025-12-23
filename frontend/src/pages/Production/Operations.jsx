@@ -19,7 +19,7 @@ export default function Operations() {
     try {
       setLoading(true)
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/production/operations`, {
+      const response = await fetch(`/api/production/operations`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
@@ -43,7 +43,7 @@ export default function Operations() {
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/production/operations/${operationName}`, {
+      const response = await fetch(`/api/production/operations/${operationName}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       })

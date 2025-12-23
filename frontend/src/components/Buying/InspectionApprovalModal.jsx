@@ -31,7 +31,7 @@ export default function InspectionApprovalModal({ grn, onClose, onSuccess }) {
 
   const fetchWarehouses = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/stock/warehouses')
+      const res = await fetch('/api/stock/warehouses')
       const data = await res.json()
       if (data.success) {
         setWarehouses(data.data || [])
@@ -68,7 +68,7 @@ export default function InspectionApprovalModal({ grn, onClose, onSuccess }) {
       }))
 
       const response = await axios.post(
-        `http://localhost:5000/api/grn-requests/${grn.id}/send-to-inventory`,
+        `/api/grn-requests/${grn.id}/send-to-inventory`,
         { approvedItems, warehouseAssignments }
       )
 
@@ -97,7 +97,7 @@ export default function InspectionApprovalModal({ grn, onClose, onSuccess }) {
 
     try {
       const response = await axios.post(
-        `http://localhost:5000/api/grn-requests/${grn.id}/reject`,
+        `/api/grn-requests/${grn.id}/reject`,
         { reason: rejectionReason }
       )
 

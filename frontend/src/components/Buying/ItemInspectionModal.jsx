@@ -82,7 +82,7 @@ export default function ItemInspectionModal({ item, grnId, onClose, onSuccess })
       }
 
       const response = await axios.post(
-        `http://localhost:5000/api/grn-requests/${grnId}/items/inspect`,
+        `/api/grn-requests/${grnId}/items/inspect`,
         payload
       )
 

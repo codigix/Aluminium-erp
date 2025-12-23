@@ -43,7 +43,7 @@ export default function PurchaseReceipts() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/grn-requests?${query}`)
+      const res = await fetch(`/api/grn-requests?${query}`)
       const data = await res.json()
       if (data.success) {
         const grnData = data.data || []

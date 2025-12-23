@@ -15,7 +15,7 @@ export default function InventoryApprovalModal({ grn, onClose, onSuccess }) {
 
     try {
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/grn-requests/${grn.id}/inventory-approve`
+        `/api/grn-requests/${grn.id}/inventory-approve`
       )
 
       if (response.data.success) {

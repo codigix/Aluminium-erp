@@ -48,7 +48,7 @@ export default function OperationForm() {
   const fetchWorkstations = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/production/workstations`, {
+      const response = await fetch(`/api/production/workstations`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (response.ok) {
@@ -64,7 +64,7 @@ export default function OperationForm() {
     try {
       setLoading(true)
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/production/operations/${opId}`, {
+      const response = await fetch(`/api/production/operations/${opId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (response.ok) {
@@ -148,7 +148,7 @@ export default function OperationForm() {
 
       const token = localStorage.getItem('token')
       const response = await fetch(
-        id ? `${import.meta.env.VITE_API_URL}/production/operations/${id}` : `${import.meta.env.VITE_API_URL}/production/operations`,
+        id ? `/api/production/operations/${id}` : `/api/production/operations`,
         {
           method: id ? 'PUT' : 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },

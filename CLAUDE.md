@@ -1,291 +1,356 @@
-# Aluminium ERP - Development Notes
+# BOM Total Cost Calculation Fix
 
-## Recent Changes & Fixes
+## Issue Resolved
+BOMs were displaying `total_cost: "0.00"` in the API response despite having valid materials with rates. The issue was:
+1. The `item` table was missing `valuation_rate` and `standard_selling_rate` columns as fallbacks
+2. The `getBOMs()` and `getBOMDetails()` methods weren't properly calculating costs when `bom_line.rate` was 0
 
-### 7. Supplier & Item Model Fixes - Fixed Database Column Errors ✅
-**Date**: Dec 5, 2025
-**Issue**: 
-- Supplier: "Failed to update supplier: Unknown column 'email' in 'field list'"
-- Item: "Failed to fetch item: Unknown column 'qty_on_hand' in 'field list'"
-- ItemForm: `TypeError: group.toLowerCase is not a function`
+## Changes Made
 
-**Files**:
-- `backend/src/models/SupplierModel.js` (fixed)
-- `backend/src/models/ItemModel.js` (fixed)
-- `frontend/src/pages/Suppliers/SupplierList.jsx` (fixed)
-- `frontend/src/pages/Buying/ItemForm.jsx` (fixed)
+### 1. Database Schema (✅ Already Had Columns)
+- Verified `item` table has `valuation_rate` and `standard_selling_rate` columns
+- Added indexes for performance
+
+### 2. ProductionModel.js - Updated getBOMs() (Line 649-697)
+- Enhanced cost calculation logic to:
+  - Use `bom_line.rate` first (primary source)
+  - Fall back to `item.valuation_rate` if rate is 0
+  - Fall back to `item.standard_selling_rate` if valuation_rate is also 0
+  - Convert all costs to proper decimal format
+
+### 3. ProductionModel.js - Updated getBOMDetails() (Line 703-738)
+- Applied same cost calculation enhancement
+- Now properly recalculates total_cost from materials when stored value is 0
+
+### 4. SellingController.js - Updated getBOMList() (Line 1285-1325)
+- Recalculates total_cost for BOMs with 0 cost
+- Uses same three-tier fallback logic
+- Returns accurate costs in BOM list endpoint
+
+### 5. SellingController.js - Updated getBOMDetails() (Line 1338-1359)
+- Enhanced materials mapping to use `bom_line.rate`
+- Recalculates total_cost on-the-fly if missing
+- Ensures frontend receives correct cost values
+
+## How It Works Now
+
+When fetching BOMs, the system calculates total_cost as:
+
+```
+For each material in BOM:
+  quantity = material.quantity
+  rate = material.rate (from bom_line)
+  if rate is 0:
+    rate = item.valuation_rate (from item master)
+  if rate is still 0:
+    rate = item.standard_selling_rate (from item master)
+  
+  total_cost += quantity × rate
+```
+
+## Testing the Fix
+
+After restarting the backend with `npm run backend`, test with:
+
+```bash
+# Get all BOMs (should show correct total_cost instead of 0.00)
+curl http://localhost:5000/api/selling/boms
+
+# Get specific BOM details
+curl http://localhost:5000/api/selling/bom/BOM-1766487750453
+
+# Response should now include total_cost calculated from materials
+```
+
+## Expected Results
+
+BOMs that previously showed:
+```json
+{
+  "bom_id": "BOM-1766487750453",
+  "total_cost": "0.00",
+  ...
+}
+```
+
+Will now show calculated costs based on:
+1. Stored `bom_line.rate` values (if provided during BOM creation)
+2. Item master `valuation_rate` (backup)
+3. Item master `standard_selling_rate` (final fallback)
+
+## Notes
+
+- The fix ensures backward compatibility - BOMs with pre-calculated costs remain unchanged
+- BOMs created without rates in bom_line will use item master pricing
+- All cost values are formatted to 2 decimal places for consistency
+
+---
+
+## Phase 12: Operations Cost Inclusion in BOM Total Cost
+
+### Issue Identified
+BOM total_cost was only including **Material Cost**, missing **Operations Cost** which led to incomplete costing:
+- Material Cost: ₹377
+- Operations Cost: ₹90
+- **Incorrect Total**: ₹377 (missing operations)
+- **Correct Total**: ₹467 (material + operations)
+
+### Root Cause
+All four BOM cost calculation methods were only summing material line costs. The operations were being fetched but not included in the total_cost calculation.
+
+### Changes Made
+
+#### 1. ProductionModel.js - getBOMs() (Lines 670-704)
+**Before**: Only calculated material costs
+**After**: 
+- Fetches `bom_operation.operating_cost` for each BOM
+- Calculates total = materialCost + operationCost
+- Both costs summed before returning BOMs
+
+#### 2. ProductionModel.js - getBOMDetails() (Lines 728-749)
+**Before**: Calculated total_cost from materials only
+**After**:
+- Recalculates materialCost from lines (with three-tier fallback)
+- Calculates operationCost from bom_operation records
+- Returns total_cost = materialCost + operationCost
+
+#### 3. SellingController.js - getBOMList() (Lines 1294-1326)
+**Before**: Only included material costs in recalculation
+**After**:
+- Fetches operations for BOMs with zero cost
+- Separates materialCost and operationCost calculation
+- Combines both for accurate total_cost
+
+#### 4. SellingController.js - getBOMDetails() (Lines 1380-1395)
+**Before**: Only included material costs
+**After**:
+- Calculates materialCost from enhanced materials
+- Calculates operationCost from operations array
+- Returns bomData.total_cost = materialCost + operationCost
+
+### Cost Calculation Formula
+```
+total_cost = ∑(material_qty × material_rate) + ∑(operation_operating_cost)
+
+Where:
+- material_qty = bom_line.quantity
+- material_rate = bom_line.rate (with fallback to item.valuation_rate or standard_selling_rate)
+- operation_operating_cost = bom_operation.operating_cost
+```
+
+### Impact
+✅ BOM total costs now accurately reflect complete production costs
+✅ Margin calculations will be correct (selling price - total_cost)
+✅ Profitability analysis becomes reliable
+✅ Cost comparison between BOMs includes all cost factors
+
+---
+
+## Phase 13: Scrap Items Persistence Fix
+
+### Issues Fixed
+
+#### Issue 1: Property Name Mismatch
+**Problem**: SellingController returned `scrap_items` but frontend expected `scrapItems`
+- When fetching BOM details via API, scrap items were missing in frontend
+- Frontend code: `setScrapItems(bom.scrapItems || [])`
+- Backend response had: `bomData.scrap_items`
+
+**Solution**: SellingController.js `getBOMDetails()` (Line 1397-1400)
+- Now returns both `scrapItems` and `scrap_items` for full compatibility
+- Frontend receives correct property name
+
+#### Issue 2: Empty Scrap Items Array Not Persisted
+**Problem**: When updating BOM with empty scrapItems array, old items remained in database
+- Code only deleted/saved if `scrapItems.length > 0`
+- Empty array from frontend was ignored
+
+**Solution**: ProductionController.js `updateBOM()` (Line 1140-1144)
+- **Before**: `if (scrapItems && Array.isArray(scrapItems) && scrapItems.length > 0)`
+- **After**: `if (scrapItems && Array.isArray(scrapItems))`
+- Now always deletes existing items when array is provided
+- Then adds new items if array has elements
+- Empty array properly clears all scrap items
+
+### Files Modified
+- **SellingController.js** - Added `scrapItems` property alongside `scrap_items` (Line 1398)
+- **ProductionController.js** - Fixed updateBOM to handle empty scrapItems array (Line 1140)
+
+### Result
+✅ Scrap items now properly persist when added
+✅ Scrap items now properly delete when array is cleared
+✅ Frontend correctly receives scrapItems from API
+✅ No orphaned scrap items remain after BOM updates
+
+---
+
+## Phase 14: Sales Order List Display - Field Name Mapping Fix
+
+### Issue Identified
+Sales Order list showed invalid data:
+- ORDER VALUE: ₹0.00 (should show BOM cost)
+- QTY: 0 (should show order quantity)
+- ORDER DATE: N/A
 
 **Root Cause**:
-1. **Supplier**: Frontend form was sending `email` and `phone` fields that don't exist in the supplier table
-2. **Item**: ItemModel was querying non-existent columns (`qty_on_hand`, `qty_available`) from stock table
-3. **ItemForm**: itemGroups array contains objects `{ label, value }` but filter was treating them as strings
+Field name mismatch between frontend and backend:
 
-**Solution**:
-1. **Supplier**:
-   - Added column validation in `update()` to filter out invalid fields
-   - Only allows valid columns: name, supplier_group_id, gstin, contact_person_id, address_id, bank_details, payment_terms_days, lead_time_days, rating, is_active
-   - Removed email/phone fields from frontend form (both add form and inline edit)
-   - Updated return value in `create()` to only include valid columns
+| Data | Frontend Sends | Backend Expects | Result |
+|------|---|---|---|
+| Order Amount | `total_amount` | `order_amount` | Stored as 0 |
+| Quantity | `qty` | `quantity` | Stored as 0 |
 
-2. **Item**:
-   - Fixed `getById()` to select `qty` instead of `qty_on_hand, qty_available` from stock table
-   - Fixed `getStockInfo()` to select only `warehouse_code, qty` (not qty_on_hand/qty_available/qty_reserved)
-   - Fixed `getTotalStock()` to sum `qty` instead of qty_on_hand/available_qty/reserved_qty
-
-3. **ItemForm**:
-   - Updated filter to handle both string and object types for itemGroups
-   - Extracts label or value from object if needed
-   - Added null-safety checks with optional chaining
-
-**Testing**:
-- ✅ Frontend build: Successful (2341 modules)
-- ✅ Supplier update: No longer throws "Unknown column 'email'" error
-- ✅ Item fetch: No longer throws "Unknown column 'qty_on_hand'" error
-- ✅ ItemForm: Item group filter works with object array
-
----
-
-### 6. Stock Entry Creation - Fixed 'Unknown Column ID' Error ✅
-**Date**: Nov 24, 2025
-**Issue**: "Failed to create stock entry: Unknown column 'id' in 'field list'"
-**Files**:
-- `frontend/src/pages/Inventory/StockEntries.jsx` (fixed)
-- `backend/src/models/StockEntryModel.js` (improved error handling)
-
-**Root Cause**: 
-- Items in the entryItems array were created with an `id` field for UI purposes (React keys, item removal)
-- When submitting to backend, this `id` field was being sent but not expected by the INSERT statement
-
-**Solution**:
-- Replaced `id` field with `_key` field for UI management (React keys and item identification)
-- Updated `handleAddItem()` to create items with `_key: manual_${Date.now()}` instead of `id: Date.now()`
-- Updated `handleRemoveItem()` to use `item._key` instead of `item.id`
-- Updated item table rendering to use `item._key` for keys and remove buttons
-- Updated `handleGRNSelect()` to create GRN items with `_key: grn_${item.id}`
-- Updated both `handleSubmit()` and `handleGRNFormSubmit()` to strip out `id`, `_key`, `item_name`, and `grn_item_id` before sending to backend
-- Backend error handling improved with better error messages
-
-**Testing**:
-- Create manual stock entry with items - should no longer get id column error
-- Create stock entry from GRN - should work correctly
-- Both GRN and manual forms should properly clean items before submission
-
----
-
-### 5. GRN Request Acceptance Page - Enhanced for Inventory Storage ✅
-**Date**: Nov 22, 2025  
-**Files**: 
-- `frontend/src/pages/Inventory/GRNRequests.jsx` (enhanced)
-- `backend/src/controllers/GRNRequestController.js` (updated)
-- `backend/scripts/add-grn-storage-fields.sql` (new migration)
-
-**What was done**:
-- **Frontend Enhancement**:
-  - Enhanced GRNRequests page to accept all GRN statuses (not just awaiting_inventory_approval)
-  - Two-step approval process:
-    1. **Material Inspection Form**: Inspect items, set accepted/rejected quantities, QC status
-    2. **Storage Details Form**: Assign warehouse, bin/rack location, batch tracking, cost/valuation
-  - Better UI with workflow instructions and progress indicators
-  - Warehouse fetching and validation
-  - Real-time validation of quantities and warehouse assignments
-  - Loading states and comprehensive error handling
-
-- **Backend Enhancement**:
-  - Updated `inventoryApproveGRN` controller to accept and process `approvedItems` with storage data
-  - Validates quantities match received amounts
-  - Updates grn_request_items with: accepted_qty, rejected_qty, qc_status, bin_rack, valuation_rate
-  - Automatically creates stock entries with proper warehouse and batch tracking
-  - Includes error handling for quantity mismatches
-
-- **Database Schema**:
-  - Added 3 new columns to `grn_request_items` table:
-    - `qc_status` (VARCHAR 50): pass/fail/hold status
-    - `bin_rack` (VARCHAR 100): Warehouse location (e.g., A-12-3)
-    - `valuation_rate` (DECIMAL 18,4): Cost per unit for inventory valuation
-
-**Complete GRN Workflow**:
-1. ✅ Buying creates GRN from Purchase Order
-2. ✅ GRN automatically sent to Inventory (status: awaiting_inventory_approval)
-3. ✅ Inventory inspects materials and sets accepted/rejected quantities
-4. ✅ Inventory assigns warehouse locations and batch numbers
-5. ✅ Approve and store - stock entries created automatically with proper valuation
-
-**Database Migration Required**:
-```bash
-mysql -u root -p aluminium_erp < backend/scripts/add-grn-storage-fields.sql
+Frontend payload (SalesOrderForm.jsx):
+```javascript
+const payload = {
+  qty: 1,
+  total_amount: 377,
+  ...
+}
 ```
 
-**Testing Checklist**:
-- [ ] Run migration to add new columns
-- [ ] Create PO in Buying module
-- [ ] Create GRN from the PO
-- [ ] Go to `/inventory/grn-requests`
-- [ ] Click "Approve & Store" on awaiting item
-- [ ] Fill inspection details (accepted qty, QC status)
-- [ ] Assign warehouse and bin/rack location
-- [ ] Submit - verify stock entry is created
-- [ ] Check stock balance updated correctly
-
----
-
-### 1. GRN Modal Redesign ✅
-**Date**: Nov 21, 2025  
-**File**: `frontend/src/components/Buying/CreateGRNModal.jsx`
-
-**What was done**:
-- Complete UI/UX redesign with modern, organized layout
-- 4 logical sections: Basic Info, Warehouse, Received Items, Notes
-- Real database integration:
-  - Fetches active POs from `/api/purchase-orders`
-  - Filters for POs with status `to_receive` or `partially_received`
-  - Fetches warehouses from `/api/stock/warehouses`
-  - Auto-populates items from selected PO
-- Enhanced fields: Item Code, Ordered Qty, Received Qty, Batch No, Remarks
-- Real-time calculations and validation
-- Loading states and error handling
-
-**Backend**: Uses existing `/api/grn-requests` endpoint ✅
-
----
-
-### 2. Modal Scrolling Fix ✅
-**Date**: Nov 21, 2025  
-**File**: `frontend/src/components/Modal/Modal.jsx`
-
-**What was done**:
-- Fixed modal overflow issues
-- Added `max-h-[90vh]` constraint
-- Implemented internal scrolling with `overflow-y-auto`
-- Sticky header/footer using `flex-shrink-0`
-- Applies to all modals (PO, GRN, Quotation, etc.)
-
-**Result**: Modals now properly fit on screen with scrollable content
-
----
-
-### 3. Purchase Order Creation - Tax Template Fix ✅
-**Date**: Nov 21, 2025  
-**File**: `backend/src/models/PurchaseOrderModel.js`  
-**Migration**: `backend/scripts/add-tax-template-id.sql`
-
-**Problem**: 
-```
-Failed to create purchase order: Unknown column 'tax_template_id' in 'field list'
+Backend expected (SellingController.js):
+```javascript
+const { order_amount, quantity } = req.body
 ```
 
-**Solution**:
-- Updated `create()` method to conditionally handle `tax_template_id`
-- If provided → includes in INSERT
-- If not provided → excludes from INSERT
-- Works with or without the column in database
+### Solution Implemented
 
-**Database Migration Required**:
-```bash
-mysql -u root -p aluminium_erp < backend/scripts/add-tax-template-id.sql
-```
+#### SellingController.js - createSalesOrder() (Lines 371, 374-375, 407)
+- **Before**: Only accepted `order_amount`, `quantity`
+- **After**: Now accepts both field name variations
+  - `order_amount` OR `total_value` OR `total_amount`
+  - `quantity` OR `qty`
+  - Uses fallback chain: first available value is used
+  - DEFAULT: `finalAmount = 0`, `finalQuantity = 1`
 
-**Reference Documentation**: See `PURCHASE_ORDER_FIX.md`
+#### SellingController.js - updateSalesOrder() (Lines 579, 602-604, 622-624)
+- **Before**: Only accepted `order_amount`, `quantity`
+- **After**: Now accepts both naming conventions
+  - Amount field check: `order_amount OR total_value OR total_amount`
+  - Quantity field check: `quantity OR qty`
+  - Properly updates database with correct values
 
----
-
-### 4. Modal Standardization & Alignment ✅
-**Date**: Nov 22, 2025
-**Files**: 
-- `frontend/src/components/Modal.jsx` (unified with Modal/Modal.jsx)
-- `MODAL_STANDARDS.md` (comprehensive guidelines)
-
-**What was done**:
-- Unified both Modal components to use identical Tailwind flex layout
-- Header and footer use `flex-shrink-0` (never scroll)
-- Body uses `flex-1 overflow-y-auto` (scrollable content)
-- Max height set to `max-h-[90vh]` (fits on screen)
-- Added size support: sm, md, lg, xl, 2xl, 3xl
-- All modal content properly aligned with consistent padding
-- Prevents header/content overlap on scroll
-
-**Coverage**:
-- ✅ Buying: PO, GRN, Quotation, RFQ, Material Request, PI, etc.
-- ✅ Selling: Invoice, Sales Order, Delivery Note, Customer, Quotation, etc.
-- ✅ Production: Work Order, Production Plan, Entry, Rejection, etc.
-- ✅ Inspection modals
-
-**Result**: All modals now have consistent, aligned scrollable content with headers that never hide
-
-**Documentation**: See `MODAL_STANDARDS.md` for implementation guide
+### Impact
+✅ Sales orders now display correct ORDER VALUE amounts
+✅ Sales orders now display correct QTY values
+✅ Both frontend field names (`qty`, `total_amount`) work
+✅ Backward compatible with API field names (`quantity`, `order_amount`)
+✅ Data persists correctly to database
 
 ---
 
-## Build Status
-- ✅ Frontend: Clean build (2319 modules, 280 KB gzipped)
-- ✅ No TypeScript/ESLint errors  
-- ✅ GRN acceptance page fully functional
-- ✅ Production ready
+## Phase 15: Sales Order Header Totals Recalculation (CRITICAL FIX)
 
-## Next Steps for User
+### Issue Identified
+Sales Order list displayed:
+- ORDER VALUE: ₹0.00 (items exist with ₹377 total)
+- QTY: 0 (items exist with qty > 0)
+- ORDER DATE: N/A
 
-### 🔴 URGENT: Database Migration Required
-```bash
-mysql -u root -p aluminium_erp < backend/scripts/add-grn-storage-fields.sql
+**Root Cause** (Critical Bug):
+After inserting `sales_order_items`, the `sales_orders` header record was NEVER updated with calculated totals.
+
+**Example**:
+```
+sales_order_items table:
+- Item 1: qty=1, rate=127 → amount=127
+- Item 2: qty=1, rate=250 → amount=250
+- TOTAL: 377
+
+selling_sales_order table (header):
+- order_amount: 0.00 ❌ (should be 377)
+- quantity: 0 ❌ (should be 2)
+- total_value: 0.00 ❌
 ```
 
-1. **Test GRN Request Flow (Complete End-to-End)**:
-   - Go to http://localhost:5173/buying/purchase-orders
-   - Click **+ Create PO** with multiple items
-   - Submit PO
-   - Go to http://localhost:5173/buying/grn-management
-   - Click **Create GRN** button
-   - Submit GRN (should appear in inventory awaiting approval)
+### Solution Implemented
 
-2. **Test Inventory Approval & Storage**:
-   - Go to http://localhost:5173/inventory/grn-requests
-   - Filter by "Awaiting Inventory Approval" (should see your GRN)
-   - Click **Approve & Store** button
-   - **Step 1 - Material Inspection**:
-     - Set accepted/rejected quantities
-     - Choose QC status (Pass/Fail/Hold)
-     - Click "Next: Storage Details"
-   - **Step 2 - Warehouse Storage**:
-     - Assign warehouse location for each item
-     - Enter bin/rack location (e.g., A-12-3)
-     - Enter cost/valuation rate (optional)
-     - Click "Approve & Store in Inventory"
-   - Verify: GRN status changes to "Stored", stock entry created
+#### SellingController.js - createSalesOrder() (Lines 411-429, 431-452)
 
-3. **Verify Stock Entry Created**:
-   - Go to http://localhost:5173/inventory/stock-entries
-   - Find Material Receipt for your GRN
-   - Verify items and quantities match accepted items
-   - Check warehouse assignment
+**Before**: Items inserted, header never updated
+```javascript
+if (items.length > 0) {
+  for (const item of items) {
+    INSERT INTO sales_order_items
+  }
+}
+// ❌ ORDER HEADER STILL HAS 0.00
+```
 
-4. **Verify Stock Balance Updated**:
-   - Go to http://localhost:5173/inventory/stock-balance
-   - Find items from your GRN
-   - Verify quantity available increased
+**After**: Calculate and update header after items inserted
+```javascript
+if (items && Array.isArray(items) && items.length > 0) {
+  let totalAmount = 0
+  let totalQty = 0
+  for (const item of items) {
+    const qty = parseFloat(item.qty || 1)
+    const rate = parseFloat(item.rate || 0)
+    totalAmount += (qty * rate)  // ✅ Running sum
+    totalQty += qty
+    INSERT INTO sales_order_items
+  }
+  // ✅ UPDATE header with calculated totals
+  UPDATE selling_sales_order SET 
+    order_amount = totalAmount,
+    quantity = totalQty
+}
+```
 
-## Key Technical Decisions
+#### SellingController.js - updateSalesOrder() (Lines 657-684)
 
-1. **Conditional SQL Columns**: Handles databases with/without tax_template_id
-2. **Parallel Data Fetching**: Uses Promise.all() for better performance
-3. **Graceful Degradation**: Optional endpoints (tax-templates) don't break form
-4. **Flex Layout**: Modern CSS flexbox for proper modal scrolling
-5. **Type Conversions**: Explicit parseFloat() for numeric fields
+Applied identical fix:
+- Delete old items
+- Insert new items
+- Recalculate totals
+- Update header with calculated values
+- If no items: set order_amount and quantity to 0
 
-## Commands to Remember
+### Cost Calculation Logic
+```javascript
+For each item in sales_order_items:
+  item_qty = parseFloat(qty)
+  item_rate = parseFloat(rate)
+  item_amount = item_qty × item_rate
+  
+total_amount = ∑(item_amount)
+total_qty = ∑(item_qty)
 
-```bash
-# Frontend build
-cd frontend && npm run build
+Then UPDATE sales_orders SET:
+  order_amount = total_amount
+  quantity = total_qty
+```
 
-# Backend start
-cd backend && npm start
+### Result
+✅ Sales Order list now shows correct ORDER VALUE (₹377+)
+✅ Sales Order list now shows correct QTY (2, 3, etc.)
+✅ Header totals always match sum of items
+✅ Works for both create and update operations
+✅ Handles empty items list (sets to 0)
 
-# Database migrations (RUN IN ORDER)
-mysql -u root -p aluminium_erp < backend/scripts/add-grn-storage-fields.sql
-mysql -u root -p aluminium_erp < backend/scripts/add-tax-template-id.sql
+### Verification Steps
+1. Create new Sales Order with 2 items
+2. Open Sales Orders list
+3. Expected: ORDER VALUE shows ₹377, QTY shows 2
+4. Edit order to change items
+5. Expected: Totals update immediately
 
-# Verify GRN tables columns
-mysql -u root -p -e "DESCRIBE aluminium_erp.grn_request_items;"
-
-# Test GRN Request page
-# Navigate to: http://localhost:5173/inventory/grn-requests
+### Related Data Flow
+```
+Frontend (SalesOrderForm.jsx)
+  → sends: items array with qty + rate
+  ↓
+SellingController.createSalesOrder()
+  → validates items
+  → inserts sales_order header (with initial order_amount)
+  → inserts sales_order_items (one per item)
+  → ✅ RECALCULATES order_amount from items
+  → ✅ UPDATES sales_orders header
+  ↓
+Database (selling_sales_order, sales_order_items)
+  → header now has correct total_amount
+  ↓
+SalesOrder.jsx list page
+  → queries header totals
+  → displays ✅ correct values
 ```

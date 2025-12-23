@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Clipboard, Settings, Calendar } from 'lucide-react'
 import * as productionService from '../../services/productionService'
@@ -125,8 +125,18 @@ export default function WorkOrderForm() {
     }))
     setError(null)
 
-    if (name === 'item_to_manufacture' && value) {
-      fetchBOMsForItem(value)
+    if (name === 'item_to_manufacture') {
+      if (value) {
+        fetchBOMsForItem(value)
+      } else {
+        setBOMsData([])
+        setFormData(prev => ({
+          ...prev,
+          bom_no: ''
+        }))
+        setRequiredItems([])
+        setOperationsData([])
+      }
     }
 
     if (name === 'bom_no' && value) {
@@ -139,6 +149,8 @@ export default function WorkOrderForm() {
       setLoading(true)
       const response = await productionService.getBOMs({ item_code: itemCode, status: 'active' })
       const bomsForItem = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : [])
+      
+      setBOMsData(bomsForItem)
       
       if (bomsForItem.length > 0) {
         const firstBOM = bomsForItem[0]
@@ -170,35 +182,45 @@ export default function WorkOrderForm() {
       const response = await productionService.getBOMDetails(bomId)
       const bomData = response.data || response
 
-      if (bomData && bomData.lines && Array.isArray(bomData.lines)) {
-        const requiredItemsFromBOM = bomData.lines.map(line => ({
-          id: Date.now() + Math.random(),
-          item_code: line.component_code,
-          source_warehouse: 'Stores', // Default
-          required_qty: line.quantity,
-          transferred_qty: '0.000',
-          consumed_qty: '0.000',
-          returned_qty: '0.000'
-        }))
-        setRequiredItems(requiredItemsFromBOM)
-      }
+      if (bomData) {
+        const lines = bomData.lines || bomData.materials || []
+        if (lines && Array.isArray(lines) && lines.length > 0) {
+          const requiredItemsFromBOM = lines.map((line, index) => ({
+            id: Date.now() + Math.random() + index,
+            item_code: line.component_code || line.item_code || line.component || '',
+            item_name: line.component_name || line.item_name || '',
+            source_warehouse: line.warehouse || 'Stores',
+            required_qty: parseFloat(line.quantity || line.qty || 0),
+            transferred_qty: '0.000',
+            consumed_qty: '0.000',
+            returned_qty: '0.000'
+          }))
+          setRequiredItems(requiredItemsFromBOM)
+        } else {
+          setRequiredItems([])
+        }
 
-      if (bomData.operations && Array.isArray(bomData.operations)) {
-        const operationsFromBOM = bomData.operations.map(op => ({
-          id: Date.now() + Math.random(),
-          operation: op.operation_name || op.operation,
-          completed_qty: '0.000',
-          process_loss_qty: '0.000',
-          bom: bomData.bom_id,
-          workstation: op.workstation || '',
-          time: op.time || '4.00' // Default or from BOM
-        }))
-        setOperationsData(operationsFromBOM)
+        const operations = bomData.operations || []
+        if (operations && Array.isArray(operations) && operations.length > 0) {
+          const operationsFromBOM = operations.map((op, index) => ({
+            id: Date.now() + Math.random() + index,
+            operation: op.operation_name || op.operation || '',
+            completed_qty: '0.000',
+            process_loss_qty: '0.000',
+            bom: bomData.bom_id || bomId,
+            workstation: op.workstation || op.workstation_name || '',
+            time: parseFloat(op.time || 4.0)
+          }))
+          setOperationsData(operationsFromBOM)
+        } else {
+          setOperationsData([])
+        }
       }
 
       setError(null)
     } catch (err) {
       console.error('Failed to fetch BOM details:', err)
+      setError(`Failed to load BOM details: ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -209,11 +231,22 @@ export default function WorkOrderForm() {
     setLoading(true)
     setError(null)
 
+    if (!formData.item_to_manufacture || !formData.bom_no || !formData.qty_to_manufacture) {
+      setError('Please fill in all required fields: Item, BOM, and Quantity')
+      setLoading(false)
+      return
+    }
+
     try {
       const payload = {
         ...formData,
         item_code: formData.item_to_manufacture,
-        quantity: formData.qty_to_manufacture,
+        item_to_manufacture: formData.item_to_manufacture,
+        quantity: parseFloat(formData.qty_to_manufacture) || 1,
+        qty_to_manufacture: parseFloat(formData.qty_to_manufacture) || 1,
+        bom_no: formData.bom_no,
+        bom_id: formData.bom_no,
+        priority: formData.priority || 'Medium',
         required_items: requiredItems,
         operations: operationsData
       }
@@ -231,6 +264,7 @@ export default function WorkOrderForm() {
       }, 1500)
     } catch (err) {
       setError(err.message || 'Failed to save work order')
+      console.error('Error submitting form:', err)
     } finally {
       setLoading(false)
     }
@@ -310,10 +344,13 @@ export default function WorkOrderForm() {
                 onChange={handleInputChange}
                 style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#fff' }}
                 required
+                disabled={!formData.item_to_manufacture}
               >
-                <option value="">Select BOM</option>
+                <option value="">{formData.item_to_manufacture ? 'Select BOM' : 'Select Item First'}</option>
                 {bomsData.map(bom => (
-                  <option key={bom.bom_id} value={bom.bom_id}>{bom.bom_id} ({bom.status})</option>
+                  <option key={bom.bom_id} value={bom.bom_id}>
+                    {bom.bom_id} - {bom.item_name || bom.item_code || ''} ({bom.status})
+                  </option>
                 ))}
               </select>
             </div>

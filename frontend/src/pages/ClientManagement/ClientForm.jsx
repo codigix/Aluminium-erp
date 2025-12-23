@@ -35,7 +35,7 @@ export default function ClientForm() {
 
   const fetchClient = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/clients/${client_id}`)
+      const res = await fetch(`/api/clients/${client_id}`)
       const data = await res.json()
       if (data.success) {
         setFormData(data.data)
@@ -65,8 +65,8 @@ export default function ClientForm() {
     try {
       const method = client_id && client_id !== 'new' ? 'PUT' : 'POST'
       const url = client_id && client_id !== 'new' 
-        ? `${import.meta.env.VITE_API_URL}/clients/${client_id}`
-        : `${import.meta.env.VITE_API_URL}/clients`
+        ? `/api/clients/${client_id}`
+        : `/api/clients`
 
       const res = await fetch(url, {
         method,

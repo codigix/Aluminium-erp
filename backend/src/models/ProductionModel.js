@@ -103,9 +103,9 @@ class ProductionModel {
   async createWorkOrder(data) {
     try {
       await this.db.query(
-        `INSERT INTO work_order (wo_id, item_code, bom_no, quantity, priority, notes, planned_start_date, planned_end_date, actual_start_date, actual_end_date, expected_delivery_date, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [data.wo_id, data.item_code, data.bom_no, data.quantity, data.priority, data.notes, 
+        `INSERT INTO work_order (wo_id, item_code, bom_no, quantity, unit_cost, total_cost, priority, notes, planned_start_date, planned_end_date, actual_start_date, actual_end_date, expected_delivery_date, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [data.wo_id, data.item_code, data.bom_no, data.quantity, data.unit_cost || 0, data.total_cost || 0, data.priority, data.notes, 
          data.planned_start_date || null, data.planned_end_date || null, data.actual_start_date || null, data.actual_end_date || null, data.expected_delivery_date || null, data.status]
       )
       return { wo_id: data.wo_id, ...data }
@@ -648,23 +648,61 @@ class ProductionModel {
 
   async getBOMs(filters = {}) {
     try {
-      let query = 'SELECT * FROM bom WHERE 1=1'
+      let query = 'SELECT b.* FROM bom b WHERE 1=1'
       const params = []
 
       if (filters.status) {
-        query += ' AND status = ?'
+        query += ' AND b.status = ?'
         params.push(filters.status)
       }
       if (filters.item_code) {
-        query += ' AND item_code = ?'
+        query += ' AND b.item_code = ?'
         params.push(filters.item_code)
       }
       if (filters.search) {
-        query += ' AND (bom_id LIKE ? OR item_code LIKE ?)'
+        query += ' AND (b.bom_id LIKE ? OR b.item_code LIKE ?)'
         params.push(`%${filters.search}%`, `%${filters.search}%`)
       }
 
+      query += ' ORDER BY b.updated_at DESC'
       const [boms] = await this.db.query(query, params)
+      
+      for (let bom of boms) {
+        const [lines] = await this.db.query(
+          `SELECT bl.quantity, bl.rate, i.valuation_rate, i.standard_selling_rate
+           FROM bom_line bl
+           LEFT JOIN item i ON bl.component_code = i.item_code
+           WHERE bl.bom_id = ?`,
+          [bom.bom_id]
+        )
+
+        const [operations] = await this.db.query(
+          `SELECT operating_cost FROM bom_operation WHERE bom_id = ?`,
+          [bom.bom_id]
+        )
+        
+        if ((lines && lines.length > 0) || (operations && operations.length > 0)) {
+          if (!bom.total_cost || parseFloat(bom.total_cost) === 0) {
+            let materialCost = 0
+            for (const line of lines || []) {
+              const qty = parseFloat(line.quantity || 0)
+              let rate = parseFloat(line.rate || 0)
+              if (rate === 0) {
+                rate = parseFloat(line.valuation_rate || line.standard_selling_rate || 0)
+              }
+              materialCost += (qty * rate)
+            }
+            let operationCost = 0
+            for (const op of operations || []) {
+              operationCost += parseFloat(op.operating_cost || 0)
+            }
+            bom.total_cost = parseFloat((materialCost + operationCost).toFixed(2))
+          } else {
+            bom.total_cost = parseFloat(bom.total_cost)
+          }
+        }
+      }
+      
       return boms
     } catch (error) {
       throw error
@@ -676,16 +714,41 @@ class ProductionModel {
       const [bom] = await this.db.query('SELECT * FROM bom WHERE bom_id = ?', [bom_id])
       if (!bom || bom.length === 0) return null
 
-      const [lines] = await this.db.query('SELECT * FROM bom_line WHERE bom_id = ? ORDER BY sequence', [bom_id])
+      const [lines] = await this.db.query(
+        `SELECT bl.*, i.valuation_rate, i.standard_selling_rate, i.name as item_name
+         FROM bom_line bl
+         LEFT JOIN item i ON bl.component_code = i.item_code
+         WHERE bl.bom_id = ?
+         ORDER BY bl.sequence`,
+        [bom_id]
+      )
       const [operations] = await this.db.query('SELECT * FROM bom_operation WHERE bom_id = ? ORDER BY sequence', [bom_id])
       const [scrapItems] = await this.db.query('SELECT * FROM bom_scrap WHERE bom_id = ? ORDER BY sequence', [bom_id])
 
-      return {
-        ...bom[0],
-        lines: lines || [],
-        operations: operations || [],
-        scrapItems: scrapItems || []
+      let bomData = { ...bom[0], lines: lines || [], operations: operations || [], scrapItems: scrapItems || [] }
+      
+      if ((lines && lines.length > 0) || (operations && operations.length > 0)) {
+        if (!bomData.total_cost || parseFloat(bomData.total_cost) === 0) {
+          let materialCost = 0
+          for (const line of lines || []) {
+            const qty = parseFloat(line.quantity || 0)
+            let rate = parseFloat(line.rate || 0)
+            if (rate === 0) {
+              rate = parseFloat(line.valuation_rate || line.standard_selling_rate || 0)
+            }
+            materialCost += (qty * rate)
+          }
+          let operationCost = 0
+          for (const op of operations || []) {
+            operationCost += parseFloat(op.operating_cost || 0)
+          }
+          bomData.total_cost = parseFloat((materialCost + operationCost).toFixed(2))
+        } else {
+          bomData.total_cost = parseFloat(bomData.total_cost)
+        }
       }
+
+      return bomData
     } catch (error) {
       throw error
     }

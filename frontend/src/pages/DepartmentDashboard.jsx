@@ -26,12 +26,12 @@ export default function DepartmentDashboard() {
 
       if (userDept === 'buying' || userDept === 'procurement') {
         const [mrRes, rfqRes, quotRes, supplierRes, poRes, invRes] = await Promise.all([
-          fetch(`${import.meta.env.VITE_API_URL}/material-requests`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/rfqs`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/quotations`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/suppliers`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/purchase-orders`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/purchase-invoices`, { headers }).catch(() => ({}))
+          fetch(`/api/material-requests`, { headers }).catch(() => ({})),
+          fetch(`/api/rfqs`, { headers }).catch(() => ({})),
+          fetch(`/api/quotations`, { headers }).catch(() => ({})),
+          fetch(`/api/suppliers`, { headers }).catch(() => ({})),
+          fetch(`/api/purchase-orders`, { headers }).catch(() => ({})),
+          fetch(`/api/purchase-invoices`, { headers }).catch(() => ({}))
         ])
         const [mrs, rfqs, quotations, suppliers, pos, invoices] = await Promise.all([
           mrRes.json?.().catch(() => []), rfqRes.json?.().catch(() => []), quotRes.json?.().catch(() => []),
@@ -57,7 +57,7 @@ export default function DepartmentDashboard() {
         })
         
         try {
-          const bomRes = await fetch(`${import.meta.env.VITE_API_URL}/production/boms`, { headers }).catch(() => ({}))
+          const bomRes = await fetch(`/api/production/boms`, { headers }).catch(() => ({}))
           const bomData = await bomRes.json?.().catch(() => [])
           setBOMs(Array.isArray(bomData?.data) ? bomData.data.slice(0, 5) : [])
         } catch (err) {
@@ -796,11 +796,7 @@ export default function DepartmentDashboard() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right text-gray-700 font-medium">₹{parseFloat(bom.total_cost || 0).toFixed(2)}</td>
-                          <td className="py-3 px-4 text-center">
-                            <a href={`/selling/quotations/new?bom_id=${bom.bom_id}`} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-xs font-medium transition">
-                              Use in Quote
-                            </a>
-                          </td>
+                          <td className="py-3 px-4 text-center" />
                         </tr>
                       ))}
                     </tbody>

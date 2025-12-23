@@ -63,7 +63,7 @@ export default function PurchaseOrderForm() {
 
   const fetchSuppliers = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/suppliers`)
+      const res = await fetch(`/api/suppliers`)
       const data = await res.json()
       
       if (!res.ok) {
@@ -88,7 +88,7 @@ export default function PurchaseOrderForm() {
 
   const fetchItems = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/items`)
+      const res = await fetch(`/api/items`)
       const data = await res.json()
       
       if (!res.ok) {
@@ -126,7 +126,7 @@ export default function PurchaseOrderForm() {
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const searchQuery = encodeURIComponent(searchTerm)
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/items?search=${searchQuery}`)
+        const res = await fetch(`/api/items?search=${searchQuery}`)
         const data = await res.json()
         
         const itemsData = data.success && data.data ? data.data : []
@@ -154,7 +154,7 @@ export default function PurchaseOrderForm() {
 
   const fetchPO = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-orders/${po_no}`)
+      const res = await fetch(`/api/purchase-orders/${po_no}`)
       const data = await res.json()
       if (data.success && data.data) {
         const apiData = data.data
@@ -204,7 +204,7 @@ export default function PurchaseOrderForm() {
     
     if (selectedItem) {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/items/${value}`)
+        const res = await fetch(`/api/items/${value}`)
         const data = await res.json()
         
         if (data.success) {
@@ -270,7 +270,7 @@ export default function PurchaseOrderForm() {
     setLoading(true)
     try {
       const method = po_no ? 'PUT' : 'POST'
-      const url = po_no ? `${import.meta.env.VITE_API_URL}/purchase-orders/${po_no}` : `${import.meta.env.VITE_API_URL}/purchase-orders`
+      const url = po_no ? `/api/purchase-orders/${po_no}` : `/api/purchase-orders`
       
       const submitData = {
         ...po,

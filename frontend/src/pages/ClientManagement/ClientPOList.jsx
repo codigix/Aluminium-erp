@@ -38,7 +38,7 @@ export default function ClientPOs() {
 
   const fetchClients = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/selling/customers`)
+      const res = await fetch(`/api/selling/customers`)
       const data = await res.json()
       if (data.success) {
         setClients(data.data || [])
@@ -55,7 +55,7 @@ export default function ClientPOs() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/client-pos?${query}`)
+      const res = await fetch(`/api/client-pos?${query}`)
       const data = await res.json()
       if (data.success) {
         setPOs(data.data || [])
@@ -81,7 +81,7 @@ export default function ClientPOs() {
   const handleDelete = async (po_id) => {
     if (!confirm('Are you sure you want to delete this Client PO?')) return
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/client-pos/${po_id}`, {
+      const res = await fetch(`/api/client-pos/${po_id}`, {
         method: 'DELETE'
       })
       const data = await res.json()
@@ -98,7 +98,7 @@ export default function ClientPOs() {
   const handleAccept = async (po_id) => {
     if (!confirm('Are you sure you want to accept this Client PO? This will create a Sales Order.')) return
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/client-pos/${po_id}/accept`, {
+      const res = await fetch(`/api/client-pos/${po_id}/accept`, {
         method: 'POST'
       })
       const data = await res.json()

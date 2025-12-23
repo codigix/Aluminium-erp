@@ -32,7 +32,7 @@ export default function WorkstationForm() {
   const fetchWorkstationDetails = async (wsId) => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/production/workstations/${wsId}`, {
+      const response = await fetch(`/api/production/workstations/${wsId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (response.ok) {
@@ -64,7 +64,7 @@ export default function WorkstationForm() {
 
       const token = localStorage.getItem('token')
       const response = await fetch(
-        id ? `${import.meta.env.VITE_API_URL}/production/workstations/${id}` : `${import.meta.env.VITE_API_URL}/production/workstations`,
+        id ? `/api/production/workstations/${id}` : `/api/production/workstations`,
         {
           method: id ? 'PUT' : 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },

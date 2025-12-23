@@ -49,7 +49,7 @@ export default function PurchaseOrders() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/purchase-orders?${query}`)
+      const res = await fetch(`/api/purchase-orders?${query}`)
       const data = await res.json()
       if (data.success) {
         setOrders(data.data || [])
@@ -90,7 +90,7 @@ export default function PurchaseOrders() {
   const handleSubmitPO = async (po_no) => {
     try {
       setActionLoading(po_no)
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/purchase-orders/${po_no}/submit`, {
+      const response = await fetch(`/api/purchase-orders/${po_no}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       })

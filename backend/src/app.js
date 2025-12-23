@@ -332,6 +332,61 @@ async function initializeDatabase() {
       }
     }
 
+    // Create bom_operation table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS bom_operation (
+          operation_id INT AUTO_INCREMENT PRIMARY KEY,
+          bom_id VARCHAR(50) NOT NULL,
+          operation_name VARCHAR(100),
+          workstation_type VARCHAR(100),
+          operation_time DECIMAL(10,2),
+          fixed_time DECIMAL(10,2) DEFAULT 0,
+          operating_cost DECIMAL(18,2) DEFAULT 0,
+          sequence INT,
+          notes TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (bom_id) REFERENCES bom(bom_id) ON DELETE CASCADE,
+          INDEX idx_bom_id (bom_id),
+          INDEX idx_sequence (sequence)
+        )
+      `)
+      console.log('✓ bom_operation table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ bom_operation table already exists')
+      } else {
+        console.warn('⚠ Could not initialize bom_operation table:', err.message)
+      }
+    }
+
+    // Create bom_scrap table if it doesn't exist
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS bom_scrap (
+          scrap_id INT AUTO_INCREMENT PRIMARY KEY,
+          bom_id VARCHAR(50) NOT NULL,
+          item_code VARCHAR(100) NOT NULL,
+          item_name VARCHAR(255),
+          quantity DECIMAL(18,6),
+          rate DECIMAL(18,2),
+          sequence INT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (bom_id) REFERENCES bom(bom_id) ON DELETE CASCADE,
+          FOREIGN KEY (item_code) REFERENCES item(item_code),
+          INDEX idx_bom_id (bom_id),
+          INDEX idx_sequence (sequence)
+        )
+      `)
+      console.log('✓ bom_scrap table initialized')
+    } catch (err) {
+      if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+        console.log('✓ bom_scrap table already exists')
+      } else {
+        console.warn('⚠ Could not initialize bom_scrap table:', err.message)
+      }
+    }
+
     // Add sales_orders column to production_plan table if it doesn't exist
     try {
       await db.execute(`

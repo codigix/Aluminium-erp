@@ -34,7 +34,7 @@ export default function Clients() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/clients?${query}`)
+      const res = await fetch(`/api/clients?${query}`)
       const data = await res.json()
       if (data.success) {
         setClients(data.data || [])
@@ -59,7 +59,7 @@ export default function Clients() {
   const handleDelete = async (client_id) => {
     if (!confirm('Are you sure you want to delete this client?')) return
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/clients/${client_id}`, {
+      const res = await fetch(`/api/clients/${client_id}`, {
         method: 'DELETE'
       })
       const data = await res.json()

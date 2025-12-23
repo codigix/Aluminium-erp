@@ -59,7 +59,7 @@ export default function ImportClientPOModal({ isOpen, onClose, onSuccess }) {
 
     setLoading(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/client-pos/import`, {
+      const res = await fetch(`/api/client-pos/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: importData })

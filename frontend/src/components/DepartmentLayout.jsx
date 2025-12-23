@@ -122,34 +122,7 @@ export default function DepartmentLayout({ children }) {
       ]
     }
 
-    // SELLING DEPARTMENT MENU
-    if (userDept === 'selling') {
-      return [
-        dashboardItem,
-        {
-          id: 'selling',
-          label: 'Selling Module',
-          icon: TrendingUp,
-          section: 'APPS',
-          submenu: [
-            { label: 'Quotations', path: '/selling/quotations', icon: DollarSign },
-            { label: 'Sales Orders', path: '/selling/sales-orders', icon: Clipboard },
-            { label: 'Delivery Notes', path: '/selling/delivery-notes', icon: Package },
-            { label: 'Sales Invoices', path: '/selling/sales-invoices', icon: Receipt },
-            { label: 'Customers', path: '/selling/customers', icon: Building2 }
-          ]
-        },
-        {
-          id: 'analytics',
-          label: 'Analytics',
-          icon: TrendingUp,
-          section: 'APPS',
-          submenu: [
-            { label: 'Sales Analytics', path: '/analytics/selling', icon: TrendingUp }
-          ]
-        }
-      ]
-    }
+
 
     // INVENTORY DEPARTMENT MENU
     if (userDept === 'inventory') {

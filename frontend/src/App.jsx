@@ -28,18 +28,6 @@ import QuotationForm from './pages/Buying/QuotationForm'
 import ItemForm from './pages/Masters/ItemForm'
 import BuyingAnalytics from './pages/Buying/BuyingAnalytics'
 import {
-  Quotation,
-  SalesOrder,
-  DeliveryNote,
-  SalesInvoice,
-  Customers,
-  SellingAnalytics
-} from './pages/Selling'
-import SalesQuotationForm from './pages/Selling/SalesQuotationForm'
-import SalesOrderForm from './pages/Selling/SalesOrderForm'
-import SalesInvoiceDetail from './pages/Selling/SalesInvoiceDetail'
-import CustomerDetail from './pages/Selling/CustomerDetail'
-import {
   Clients,
   ClientForm,
   ClientPOs,
@@ -79,7 +67,9 @@ import {
   WorkOrder,
   WorkOrderTracking,
   JobCard,
-  BOMForm
+  BOMForm,
+  SalesOrder,
+  SalesOrderForm
 } from './pages/Production'
 import './App.css'
 import WorkOrderForm from './pages/Production/WorkOrderForm'
@@ -496,282 +486,6 @@ function App() {
             }
           />
 
-          {/* Selling Module - Quotations */}
-          <Route
-            path="/selling/quotations"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <Quotation />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/quotations/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesQuotationForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/quotations/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesQuotationForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Selling Module - Sales Orders */}
-          <Route
-            path="/selling/sales-orders"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin', 'production']}>
-                    <SalesOrder />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/sales-orders/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin', 'production']}>
-                    <SalesOrderForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/sales-orders/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin', 'production']}>
-                    <SalesOrderForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/production/sales-orders"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['production', 'admin']}>
-                    <SalesOrder />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/production/sales-orders/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['production', 'admin']}>
-                    <SalesOrderForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/production/sales-orders/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['production', 'admin']}>
-                    <SalesOrderForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Selling Module - Delivery Notes */}
-          <Route
-            path="/selling/delivery-notes"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <DeliveryNote />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/delivery-notes/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <DeliveryNote />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/delivery-notes/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <DeliveryNote />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Selling Module - Sales Invoices */}
-          <Route
-            path="/selling/sales-invoices"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesInvoice />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/sales-invoices/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesInvoice />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/sales-invoices/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SalesInvoiceDetail />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Selling Module - Customers */}
-          <Route
-            path="/selling/customers"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <Customers />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/production/customers"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['production', 'admin']}>
-                    <Customers />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/production/customers/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['production', 'admin']}>
-                    <Customers />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/production/customers/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['production', 'admin']}>
-                    <CustomerDetail />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/customers/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <Customers />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/selling/customers/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <CustomerDetail />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Selling Analytics */}
-          <Route
-            path="/analytics/selling"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['selling', 'admin']}>
-                    <SellingAnalytics />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
 
           {/* Client Management Module - Clients */}
           <Route
@@ -1185,7 +899,6 @@ function App() {
           <Route path="/production/boms/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><BOMForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
           <Route path="/production/boms/form/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><BOMForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
 
-          {/* Production Module - Sales Orders (BOM-based) */}
           <Route
             path="/production/sales-orders"
             element={
@@ -1198,30 +911,8 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/production/sales-orders/new"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['production', 'admin']}>
-                    <SalesOrderForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/production/sales-orders/:id"
-            element={
-              <ProtectedRoute>
-                <DepartmentLayout>
-                  <DepartmentProtectedRoute departments={['production', 'admin']}>
-                    <SalesOrderForm />
-                  </DepartmentProtectedRoute>
-                </DepartmentLayout>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/production/sales-orders/form" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><SalesOrderForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
+          <Route path="/production/sales-orders/:id" element={<ProtectedRoute><DepartmentLayout><DepartmentProtectedRoute departments={['production', 'admin']}><SalesOrderForm /></DepartmentProtectedRoute></DepartmentLayout></ProtectedRoute>} />
 
           <Route
             path="/production/plans"

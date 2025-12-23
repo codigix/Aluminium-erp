@@ -205,12 +205,12 @@ export default function Dashboard() {
         }
 
         const [mrRes, rfqRes, quotRes, supplierRes, poRes, invoiceRes] = await Promise.all([
-          fetch(`${import.meta.env.VITE_API_URL}/material-requests`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/rfqs`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/quotations`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/suppliers`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/purchase-orders`, { headers }).catch(() => ({})),
-          fetch(`${import.meta.env.VITE_API_URL}/purchase-invoices`, { headers }).catch(() => ({}))
+          fetch(`/api/material-requests`, { headers }).catch(() => ({})),
+          fetch(`/api/rfqs`, { headers }).catch(() => ({})),
+          fetch(`/api/quotations`, { headers }).catch(() => ({})),
+          fetch(`/api/suppliers`, { headers }).catch(() => ({})),
+          fetch(`/api/purchase-orders`, { headers }).catch(() => ({})),
+          fetch(`/api/purchase-invoices`, { headers }).catch(() => ({}))
         ])
 
         const [mrs, rfqs, quotations, suppliers, pos, invoices] = await Promise.all([

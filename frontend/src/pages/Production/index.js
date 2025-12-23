@@ -15,6 +15,8 @@ import Operations from './Operations'
 import OperationForm from './OperationForm'
 import Workstations from './Workstations'
 import WorkstationForm from './WorkstationForm'
+import SalesOrder from './SalesOrder'
+import SalesOrderForm from './SalesOrderForm'
 
 export {
   ProductionOrders,
@@ -32,7 +34,9 @@ export {
   BOMForm,
   OperationForm,
   Workstations,
-  WorkstationForm
+  WorkstationForm,
+  SalesOrder,
+  SalesOrderForm
 }
 
 export default {
@@ -52,5 +56,7 @@ export default {
   Operations,
   OperationForm,
   Workstations,
-  WorkstationForm
+  WorkstationForm,
+  SalesOrder,
+  SalesOrderForm
 }

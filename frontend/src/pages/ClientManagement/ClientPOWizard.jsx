@@ -80,7 +80,7 @@ export default function ClientPOWizard() {
       setLoading(true)
       
       // Fetch clients
-      const clientRes = await fetch(`${import.meta.env.VITE_API_URL}/selling/customers`)
+      const clientRes = await fetch(`/api/selling/customers`)
       const clientData = await clientRes.json()
       if (clientData.success) {
         setClients(clientData.data || [])
@@ -88,7 +88,7 @@ export default function ClientPOWizard() {
 
       // If editing existing PO, fetch its data
       if (po_id && po_id !== 'new') {
-        const poRes = await fetch(`${import.meta.env.VITE_API_URL}/client-pos/${po_id}`)
+        const poRes = await fetch(`/api/client-pos/${po_id}`)
         const poJson = await poRes.json()
         if (poJson.success) {
           const data = poJson.data
@@ -163,19 +163,19 @@ export default function ClientPOWizard() {
       let method = 'POST'
 
       if (currentStep === 1) {
-        endpoint = `${import.meta.env.VITE_API_URL}/client-pos`
+        endpoint = `/api/client-pos`
         payload = clientInfo
       } else if (currentStep === 2) {
-        endpoint = `${import.meta.env.VITE_API_URL}/client-pos/${clientInfo.po_id}/project`
+        endpoint = `/api/client-pos/${clientInfo.po_id}/project`
         payload = { ...projectInfo, po_id: clientInfo.po_id }
       } else if (currentStep === 3) {
-        endpoint = `${import.meta.env.VITE_API_URL}/client-pos/${clientInfo.po_id}/drawings`
+        endpoint = `/api/client-pos/${clientInfo.po_id}/drawings`
         payload = { drawings, po_id: clientInfo.po_id }
       } else if (currentStep === 4) {
-        endpoint = `${import.meta.env.VITE_API_URL}/client-pos/${clientInfo.po_id}/commercials`
+        endpoint = `/api/client-pos/${clientInfo.po_id}/commercials`
         payload = { ...commercials, po_id: clientInfo.po_id }
       } else if (currentStep === 5) {
-        endpoint = `${import.meta.env.VITE_API_URL}/client-pos/${clientInfo.po_id}/terms`
+        endpoint = `/api/client-pos/${clientInfo.po_id}/terms`
         payload = { ...terms, po_id: clientInfo.po_id, attachments: [] }
       }
 
@@ -848,7 +848,7 @@ export default function ClientPOWizard() {
                 setSubmitting(true)
                 try {
                   const res = await fetch(
-                    `${import.meta.env.VITE_API_URL}/client-pos/${clientInfo.po_id}/submit`,
+                    `/api/client-pos/${clientInfo.po_id}/submit`,
                     { method: 'POST', headers: { 'Content-Type': 'application/json' } }
                   )
                   const data = await res.json()

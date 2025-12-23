@@ -39,7 +39,7 @@ export default function Items() {
 
   const fetchItemGroups = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/items/groups`)
+      const res = await fetch(`/api/items/groups`)
       const data = await res.json()
       if (data.success) {
         setGroups(data.data)
@@ -55,7 +55,7 @@ export default function Items() {
       const query = new URLSearchParams(
         Object.entries(filters).filter(([, v]) => v)
       )
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/items?${query}`)
+      const res = await fetch(`/api/items?${query}`)
       const data = await res.json()
       if (data.success) {
         setItems(data.data)
@@ -76,7 +76,7 @@ export default function Items() {
     if (!window.confirm('Are you sure you want to delete this item?')) return
     
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/items/${itemCode}`, {
+      const res = await fetch(`/api/items/${itemCode}`, {
         method: 'DELETE'
       })
       const data = await res.json()

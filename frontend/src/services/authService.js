@@ -1,9 +1,9 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 const authService = {
   // Register new user
   async register(email, fullName, password, confirmPassword, department) {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, fullName, password, confirmPassword, department })
@@ -15,7 +15,7 @@ const authService = {
 
   // Login user
   async login(email, password) {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
@@ -57,7 +57,7 @@ const authService = {
     if (!token) return null
     
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+      const response = await fetch('/api/auth/verify', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

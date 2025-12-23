@@ -165,7 +165,7 @@ export default function ItemForm() {
 
   const fetchItem = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_API_URL}/items/${item_code}`)
+      const response = await axios.get(`/api/items/${item_code}`)
       const itemData = response.data.data
       setItem(itemData)
       setFormData(prev => ({

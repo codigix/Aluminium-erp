@@ -109,6 +109,11 @@ router.delete(
   authMiddleware,
   productionController.deleteProductionPlan.bind(productionController)
 )
+router.post(
+  '/plans/:plan_id/create-work-orders',
+  authMiddleware,
+  productionController.createWorkOrdersFromPlan.bind(productionController)
+)
 
   // ============= PRODUCTION ENTRIES =============
   router.post(

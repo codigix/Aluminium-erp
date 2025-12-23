@@ -36,10 +36,10 @@ export default function InventoryDashboard({ user }) {
       }
 
       const [warehouseRes, balanceRes, ledgerRes, transferRes, grnRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/stock/warehouses`, { headers }).catch(() => ({})),
-        fetch(`${import.meta.env.VITE_API_URL}/stock/stock-balance`, { headers }).catch(() => ({})),
-        fetch(`${import.meta.env.VITE_API_URL}/stock/ledger`, { headers }).catch(() => ({})),
-        fetch(`${import.meta.env.VITE_API_URL}/stock/transfers`, { headers }).catch(() => ({})),
+        fetch(`/api/stock/warehouses`, { headers }).catch(() => ({})),
+        fetch(`/api/stock/stock-balance`, { headers }).catch(() => ({})),
+        fetch(`/api/stock/ledger`, { headers }).catch(() => ({})),
+        fetch(`/api/stock/transfers`, { headers }).catch(() => ({})),
         axios.get('/api/grn-requests').catch(() => ({}))
       ])
 

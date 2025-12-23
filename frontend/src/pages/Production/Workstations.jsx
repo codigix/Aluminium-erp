@@ -19,7 +19,7 @@ export default function Workstations() {
     try {
       setLoading(true)
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/production/workstations`, {
+      const response = await fetch(`/api/production/workstations`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
@@ -43,7 +43,7 @@ export default function Workstations() {
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/production/workstations/${workstationName}`, {
+      const response = await fetch(`/api/production/workstations/${workstationName}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       })

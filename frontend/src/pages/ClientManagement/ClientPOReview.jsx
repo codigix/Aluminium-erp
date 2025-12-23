@@ -21,7 +21,7 @@ export default function ClientPOReview() {
 
   const fetchPOData = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/client-pos/${po_id}/review`)
+      const res = await fetch(`/api/client-pos/${po_id}/review`)
       const data = await res.json()
 
       if (data.success) {
@@ -37,7 +37,7 @@ export default function ClientPOReview() {
   const downloadPDF = async () => {
     setDownloading(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/client-pos/${po_id}/download/pdf`)
+      const res = await fetch(`/api/client-pos/${po_id}/download/pdf`)
       
       if (!res.ok) {
         throw new Error('Failed to download PDF')
@@ -75,7 +75,7 @@ export default function ClientPOReview() {
   const downloadExcel = async () => {
     setDownloading(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/client-pos/${po_id}/download/excel`)
+      const res = await fetch(`/api/client-pos/${po_id}/download/excel`)
       
       if (!res.ok) {
         throw new Error('Failed to download Excel')
@@ -182,7 +182,7 @@ export default function ClientPOReview() {
       {/* PO Template Preview (EJS Rendering) */}
       <div className="bg-white rounded-lg shadow">
         <iframe
-          src={`${import.meta.env.VITE_API_URL}/client-pos/${po_id}/template`}
+          src={`/api/client-pos/${po_id}/template`}
           style={{
             width: '100%',
             height: '800px',

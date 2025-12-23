@@ -175,7 +175,6 @@ class ProductionController {
     try {
       let { item_code, bom_no, quantity, priority, notes, planned_start_date, planned_end_date, actual_start_date, actual_end_date, expected_delivery_date, required_items, operations } = req.body
 
-      // Fallback for frontend field mismatch
       if (!item_code && req.body.item_to_manufacture) item_code = req.body.item_to_manufacture
       if (!quantity && req.body.qty_to_manufacture) quantity = req.body.qty_to_manufacture
 
@@ -186,12 +185,23 @@ class ProductionController {
         })
       }
 
+      let unit_cost = 0
+      let total_cost = 0
+
+      const bomDetails = await this.productionModel.getBOMDetails(bom_no)
+      if (bomDetails && bomDetails.total_cost) {
+        unit_cost = parseFloat(bomDetails.total_cost)
+        total_cost = unit_cost * parseFloat(quantity)
+      }
+
       const wo_id = `WO-${Date.now()}`
       const workOrder = await this.productionModel.createWorkOrder({
         wo_id,
         item_code,
         bom_no,
         quantity,
+        unit_cost,
+        total_cost,
         priority,
         notes,
         planned_start_date,
@@ -607,6 +617,72 @@ class ProductionController {
     }
   }
 
+  async createWorkOrdersFromPlan(req, res) {
+    try {
+      const { plan_id } = req.params
+
+      const planDetails = await this.productionModel.getProductionPlanDetails(plan_id)
+      if (!planDetails) {
+        return res.status(404).json({
+          success: false,
+          message: 'Production plan not found'
+        })
+      }
+
+      if (!planDetails.items || planDetails.items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Production plan has no items'
+        })
+      }
+
+      const createdWorkOrders = []
+
+      for (const item of planDetails.items) {
+        const wo_id = `WO-${Date.now()}-${createdWorkOrders.length + 1}`
+
+        let unit_cost = 0
+        let total_cost = 0
+
+        if (item.bom_id) {
+          const bomDetails = await this.productionModel.getBOMDetails(item.bom_id)
+          if (bomDetails && bomDetails.total_cost) {
+            unit_cost = parseFloat(bomDetails.total_cost)
+            total_cost = unit_cost * parseFloat(item.planned_qty || item.quantity || 1)
+          }
+        }
+
+        const workOrder = await this.productionModel.createWorkOrder({
+          wo_id,
+          item_code: item.item_code,
+          bom_no: item.bom_id,
+          quantity: item.planned_qty || item.quantity || 1,
+          unit_cost,
+          total_cost,
+          priority: 'medium',
+          notes: `Auto-created from Production Plan ${plan_id}`,
+          planned_start_date: item.planned_date,
+          planned_end_date: null,
+          status: 'Draft'
+        })
+
+        createdWorkOrders.push(workOrder)
+      }
+
+      res.status(201).json({
+        success: true,
+        message: `${createdWorkOrders.length} work orders created successfully from production plan`,
+        data: createdWorkOrders
+      })
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error creating work orders from production plan',
+        error: error.message
+      })
+    }
+  }
+
   // ============= PRODUCTION ENTRIES =============
 
   // Create production entry (daily production)
@@ -1014,8 +1090,17 @@ class ProductionController {
         }
       }
 
-      // Map total cost
-      const total_cost = costing?.total_bom_cost || legacyTotalCost || 0
+      // Map total cost - calculate from materials if not provided
+      let total_cost = costing?.total_bom_cost || legacyTotalCost || 0
+      
+      const materialsToCalculate = materials || lines || []
+      if (total_cost === 0 && materialsToCalculate.length > 0) {
+        total_cost = materialsToCalculate.reduce((sum, material) => {
+          const qty = parseFloat(material.qty || material.quantity || 0)
+          const rate = parseFloat(material.rate || 0)
+          return sum + (qty * rate)
+        }, 0)
+      }
 
       const bom_id = `BOM-${Date.now()}`
       const bom = await this.productionModel.createBOM({
@@ -1093,6 +1178,16 @@ class ProductionController {
       const { bom_id } = req.params
       const { item_code, description, quantity, uom, status, revision, effective_date, lines, operations, scrapItems, total_cost } = req.body
 
+      // Calculate total_cost from lines if not provided or is 0
+      let calculatedTotalCost = total_cost || 0
+      if (calculatedTotalCost === 0 && lines && Array.isArray(lines) && lines.length > 0) {
+        calculatedTotalCost = lines.reduce((sum, line) => {
+          const qty = parseFloat(line.qty || line.quantity || 0)
+          const rate = parseFloat(line.rate || 0)
+          return sum + (qty * rate)
+        }, 0)
+      }
+
       const bom = await this.productionModel.updateBOM(bom_id, {
         item_code,
         description,
@@ -1101,7 +1196,7 @@ class ProductionController {
         status,
         revision,
         effective_date,
-        total_cost: total_cost || 0
+        total_cost: calculatedTotalCost
       })
 
       if (lines && Array.isArray(lines) && lines.length > 0) {
@@ -1118,7 +1213,7 @@ class ProductionController {
         }
       }
 
-      if (scrapItems && Array.isArray(scrapItems) && scrapItems.length > 0) {
+      if (scrapItems && Array.isArray(scrapItems)) {
         await this.productionModel.deleteAllBOMScrapItems(bom_id)
         for (let i = 0; i < scrapItems.length; i++) {
           await this.productionModel.addBOMScrapItem(bom_id, { ...scrapItems[i], sequence: i + 1 })

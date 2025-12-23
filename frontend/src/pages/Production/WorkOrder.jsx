@@ -47,7 +47,7 @@ export default function WorkOrder() {
     const inProgress = ordersData.filter(o => o.status === 'in-progress').length
     const completed = ordersData.filter(o => o.status === 'completed').length
     const pending = ordersData.filter(o => ['draft', 'planned'].includes(o.status)).length
-    const totalCost = ordersData.reduce((sum, o) => sum + (o.total_cost || 0), 0)
+    const totalCost = ordersData.reduce((sum, o) => sum + (parseFloat(o.total_cost || o.estimated_cost || 0)), 0)
 
     setStats({ totalOrders: total, inProgress, completed, pending, totalCost })
   }
@@ -223,35 +223,40 @@ export default function WorkOrder() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map(order => (
-                    <tr key={order.wo_id}>
-                      <td><strong>{order.wo_id}</strong></td>
-                      <td>{order.item_name || order.item_code}</td>
-                      <td>{order.qty_to_manufacture || order.quantity}</td>
-                      <td>₹{order.unit_cost?.toFixed(2) || '0.00'}</td>
-                      <td>₹{order.total_cost?.toFixed(2) || '0.00'}</td>
-                      <td>
-                        <span className={`wo-priority-badge ${order.priority}`}>
-                          {order.priority}
-                        </span>
-                      </td>
-                      <td>{order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A'}</td>
-                      <td><span className={`wo-status-badge ${getStatusColor(order.status)}`}>{order.status}</span></td>
-                      <td>
-                        <div className="wo-entry-actions">
-                          <button
-                            className="wo-btn-track"
-                            onClick={() => handleTrack(order)}
-                            title="Track"
-                          >
-                            <Truck size={14} />
-                          </button>
-                          <button className="wo-btn-edit" onClick={() => handleEdit(order)} title="Edit"><Edit2 size={14} /></button>
-                          <button className="wo-btn-delete" onClick={() => handleDelete(order.wo_id)} title="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {orders.map(order => {
+                    const unitCost = parseFloat(order.unit_cost || order.bom_cost || 0)
+                    const totalCost = parseFloat(order.total_cost || order.estimated_cost || 0)
+                    const dueDate = order.expected_delivery_date || order.planned_end_date || order.planned_delivery_date
+                    return (
+                      <tr key={order.wo_id}>
+                        <td><strong>{order.wo_id}</strong></td>
+                        <td>{order.item_name || order.item_code}</td>
+                        <td>{order.qty_to_manufacture || order.quantity || 0}</td>
+                        <td>₹{unitCost.toFixed(2)}</td>
+                        <td>₹{totalCost.toFixed(2)}</td>
+                        <td>
+                          <span className={`wo-priority-badge ${order.priority}`}>
+                            {order.priority}
+                          </span>
+                        </td>
+                        <td>{dueDate ? new Date(dueDate).toLocaleDateString('en-IN') : 'N/A'}</td>
+                        <td><span className={`wo-status-badge ${getStatusColor(order.status)}`}>{order.status}</span></td>
+                        <td>
+                          <div className="wo-entry-actions">
+                            <button
+                              className="wo-btn-track"
+                              onClick={() => handleTrack(order)}
+                              title="Track"
+                            >
+                              <Truck size={14} />
+                            </button>
+                            <button className="wo-btn-edit" onClick={() => handleEdit(order)} title="Edit"><Edit2 size={14} /></button>
+                            <button className="wo-btn-delete" onClick={() => handleDelete(order.wo_id)} title="Delete"><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

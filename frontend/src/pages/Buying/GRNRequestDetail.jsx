@@ -33,7 +33,7 @@ export default function GRNRequestDetail() {
   const fetchUser = async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/me`, {
+      const res = await fetch(`/api/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = await res.json()
@@ -49,7 +49,7 @@ export default function GRNRequestDetail() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/grn-requests/${grnNo}`)
+      const res = await fetch(`/api/grn-requests/${grnNo}`)
       const data = await res.json()
       if (data.success) {
         setGrn(data.data)
@@ -71,7 +71,7 @@ export default function GRNRequestDetail() {
   const handleStartInspection = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/grn-requests/${grn.id}/start-inspection`, {
+      const res = await fetch(`/api/grn-requests/${grn.id}/start-inspection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       })

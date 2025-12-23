@@ -368,11 +368,11 @@ export class SellingController {
 
   static async createSalesOrder(req, res) {
     const db = req.app.locals.db
-    const { customer_id, quotation_id, order_amount, total_value, delivery_date, order_terms, terms_conditions, items, bom_id, quantity } = req.body
+    const { customer_id, quotation_id, order_amount, total_value, total_amount, delivery_date, order_terms, terms_conditions, items, bom_id, quantity, qty } = req.body
 
     try {
-      // Accept both field name variations
-      const finalAmount = order_amount || total_value || 0
+      const finalAmount = order_amount || total_value || total_amount || 0
+      const finalQuantity = quantity || qty || 1
       const finalTerms = order_terms || terms_conditions
 
       if (!customer_id) {
@@ -404,18 +404,35 @@ export class SellingController {
         `INSERT INTO selling_sales_order 
          (sales_order_id, customer_id, quotation_id, order_amount, delivery_date, order_terms, bom_id, quantity, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
-        [sales_order_id, customer_id, quotation_id || null, finalAmount, formatDateForSQL(delivery_date), finalTerms || null, bom_id || null, quantity || 1]
+        [sales_order_id, customer_id, quotation_id || null, finalAmount, formatDateForSQL(delivery_date), finalTerms || null, bom_id || null, finalQuantity]
       )
 
       // Insert items if provided
       if (items && Array.isArray(items) && items.length > 0) {
+        let totalAmount = 0
+        let totalQty = 0
         for (const item of items) {
+          const qty = parseFloat(item.qty || 1)
+          const rate = parseFloat(item.rate || 0)
+          totalAmount += (qty * rate)
+          totalQty += qty
           await db.execute(
             `INSERT INTO sales_order_items (sales_order_id, item_code, item_name, delivery_date, qty, rate)
              VALUES (?, ?, ?, ?, ?, ?)`,
-            [sales_order_id, item.item_code || null, item.item_name || null, formatDateForSQL(item.delivery_date), item.qty || 1, item.rate || 0]
+            [sales_order_id, item.item_code || null, item.item_name || null, formatDateForSQL(item.delivery_date), qty, rate]
           )
         }
+        await db.execute(
+          `UPDATE selling_sales_order SET order_amount = ?, quantity = ?, updated_at = NOW() WHERE sales_order_id = ?`,
+          [parseFloat(totalAmount.toFixed(2)), totalQty, sales_order_id]
+        )
+      }
+
+      let responseAmount = finalAmount
+      let responseQty = 1
+      if (items && Array.isArray(items) && items.length > 0) {
+        responseAmount = items.reduce((sum, item) => sum + ((parseFloat(item.qty || 1)) * (parseFloat(item.rate || 0))), 0)
+        responseQty = items.reduce((sum, item) => sum + parseFloat(item.qty || 1), 0)
       }
 
       res.status(201).json({
@@ -424,11 +441,12 @@ export class SellingController {
           sales_order_id,
           customer_id,
           quotation_id,
-          order_amount: finalAmount,
-          total_value: finalAmount,
+          order_amount: parseFloat(responseAmount.toFixed(2)),
+          total_value: parseFloat(responseAmount.toFixed(2)),
           delivery_date,
           order_terms: finalTerms,
           status: 'draft',
+          quantity: responseQty,
           items: items || []
         }
       })
@@ -462,13 +480,36 @@ export class SellingController {
 
       const [orders] = await db.execute(query, params)
       
-      // Fetch items for each order
       for (let order of orders) {
         const [items] = await db.execute(
           'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
           [order.sales_order_id]
         )
         order.items = items || []
+
+        if (order.status === 'confirmed' && (parseFloat(order.order_amount || 0) === 0 || parseFloat(order.quantity || 0) === 0)) {
+          let totalAmount = 0
+          let totalQty = 0
+
+          if (items && items.length > 0) {
+            for (const item of items) {
+              const qty = parseFloat(item.qty || item.quantity || 0)
+              const rate = parseFloat(item.rate || item.price || 0)
+              totalAmount += (qty * rate)
+              totalQty += qty
+            }
+          }
+
+          if (totalAmount > 0 || totalQty > 0) {
+            await db.execute(
+              'UPDATE selling_sales_order SET order_amount = ?, quantity = ? WHERE sales_order_id = ?',
+              [totalAmount, totalQty, order.sales_order_id]
+            )
+            order.order_amount = totalAmount
+            order.quantity = totalQty
+            order.total_value = totalAmount
+          }
+        }
       }
 
       res.json({ success: true, data: orders })
@@ -512,9 +553,26 @@ export class SellingController {
         return res.json({ success: true, data: confirmedOrder[0] })
       }
 
+      const [items] = await db.execute(
+        'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
+        [id]
+      )
+
+      let totalAmount = 0
+      let totalQty = 0
+
+      if (items && items.length > 0) {
+        for (const item of items) {
+          const qty = parseFloat(item.qty || item.quantity || 0)
+          const rate = parseFloat(item.rate || item.price || 0)
+          totalAmount += (qty * rate)
+          totalQty += qty
+        }
+      }
+
       await db.execute(
-        'UPDATE selling_sales_order SET status = ?, confirmed_at = NOW(), updated_at = NOW() WHERE sales_order_id = ?',
-        ['confirmed', id]
+        'UPDATE selling_sales_order SET status = ?, confirmed_at = NOW(), updated_at = NOW(), order_amount = ?, quantity = ? WHERE sales_order_id = ?',
+        ['confirmed', totalAmount, totalQty, id]
       )
 
       const [updated] = await db.execute(
@@ -526,11 +584,11 @@ export class SellingController {
       )
 
       if (updated.length > 0) {
-        const [items] = await db.execute(
+        const [itemsUpdated] = await db.execute(
           'SELECT * FROM sales_order_items WHERE sales_order_id = ? ORDER BY created_at',
           [id]
         )
-        updated[0].items = items || []
+        updated[0].items = itemsUpdated || []
       }
 
       res.json({ success: true, data: updated[0] })
@@ -576,10 +634,9 @@ export class SellingController {
   static async updateSalesOrder(req, res) {
     const db = req.app.locals.db
     const { id } = req.params
-    const { order_amount, total_value, delivery_date, order_terms, status, items, bom_id, quantity } = req.body
+    const { order_amount, total_value, total_amount, delivery_date, order_terms, status, items, bom_id, quantity, qty } = req.body
 
     try {
-      // Check if order exists
       const [orderCheck] = await db.execute(
         'SELECT sales_order_id FROM selling_sales_order WHERE sales_order_id = ? AND deleted_at IS NULL',
         [id]
@@ -589,7 +646,6 @@ export class SellingController {
         return res.status(404).json({ error: 'Sales order not found' })
       }
 
-      // Helper to convert ISO date to YYYY-MM-DD format
       const formatDateForSQL = (dateStr) => {
         if (!dateStr) return null
         if (typeof dateStr === 'string' && dateStr.includes('T')) {
@@ -598,13 +654,12 @@ export class SellingController {
         return dateStr
       }
 
-      // Build update query dynamically
       const updates = []
       const values = []
 
-      if (order_amount !== undefined || total_value !== undefined) {
+      if (order_amount !== undefined || total_value !== undefined || total_amount !== undefined) {
         updates.push('order_amount = ?')
-        values.push(order_amount || total_value || 0)
+        values.push(order_amount || total_value || total_amount || 0)
       }
       if (delivery_date !== undefined) {
         updates.push('delivery_date = ?')
@@ -622,9 +677,9 @@ export class SellingController {
         updates.push('bom_id = ?')
         values.push(bom_id)
       }
-      if (quantity !== undefined) {
+      if (quantity !== undefined || qty !== undefined) {
         updates.push('quantity = ?')
-        values.push(quantity)
+        values.push(quantity || qty || 1)
       }
 
       if (updates.length === 0 && (!items || items.length === 0)) {
@@ -639,18 +694,32 @@ export class SellingController {
         await db.execute(query, values)
       }
 
-      // Handle items update - delete old items and insert new ones
       if (items && Array.isArray(items)) {
         await db.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [id])
         
         if (items.length > 0) {
+          let totalAmount = 0
+          let totalQty = 0
           for (const item of items) {
+            const itemQty = parseFloat(item.qty || 1)
+            const itemRate = parseFloat(item.rate || 0)
+            totalAmount += (itemQty * itemRate)
+            totalQty += itemQty
             await db.execute(
               `INSERT INTO sales_order_items (sales_order_id, item_code, item_name, delivery_date, qty, rate)
                VALUES (?, ?, ?, ?, ?, ?)`,
-              [id, item.item_code || null, item.item_name || null, formatDateForSQL(item.delivery_date), item.qty || 1, item.rate || 0]
+              [id, item.item_code || null, item.item_name || null, formatDateForSQL(item.delivery_date), itemQty, itemRate]
             )
           }
+          await db.execute(
+            `UPDATE selling_sales_order SET order_amount = ?, quantity = ?, updated_at = NOW() WHERE sales_order_id = ?`,
+            [parseFloat(totalAmount.toFixed(2)), totalQty, id]
+          )
+        } else {
+          await db.execute(
+            `UPDATE selling_sales_order SET order_amount = 0, quantity = 0, updated_at = NOW() WHERE sales_order_id = ?`,
+            [id]
+          )
         }
       }
 
@@ -1286,10 +1355,45 @@ export class SellingController {
     const db = req.app.locals.db
     try {
       const [boms] = await db.execute(
-        `SELECT bom_id, item_code, status 
-         FROM bom 
-         ORDER BY created_at DESC`
+        `SELECT b.*, COALESCE(b.total_cost, 0) as total_cost
+         FROM bom b
+         ORDER BY b.created_at DESC`
       )
+      
+      for (let bom of boms) {
+        if (!bom.total_cost || parseFloat(bom.total_cost) === 0) {
+          const [lines] = await db.execute(
+            `SELECT bl.quantity, bl.rate, i.valuation_rate, i.standard_selling_rate
+             FROM bom_line bl
+             LEFT JOIN item i ON bl.component_code = i.item_code
+             WHERE bl.bom_id = ?`,
+            [bom.bom_id]
+          )
+
+          const [operations] = await db.execute(
+            `SELECT operating_cost FROM bom_operation WHERE bom_id = ?`,
+            [bom.bom_id]
+          )
+          
+          if ((lines && lines.length > 0) || (operations && operations.length > 0)) {
+            let materialCost = 0
+            for (const line of lines || []) {
+              const qty = parseFloat(line.quantity || 0)
+              let rate = parseFloat(line.rate || 0)
+              if (rate === 0) {
+                rate = parseFloat(line.valuation_rate || line.standard_selling_rate || 0)
+              }
+              materialCost += (qty * rate)
+            }
+            let operationCost = 0
+            for (const op of operations || []) {
+              operationCost += parseFloat(op.operating_cost || 0)
+            }
+            bom.total_cost = parseFloat((materialCost + operationCost).toFixed(2))
+          }
+        }
+      }
+      
       res.json({ success: true, data: boms })
     } catch (error) {
       console.error('Error fetching BOM list:', error)
@@ -1317,7 +1421,11 @@ export class SellingController {
       const bomData = bom[0]
 
       const [lines] = await db.execute(
-        'SELECT * FROM bom_line WHERE bom_id = ? ORDER BY sequence ASC',
+        `SELECT bl.*, i.standard_selling_rate, i.valuation_rate, i.name as item_name
+         FROM bom_line bl
+         LEFT JOIN item i ON bl.component_code = i.item_code
+         WHERE bl.bom_id = ? 
+         ORDER BY bl.sequence ASC`,
         [bomId]
       )
 
@@ -1331,7 +1439,32 @@ export class SellingController {
         [bomId]
       )
 
-      bomData.materials = lines || []
+      // Enhance materials with rate field for frontend
+      const enhancedMaterials = (lines || []).map(line => ({
+        ...line,
+        qty: line.quantity,
+        rate: parseFloat(line.rate || line.valuation_rate || line.standard_selling_rate || 0)
+      }))
+
+      if (!bomData.total_cost || parseFloat(bomData.total_cost) === 0) {
+        let materialCost = 0
+        for (const line of lines || []) {
+          const qty = parseFloat(line.quantity || 0)
+          let rate = parseFloat(line.rate || 0)
+          if (rate === 0) {
+            rate = parseFloat(line.valuation_rate || line.standard_selling_rate || 0)
+          }
+          materialCost += (qty * rate)
+        }
+        let operationCost = 0
+        for (const op of operations || []) {
+          operationCost += parseFloat(op.operating_cost || 0)
+        }
+        bomData.total_cost = parseFloat((materialCost + operationCost).toFixed(2))
+      }
+
+      bomData.materials = enhancedMaterials
+      bomData.scrapItems = scrap || []
       bomData.scrap_items = scrap || []
       bomData.operations = operations || []
 
