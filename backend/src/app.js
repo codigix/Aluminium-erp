@@ -1,69 +1,188 @@
-require('dotenv').config();
-const path = require('path');
-const express = require('express');
-const cors = require('cors');
-const companyRoutes = require('./routes/companyRoutes');
-const customerPoRoutes = require('./routes/customerPoRoutes');
-const salesOrderRoutes = require('./routes/salesOrderRoutes');
-const dashboardRoutes = require('./routes/dashboardRoutes');
-const authRoutes = require('./routes/authRoutes');
-const departmentRoutes = require('./routes/departmentRoutes');
-const userRoutes = require('./routes/userRoutes');
-const departmentDocumentRoutes = require('./routes/departmentDocumentRoutes');
-const vendorRoutes = require('./routes/vendorRoutes');
-const quotationRoutes = require('./routes/quotationRoutes');
-const purchaseOrderRoutes = require('./routes/purchaseOrderRoutes');
-const poReceiptRoutes = require('./routes/poReceiptRoutes');
-const grnRoutes = require('./routes/grnRoutes');
-const grnItemRoutes = require('./routes/grnItemRoutes');
-const qcInspectionsRoutes = require('./routes/qcInspectionsRoutes');
-const grnService = require('./services/grnService');
-const qcService = require('./services/qcInspectionsService');
-const { notFound, errorHandler } = require('./middleware/errorHandler');
-const { authenticate } = require('./middleware/authMiddleware');
+﻿import express from 'express'
+import cors from 'cors'
+import dotenv from 'dotenv'
+import { createPool } from 'mysql2/promise'
+import authRoutes from './routes/auth.js'
+import supplierRoutes from './routes/suppliers.js'
+import itemRoutes from './routes/items.js'
+import materialRequestRoutes from './routes/materialRequests.js'
+import rfqRoutes from './routes/rfqs.js'
+import quotationRoutes from './routes/quotations.js'
+import purchaseOrderRoutes from './routes/purchaseOrders.js'
+import purchaseReceiptRoutes from './routes/purchaseReceipts.js'
+import purchaseInvoiceRoutes from './routes/purchaseInvoices.js'
+import analyticsRoutes from './routes/analyticsRoutes.js'
+import stockWarehouseRoutes from './routes/stockWarehouses.js'
+import stockBalanceRoutes from './routes/stockBalance.js'
+import stockLedgerRoutes from './routes/stockLedger.js'
+import stockEntryRoutes from './routes/stockEntries.js'
+import materialTransferRoutes from './routes/materialTransfers.js'
+import batchTrackingRoutes from './routes/batchTracking.js'
+import stockReconciliationRoutes from './routes/stockReconciliation.js'
+import reorderManagementRoutes from './routes/reorderManagement.js'
+import { createProductionRoutes } from './routes/production.js'
+import { createToolRoomRoutes } from './routes/toolroom.js'
+import { createQCRoutes } from './routes/qc.js'
+import { createDispatchRoutes } from './routes/dispatch.js'
+import { createHRPayrollRoutes } from './routes/hrpayroll.js'
+import { createFinanceRoutes } from './routes/finance.js'
+import sellingRoutes from './routes/selling.js'
+import grnRequestRoutes from './routes/grnRequests.js'
+import companyRoutes from './routes/company.js'
+import taxTemplateRoutes from './routes/taxTemplates.js'
 
-const app = express();
+// Load environment variables
+dotenv.config()
 
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads')));
+const app = express()
 
-app.use('/api/auth', authRoutes);
-app.use('/api/departments', departmentRoutes);
-app.use('/api/users', authenticate, userRoutes);
-app.use('/api/access', authenticate, departmentDocumentRoutes);
-app.use('/api/companies', authenticate, companyRoutes);
-app.use('/api/customer-pos', authenticate, customerPoRoutes);
-app.use('/api/sales-orders', authenticate, salesOrderRoutes);
-app.use('/api/vendors', authenticate, vendorRoutes);
-app.use('/api/quotations', authenticate, quotationRoutes);
-app.use('/api/purchase-orders', authenticate, purchaseOrderRoutes);
-app.use('/api/po-receipts', authenticate, poReceiptRoutes);
-app.use('/api/grns', authenticate, grnRoutes);
-app.use('/api/grn-items', authenticate, grnItemRoutes);
-app.use('/api/qc-inspections', authenticate, qcInspectionsRoutes);
-app.use('/api/dashboard', authenticate, dashboardRoutes);
+// CORS Configuration - Handle multiple origins properly
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001']
 
-app.get('/api/grn-stats', authenticate, async (req, res) => {
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl requests, etc)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('CORS not allowed for this origin'))
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
+}
+
+// Middleware
+app.use(cors(corsOptions))
+app.use(express.json())
+
+// Database pool
+let db = null
+
+async function initializeDatabase() {
   try {
-    const stats = await grnService.getGRNStats();
-    res.json(stats);
+    db = createPool({
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || 'backend',
+      database: process.env.DB_NAME || 'aluminium_erp',
+      port: process.env.DB_PORT || 3306,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0
+    })
+
+    // Test the database connection
+    await db.execute('SELECT 1')
+    console.log('✓ Database connected successfully')
+
+    // Store db in app locals for route handlers
+    app.locals.db = db
+
+    // Make db available globally for models
+    global.db = db
+
+    console.log('✓ Database pool created successfully')
   } catch (error) {
-    res.status(error.statusCode || 500).json({ message: error.message });
+    console.error('Database connection failed:', error)
+    process.exit(1)
   }
-});
+}
 
-app.get('/api/qc-stats', authenticate, async (req, res) => {
-  try {
-    const stats = await qcService.getQCStats();
-    res.json(stats);
-  } catch (error) {
-    res.status(error.statusCode || 500).json({ message: error.message });
-  }
-});
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
 
-app.use(notFound);
-app.use(errorHandler);
+// Setup routes function - called after DB initialization
+function setupRoutes() {
+  // API Routes - Authentication (requires db)
+  app.use('/api/auth', authRoutes(db))
+  
+  // API Routes - Buying Module
+  app.use('/api/suppliers', supplierRoutes)
+  app.use('/api/items', itemRoutes)
+  app.use('/api/material-requests', materialRequestRoutes)
+  app.use('/api/rfqs', rfqRoutes)
+  app.use('/api/quotations', quotationRoutes)
+  app.use('/api/purchase-orders', purchaseOrderRoutes)
+  app.use('/api/purchase-receipts', purchaseReceiptRoutes)
+  app.use('/api/purchase-invoices', purchaseInvoiceRoutes)
+  app.use('/api/tax-templates', taxTemplateRoutes)
+  app.use('/api/analytics', analyticsRoutes)
+  
+  // API Routes - Stock Module
+  app.use('/api/stock/warehouses', stockWarehouseRoutes)
+  app.use('/api/stock/stock-balance', stockBalanceRoutes)
+  app.use('/api/stock/ledger', stockLedgerRoutes)
+  app.use('/api/stock/entries', stockEntryRoutes)
+  app.use('/api/stock/transfers', materialTransferRoutes)
+  app.use('/api/stock/batches', batchTrackingRoutes)
+  app.use('/api/stock/reconciliation', stockReconciliationRoutes)
+  app.use('/api/stock/reorder', reorderManagementRoutes)
+  
+  // API Routes - Production Module
+  app.use('/api/production', createProductionRoutes(db))
+  
+  // API Routes - Tool Room Module
+  app.use('/api/toolroom', createToolRoomRoutes(db))
+  
+  // API Routes - Quality Control Module
+  app.use('/api/qc', createQCRoutes(db))
+  
+  // API Routes - Dispatch Module
+  app.use('/api/dispatch', createDispatchRoutes(db))
+  
+  // API Routes - HR & Payroll Module
+  app.use('/api/hr', createHRPayrollRoutes(db))
+  
+  // API Routes - Finance & Accounts Module
+  app.use('/api/finance', createFinanceRoutes(db))
+  
+  // API Routes - Selling Module
+  app.use('/api/selling', sellingRoutes)
 
-module.exports = app;
+  // API Routes - GRN Requests
+  app.use('/api/grn-requests', grnRequestRoutes)
+
+  // API Routes - Company Information
+  app.use('/api/company-info', companyRoutes)
+  
+  // Error handling middleware (must be after all routes)
+  app.use((err, req, res, next) => {
+    console.error(err.stack)
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: process.env.NODE_ENV === 'development' ? err.message : undefined
+    })
+  })
+
+  // 404 handler (must be last)
+  app.use((req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' })
+  })
+}
+
+const PORT = process.env.PORT || 5000
+
+// Start server
+async function start() {
+  await initializeDatabase()
+  setupRoutes() // Setup routes after DB is initialized
+  
+  app.listen(PORT, () => {
+    console.log(`✓ Server running on http://localhost:${PORT}`)
+    console.log(`✓ API Base URL: http://localhost:${PORT}/api`)
+    console.log('Environment:', process.env.NODE_ENV || 'development')
+  })
+}
+
+start().catch(err => {
+  console.error('Failed to start server:', err)
+  process.exit(1)
+})
+
+export { app, db }
+ 
