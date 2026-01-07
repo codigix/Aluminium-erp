@@ -1,0 +1,199 @@
+const DEPARTMENT_CODES = {
+  SALES: 1,
+  DESIGN_ENG: 2,
+  PROCUREMENT: 3,
+  PRODUCTION: 4,
+  QUALITY: 5,
+  SHIPMENT: 6,
+  ACCOUNTS: 7,
+  INVENTORY: 8,
+  ADMIN: 9
+};
+
+const DOCUMENT_STATUS_FLOW = {
+  DRAFT: 0,
+  DESIGN: 1,
+  PRODUCTION: 2,
+  DISPATCH_PENDING: 3,
+  PAYMENT_PENDING: 4,
+  CLOSED: 5
+};
+
+const DEPARTMENT_ACCESS_RULES = {
+  SALES: {
+    name: 'Sales Department',
+    description: 'Handles customer POs and order creation',
+    canAccessStatuses: [DOCUMENT_STATUS_FLOW.DRAFT],
+    canCreateDocuments: ['customer_pos', 'sales_orders'],
+    canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
+    canEditDocuments: ['customer_pos', 'sales_orders'],
+    canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DESIGN],
+    permissions: [
+      'PO_VIEW', 'PO_CREATE', 'PO_EDIT',
+      'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
+      'COMPANY_VIEW',
+      'DASHBOARD_VIEW',
+      'STATUS_CHANGE'
+    ]
+  },
+
+  DESIGN_ENG: {
+    name: 'Design Engineering Department',
+    description: 'Handles design and engineering work',
+    canAccessStatuses: [DOCUMENT_STATUS_FLOW.DESIGN],
+    canCreateDocuments: [],
+    canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
+    canEditDocuments: ['sales_orders'],
+    canChangeStatusTo: [DOCUMENT_STATUS_FLOW.PRODUCTION],
+    permissions: [
+      'ORDER_VIEW', 'ORDER_EDIT',
+      'PO_VIEW',
+      'COMPANY_VIEW',
+      'DASHBOARD_VIEW',
+      'STATUS_CHANGE'
+    ]
+  },
+
+  PROCUREMENT: {
+    name: 'Procurement Department',
+    description: 'Manages procurement and sourcing',
+    canAccessStatuses: [DOCUMENT_STATUS_FLOW.DRAFT, DOCUMENT_STATUS_FLOW.DESIGN],
+    canCreateDocuments: [],
+    canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
+    canEditDocuments: [],
+    canChangeStatusTo: [],
+    permissions: [
+      'PO_VIEW',
+      'ORDER_VIEW',
+      'COMPANY_VIEW',
+      'DASHBOARD_VIEW'
+    ]
+  },
+
+  PRODUCTION: {
+    name: 'Production Department',
+    description: 'Manages manufacturing and production',
+    canAccessStatuses: [DOCUMENT_STATUS_FLOW.PRODUCTION],
+    canCreateDocuments: [],
+    canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
+    canEditDocuments: ['sales_orders'],
+    canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DISPATCH_PENDING],
+    permissions: [
+      'ORDER_VIEW', 'ORDER_EDIT',
+      'PO_VIEW',
+      'COMPANY_VIEW',
+      'DASHBOARD_VIEW',
+      'STATUS_CHANGE'
+    ]
+  },
+
+  QUALITY: {
+    name: 'Quality Department',
+    description: 'Handles quality assurance and inspection',
+    canAccessStatuses: [DOCUMENT_STATUS_FLOW.PRODUCTION, DOCUMENT_STATUS_FLOW.DISPATCH_PENDING],
+    canCreateDocuments: [],
+    canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
+    canEditDocuments: [],
+    canChangeStatusTo: [],
+    permissions: [
+      'ORDER_VIEW',
+      'PO_VIEW',
+      'COMPANY_VIEW',
+      'DASHBOARD_VIEW'
+    ]
+  },
+
+  SHIPMENT: {
+    name: 'Shipment Department',
+    description: 'Manages dispatch and delivery',
+    canAccessStatuses: [DOCUMENT_STATUS_FLOW.DISPATCH_PENDING],
+    canCreateDocuments: [],
+    canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
+    canEditDocuments: ['sales_orders'],
+    canChangeStatusTo: [DOCUMENT_STATUS_FLOW.PAYMENT_PENDING],
+    permissions: [
+      'ORDER_VIEW', 'ORDER_EDIT',
+      'PO_VIEW',
+      'COMPANY_VIEW',
+      'DASHBOARD_VIEW',
+      'STATUS_CHANGE',
+      'DATA_EXPORT'
+    ]
+  },
+
+  ACCOUNTS: {
+    name: 'Accounts Department',
+    description: 'Handles billing and payments',
+    canAccessStatuses: [DOCUMENT_STATUS_FLOW.PAYMENT_PENDING, DOCUMENT_STATUS_FLOW.CLOSED],
+    canCreateDocuments: [],
+    canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
+    canEditDocuments: [],
+    canChangeStatusTo: [DOCUMENT_STATUS_FLOW.CLOSED],
+    permissions: [
+      'ORDER_VIEW',
+      'PO_VIEW',
+      'COMPANY_VIEW',
+      'DASHBOARD_VIEW',
+      'STATUS_CHANGE',
+      'DATA_EXPORT'
+    ]
+  },
+
+  INVENTORY: {
+    name: 'Inventory Department',
+    description: 'Manages stock and inventory',
+    canAccessStatuses: [DOCUMENT_STATUS_FLOW.DESIGN, DOCUMENT_STATUS_FLOW.PRODUCTION],
+    canCreateDocuments: [],
+    canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
+    canEditDocuments: [],
+    canChangeStatusTo: [],
+    permissions: [
+      'ORDER_VIEW',
+      'PO_VIEW',
+      'COMPANY_VIEW',
+      'DASHBOARD_VIEW'
+    ]
+  },
+
+  ADMIN: {
+    name: 'Admin Department',
+    description: 'System administration and user management',
+    canAccessStatuses: Object.values(DOCUMENT_STATUS_FLOW),
+    canCreateDocuments: ['customer_pos', 'sales_orders'],
+    canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
+    canEditDocuments: ['customer_pos', 'sales_orders'],
+    canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
+    permissions: [
+      'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',
+      'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
+      'COMPANY_VIEW', 'COMPANY_EDIT',
+      'USER_MANAGE',
+      'DEPT_MANAGE',
+      'DASHBOARD_VIEW',
+      'DATA_EXPORT',
+      'STATUS_CHANGE'
+    ]
+  }
+};
+
+const DOCUMENT_WORKFLOW = {
+  'sales_orders': [
+    { status: 'DRAFT', department: 'SALES', description: 'Order created by Sales' },
+    { status: 'DESIGN', department: 'DESIGN_ENG', description: 'Design Engineering phase' },
+    { status: 'PRODUCTION', department: 'PRODUCTION', description: 'Manufacturing phase' },
+    { status: 'DISPATCH_PENDING', department: 'SHIPMENT', description: 'Ready for dispatch' },
+    { status: 'PAYMENT_PENDING', department: 'ACCOUNTS', description: 'Awaiting payment' },
+    { status: 'CLOSED', department: 'ACCOUNTS', description: 'Order completed' }
+  ],
+  'customer_pos': [
+    { status: 'DRAFT', department: 'SALES', description: 'PO received and processing' },
+    { status: 'APPROVED', department: 'SALES', description: 'PO approved' }
+  ]
+};
+
+module.exports = {
+  DEPARTMENT_CODES,
+  DOCUMENT_STATUS_FLOW,
+  DEPARTMENT_ACCESS_RULES,
+  DOCUMENT_WORKFLOW
+};

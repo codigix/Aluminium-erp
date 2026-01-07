@@ -1,0 +1,310 @@
+const pool = require('../config/db');
+
+const generatePONumber = async () => {
+  const currentYear = new Date().getFullYear();
+  const [result] = await pool.query(
+    `SELECT COUNT(*) as count FROM purchase_orders 
+     WHERE YEAR(created_at) = ?`,
+    [currentYear]
+  );
+  
+  const count = (result[0]?.count || 0) + 1;
+  const paddedCount = String(count).padStart(4, '0');
+  return `PO-${currentYear}-${paddedCount}`;
+};
+
+const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes) => {
+  if (!quotationId) {
+    const error = new Error('Quotation is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [quotation] = await connection.query(
+      'SELECT * FROM quotations WHERE id = ?',
+      [quotationId]
+    );
+
+    if (!quotation.length) {
+      throw new Error('Quotation not found');
+    }
+
+    const quote = quotation[0];
+
+    const [items] = await connection.query(
+      'SELECT * FROM quotation_items WHERE quotation_id = ?',
+      [quotationId]
+    );
+
+    let poNumber = await generatePONumber();
+
+    if (quote.sales_order_id) {
+      const [salesOrder] = await connection.query(
+        'SELECT customer_po_id FROM sales_orders WHERE id = ?',
+        [quote.sales_order_id]
+      );
+
+      if (salesOrder.length && salesOrder[0].customer_po_id) {
+        const [customerPO] = await connection.query(
+          'SELECT po_number FROM customer_pos WHERE id = ?',
+          [salesOrder[0].customer_po_id]
+        );
+
+        if (customerPO.length && customerPO[0].po_number) {
+          poNumber = customerPO[0].po_number;
+        }
+      }
+    }
+
+    const [result] = await connection.execute(
+      `INSERT INTO purchase_orders (po_number, quotation_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        poNumber,
+        quotationId,
+        quote.vendor_id,
+        quote.sales_order_id || null,
+        'ORDERED',
+        quote.total_amount || 0,
+        expectedDeliveryDate || null,
+        notes || null
+      ]
+    );
+
+    const poId = result.insertId;
+
+    if (items.length > 0) {
+      for (const item of items) {
+        await connection.execute(
+          `INSERT INTO purchase_order_items (purchase_order_id, item_code, description, quantity, unit, unit_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            poId,
+            item.item_code || null,
+            item.description || null,
+            item.quantity || 0,
+            item.unit || 'NOS',
+            item.unit_rate || 0,
+            item.amount || 0
+          ]
+        );
+      }
+    }
+
+    const [grnResult] = await connection.execute(
+      `INSERT INTO grns (po_number, grn_date, received_quantity, status, notes)
+       VALUES (?, ?, ?, ?, ?)` ,
+      [poNumber, new Date(), 0, 'PENDING', null]
+    );
+
+    await connection.execute(
+      `INSERT INTO qc_inspections (grn_id, inspection_date, pass_quantity, fail_quantity, status, defects, remarks)
+       VALUES (?, ?, ?, ?, ?, ?, ?)` ,
+      [grnResult.insertId, new Date(), 0, 0, 'PENDING', null, null]
+    );
+
+    if (quote.sales_order_id) {
+      await connection.execute(
+        'UPDATE sales_orders SET status = ? WHERE id = ?',
+        ['MATERIAL_PURCHASE_IN_PROGRESS', quote.sales_order_id]
+      );
+    }
+
+    const [receiptResult] = await connection.execute(
+      `INSERT INTO po_receipts (po_id, receipt_date, received_quantity, status, notes)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        poId,
+        new Date().toISOString().split('T')[0],
+        0,
+        'DRAFT',
+        `Auto-created for PO ${poNumber}`
+      ]
+    );
+
+    await connection.commit();
+    return { id: poId, po_number: poNumber, receipt_id: receiptResult.insertId };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const getPurchaseOrders = async (filters = {}) => {
+  let query = `
+    SELECT 
+      po.*,
+      v.vendor_name,
+      COUNT(poi.id) as items_count
+    FROM purchase_orders po
+    LEFT JOIN vendors v ON v.id = po.vendor_id
+    LEFT JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (filters.status) {
+    query += ' AND po.status = ?';
+    params.push(filters.status);
+  }
+
+  if (filters.vendorId) {
+    query += ' AND po.vendor_id = ?';
+    params.push(filters.vendorId);
+  }
+
+  query += ' GROUP BY po.id ORDER BY po.created_at DESC';
+
+  const [pos] = await pool.query(query, params);
+  return pos;
+};
+
+const getPurchaseOrderById = async (poId) => {
+  const [rows] = await pool.query(
+    `SELECT po.*, v.vendor_name
+     FROM purchase_orders po
+     LEFT JOIN vendors v ON v.id = po.vendor_id
+     WHERE po.id = ?`,
+    [poId]
+  );
+
+  if (!rows.length) {
+    const error = new Error('Purchase Order not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const po = rows[0];
+  let items = [];
+
+  if (po.sales_order_id) {
+    const [soDetails] = await pool.query(
+      'SELECT customer_po_id FROM sales_orders WHERE id = ?',
+      [po.sales_order_id]
+    );
+
+    if (soDetails.length && soDetails[0].customer_po_id) {
+      const [cpItems] = await pool.query(
+        `SELECT 
+          id,
+          item_code,
+          description,
+          quantity,
+          unit,
+          rate as unit_rate,
+          basic_amount as amount,
+          cgst_percent,
+          cgst_amount,
+          sgst_percent,
+          sgst_amount,
+          igst_percent,
+          igst_amount,
+          (basic_amount + COALESCE(cgst_amount, 0) + COALESCE(sgst_amount, 0) + COALESCE(igst_amount, 0)) as total_amount
+         FROM customer_po_items 
+         WHERE customer_po_id = ?`,
+        [soDetails[0].customer_po_id]
+      );
+
+      const [totalResult] = await pool.query(
+        `SELECT SUM(basic_amount + COALESCE(cgst_amount, 0) + COALESCE(sgst_amount, 0) + COALESCE(igst_amount, 0)) as total 
+         FROM customer_po_items 
+         WHERE customer_po_id = ?`,
+        [soDetails[0].customer_po_id]
+      );
+
+      items = cpItems;
+      const calculatedTotal = totalResult[0]?.total || 0;
+      po.total_amount = calculatedTotal;
+    } else {
+      const [soItems] = await pool.query(
+        `SELECT 
+          id,
+          item_code,
+          description,
+          quantity,
+          unit,
+          rate as unit_rate,
+          (quantity * rate) as amount
+         FROM sales_order_items 
+         WHERE sales_order_id = ?`,
+        [po.sales_order_id]
+      );
+
+      const [totalResult] = await pool.query(
+        `SELECT SUM(quantity * rate) as total FROM sales_order_items 
+         WHERE sales_order_id = ?`,
+        [po.sales_order_id]
+      );
+
+      items = soItems;
+      const calculatedTotal = totalResult[0]?.total || 0;
+      po.total_amount = calculatedTotal;
+    }
+  } else {
+    const [poItems] = await pool.query(
+      'SELECT * FROM purchase_order_items WHERE purchase_order_id = ?',
+      [poId]
+    );
+    items = poItems;
+  }
+
+  return { ...po, items };
+};
+
+const updatePurchaseOrderStatus = async (poId, status) => {
+  const validStatuses = ['DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'CLOSED'];
+  if (!validStatuses.includes(status)) {
+    const error = new Error('Invalid status');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await getPurchaseOrderById(poId);
+
+  await pool.execute(
+    'UPDATE purchase_orders SET status = ? WHERE id = ?',
+    [status, poId]
+  );
+
+  return status;
+};
+
+const deletePurchaseOrder = async (poId) => {
+  await getPurchaseOrderById(poId);
+  await pool.execute('DELETE FROM purchase_orders WHERE id = ?', [poId]);
+};
+
+const getPurchaseOrderStats = async () => {
+  const [stats] = await pool.query(`
+    SELECT 
+      COUNT(*) as total_pos,
+      SUM(CASE WHEN status = 'ORDERED' THEN 1 ELSE 0 END) as pending_pos,
+      SUM(CASE WHEN status = 'ACKNOWLEDGED' THEN 1 ELSE 0 END) as approved_pos,
+      SUM(CASE WHEN status = 'RECEIVED' THEN 1 ELSE 0 END) as delivered_pos,
+      SUM(total_amount) as total_value
+    FROM purchase_orders
+  `);
+
+  return stats[0] || {
+    total_pos: 0,
+    pending_pos: 0,
+    approved_pos: 0,
+    delivered_pos: 0,
+    total_value: 0
+  };
+};
+
+module.exports = {
+  createPurchaseOrder,
+  getPurchaseOrders,
+  getPurchaseOrderById,
+  updatePurchaseOrderStatus,
+  deletePurchaseOrder,
+  getPurchaseOrderStats
+};

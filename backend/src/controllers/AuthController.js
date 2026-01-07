@@ -1,155 +1,156 @@
-import jwt from 'jsonwebtoken'
-import AuthModel from '../models/AuthModel.js'
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const db = require('../config/db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production'
+const generateToken = (user) => {
+  return jwt.sign(
+    {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      department_id: user.department_id,
+      department_code: user.department_code,
+      role_id: user.role_id
+    },
+    process.env.JWT_SECRET || 'your-secret-key',
+    { expiresIn: '24h' }
+  );
+};
 
-class AuthController {
-  constructor(db) {
-    this.authModel = new AuthModel(db)
-  }
+exports.register = async (req, res) => {
+  try {
+    const { username, email, password, first_name, last_name, department_id, role_id, phone } = req.body;
 
-  // Register endpoint
-  async register(req, res) {
-    try {
-      const { email, fullName, password, confirmPassword, department } = req.body
-
-      // Validation
-      if (!email || !fullName || !password) {
-        return res.status(400).json({ error: 'Email, full name, and password are required' })
-      }
-
-      if (password !== confirmPassword) {
-        return res.status(400).json({ error: 'Passwords do not match' })
-      }
-
-      if (password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' })
-      }
-
-      // Register user
-      const user = await this.authModel.register(email, fullName, password, department || 'buying')
-
-      // Generate token
-      const token = jwt.sign(
-        { user_id: user.user_id, email: user.email, department: user.department },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      )
-
-      res.status(201).json({
-        message: 'User registered successfully',
-        token,
-        user: {
-          user_id: user.user_id,
-          email: user.email,
-          full_name: user.full_name,
-          department: user.department,
-          is_active: user.is_active
-        }
-      })
-    } catch (error) {
-      console.error('Registration error:', error)
-      res.status(400).json({ error: error.message })
+    if (!username || !email || !password || !department_id || !role_id) {
+      return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const query = `
+      INSERT INTO users (username, email, password, first_name, last_name, department_id, role_id, phone, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+    `;
+
+    const [results] = await db.query(query, [username, email, hashedPassword, first_name, last_name, department_id, role_id, phone || null]);
+
+    const user = { id: results.insertId, username, email, department_id, role_id };
+    const token = generateToken(user);
+
+    res.status(201).json({
+      message: 'User created successfully',
+      token,
+      user: { id: user.id, username, email, first_name, last_name, department_id, role_id }
+    });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Username or email already exists' });
+    }
+    res.status(500).json({ error: error.message });
   }
+};
 
-  // Login endpoint
-  async login(req, res) {
-    try {
-      const { email, password } = req.body
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-      // Validation
-      if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' })
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const query = `
+      SELECT u.*, d.name as department_name, d.code as department_code, r.name as role_name 
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN roles r ON u.role_id = r.id
+      WHERE u.email = ? AND u.status = 'ACTIVE'
+    `;
+
+    const [results] = await db.query(query, [email]);
+
+    if (results.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = results[0];
+    const passwordMatch = await bcrypt.compare(password, user.password);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = generateToken(user);
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        department_id: user.department_id,
+        department_name: user.department_name,
+        department_code: user.department_code,
+        role_id: user.role_id,
+        role_name: user.role_name,
+        phone: user.phone
       }
-
-      // Login user
-      const user = await this.authModel.login(email, password)
-
-      // Generate token
-      const token = jwt.sign(
-        { user_id: user.user_id, email: user.email, department: user.department },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      )
-
-      res.json({
-        message: 'Login successful',
-        token,
-        user: {
-          user_id: user.user_id,
-          email: user.email,
-          full_name: user.full_name,
-          department: user.department,
-          is_active: user.is_active
-        }
-      })
-    } catch (error) {
-      console.error('Login error:', error)
-      res.status(401).json({ error: error.message })
-    }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
+};
 
-  // Get current user
-  async getCurrentUser(req, res) {
-    try {
-      const userId = req.user.user_id
-      const user = await this.authModel.getUserById(userId)
+exports.verifyToken = (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
 
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' })
-      }
-
-      res.json(user)
-    } catch (error) {
-      console.error('Get user error:', error)
-      res.status(500).json({ error: error.message })
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
     }
-  }
 
-  // Get all users (admin)
-  async getAllUsers(req, res) {
-    try {
-      const users = await this.authModel.getAllUsers()
-      res.json(users)
-    } catch (error) {
-      console.error('Get users error:', error)
-      res.status(500).json({ error: error.message })
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    res.json({ valid: true, user: decoded });
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+exports.getProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const query = `
+      SELECT u.*, d.name as department_name, d.code as department_code, r.name as role_name 
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN roles r ON u.role_id = r.id
+      WHERE u.id = ?
+    `;
+
+    const [results] = await db.query(query, [userId]);
+
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
     }
+
+    const user = results[0];
+    res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      department_id: user.department_id,
+      department_name: user.department_name,
+      department_code: user.department_code,
+      role_id: user.role_id,
+      role_name: user.role_name,
+      phone: user.phone
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  // Update user
-  async updateUser(req, res) {
-    try {
-      const userId = req.user.user_id
-      const { fullName, email } = req.body
-
-      if (!fullName || !email) {
-        return res.status(400).json({ error: 'Full name and email are required' })
-      }
-
-      const user = await this.authModel.updateUser(userId, fullName, email)
-      res.json({
-        message: 'User updated successfully',
-        user
-      })
-    } catch (error) {
-      console.error('Update user error:', error)
-      res.status(400).json({ error: error.message })
-    }
-  }
-
-  // Verify token
-  verifyToken(req, res) {
-    try {
-      res.json({
-        valid: true,
-        user: req.user
-      })
-    } catch (error) {
-      res.status(401).json({ error: 'Invalid token' })
-    }
-  }
-}
-
-export default AuthController
+};
