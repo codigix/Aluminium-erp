@@ -29,7 +29,27 @@ router.get('/:qcId', async (req, res) => {
     if (!qc) {
       return res.status(404).json({ message: 'QC Inspection not found' });
     }
-    res.json(qc);
+    
+    const items = await qcService.getQCItems(req.params.qcId);
+    res.json({ ...qc, items });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.get('/:qcId/items', async (req, res) => {
+  try {
+    const items = await qcService.getQCItems(req.params.qcId);
+    res.json(items);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.patch('/items/:qcItemId', async (req, res) => {
+  try {
+    const item = await qcService.updateQCItem(req.params.qcItemId, req.body);
+    res.json(item);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
   }

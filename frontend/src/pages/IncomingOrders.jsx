@@ -28,9 +28,10 @@ const formatDate = (date) => {
 
 const formatCurrency = (value, currency = 'INR') => {
   if (!value || isNaN(value)) return '—';
+  const validCurrency = currency && ['USD', 'EUR', 'INR', 'GBP'].includes(currency.toUpperCase()) ? currency.toUpperCase() : 'INR';
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: currency || 'INR',
+    currency: validCurrency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);

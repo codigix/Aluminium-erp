@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const stockService = require('./stockService');
 
 const getQCWithDetails = async (qcId) => {
   const [qcs] = await pool.query(
@@ -16,59 +17,48 @@ const getQCWithDetails = async (qcId) => {
       g.po_number,
       po.id AS po_id,
       po.vendor_id,
-      v.vendor_name AS vendor_name,
-      g.received_quantity AS accepted_quantity,
-      SUM(poi.quantity) AS ordered_quantity
+      v.vendor_name AS vendor_name
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
     LEFT JOIN vendors v ON po.vendor_id = v.id
-    LEFT JOIN purchase_order_items poi ON po.id = poi.purchase_order_id
-    WHERE qc.id = ?
-    GROUP BY qc.id`,
+    WHERE qc.id = ?`,
     [qcId]
   );
   
   if (qcs.length > 0) {
     const qc = qcs[0];
-    const orderedQty = qc.ordered_quantity || 0;
-    const acceptedQty = qc.accepted_quantity || 0;
+    
+    const [qcItems] = await pool.query(
+      `SELECT 
+        id,
+        item_code, 
+        po_qty, 
+        received_qty,
+        accepted_qty, 
+        rejected_qty, 
+        status 
+       FROM qc_inspection_items WHERE qc_inspection_id = ?`,
+      [qcId]
+    );
+    
+    const orderedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.po_qty) || 0), 0);
+    const acceptedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
     
     qc.shortage = orderedQty > acceptedQty ? orderedQty - acceptedQty : 0;
     qc.overage = acceptedQty > orderedQty ? acceptedQty - orderedQty : 0;
-    qc.items = orderedQty || acceptedQty;
+    qc.items = qcItems.length;
+    qc.accepted_quantity = acceptedQty;
     
-    if (qc.po_id) {
-      const [items] = await pool.query(
-        `SELECT 
-          id,
-          item_code,
-          description,
-          quantity AS ordered_qty,
-          unit,
-          unit_rate
-        FROM purchase_order_items
-        WHERE purchase_order_id = ?
-        ORDER BY id`,
-        [qc.po_id]
-      );
-      
-      const receivedPerItem = Math.floor((acceptedQty || 0) / (items.length || 1));
-      const remainder = (acceptedQty || 0) % (items.length || 1);
-      
-      qc.items_detail = items.map((item, index) => {
-        const received = receivedPerItem + (index < remainder ? 1 : 0);
-        const itemShortage = Math.max(0, item.ordered_qty - received);
-        const itemOverage = Math.max(0, received - item.ordered_qty);
-        
-        return {
-          ...item,
-          received_qty: received,
-          shortage: itemShortage,
-          overage: itemOverage
-        };
-      });
-    }
+    qc.items_detail = qcItems.map(item => ({
+      id: item.id,
+      item_code: item.item_code,
+      ordered_qty: parseFloat(item.po_qty) || 0,
+      received_qty: parseFloat(item.received_qty) || 0,
+      accepted_qty: parseFloat(item.accepted_qty) || 0,
+      shortage: Math.max(0, (parseFloat(item.po_qty) || 0) - (parseFloat(item.accepted_qty) || 0)),
+      overage: Math.max(0, (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.po_qty) || 0))
+    }));
   }
   
   return qcs[0] || null;
@@ -89,29 +79,34 @@ const getAllQCs = async () => {
       qc.updated_at,
       g.po_number,
       po.vendor_id,
-      v.vendor_name AS vendor_name,
-      g.received_quantity AS accepted_quantity,
-      SUM(poi.quantity) AS ordered_quantity
+      v.vendor_name AS vendor_name
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
     LEFT JOIN vendors v ON po.vendor_id = v.id
-    LEFT JOIN purchase_order_items poi ON po.id = poi.purchase_order_id
-    GROUP BY qc.id
     ORDER BY qc.created_at DESC`
   );
   
-  return qcs.map(qc => {
-    const orderedQty = qc.ordered_quantity || 0;
-    const acceptedQty = qc.accepted_quantity || 0;
+  const result = [];
+  for (const qc of qcs) {
+    const [qcItems] = await pool.query(
+      `SELECT po_qty, accepted_qty, rejected_qty, status FROM qc_inspection_items WHERE qc_inspection_id = ?`,
+      [qc.id]
+    );
     
-    return {
+    const orderedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.po_qty) || 0), 0);
+    const acceptedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
+    
+    result.push({
       ...qc,
       shortage: orderedQty > acceptedQty ? orderedQty - acceptedQty : 0,
       overage: acceptedQty > orderedQty ? acceptedQty - orderedQty : 0,
-      items: orderedQty || acceptedQty
-    };
-  });
+      items: qcItems.length,
+      accepted_quantity: acceptedQty
+    });
+  }
+  
+  return result;
 };
 
 const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defects, remarks) => {
@@ -142,8 +137,34 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
       [grnId, inspectionDate, passQty, failQuantity || 0, 'PENDING', defects || null, remarks || null]
     );
 
+    const qcId = result.insertId;
+
+    const [grnItems] = await connection.query(
+      `SELECT 
+        gi.id, 
+        poi.item_code, 
+        gi.po_qty, 
+        gi.received_qty, 
+        gi.accepted_qty, 
+        gi.rejected_qty, 
+        gi.status 
+       FROM grn_items gi
+       LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+       WHERE gi.grn_id = ?`,
+      [grnId]
+    );
+
+    for (const item of grnItems) {
+      await connection.execute(
+        `INSERT INTO qc_inspection_items 
+         (qc_inspection_id, grn_item_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [qcId, item.id, item.item_code, item.po_qty, item.received_qty, item.accepted_qty, item.rejected_qty, 'PENDING']
+      );
+    }
+
     await connection.commit();
-    return getQCWithDetails(result.insertId);
+    return getQCWithDetails(qcId);
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -188,22 +209,77 @@ const updateQC = async (qcId, updates) => {
     values.push(remarks);
   }
 
-  if (setClause.length === 0) {
-    return getQCWithDetails(qcId);
-  }
+
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    values.push(qcId);
+    if (setClause.length > 0) {
+      values.push(qcId);
 
-    await connection.execute(
-      `UPDATE qc_inspections SET ${setClause.join(', ')} WHERE id = ?`,
-      values
+      await connection.execute(
+        `UPDATE qc_inspections SET ${setClause.join(', ')} WHERE id = ?`,
+        values
+      );
+    }
+
+    const [qcData] = await connection.query(
+      'SELECT grn_id, pass_quantity, status FROM qc_inspections WHERE id = ?',
+      [qcId]
     );
 
-    if (status === 'ACCEPTED' || status === 'SHORTAGE') {
+    const currentStatus = status !== undefined ? status : (qcData.length > 0 ? qcData[0].status : null);
+
+    if (qcData.length) {
+      const grnId = qcData[0].grn_id;
+
+      const [grnItems] = await connection.query(
+        'SELECT id, accepted_qty FROM grn_items WHERE grn_id = ?',
+        [grnId]
+      );
+
+      const totalAcceptedQty = grnItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
+
+      let grnStatus = 'PENDING';
+      if (currentStatus === 'PASSED' || currentStatus === 'ACCEPTED') {
+        grnStatus = 'APPROVED';
+      } else if (currentStatus === 'FAILED') {
+        grnStatus = 'REJECTED';
+      } else if (currentStatus === 'SHORTAGE') {
+        grnStatus = 'INSPECTED';
+      } else if (currentStatus === 'IN_PROGRESS') {
+        grnStatus = 'INSPECTED';
+      } else if (currentStatus === 'PENDING') {
+        grnStatus = 'PENDING';
+      }
+
+      await connection.execute(
+        'UPDATE grns SET received_quantity = ?, status = ? WHERE id = ?',
+        [totalAcceptedQty, grnStatus, grnId]
+      );
+      if (currentStatus === 'PASSED' || currentStatus === 'ACCEPTED') {
+        for (const item of grnItems) {
+          await connection.execute(
+            'UPDATE grn_items SET status = ? WHERE id = ?',
+            ['APPROVED', item.id]
+          );
+        }
+      } else if (currentStatus === 'FAILED' || currentStatus === 'REJECTED') {
+        for (const item of grnItems) {
+          await connection.execute(
+            'UPDATE grn_items SET status = ? WHERE id = ?',
+            ['REJECTED', item.id]
+          );
+        }
+      }
+    } else {
+      const error = new Error('QC Inspection not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (currentStatus === 'ACCEPTED' || currentStatus === 'SHORTAGE' || currentStatus === 'PASSED') {
       const [linked] = await connection.query(
         `SELECT po.sales_order_id
          FROM qc_inspections qc
@@ -222,6 +298,43 @@ const updateQC = async (qcId, updates) => {
       }
     }
 
+    if (currentStatus === 'PASSED' || currentStatus === 'PARTIAL') {
+      try {
+        const [qcItems] = await connection.query(
+          `SELECT id, grn_item_id, item_code, accepted_qty FROM qc_inspection_items WHERE qc_inspection_id = ?`,
+          [qcId]
+        );
+
+        const grnId = qcData[0].grn_id;
+        console.log(`[QC ${qcId}] Creating stock ledger - Found ${qcItems.length} items`);
+
+        if (qcItems.length > 0) {
+          for (const qcItem of qcItems) {
+            const passQty = parseFloat(qcItem.accepted_qty) || 0;
+            
+            console.log(`[QC ${qcId}] Item: ${qcItem.item_code}, grn_item_id: ${qcItem.grn_item_id}, accepted_qty: ${passQty}`);
+            
+            if (passQty > 0 && qcItem.grn_item_id) {
+              const result = await stockService.createQCStockLedgerEntry(
+                qcId,
+                grnId,
+                qcItem.grn_item_id,
+                qcItem.item_code,
+                passQty,
+                connection
+              );
+              console.log(`[QC ${qcId}] Stock ledger result:`, result);
+            } else {
+              console.log(`[QC ${qcId}] Skipped - passQty: ${passQty}, grn_item_id: ${qcItem.grn_item_id}`);
+            }
+          }
+        }
+      } catch (stockError) {
+        console.error(`[QC ${qcId}] Error creating stock ledger:`, stockError.message);
+        throw stockError;
+      }
+    }
+
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -231,6 +344,104 @@ const updateQC = async (qcId, updates) => {
   }
 
   return getQCWithDetails(qcId);
+};
+
+const updateQCItem = async (qcItemId, updates) => {
+  const { acceptedQty, rejectedQty, status, remarks } = updates;
+
+  const setClause = [];
+  const values = [];
+
+  if (acceptedQty !== undefined) {
+    setClause.push('accepted_qty = ?');
+    values.push(acceptedQty);
+  }
+
+  if (rejectedQty !== undefined) {
+    setClause.push('rejected_qty = ?');
+    values.push(rejectedQty);
+  }
+
+  if (status !== undefined) {
+    setClause.push('status = ?');
+    values.push(status);
+  }
+
+  if (remarks !== undefined) {
+    setClause.push('remarks = ?');
+    values.push(remarks);
+  }
+
+  if (setClause.length === 0) {
+    return null;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    values.push(qcItemId);
+
+    await connection.execute(
+      `UPDATE qc_inspection_items SET ${setClause.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    const [qcItem] = await connection.query(
+      'SELECT grn_item_id, accepted_qty, rejected_qty, status FROM qc_inspection_items WHERE id = ?',
+      [qcItemId]
+    );
+
+    if (qcItem.length) {
+      const grnItemId = qcItem[0].grn_item_id;
+      const finalAcceptedQty = acceptedQty !== undefined ? acceptedQty : qcItem[0].accepted_qty;
+      const finalRejectedQty = rejectedQty !== undefined ? rejectedQty : qcItem[0].rejected_qty;
+      const finalStatus = status || qcItem[0].status;
+
+      await connection.execute(
+        'UPDATE grn_items SET accepted_qty = ?, rejected_qty = ?, status = ? WHERE id = ?',
+        [finalAcceptedQty, finalRejectedQty, finalStatus, grnItemId]
+      );
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  const [updated] = await pool.query(
+    'SELECT * FROM qc_inspection_items WHERE id = ?',
+    [qcItemId]
+  );
+
+  return updated.length ? updated[0] : null;
+};
+
+const getQCItems = async (qcId) => {
+  const [items] = await pool.query(
+    `SELECT 
+      id,
+      qc_inspection_id,
+      grn_item_id,
+      item_code,
+      po_qty,
+      received_qty,
+      accepted_qty,
+      rejected_qty,
+      status,
+      remarks,
+      created_at,
+      updated_at
+    FROM qc_inspection_items 
+    WHERE qc_inspection_id = ?
+    ORDER BY created_at ASC`,
+    [qcId]
+  );
+
+  return items;
 };
 
 const deleteQC = async (qcId) => {
@@ -277,6 +488,8 @@ module.exports = {
   getAllQCs,
   createQC,
   updateQC,
+  updateQCItem,
+  getQCItems,
   deleteQC,
   getQCStats
 };

@@ -198,14 +198,7 @@ const getPurchaseOrderById = async (poId) => {
           quantity,
           unit,
           rate as unit_rate,
-          basic_amount as amount,
-          cgst_percent,
-          cgst_amount,
-          sgst_percent,
-          sgst_amount,
-          igst_percent,
-          igst_amount,
-          (basic_amount + COALESCE(cgst_amount, 0) + COALESCE(sgst_amount, 0) + COALESCE(igst_amount, 0)) as total_amount
+          basic_amount as amount
          FROM customer_po_items 
          WHERE customer_po_id = ?`,
         [soDetails[0].customer_po_id]
@@ -219,8 +212,7 @@ const getPurchaseOrderById = async (poId) => {
       );
 
       items = cpItems;
-      const calculatedTotal = totalResult[0]?.total || 0;
-      po.total_amount = calculatedTotal;
+      po.total_amount = totalResult[0]?.total || 0;
     } else {
       const [soItems] = await pool.query(
         `SELECT 
@@ -243,8 +235,7 @@ const getPurchaseOrderById = async (poId) => {
       );
 
       items = soItems;
-      const calculatedTotal = totalResult[0]?.total || 0;
-      po.total_amount = calculatedTotal;
+      po.total_amount = totalResult[0]?.total || 0;
     }
   } else {
     const [poItems] = await pool.query(
@@ -252,6 +243,12 @@ const getPurchaseOrderById = async (poId) => {
       [poId]
     );
     items = poItems;
+
+    const [totalResult] = await pool.query(
+      'SELECT SUM(amount) as total FROM purchase_order_items WHERE purchase_order_id = ?',
+      [poId]
+    );
+    po.total_amount = totalResult[0]?.total || 0;
   }
 
   return { ...po, items };

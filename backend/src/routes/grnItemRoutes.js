@@ -27,4 +27,6 @@ router.post('/validate', grnItemController.validateGRNInput);
 
 router.get('/:grnId/inventory-ledger', grnItemController.getInventoryLedger);
 
+router.delete('/:grnItemId', grnItemController.deleteGRNItem);
+
 module.exports = router;

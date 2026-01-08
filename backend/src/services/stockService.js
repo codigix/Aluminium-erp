@@ -1,0 +1,365 @@
+const pool = require('../config/db');
+
+const calculateBalanceDetailsFromLedger = async (itemCode) => {
+  const [ledgerData] = await pool.query(`
+    SELECT 
+      SUM(CASE WHEN transaction_type = 'GRN_IN' THEN quantity ELSE 0 END) as accepted_qty,
+      SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) as issued_qty,
+      SUM(CASE WHEN transaction_type IN ('GRN_IN', 'ADJUSTMENT', 'RETURN') THEN quantity 
+               WHEN transaction_type = 'OUT' THEN -quantity ELSE 0 END) as current_balance
+    FROM stock_ledger 
+    WHERE item_code = ?
+  `, [itemCode]);
+
+  const ledger = ledgerData[0] || {};
+  return {
+    received_qty: parseFloat(ledger.accepted_qty) || 0,
+    accepted_qty: parseFloat(ledger.accepted_qty) || 0,
+    issued_qty: parseFloat(ledger.issued_qty) || 0,
+    current_balance: parseFloat(ledger.current_balance) || 0
+  };
+};
+
+const getStockLedger = async (itemCode = null, startDate = null, endDate = null) => {
+  let query = `SELECT 
+    id,
+    item_code,
+    transaction_date,
+    transaction_type,
+    quantity,
+    reference_doc_type,
+    reference_doc_id,
+    reference_doc_number,
+    qc_id,
+    grn_item_id,
+    balance_after,
+    remarks,
+    created_at
+  FROM stock_ledger`;
+
+  const conditions = [];
+  const params = [];
+
+  if (itemCode) {
+    conditions.push('item_code = ?');
+    params.push(itemCode);
+  }
+
+  if (startDate) {
+    conditions.push('transaction_date >= ?');
+    params.push(startDate);
+  }
+
+  if (endDate) {
+    conditions.push('transaction_date <= ?');
+    params.push(endDate);
+  }
+
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  query += ' ORDER BY transaction_date DESC';
+
+  const [ledger] = await pool.query(query, params);
+  return ledger;
+};
+
+const getStockBalance = async () => {
+  const [balances] = await pool.query(`
+    SELECT 
+      id,
+      item_code,
+      item_description,
+      unit,
+      last_updated
+    FROM stock_balance
+    ORDER BY item_code ASC
+  `);
+
+  const result = [];
+  for (const balance of balances) {
+    const details = await calculateBalanceDetailsFromLedger(balance.item_code);
+    
+    const [poItems] = await pool.query(`
+      SELECT COALESCE(SUM(quantity), 0) as po_qty FROM purchase_order_items WHERE item_code = ?
+    `, [balance.item_code]);
+    
+    const poQty = parseFloat(poItems[0]?.po_qty || 0);
+    
+    result.push({
+      id: balance.id,
+      item_code: balance.item_code,
+      item_description: balance.item_description,
+      po_qty: poQty,
+      received_qty: details.received_qty,
+      accepted_qty: details.accepted_qty,
+      issued_qty: details.issued_qty,
+      current_balance: details.current_balance,
+      unit: balance.unit || 'NOS',
+      last_updated: balance.last_updated
+    });
+  }
+
+  return result;
+};
+
+const getStockBalanceByItem = async (itemCode) => {
+  const [balance] = await pool.query(`
+    SELECT id, item_code, item_description, unit, last_updated FROM stock_balance WHERE item_code = ?
+  `, [itemCode]);
+
+  if (balance.length === 0) {
+    return null;
+  }
+
+  const details = await calculateBalanceDetailsFromLedger(itemCode);
+
+  const [poItems] = await pool.query(`
+    SELECT COALESCE(SUM(quantity), 0) as po_qty FROM purchase_order_items WHERE item_code = ?
+  `, [itemCode]);
+  
+  const poQty = parseFloat(poItems[0]?.po_qty || 0);
+
+  return {
+    id: balance[0].id,
+    item_code: balance[0].item_code,
+    item_description: balance[0].item_description,
+    po_qty: poQty,
+    received_qty: details.received_qty,
+    accepted_qty: details.accepted_qty,
+    issued_qty: details.issued_qty,
+    current_balance: details.current_balance,
+    unit: balance[0].unit || 'NOS',
+    last_updated: balance[0].last_updated
+  };
+};
+
+const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocType = null, refDocId = null, refDocNumber = null, remarks = null, userId = null) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    let existingBalance = await getStockBalanceByItem(itemCode);
+
+    let newBalance = 0;
+    if (existingBalance) {
+      const currentBalance = parseFloat(existingBalance.current_balance) || 0;
+      const qty = parseFloat(quantity) || 0;
+
+      if (transactionType === 'IN') {
+        newBalance = currentBalance + qty;
+      } else if (transactionType === 'OUT') {
+        newBalance = Math.max(0, currentBalance - qty);
+      } else if (transactionType === 'ADJUSTMENT' || transactionType === 'RETURN') {
+        newBalance = currentBalance + qty;
+      }
+
+      await connection.execute(`
+        INSERT INTO stock_ledger 
+        (item_code, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
+
+      await connection.execute(`
+        UPDATE stock_balance 
+        SET current_balance = ?, last_updated = CURRENT_TIMESTAMP
+        WHERE item_code = ?
+      `, [newBalance, itemCode]);
+    } else {
+      let newBalance = 0;
+      if (transactionType === 'IN') {
+        newBalance = parseFloat(quantity) || 0;
+      }
+
+      await connection.execute(`
+        INSERT INTO stock_ledger 
+        (item_code, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
+
+      await connection.execute(`
+        INSERT INTO stock_balance 
+        (item_code, current_balance)
+        VALUES (?, ?)
+      `, [itemCode, newBalance]);
+    }
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQty, connection = null) => {
+  const useConnection = connection || (await pool.getConnection());
+  
+  try {
+    if (!connection) {
+      await useConnection.beginTransaction();
+    }
+
+    console.log(`[Stock] Creating entry for QC:${qcId}, GRN:${grnId}, Item:${itemCode}, Qty:${passQty}`);
+
+    const [existing] = await useConnection.query(
+      `SELECT id FROM stock_ledger 
+       WHERE reference_doc_id = ? 
+       AND grn_item_id = ? 
+       AND transaction_type = 'GRN_IN'`,
+      [grnId, grnItemId]
+    );
+
+    if (existing.length > 0) {
+      console.log(`[Stock] Duplicate found - skipping`);
+      if (!connection) {
+        await useConnection.commit();
+        useConnection.release();
+      }
+      return { success: true, duplicate: true };
+    }
+
+    const [currentBalanceRow] = await useConnection.query(
+      `SELECT current_balance FROM stock_balance WHERE item_code = ? FOR UPDATE`,
+      [itemCode]
+    );
+
+    let newBalance = 0;
+
+    if (currentBalanceRow.length > 0) {
+      newBalance = parseFloat(currentBalanceRow[0].current_balance) || 0;
+      newBalance += parseFloat(passQty) || 0;
+      console.log(`[Stock] Existing balance: ${currentBalanceRow[0].current_balance}, new: ${newBalance}`);
+
+      await useConnection.execute(
+        `INSERT INTO stock_ledger 
+        (item_code, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemCode, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
+      );
+
+      await useConnection.execute(
+        `UPDATE stock_balance SET current_balance = ?, last_updated = CURRENT_TIMESTAMP WHERE item_code = ?`,
+        [newBalance, itemCode]
+      );
+      console.log(`[Stock] Created ledger entry and updated balance`);
+    } else {
+      newBalance = parseFloat(passQty) || 0;
+      console.log(`[Stock] New item - balance: ${newBalance}`);
+
+      await useConnection.execute(
+        `INSERT INTO stock_ledger 
+        (item_code, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemCode, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
+      );
+
+      await useConnection.execute(
+        `INSERT INTO stock_balance (item_code, current_balance) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE current_balance = VALUES(current_balance), last_updated = CURRENT_TIMESTAMP`,
+        [itemCode, newBalance]
+      );
+      console.log(`[Stock] Created new balance and ledger entry`);
+    }
+
+    if (!connection) {
+      await useConnection.commit();
+      useConnection.release();
+    }
+
+    return { success: true, duplicate: false };
+  } catch (error) {
+    console.error(`[Stock] Error:`, error.message);
+    if (!connection) {
+      await useConnection.rollback();
+      useConnection.release();
+    }
+    throw error;
+  }
+};
+
+const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, acceptedQty = null, issuedQty = null, itemDescription = null, unit = null) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const existing = await getStockBalanceByItem(itemCode);
+
+    const setClauses = [];
+    const params = [];
+
+    if (poQty !== null && poQty !== undefined) {
+      setClauses.push('po_qty = ?');
+      params.push(poQty);
+    }
+
+    if (receivedQty !== null && receivedQty !== undefined) {
+      setClauses.push('received_qty = ?');
+      params.push(receivedQty);
+    }
+
+    if (acceptedQty !== null && acceptedQty !== undefined) {
+      setClauses.push('accepted_qty = ?');
+      params.push(acceptedQty);
+    }
+
+    if (issuedQty !== null && issuedQty !== undefined) {
+      setClauses.push('issued_qty = ?');
+      params.push(issuedQty);
+    }
+
+    if (itemDescription !== null && itemDescription !== undefined) {
+      setClauses.push('item_description = ?');
+      params.push(itemDescription);
+    }
+
+    if (unit !== null && unit !== undefined) {
+      setClauses.push('unit = ?');
+      params.push(unit);
+    }
+
+    if (existing) {
+      if (setClauses.length > 0) {
+        setClauses.push('last_updated = CURRENT_TIMESTAMP');
+        params.push(itemCode);
+        await connection.execute(
+          `UPDATE stock_balance SET ${setClauses.join(', ')} WHERE item_code = ?`,
+          params
+        );
+      }
+    } else {
+      await connection.execute(`
+        INSERT INTO stock_balance (item_code, item_description, unit, po_qty, received_qty, accepted_qty, issued_qty)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [
+        itemCode,
+        itemDescription || null,
+        unit || 'NOS',
+        poQty || 0,
+        receivedQty || 0,
+        acceptedQty || 0,
+        issuedQty || 0
+      ]);
+    }
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+module.exports = {
+  getStockLedger,
+  getStockBalance,
+  getStockBalanceByItem,
+  addStockLedgerEntry,
+  updateStockBalance,
+  createQCStockLedgerEntry
+};

@@ -13,17 +13,30 @@ const listSalesOrders = async () => {
 
 const getIncomingOrders = async (departmentCode) => {
   console.log(`[getIncomingOrders-service] Starting query for department: "${departmentCode}"`);
-  const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
+  
+  let whereClause = '';
+  if (departmentCode === 'DESIGN_ENG') {
+    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_QUERY')`;
+  } else if (departmentCode === 'PROCUREMENT') {
+    whereClause = `so.status IN ('DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS')`;
+  } else if (departmentCode === 'INVENTORY') {
+    whereClause = `so.status IN ('CREATED', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION')`;
+  } else if (departmentCode === 'PRODUCTION') {
+    whereClause = `so.status IN ('MATERIAL_READY', 'IN_PRODUCTION')`;
+  } else {
+    whereClause = `so.current_department = '${departmentCode}'`;
+  }
+  
+  const query = `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
-     WHERE so.current_department = ?
-     ORDER BY so.created_at DESC`,
-    [departmentCode]
-  );
+     WHERE ${whereClause}
+     ORDER BY so.created_at DESC`;
+  
+  const [rows] = await pool.query(query);
   console.log(`[getIncomingOrders-service] Query returned ${rows.length} rows for department "${departmentCode}"`);
   console.log(`[getIncomingOrders-service] Raw rows:`, rows);
   return rows;
@@ -32,7 +45,7 @@ const getIncomingOrders = async (departmentCode) => {
 const createSalesOrder = async (customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate) => {
   const [result] = await pool.execute(
     `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted)
-     VALUES (?, ?, ?, ?, ?, ?, 'DESIGN_IN_REVIEW', 'DESIGN_ENG', 0)`,
+     VALUES (?, ?, ?, ?, ?, ?, 'CREATED', 'DESIGN_ENG', 0)`,
     [customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate]
   );
   return result.insertId;

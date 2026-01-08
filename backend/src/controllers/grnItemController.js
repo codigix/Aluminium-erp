@@ -1,6 +1,7 @@
 const grnItemService = require('../services/grnItemService');
 const inventoryPostingService = require('../services/inventoryPostingService');
 const poBalanceService = require('../services/poBalanceService');
+const qcInspectionsService = require('../services/qcInspectionsService');
 
 const createGRNWithItems = async (req, res, next) => {
   try {
@@ -30,12 +31,33 @@ const createGRNWithItems = async (req, res, next) => {
     const grnItemResults = [];
     let totalAcceptedQty = 0;
     let totalRejectedQty = 0;
+    const pool = require('../config/db');
 
     for (const item of items) {
       try {
+        let poItemId = item.poItemId;
+
+        const [poItemResult] = await pool.query(
+          'SELECT id FROM purchase_order_items WHERE item_code = ? AND purchase_order_id = ?',
+          [item.itemCode, poId]
+        );
+
+        if (poItemResult.length > 0) {
+          poItemId = poItemResult[0].id;
+        } else {
+          console.warn(`Creating missing purchase_order_item for: ${item.itemCode}`);
+          const [insertResult] = await pool.execute(
+            `INSERT INTO purchase_order_items 
+             (purchase_order_id, item_code, description, quantity, unit, unit_rate, amount) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [poId, item.itemCode, item.description || '', item.poQty, 'NOS', 0, 0]
+          );
+          poItemId = insertResult.insertId;
+        }
+
         const grnItem = await grnItemService.createGRNItem(
           grn.id,
-          item.poItemId,
+          poItemId,
           item.poQty,
           item.acceptedQty,
           item.remarks
@@ -46,14 +68,15 @@ const createGRNWithItems = async (req, res, next) => {
 
         await inventoryPostingService.postInventoryFromGRN(
           grn.id,
-          item.poItemId,
+          poItemId,
           item.acceptedQty || 0,
           0,
           grn.po_number
         );
       } catch (itemError) {
+        console.error(`Error creating GRN item for ${item.itemCode}:`, itemError.message);
         grnItemResults.push({
-          poItemId: item.poItemId,
+          itemCode: item.itemCode,
           error: itemError.message
         });
       }
@@ -64,6 +87,25 @@ const createGRNWithItems = async (req, res, next) => {
     const summary = await grnItemService.getSummaryByGrnId(grn.id);
     const grnItems = await grnItemService.getGRNItemsByGrnId(grn.id);
     const grnStatus = grnItemService.calculateGRNStatus(grnItems);
+
+    await grnService.updateGRN(grn.id, {
+      receivedQuantity: summary.total_accepted_qty,
+      status: grnStatus
+    });
+
+    try {
+      const inspectionDate = grnDate || new Date().toISOString().split('T')[0];
+      const qcInspection = await qcInspectionsService.createQC(
+        grn.id,
+        inspectionDate,
+        summary.total_accepted_qty || 0,
+        0,
+        null,
+        'Auto-created from GRN'
+      );
+    } catch (qcError) {
+      console.error('QC creation error (non-blocking):', qcError.message);
+    }
 
     res.status(201).json({
       grn_id: grn.id,
@@ -106,6 +148,18 @@ const updateGRNItem = async (req, res, next) => {
       remarks
     } = req.body;
 
+    const pool = require('../config/db');
+    const [itemResult] = await pool.query(
+      'SELECT grn_id FROM grn_items WHERE id = ?',
+      [grnItemId]
+    );
+
+    if (!itemResult.length) {
+      return res.status(404).json({ error: 'GRN Item not found' });
+    }
+
+    const grnId = itemResult[0].grn_id;
+
     const updated = await grnItemService.updateGRNItem(
       grnItemId,
       {
@@ -115,6 +169,16 @@ const updateGRNItem = async (req, res, next) => {
         remarks
       }
     );
+
+    const grnService = require('../services/grnService');
+    const grnItems = await grnItemService.getGRNItemsByGrnId(grnId);
+    const summary = await grnItemService.getSummaryByGrnId(grnId);
+    const grnStatus = grnItemService.calculateGRNStatus(grnItems);
+
+    await grnService.updateGRN(grnId, {
+      receivedQuantity: summary.total_accepted_qty,
+      status: grnStatus
+    });
 
     res.json({
       message: 'GRN item updated successfully',
@@ -130,10 +194,32 @@ const approveExcessQuantity = async (req, res, next) => {
     const { grnItemId } = req.params;
     const { approvalNotes } = req.body;
 
+    const pool = require('../config/db');
+    const [itemResult] = await pool.query(
+      'SELECT grn_id FROM grn_items WHERE id = ?',
+      [grnItemId]
+    );
+
+    if (!itemResult.length) {
+      return res.status(404).json({ error: 'GRN Item not found' });
+    }
+
+    const grnId = itemResult[0].grn_id;
+
     const result = await grnItemService.approveExcessGRNItem(
       grnItemId,
       approvalNotes
     );
+
+    const grnService = require('../services/grnService');
+    const grnItems = await grnItemService.getGRNItemsByGrnId(grnId);
+    const summary = await grnItemService.getSummaryByGrnId(grnId);
+    const grnStatus = grnItemService.calculateGRNStatus(grnItems);
+
+    await grnService.updateGRN(grnId, {
+      receivedQuantity: summary.total_accepted_qty,
+      status: grnStatus
+    });
 
     res.json({
       message: 'Excess quantity approved',
@@ -149,10 +235,32 @@ const rejectExcessQuantity = async (req, res, next) => {
     const { grnItemId } = req.params;
     const { rejectionReason } = req.body;
 
+    const pool = require('../config/db');
+    const [itemResult] = await pool.query(
+      'SELECT grn_id FROM grn_items WHERE id = ?',
+      [grnItemId]
+    );
+
+    if (!itemResult.length) {
+      return res.status(404).json({ error: 'GRN Item not found' });
+    }
+
+    const grnId = itemResult[0].grn_id;
+
     const result = await grnItemService.rejectExcessGRNItem(
       grnItemId,
       rejectionReason
     );
+
+    const grnService = require('../services/grnService');
+    const grnItems = await grnItemService.getGRNItemsByGrnId(grnId);
+    const summary = await grnItemService.getSummaryByGrnId(grnId);
+    const grnStatus = grnItemService.calculateGRNStatus(grnItems);
+
+    await grnService.updateGRN(grnId, {
+      receivedQuantity: summary.total_accepted_qty,
+      status: grnStatus
+    });
 
     res.json({
       message: 'Excess quantity rejected',
@@ -287,6 +395,26 @@ const getInventoryLedger = async (req, res, next) => {
   }
 };
 
+const deleteGRNItem = async (req, res, next) => {
+  try {
+    const { grnItemId } = req.params;
+
+    if (!grnItemId) {
+      return res.status(400).json({ message: 'GRN Item ID is required' });
+    }
+
+    const result = await grnItemService.deleteGRNItem(grnItemId);
+    
+    res.json({
+      success: true,
+      message: 'GRN item deleted successfully',
+      deletedId: grnItemId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createGRNWithItems,
   getGRNItemDetails,
@@ -298,5 +426,6 @@ module.exports = {
   getPOReceiptHistory,
   getGRNSummary,
   validateGRNInput,
-  getInventoryLedger
+  getInventoryLedger,
+  deleteGRNItem
 };

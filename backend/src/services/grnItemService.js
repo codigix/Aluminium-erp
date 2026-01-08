@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const stockService = require('./stockService');
 
 const GRN_ITEM_STATUS = {
   APPROVED: 'APPROVED',
@@ -60,6 +61,14 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
 
     validateGRNItemInput(poQty, acceptedQty);
 
+    const [poItem] = await connection.query(
+      'SELECT item_code, description FROM purchase_order_items WHERE id = ?',
+      [poItemId]
+    );
+
+    const itemCode = poItem.length ? poItem[0].item_code : null;
+    const itemDescription = poItem.length ? poItem[0].description : null;
+
     const grnItemStatus = determineGRNItemStatus(poQty, acceptedQty);
     const shortageQty = acceptedQty < poQty ? poQty - acceptedQty : 0;
     const overageQty = acceptedQty > poQty ? acceptedQty - poQty : 0;
@@ -87,6 +96,26 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
     );
 
     const grnItemId = result.insertId;
+
+    if (itemCode && acceptedQty > 0) {
+      const [grn] = await connection.query(
+        'SELECT id FROM grns WHERE id = ?',
+        [grnId]
+      );
+
+      await stockService.updateStockBalance(itemCode, poQty, receivedQty, acceptedQty, 0, itemDescription);
+
+      await stockService.addStockLedgerEntry(
+        itemCode,
+        'IN',
+        acceptedQty,
+        'GRN',
+        grnId,
+        `GRN-${String(grnId).padStart(4, '0')}`,
+        remarks,
+        null
+      );
+    }
 
     await connection.commit();
 
@@ -156,6 +185,35 @@ const updateGRNItem = async (grnItemId, updates) => {
         grnItemId
       ]
     );
+
+    const [poItem] = await connection.query(
+      'SELECT item_code, description FROM purchase_order_items WHERE id = ?',
+      [item.po_item_id]
+    );
+
+    const itemCode = poItem.length ? poItem[0].item_code : null;
+    const itemDescription = poItem.length ? poItem[0].description : null;
+
+    if (itemCode && (acceptedQty !== parseFloat(item.accepted_qty))) {
+      const qtyDifference = parseFloat(acceptedQty) - parseFloat(item.accepted_qty);
+
+      await stockService.updateStockBalance(itemCode, item.po_qty, receivedQty, acceptedQty, 0, itemDescription);
+
+      if (qtyDifference !== 0) {
+        const transactionType = qtyDifference > 0 ? 'IN' : 'OUT';
+
+        await stockService.addStockLedgerEntry(
+          itemCode,
+          transactionType,
+          Math.abs(qtyDifference),
+          'GRN',
+          item.grn_id,
+          `GRN-${String(item.grn_id).padStart(4, '0')}`,
+          `Updated: ${remarks || 'Quantity adjustment'}`,
+          null
+        );
+      }
+    }
 
     if (newStatus === GRN_ITEM_STATUS.EXCESS_HOLD && overageQty > 0) {
       const [existingApproval] = await connection.query(
@@ -441,6 +499,21 @@ const calculateGRNStatus = (grnItems) => {
   return 'PENDING';
 };
 
+const deleteGRNItem = async (grnItemId) => {
+  const [result] = await pool.execute(
+    'DELETE FROM grn_items WHERE id = ?',
+    [grnItemId]
+  );
+
+  if (result.affectedRows === 0) {
+    const error = new Error('GRN Item not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return result;
+};
+
 module.exports = {
   GRN_ITEM_STATUS,
   validateGRNItemInput,
@@ -454,5 +527,6 @@ module.exports = {
   getGRNItemsByGrnId,
   getPOBalance,
   getSummaryByGrnId,
-  calculateGRNStatus
+  calculateGRNStatus,
+  deleteGRNItem
 };

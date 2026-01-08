@@ -16,12 +16,15 @@ import POReceiptDetails from './pages/POReceiptDetails'
 import GRN from './pages/GRN'
 import GRNProcessing from './pages/GRNProcessing'
 import QCInspections from './pages/QCInspections'
+import StockLedger from './pages/StockLedger'
+import StockBalance from './pages/StockBalance'
+import InventoryDashboard from './pages/InventoryDashboard'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'grn', 'qc-inspections']
+const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance']
 const DEFAULT_MODULE = 'company-master'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const COMPANY_HINTS = {
@@ -162,7 +165,7 @@ const DEPARTMENT_MODULES = {
   QUALITY: ['incoming-orders'],
   SHIPMENT: ['incoming-orders'],
   ACCOUNTS: [],
-  INVENTORY: ['incoming-orders', 'grn', 'qc-inspections'],
+  INVENTORY: ['inventory-dashboard', 'incoming-orders', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
   ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders']
 }
@@ -1330,8 +1333,11 @@ function App() {
     { label: 'Purchase Orders', moduleId: 'purchase-orders', indent: true },
     { label: 'PO Receipts', moduleId: 'po-receipts', indent: true },
     { label: 'Inventory Management', isGroup: true, isDisabled: true, groupId: 'inventory-group' },
+    { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', indent: true },
     { label: 'GRN Processing', moduleId: 'grn', indent: true },
-    { label: 'QC Inspections', moduleId: 'qc-inspections', indent: true }
+    { label: 'QC Inspections', moduleId: 'qc-inspections', indent: true },
+    { label: 'Stock Ledger', moduleId: 'stock-ledger', indent: true },
+    { label: 'Stock Balance', moduleId: 'stock-balance', indent: true }
   ]
 
   const getUserDepartmentCode = () => {
@@ -1491,6 +1497,30 @@ function App() {
       badge: 'Quality Control',
       title: 'QC Inspections',
       description: 'Manage Quality Control Inspections',
+      actions: null
+    },
+    'inventory-dashboard': {
+      badge: 'Inventory Management',
+      title: 'Inventory Dashboard',
+      description: 'Overview of incoming orders, stock levels, and pending activities',
+      actions: null
+    },
+    'po-receipts': {
+      badge: 'Procurement',
+      title: 'PO Receipts',
+      description: 'Track purchase order receipts and deliveries',
+      actions: null
+    },
+    'stock-ledger': {
+      badge: 'Inventory Management',
+      title: 'Stock Ledger',
+      description: 'Detailed transaction history for all stock items',
+      actions: null
+    },
+    'stock-balance': {
+      badge: 'Inventory Management',
+      title: 'Stock Balance',
+      description: 'Current stock levels and inventory status',
       actions: null
     }
   }
@@ -1729,12 +1759,24 @@ function App() {
                   <POReceipts />
                 )}
 
+                {activeModule === 'inventory-dashboard' && (
+                  <InventoryDashboard />
+                )}
+
                 {activeModule === 'grn' && (
                   <GRNProcessing />
                 )}
 
                 {activeModule === 'qc-inspections' && (
                   <QCInspections />
+                )}
+
+                {activeModule === 'stock-ledger' && (
+                  <StockLedger />
+                )}
+
+                {activeModule === 'stock-balance' && (
+                  <StockBalance />
                 )}
               </>
             )}

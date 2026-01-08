@@ -357,3 +357,40 @@ INSERT IGNORE INTO roles (name, code, department_id, description) VALUES
 ('Accounts Manager', 'ACC_MGR', (SELECT id FROM departments WHERE code='ACCOUNTS'), 'Manages billing'),
 ('Inventory Manager', 'INV_MGR', (SELECT id FROM departments WHERE code='INVENTORY'), 'Manages inventory'),
 ('System Admin', 'SYS_ADMIN', (SELECT id FROM departments WHERE code='ADMIN'), 'System administration');
+
+CREATE TABLE IF NOT EXISTS stock_ledger (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  item_code VARCHAR(100) NOT NULL,
+  transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  transaction_type ENUM('IN', 'OUT', 'ADJUSTMENT', 'RETURN', 'GRN_IN') NOT NULL,
+  quantity DECIMAL(12, 3) NOT NULL,
+  reference_doc_type VARCHAR(50),
+  reference_doc_id INT,
+  reference_doc_number VARCHAR(100),
+  qc_id INT,
+  grn_item_id INT,
+  balance_after DECIMAL(12, 3),
+  remarks TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_by INT,
+  INDEX idx_item_code (item_code),
+  INDEX idx_transaction_date (transaction_date),
+  INDEX idx_transaction_type (transaction_type),
+  INDEX idx_qc_id (qc_id),
+  UNIQUE KEY unique_grn_ledger (reference_doc_id, grn_item_id, transaction_type),
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS stock_balance (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  item_code VARCHAR(100) NOT NULL UNIQUE,
+  item_description TEXT,
+  po_qty DECIMAL(12, 3) DEFAULT 0,
+  received_qty DECIMAL(12, 3) DEFAULT 0,
+  accepted_qty DECIMAL(12, 3) DEFAULT 0,
+  issued_qty DECIMAL(12, 3) DEFAULT 0,
+  current_balance DECIMAL(12, 3) DEFAULT 0,
+  unit VARCHAR(20),
+  last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_item_code (item_code)
+);

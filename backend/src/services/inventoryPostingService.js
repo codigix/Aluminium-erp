@@ -14,11 +14,9 @@ const postInventoryFromGRN = async (grnId, poItemId, acceptedQty, rejectedQty, r
     await connection.beginTransaction();
 
     const [itemData] = await connection.query(
-      `SELECT poi.item_code, poi.description, poi.unit, c.id as category_id
-       FROM purchase_order_items poi
-       LEFT JOIN items i ON poi.item_code = i.item_code
-       LEFT JOIN categories c ON i.category_id = c.id
-       WHERE poi.id = ?`,
+      `SELECT id, item_code, description, unit
+       FROM purchase_order_items
+       WHERE id = ?`,
       [poItemId]
     );
 
@@ -38,9 +36,9 @@ const postInventoryFromGRN = async (grnId, poItemId, acceptedQty, rejectedQty, r
       inventoryItemId = existingItem[0].id;
     } else {
       const [newItem] = await connection.execute(
-        `INSERT INTO inventory (item_code, description, unit, category_id, stock_on_hand, reorder_level, reorder_qty)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [item.item_code, item.description, item.unit, item.category_id || null, 0, 0, 0]
+        `INSERT INTO inventory (item_code, description, unit, stock_on_hand, reorder_level, reorder_qty)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [item.item_code, item.description, item.unit || 'NOS', 0, 0, 0]
       );
       inventoryItemId = newItem.insertId;
     }

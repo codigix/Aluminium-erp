@@ -16,7 +16,10 @@ const GRNProcessing = () => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedGRN, setSelectedGRN] = useState(null);
+  const [showItemsModal, setShowItemsModal] = useState(false);
+  const [selectedGrnId, setSelectedGrnId] = useState(null);
+  const [grnItems, setGrnItems] = useState([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     poId: '',
@@ -59,6 +62,68 @@ const GRNProcessing = () => {
       setGrns([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGrnItems = async (grnId) => {
+    try {
+      setItemsLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/grn-items/${grnId}/details`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch GRN items');
+      const data = await response.json();
+      setGrnItems(Array.isArray(data.items) ? data.items : []);
+    } catch (error) {
+      console.error('Error fetching GRN items:', error);
+      Swal.fire('Error', 'Failed to load GRN items', 'error');
+      setGrnItems([]);
+    } finally {
+      setItemsLoading(false);
+    }
+  };
+
+  const handleViewItems = (grnId) => {
+    setSelectedGrnId(grnId);
+    setShowItemsModal(true);
+    fetchGrnItems(grnId);
+  };
+
+  const handleDeleteItem = async (itemId) => {
+    const confirmDelete = await Swal.fire({
+      title: 'Delete Item?',
+      text: 'This action cannot be undone',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      confirmButtonText: 'Delete'
+    });
+
+    if (!confirmDelete.isConfirmed) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/grn-items/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to delete item');
+      
+      setGrnItems(grnItems.filter(item => item.id !== itemId));
+      Swal.fire('Deleted', 'Item removed from GRN', 'success');
+      fetchGRNs();
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      Swal.fire('Error', 'Failed to delete item', 'error');
     }
   };
 
@@ -132,17 +197,22 @@ const GRNProcessing = () => {
   };
 
   const getItemStatus = (poQty, acceptedQty) => {
-    if (acceptedQty === poQty) return 'APPROVED';
-    if (acceptedQty < poQty) return 'SHORTAGE';
-    if (acceptedQty > poQty) return 'OVERAGE';
+    const po = Number(poQty);
+    const accepted = Number(acceptedQty);
+    
+    if (accepted === po) return 'APPROVED';
+    if (accepted < po) return 'SHORTAGE';
+    if (accepted > po) return 'OVERAGE';
     return 'PENDING';
   };
 
   const calculateMetrics = (poQty, acceptedQty) => {
-    const status = getItemStatus(poQty, acceptedQty);
-    const difference = acceptedQty - poQty;
-    const shortageQty = status === 'SHORTAGE' ? poQty - acceptedQty : 0;
-    const overageQty = status === 'OVERAGE' ? acceptedQty - poQty : 0;
+    const po = Number(poQty);
+    const accepted = Number(acceptedQty);
+    const status = getItemStatus(po, accepted);
+    const difference = po - accepted;
+    const shortageQty = status === 'SHORTAGE' ? po - accepted : 0;
+    const overageQty = status === 'OVERAGE' ? accepted - po : 0;
 
     return { status, difference, shortageQty, overageQty };
   };
@@ -191,6 +261,8 @@ const GRNProcessing = () => {
       } else {
         items.push({
           poItemId: item.id,
+          itemCode: item.item_code || item.itemCode,
+          description: item.description,
           poQty: item.quantity,
           acceptedQty: accepted,
           remarks: data.remarks || null
@@ -348,6 +420,12 @@ const GRNProcessing = () => {
                     </td>
                     <td className="px-4 py-4 text-right space-x-2">
                       <button
+                        onClick={() => handleViewItems(grn.id)}
+                        className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium"
+                      >
+                        + View
+                      </button>
+                      <button
                         onClick={() => handleDeleteGRN(grn.id)}
                         className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium"
                       >
@@ -447,7 +525,7 @@ const GRNProcessing = () => {
                         {poItems.map((item) => {
                           const data = itemData[item.id] || {};
                           const accepted = parseInt(data.acceptedQty) || 0;
-                          const { status, difference, shortageQty, overageQty } = calculateMetrics(
+                          const { status, difference } = calculateMetrics(
                             item.quantity,
                             accepted
                           );
@@ -474,7 +552,7 @@ const GRNProcessing = () => {
                                 />
                               </td>
                               <td className="px-4 py-3 text-center font-medium">
-                                {difference > 0 ? `+${difference}` : difference < 0 ? difference : '0'}
+                                {difference !== 0 ? (difference > 0 ? `+${difference}` : difference) : '0'}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span className={`inline-block text-xs font-semibold px-3 py-1 rounded ${itemStatusColors[status] || itemStatusColors.PENDING}`}>
@@ -529,6 +607,79 @@ const GRNProcessing = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showItemsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-5xl w-full m-4 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-slate-900">GRN Items</h2>
+              <button
+                onClick={() => setShowItemsModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {itemsLoading ? (
+              <p className="text-center py-8 text-slate-500">Loading items...</p>
+            ) : grnItems.length === 0 ? (
+              <p className="text-center py-8 text-slate-500">No items in this GRN</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">Item Code</th>
+                      <th className="px-4 py-3 text-left font-semibold">Description</th>
+                      <th className="px-4 py-3 text-center font-semibold">PO Qty</th>
+                      <th className="px-4 py-3 text-center font-semibold">Received</th>
+                      <th className="px-4 py-3 text-center font-semibold">Accepted</th>
+                      <th className="px-4 py-3 text-center font-semibold">Rejected</th>
+                      <th className="px-4 py-3 text-left font-semibold">Status</th>
+                      <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grnItems.map((item) => (
+                      <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-4 font-medium text-slate-900">{item.item_code || '—'}</td>
+                        <td className="px-4 py-4 text-slate-600">{item.description || '—'}</td>
+                        <td className="px-4 py-4 text-center">{item.po_qty || 0}</td>
+                        <td className="px-4 py-4 text-center">{item.received_qty || 0}</td>
+                        <td className="px-4 py-4 text-center font-medium">{item.accepted_qty || 0}</td>
+                        <td className="px-4 py-4 text-center">{item.rejected_qty || 0}</td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${itemStatusColors[item.status] || itemStatusColors.PENDING}`}>
+                            {item.status || 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium"
+                          >
+                            🗑
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setShowItemsModal(false)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

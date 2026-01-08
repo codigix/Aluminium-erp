@@ -197,7 +197,10 @@ const QCInspections = () => {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to update QC Inspection');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update QC Inspection');
+      }
 
       await Swal.fire('Success', 'QC Inspection updated successfully', 'success');
       setShowEditModal(false);
@@ -584,9 +587,9 @@ const QCInspections = () => {
             <form onSubmit={handleUpdateQC} className="space-y-4">
               <div className="bg-slate-50 p-3 rounded text-sm">
                 <p className="text-slate-600"><span className="font-medium">Inspection #:</span> QC-{String(selectedQC.id).padStart(4, '0')}</p>
-                <p className="text-slate-600"><span className="font-medium">GRN #:</span> GRN-{String(selectedQC.grnId).padStart(4, '0')}</p>
-                <p className="text-slate-600"><span className="font-medium">Pass Qty:</span> {selectedQC.passQuantity}</p>
-                <p className="text-slate-600"><span className="font-medium">Fail Qty:</span> {selectedQC.failQuantity || 0}</p>
+                <p className="text-slate-600"><span className="font-medium">GRN #:</span> GRN-{String(selectedQC.grn_id).padStart(4, '0')}</p>
+                <p className="text-slate-600"><span className="font-medium">Pass Qty:</span> {selectedQC.pass_quantity}</p>
+                <p className="text-slate-600"><span className="font-medium">Fail Qty:</span> {selectedQC.fail_quantity || 0}</p>
               </div>
 
               <div>
