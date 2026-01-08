@@ -256,7 +256,6 @@ function App() {
   const [poDetailLoading, setPoDetailLoading] = useState(false)
   const [poDetail, setPoDetail] = useState(null)
   const [poDetailError, setPoDetailError] = useState('')
-  const [selectedPoId, setSelectedPoId] = useState(null)
 
   const showToast = useCallback(message => {
     if (toastTimeout.current) {
@@ -413,6 +412,227 @@ function App() {
       navigate('/')
     }, 800)
   }, [showToast, navigate])
+
+  const loadCompanies = useCallback(async () => {
+    const data = await apiRequest('/companies')
+    setCompanies(Array.isArray(data) ? data : [])
+  }, [apiRequest])
+
+  const loadSalesOrders = useCallback(async () => {
+    setSalesOrdersLoading(true)
+    try {
+      const data = await apiRequest('/sales-orders')
+      setSalesOrders(Array.isArray(data) ? data : [])
+    } catch (error) {
+      showToast(error.message)
+    } finally {
+      setSalesOrdersLoading(false)
+    }
+  }, [apiRequest, showToast])
+
+  const getPoPdfUrl = useCallback(path => {
+    if (!path) {
+      return null
+    }
+    const normalized = path.replace(/^\/+/g, '')
+    return `${API_HOST}/${normalized}`
+  }, [])
+
+  useEffect(() => {
+    if (!token) return
+    loadCompanies().catch(() => null)
+  }, [loadCompanies, token])
+
+  useEffect(() => {
+    if (!token) return
+    loadSalesOrders().catch(() => null)
+  }, [loadSalesOrders, token])
+
+  const handleSendOrderToDesign = useCallback(async (orderId) => {
+    try {
+      setSalesOrdersLoading(true)
+      await apiRequest(`/sales-orders/${orderId}/send-to-design`, {
+        method: 'POST'
+      })
+      showToast('Order sent to Design Engineering')
+      await loadSalesOrders()
+    } catch (error) {
+      showToast(error.message)
+    } finally {
+      setSalesOrdersLoading(false)
+    }
+  }, [apiRequest, loadSalesOrders, showToast])
+
+  useEffect(() => {
+    if (activeModule !== 'company-master') {
+      setShowCreatePanel(false)
+      setCompanyForm(createCompanyForm())
+    }
+  }, [activeModule])
+
+  useEffect(() => {
+    setPoForm(prev => {
+      const match = (prev.paymentTerms || '').match(/(\d+)/)
+      const derived = match ? match[1] : ''
+      if ((prev.creditDays || '') === (derived || '')) {
+        return prev
+      }
+      return { ...prev, creditDays: derived }
+    })
+  }, [poForm.paymentTerms])
+
+  const resetPoWorkflow = useCallback(() => {
+    setPoForm(createCustomerPoForm())
+    setPoItems([createCustomerPoItem()])
+    setPoPdfFile(null)
+    setPoParseResult(null)
+    setPoParseLoading(false)
+    setPoCompanyLocked(false)
+  }, [])
+
+  const findCompanyMatch = useCallback(header => {
+    if (!header) return null
+    const headerCode = (header.companyCode || '').toString().toUpperCase()
+    if (headerCode) {
+      const codeMatch = companies.find(company => (company.company_code || '').toUpperCase() === headerCode)
+      if (codeMatch) {
+        return codeMatch
+      }
+      const hints = COMPANY_HINTS[headerCode] || []
+      if (hints.length) {
+        const hintMatch = companies.find(company => {
+          const name = (company.company_name || '').toLowerCase()
+          return hints.some(hint => name.includes(hint))
+        })
+        if (hintMatch) {
+          return hintMatch
+        }
+      }
+    }
+    const normalizedName = normalizeKey(header.companyName)
+    if (normalizedName) {
+      const exactMatch = companies.find(company => normalizeKey(company.company_name) === normalizedName)
+      if (exactMatch) {
+        return exactMatch
+      }
+      const partialMatch = companies.find(company => normalizeKey(company.company_name).includes(normalizedName))
+      if (partialMatch) {
+        return partialMatch
+      }
+    }
+    return null
+  }, [companies])
+
+  const selectedCompany = useMemo(() => {
+    if (!poForm.companyId) return null
+    return companies.find(company => String(company.id) === String(poForm.companyId)) || null
+  }, [companies, poForm.companyId])
+
+  const companyState = useMemo(() => {
+    if (!selectedCompany?.addresses?.length) return ''
+    const billing = selectedCompany.addresses.find(address => (address.address_type || '').toUpperCase() === 'BILLING')
+    return (billing?.state || '').toLowerCase()
+  }, [selectedCompany])
+
+  const isIntrastate = companyState ? companyState === HOME_PLANT_STATE : true
+
+  const handleViewPoDetail = useCallback(async customerPoId => {
+    if (!customerPoId) {
+      return
+    }
+    setPoDetailDrawerOpen(true)
+    setPoDetail(null)
+    setPoDetailError('')
+    setPoDetailLoading(true)
+    try {
+      const data = await apiRequest(`/customer-pos/${customerPoId}`)
+      setPoDetail(data)
+    } catch (error) {
+      setPoDetailError(error.message)
+      showToast(error.message)
+    } finally {
+      setPoDetailLoading(false)
+    }
+  }, [apiRequest, showToast])
+
+  const currencyFormatter = useMemo(() => {
+    const currencyCode = (poForm.currency || 'INR').toUpperCase()
+    try {
+      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: currencyCode, minimumFractionDigits: 2 })
+    } catch {
+      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })
+    }
+  }, [poForm.currency])
+
+  const poSummary = useMemo(() => {
+    return poItems.reduce(
+      (acc, item) => {
+        const qty = parseIndianNumber(item.quantity)
+        const rate = parseIndianNumber(item.rate)
+        const line = qty * rate
+        if (!line) {
+          return acc
+        }
+        const taxes = normalizeTaxPercents(
+          parseIndianNumber(item.cgstPercent),
+          parseIndianNumber(item.sgstPercent),
+          parseIndianNumber(item.igstPercent),
+          isIntrastate
+        )
+        const cgst = line * (taxes.cgstPercent / 100)
+        const sgst = line * (taxes.sgstPercent / 100)
+        const igst = line * (taxes.igstPercent / 100)
+        acc.subtotal += line
+        acc.cgst += cgst
+        acc.sgst += sgst
+        acc.igst += igst
+        acc.net += line + cgst + sgst + igst
+        return acc
+      },
+      { subtotal: 0, cgst: 0, sgst: 0, igst: 0, net: 0 }
+    )
+  }, [poItems, isIntrastate])
+
+  const triggerPoUpload = useCallback(() => {
+    if (poUploadInputRef.current) {
+      poUploadInputRef.current.value = ''
+      poUploadInputRef.current.click()
+    }
+  }, [])
+
+  const getUserDepartmentCode = useCallback(() => {
+    if (user?.department_code) return user.department_code
+    
+    const deptMap = {
+      'Sales': 'SALES',
+      'Design Engineering': 'DESIGN_ENG',
+      'Production': 'PRODUCTION',
+      'Quality': 'QUALITY',
+      'Procurement': 'PROCUREMENT',
+      'Shipment': 'SHIPMENT',
+      'Accounts': 'ACCOUNTS',
+      'Inventory': 'INVENTORY',
+      'Admin': 'ADMIN'
+    }
+    
+    if (user?.department_name && deptMap[user.department_name]) {
+      return deptMap[user.department_name]
+    }
+    
+    return user?.department_name?.toUpperCase().replace(/\s+/g, '_') || 'SALES'
+  }, [user])
+
+  const userDepartmentCode = user ? getUserDepartmentCode() : 'SALES'
+  const allowedModules = DEPARTMENT_MODULES[userDepartmentCode] || DEPARTMENT_MODULES.SALES
+
+  useEffect(() => {
+    if (!user || !allowedModules.includes(activeModule)) {
+      return
+    }
+    if (!allowedModules.includes(activeModule)) {
+      navigate(`/${allowedModules[0]}`)
+    }
+  }, [user, activeModule, allowedModules, navigate])
 
   if (!token || !user) {
     return (
@@ -621,72 +841,6 @@ function App() {
     )
   }
 
-  const loadCompanies = useCallback(async () => {
-    const data = await apiRequest('/companies')
-    setCompanies(Array.isArray(data) ? data : [])
-  }, [apiRequest])
-
-  const loadSalesOrders = useCallback(async () => {
-    setSalesOrdersLoading(true)
-    try {
-      const data = await apiRequest('/sales-orders')
-      setSalesOrders(Array.isArray(data) ? data : [])
-    } catch (error) {
-      showToast(error.message)
-    } finally {
-      setSalesOrdersLoading(false)
-    }
-  }, [apiRequest, showToast])
-
-  const getPoPdfUrl = useCallback(path => {
-    if (!path) {
-      return null
-    }
-    const normalized = path.replace(/^\/+/g, '')
-    return `${API_HOST}/${normalized}`
-  }, [])
-
-  useEffect(() => {
-    loadCompanies().catch(() => null)
-  }, [loadCompanies])
-
-  useEffect(() => {
-    loadSalesOrders().catch(() => null)
-  }, [loadSalesOrders])
-
-  const handleSendOrderToDesign = useCallback(async (orderId) => {
-    try {
-      setSalesOrdersLoading(true)
-      await apiRequest(`/sales-orders/${orderId}/send-to-design`, {
-        method: 'POST'
-      })
-      showToast('Order sent to Design Engineering')
-      await loadSalesOrders()
-    } catch (error) {
-      showToast(error.message)
-    } finally {
-      setSalesOrdersLoading(false)
-    }
-  }, [apiRequest, loadSalesOrders, showToast])
-
-  useEffect(() => {
-    if (activeModule !== 'company-master') {
-      setShowCreatePanel(false)
-      setCompanyForm(createCompanyForm())
-    }
-  }, [activeModule])
-
-  useEffect(() => {
-    setPoForm(prev => {
-      const match = (prev.paymentTerms || '').match(/(\d+)/)
-      const derived = match ? match[1] : ''
-      if ((prev.creditDays || '') === (derived || '')) {
-        return prev
-      }
-      return { ...prev, creditDays: derived }
-    })
-  }, [poForm.paymentTerms])
-
   const updateAddress = (type, field, value) => {
     setCompanyForm(prev => ({
       ...prev,
@@ -758,15 +912,6 @@ function App() {
     setCompanyForm(createCompanyForm())
     setShowCreatePanel(prev => !prev)
   }
-
-  const resetPoWorkflow = useCallback(() => {
-    setPoForm(createCustomerPoForm())
-    setPoItems([createCustomerPoItem()])
-    setPoPdfFile(null)
-    setPoParseResult(null)
-    setPoParseLoading(false)
-    setPoCompanyLocked(false)
-  }, [])
 
   const handlePoFieldChange = (field, value) => {
     setPoForm(prev => ({ ...prev, [field]: value }))
@@ -1028,52 +1173,6 @@ function App() {
     }
   }
 
-  const findCompanyMatch = useCallback(header => {
-    if (!header) return null
-    const headerCode = (header.companyCode || '').toString().toUpperCase()
-    if (headerCode) {
-      const codeMatch = companies.find(company => (company.company_code || '').toUpperCase() === headerCode)
-      if (codeMatch) {
-        return codeMatch
-      }
-      const hints = COMPANY_HINTS[headerCode] || []
-      if (hints.length) {
-        const hintMatch = companies.find(company => {
-          const name = (company.company_name || '').toLowerCase()
-          return hints.some(hint => name.includes(hint))
-        })
-        if (hintMatch) {
-          return hintMatch
-        }
-      }
-    }
-    const normalizedName = normalizeKey(header.companyName)
-    if (normalizedName) {
-      const exactMatch = companies.find(company => normalizeKey(company.company_name) === normalizedName)
-      if (exactMatch) {
-        return exactMatch
-      }
-      const partialMatch = companies.find(company => normalizeKey(company.company_name).includes(normalizedName))
-      if (partialMatch) {
-        return partialMatch
-      }
-    }
-    return null
-  }, [companies])
-
-  const selectedCompany = useMemo(() => {
-    if (!poForm.companyId) return null
-    return companies.find(company => String(company.id) === String(poForm.companyId)) || null
-  }, [companies, poForm.companyId])
-
-  const companyState = useMemo(() => {
-    if (!selectedCompany?.addresses?.length) return ''
-    const billing = selectedCompany.addresses.find(address => (address.address_type || '').toUpperCase() === 'BILLING')
-    return (billing?.state || '').toLowerCase()
-  }, [selectedCompany])
-
-  const isIntrastate = companyState ? companyState === HOME_PLANT_STATE : true
-
   const handlePoPdfUpload = async event => {
     const file = event.target?.files?.[0]
     if (!file) return
@@ -1226,31 +1325,10 @@ function App() {
     }
   }
 
-  const handleViewPoDetail = useCallback(async customerPoId => {
-    if (!customerPoId) {
-      return
-    }
-    setPoDetailDrawerOpen(true)
-    setPoDetail(null)
-    setPoDetailError('')
-    setPoDetailLoading(true)
-    setSelectedPoId(customerPoId)
-    try {
-      const data = await apiRequest(`/customer-pos/${customerPoId}`)
-      setPoDetail(data)
-    } catch (error) {
-      setPoDetailError(error.message)
-      showToast(error.message)
-    } finally {
-      setPoDetailLoading(false)
-    }
-  }, [apiRequest, showToast])
-
   const closePoDetailDrawer = () => {
     setPoDetailDrawerOpen(false)
     setPoDetail(null)
     setPoDetailError('')
-    setSelectedPoId(null)
   }
 
   const handleViewCompany = company => {
@@ -1267,52 +1345,7 @@ function App() {
 
   const fieldInputClass = 'w-full rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 outline-none transition disabled:bg-slate-100 disabled:text-slate-400'
 
-  const currencyFormatter = useMemo(() => {
-    const currencyCode = (poForm.currency || 'INR').toUpperCase()
-    try {
-      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: currencyCode, minimumFractionDigits: 2 })
-    } catch {
-      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })
-    }
-  }, [poForm.currency])
-
   const formatCurrency = value => currencyFormatter.format(Number(value) || 0)
-
-  const poSummary = useMemo(() => {
-    return poItems.reduce(
-      (acc, item) => {
-        const qty = parseIndianNumber(item.quantity)
-        const rate = parseIndianNumber(item.rate)
-        const line = qty * rate
-        if (!line) {
-          return acc
-        }
-        const taxes = normalizeTaxPercents(
-          parseIndianNumber(item.cgstPercent),
-          parseIndianNumber(item.sgstPercent),
-          parseIndianNumber(item.igstPercent),
-          isIntrastate
-        )
-        const cgst = line * (taxes.cgstPercent / 100)
-        const sgst = line * (taxes.sgstPercent / 100)
-        const igst = line * (taxes.igstPercent / 100)
-        acc.subtotal += line
-        acc.cgst += cgst
-        acc.sgst += sgst
-        acc.igst += igst
-        acc.net += line + cgst + sgst + igst
-        return acc
-      },
-      { subtotal: 0, cgst: 0, sgst: 0, igst: 0, net: 0 }
-    )
-  }, [poItems, isIntrastate])
-
-  const triggerPoUpload = useCallback(() => {
-    if (poUploadInputRef.current) {
-      poUploadInputRef.current.value = ''
-      poUploadInputRef.current.click()
-    }
-  }, [])
 
   const drawerTitle = drawerMode === 'edit' ? 'Edit Company' : drawerMode === 'view' ? 'Company Details' : 'Add New Company'
   const primaryButtonLabel = drawerMode === 'edit' ? 'Update Company' : 'Save Company'
@@ -1334,45 +1367,9 @@ function App() {
     { label: 'QC Inspections', moduleId: 'qc-inspections', indent: true }
   ]
 
-  const getUserDepartmentCode = () => {
-    if (user?.department_code) return user.department_code
-    
-    const deptMap = {
-      'Sales': 'SALES',
-      'Design Engineering': 'DESIGN_ENG',
-      'Production': 'PRODUCTION',
-      'Quality': 'QUALITY',
-      'Procurement': 'PROCUREMENT',
-      'Shipment': 'SHIPMENT',
-      'Accounts': 'ACCOUNTS',
-      'Inventory': 'INVENTORY',
-      'Admin': 'ADMIN'
-    }
-    
-    if (user?.department_name && deptMap[user.department_name]) {
-      return deptMap[user.department_name]
-    }
-    
-    return user?.department_name?.toUpperCase().replace(/\s+/g, '_') || 'SALES'
-  }
-  
-  const userDepartmentCode = getUserDepartmentCode()
-  const allowedModules = DEPARTMENT_MODULES[userDepartmentCode] || DEPARTMENT_MODULES.SALES
-
-  const navigationItems = allNavigationItems.filter(item => 
+  const navigationItems = allowedModules ? allNavigationItems.filter(item => 
     !item.isGroup && (!item.moduleId || allowedModules.includes(item.moduleId))
-  )
-
-  useEffect(() => {
-    if (user && navigationItems.length > 0 && navigationItems[0].moduleId) {
-      const firstAllowedModule = navigationItems[0].moduleId
-      
-      // Redirect if trying to access unauthorized module or on root path
-      if (!allowedModules.includes(activeModule)) {
-        navigate(`/${firstAllowedModule}`)
-      }
-    }
-  }, [user, navigationItems, allowedModules, activeModule, navigate])
+  ) : []
 
   const moduleMeta = {
     'company-master': {
