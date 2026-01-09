@@ -32,7 +32,8 @@ const createCustomerPo = async (req, res, next) => {
     const rawItems = parsedItems.length ? parsedItems : fallbackItems;
     const sanitizedItems = rawItems
       .map((item, index) => ({
-        itemCode: item.itemCode || item.code || `ITEM-${index + 1}`,
+        drawingNo: item.drawingNo || item.itemCode || item.code || `DRW-${index + 1}`,
+        itemCode: item.itemCode || item.drawingNo || item.code || `ITEM-${index + 1}`,
         description: item.description || `Line Item ${index + 1}`,
         hsnCode: item.hsnCode || item.hsn || null,
         quantity: Number(item.quantity) || 0,

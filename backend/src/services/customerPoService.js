@@ -181,7 +181,7 @@ const getCustomerPoById = async id => {
     return null;
   }
   const [items] = await pool.query(
-    `SELECT id, item_code, description, quantity, unit, rate, basic_amount, discount, cgst_percent, sgst_percent, igst_percent, delivery_date
+    `SELECT id, item_code, drawing_no, description, quantity, unit, rate, basic_amount, discount, cgst_percent, sgst_percent, igst_percent, delivery_date
      FROM customer_po_items
      WHERE customer_po_id = ?
      ORDER BY id ASC`,

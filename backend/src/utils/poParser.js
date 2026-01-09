@@ -373,7 +373,7 @@ const parseSidelLineItems = lines => {
     }
     pendingDescription = '';
     items.push({
-      itemCode: cleanup(code),
+      drawingNo: cleanup(code),
       description,
       quantity: qty || 1,
       unit,
@@ -433,7 +433,7 @@ const mapRowToItem = (row, index) => {
   const igstPercent = rateIndex + 3 < parts.length ? toNumber(parts[rateIndex + 3]) : 0;
   const unit = unitIndex > -1 ? parts[unitIndex] : 'NOS';
   return {
-    itemCode: cleanup(parts[0]) || `AUTO-${index + 1}`,
+    drawingNo: cleanup(parts[0]) || `DRW-${index + 1}`,
     description,
     quantity: quantity || 1,
     unit,
@@ -466,7 +466,7 @@ const parseStructuredItems = text => {
   while ((match = regex.exec(text))) {
     const [, code, desc, delivery, rate, qty, unit, cgst, sgst, amount] = match;
     items.push({
-      itemCode: cleanup(code),
+      drawingNo: cleanup(code),
       description: cleanup(desc),
       quantity: toNumber(qty) || 1,
       unit: cleanup(unit),
@@ -489,7 +489,7 @@ const parseFallbackItems = text => {
     const tokens = line.split(/\s+/);
     const code = tokens.shift();
     return {
-      itemCode: cleanup(code) || `AUTO-${index + 1}`,
+      drawingNo: cleanup(code) || `DRW-${index + 1}`,
       description: cleanup(tokens.join(' ')) || cleanup(line),
       quantity: 1,
       unit: 'NOS',

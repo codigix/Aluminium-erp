@@ -74,39 +74,51 @@ const parseExcelPo = async fileBuffer => {
     const flatText = rawData.flat().map(v => cleanup(v || '')).join(' ');
     console.log('[ExcelPoParser] Full text length:', flatText.length);
     
-    for (const row of rawData.slice(0, Math.min(20, rawData.length))) {
+    for (const row of rawData.slice(0, Math.min(30, rawData.length))) {
       const rowText = row.map(v => cleanup(v || '')).filter(v => v).join(' ');
       
       if (!poNumber) {
-        const poMatch = rowText.match(/(?:PO|ORDER)\s*(?:NO|#)?[:\s]*([A-Z0-9\-\.]+)/i);
-        if (poMatch) {
+        // Broadened PO number search to include Quotation/Inquiry/Reference
+        const poMatch = rowText.match(/(?:PO|ORDER|QUOTATION|QUOTE|INQUIRY|REF|REFERENCE)\s*(?:NO|#)?[:\-\s]*([A-Z0-9\-\.\/]+)/i);
+        if (poMatch && poMatch[1] && poMatch[1].length > 2) {
           poNumber = cleanup(poMatch[1]).toUpperCase();
         }
       }
       
       if (!poDate) {
-        const dateMatch = rowText.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/);
+        const dateMatch = rowText.match(/(?:DATE)[:\-\s]*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i) || rowText.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/);
         if (dateMatch) {
           poDate = normalizeDate(dateMatch[1]);
         }
       }
       
       if (!gstin && rowText.match(/GSTIN|GST\s*NO/i)) {
-        const gstMatch = rowText.match(/(?:GSTIN|GST\s*NO)[:\s]*([A-Z0-9]+)/i);
+        const gstMatch = rowText.match(/(?:GSTIN|GST\s*NO)[:\-\s]*([A-Z0-9]+)/i);
         if (gstMatch) {
           gstin = cleanup(gstMatch[1]);
         }
       }
       
       if (!companyName) {
-        if (rowText.match(/SIDEL\s+INDIA/i) || rowText.match(/SIDEL\s+PVT/i)) {
-          companyName = 'Sidel India Pvt Ltd';
-        } else if (rowText.includes('TECHPIONEER')) {
-          companyName = 'SP TECHPIONEER PVT. LTD.';
-        } else if (rowText.includes('PHOENIX')) {
-          companyName = 'Phoenix';
-        } else if (rowText.includes('BOSSAR')) {
-          companyName = 'Bossar';
+        // Look for company keywords or "To: Company Name" pattern
+        const toMatch = rowText.match(/(?:TO|CUSTOMER|BUYER|CLIENT)\s*[:\-\,]?\s*([A-Z\s\.\,]{3,})/i);
+        if (toMatch && toMatch[1]) {
+          const name = cleanup(toMatch[1]);
+          if (name.match(/SIDEL|PHOENIX|BOSSAR|SP\s*TECH/i)) {
+            companyName = name;
+          }
+        }
+        
+        if (!companyName) {
+          if (rowText.match(/SIDEL\s+INDIA/i) || rowText.match(/SIDEL\s+PVT/i)) {
+            companyName = 'Sidel India Pvt Ltd';
+          } else if (rowText.includes('TECHPIONEER')) {
+            companyName = 'SP TECHPIONEER PVT. LTD.';
+          } else if (rowText.includes('PHOENIX')) {
+            companyName = 'Phoenix';
+          } else if (rowText.includes('BOSSAR')) {
+            companyName = 'Bossar';
+          }
         }
       }
     }
@@ -122,8 +134,39 @@ const parseExcelPo = async fileBuffer => {
     header.remarks = '';
     header.creditDays = '';
     
-    const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-    
+    // Find the header row index and map columns
+    let headerRowIndex = -1;
+    let columnMap = {
+      drawingNo: -1,
+      description: -1,
+      quantity: -1,
+      rate: -1
+    };
+
+    for (let i = 0; i < Math.min(50, rawData.length); i++) {
+      const row = rawData[i].map(v => String(v || '').toLowerCase());
+      const hasDescription = row.some(v => v.includes('description') || v.includes('particulars'));
+      const hasQty = row.some(v => v.includes('qty') || v.includes('quantity'));
+      
+      if (hasDescription && hasQty) {
+        headerRowIndex = i;
+        row.forEach((cell, idx) => {
+          if (cell.includes('drawing') || cell.includes('item') || cell.includes('code') || cell.includes('material') || cell.includes('part')) {
+            if (columnMap.drawingNo === -1) columnMap.drawingNo = idx;
+          } else if (cell.includes('description') || cell.includes('particulars')) {
+            if (columnMap.description === -1) columnMap.description = idx;
+          } else if (cell.includes('qty') || cell.includes('quantity')) {
+            if (columnMap.quantity === -1) columnMap.quantity = idx;
+          } else if (cell.includes('rate') || cell.includes('price') || cell.includes('unit cost')) {
+            if (columnMap.rate === -1) columnMap.rate = idx;
+          }
+        });
+        break;
+      }
+    }
+
+    console.log('[ExcelPoParser] Detected header at row:', headerRowIndex, 'Map:', columnMap);
+
     const EXCLUDE_PATTERNS = [
       /^cgst/i,
       /^sgst/i,
@@ -144,38 +187,90 @@ const parseExcelPo = async fileBuffer => {
       /^order\s*/i
     ];
 
-    for (let i = 0; i < jsonData.length; i++) {
-      const row = jsonData[i];
-      const rowValues = Object.values(row).map(v => cleanup(v || ''));
-      const rowText = rowValues.join(' ').toLowerCase();
-      
-      const isExcluded = EXCLUDE_PATTERNS.some(pattern => pattern.test(rowText));
-      if (isExcluded) continue;
-      
-      const hasNumericData = rowValues.some(v => /^\d+[\d.,]*$/.test(v));
-      
-      if (hasNumericData && rowValues.length >= 2) {
-        const description = rowValues.find(v => v && v.length > 3 && v.length < 200 && /[A-Za-z]/.test(v) && !/^\d+$/.test(v)) || '';
-        const quantities = rowValues.filter(v => /^\d+[\d.,]*$/.test(v));
+    // If we found a header row, use the column map. Otherwise, fallback to the old heuristic.
+    if (headerRowIndex !== -1) {
+      for (let i = headerRowIndex + 1; i < rawData.length; i++) {
+        const row = rawData[i];
+        if (!row || row.length === 0) continue;
         
-        if (description && quantities.length > 0) {
-          const quantity = toNumber(quantities[0] || 0);
-          const rate = toNumber(quantities[quantities.length - 1] || 0);
+        const rowText = row.join(' ').toLowerCase();
+        if (EXCLUDE_PATTERNS.some(p => p.test(rowText))) continue;
+
+        const description = columnMap.description !== -1 ? cleanup(row[columnMap.description]) : '';
+        const drawingNo = columnMap.drawingNo !== -1 ? cleanup(row[columnMap.drawingNo]) : '';
+        const quantity = columnMap.quantity !== -1 ? toNumber(row[columnMap.quantity]) : 0;
+        const rate = columnMap.rate !== -1 ? toNumber(row[columnMap.rate]) : 0;
+
+        if (description && (quantity > 0 || rate > 0)) {
+          items.push({
+            drawingNo: drawingNo || `DRW-${items.length + 1}`,
+            description: description.substring(0, 150),
+            quantity: quantity || 1,
+            unit: 'NOS',
+            rate: rate || 0,
+            cgstPercent: 0,
+            sgstPercent: 0,
+            igstPercent: 0,
+            deliveryDate: '',
+            hsnCode: '',
+            discount: 0
+          });
+        }
+      }
+    } else {
+      // Fallback for sheets without clear headers (existing logic)
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        const rowValues = Object.values(row).map(v => cleanup(v || ''));
+        const rowText = rowValues.join(' ').toLowerCase();
+        
+        const isExcluded = EXCLUDE_PATTERNS.some(pattern => pattern.test(rowText));
+        if (isExcluded) continue;
+        
+        const hasNumericData = rowValues.some(v => /^\d+[\d.,]*$/.test(v));
+        
+        if (hasNumericData && rowValues.length >= 2) {
+          const description = rowValues.find(v => v && v.length > 3 && v.length < 200 && /[A-Za-z]/.test(v) && !/^\d+$/.test(v)) || '';
+          const quantities = rowValues.filter(v => /^\d+[\d.,]*$/.test(v));
           
-          if ((quantity > 0 && quantity < 1000000) && (rate > 0 || quantity > 0)) {
-            items.push({
-              itemCode: `ITEM-${items.length + 1}`,
-              description: description.substring(0, 100),
-              quantity: Math.max(quantity, 1),
-              unit: 'NOS',
-              rate: rate || 0,
-              cgstPercent: 0,
-              sgstPercent: 0,
-              igstPercent: 0,
-              deliveryDate: '',
-              hsnCode: '',
-              discount: 0
-            });
+          let potentialDrawingNo = '';
+          const keys = Object.keys(row);
+          const drawingKey = keys.find(k => {
+            const lk = k.toLowerCase();
+            return lk.includes('drawing') || lk.includes('item') || lk.includes('code') || lk.includes('material') || lk.includes('part');
+          });
+          
+          if (drawingKey && row[drawingKey]) {
+            potentialDrawingNo = cleanup(row[drawingKey]);
+          }
+          
+          if (!potentialDrawingNo || potentialDrawingNo.length <= 2) {
+            potentialDrawingNo = rowValues.find(v => {
+              const val = String(v).trim();
+              return val && val !== description && val.length > 2 && !quantities.includes(val);
+            }) || '';
+          }
+          
+          if (description && quantities.length > 0) {
+            const quantity = toNumber(quantities[0] || 0);
+            const rate = toNumber(quantities[quantities.length - 1] || 0);
+            
+            if ((quantity > 0 && quantity < 1000000) && (rate > 0 || quantity > 0)) {
+              items.push({
+                drawingNo: potentialDrawingNo || `DRW-${items.length + 1}`,
+                description: description.substring(0, 150),
+                quantity: Math.max(quantity, 1),
+                unit: 'NOS',
+                rate: rate || 0,
+                cgstPercent: 0,
+                sgstPercent: 0,
+                igstPercent: 0,
+                deliveryDate: '',
+                hsnCode: '',
+                discount: 0
+              });
+            }
           }
         }
       }

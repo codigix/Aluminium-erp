@@ -131,7 +131,7 @@ const createCustomerPoForm = () => ({
 })
 
 const createCustomerPoItem = () => ({
-  itemCode: '',
+  drawingNo: '',
   description: '',
   quantity: 1,
   unit: 'NOS',
@@ -913,7 +913,7 @@ function App() {
       if (Array.isArray(data.items) && data.items.length) {
         setPoItems(
           data.items.map(item => ({
-            itemCode: item.itemCode || '',
+            drawingNo: item.drawingNo || item.itemCode || '',
             description: item.description || '',
             quantity: parseIndianNumber(item.quantity) || 1,
             unit: item.unit || 'NOS',
@@ -958,7 +958,7 @@ function App() {
           isIntrastate
         )
         return {
-          itemCode: item.itemCode || '',
+          drawingNo: item.drawingNo || '',
           description: item.description || '',
           quantity: parseIndianNumber(item.quantity),
           unit: item.unit || 'NOS',
@@ -2180,7 +2180,7 @@ function App() {
                             poDetailItems.map((item, index) => (
                               <tr key={`po-detail-item-${item.id ?? index}`} className="border-b border-slate-100 hover:bg-slate-50">
                                 <td className="px-4 py-3 font-semibold text-slate-900">{index + 1}</td>
-                                <td className="px-4 py-3"><div className="font-semibold text-slate-900">{item.description}</div><div className="text-xs text-slate-500">{item.item_code || 'N/A'}</div></td>
+                                <td className="px-4 py-3"><div className="font-semibold text-slate-900">{item.description}</div><div className="text-xs text-slate-500">Drw No: {item.drawing_no || item.item_code || 'N/A'}</div></td>
                                 <td className="px-4 py-3 text-right font-medium text-slate-900">{item.quantity ?? '—'}</td>
                                 <td className="px-4 py-3 text-slate-600">{item.unit || '—'}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatCurrencyByCode(item.rate, poDetail.currency)}</td>

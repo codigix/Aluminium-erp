@@ -120,7 +120,7 @@ const CustomerPO = ({
         <table className="w-full text-sm">
           <thead className="bg-slate-100 text-slate-500 uppercase tracking-[0.2em] text-[0.65rem]">
             <tr>
-              <th className="px-3 py-3 text-left font-semibold">Item Code</th>
+              <th className="px-3 py-3 text-left font-semibold">Drawing No</th>
               <th className="px-3 py-3 text-left font-semibold">Description</th>
               <th className="px-3 py-3 text-left font-semibold">Qty</th>
               <th className="px-3 py-3 text-left font-semibold">Rate</th>
@@ -135,7 +135,7 @@ const CustomerPO = ({
             {poItems.map((item, index) => (
               <tr key={`po-item-${index}`} className="border-t border-slate-100">
                 <td className="p-2">
-                  <input className={`${fieldInputClass} py-2`} value={item.itemCode} onChange={e => onItemChange(index, 'itemCode', e.target.value)} placeholder="Item code" />
+                  <input className={`${fieldInputClass} py-2`} value={item.drawingNo} onChange={e => onItemChange(index, 'drawingNo', e.target.value)} placeholder="Drawing No" />
                 </td>
                 <td className="p-2">
                   <input className={`${fieldInputClass} py-2`} value={item.description} onChange={e => onItemChange(index, 'description', e.target.value)} placeholder="Description" />

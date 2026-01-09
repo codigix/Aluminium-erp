@@ -52,79 +52,99 @@ const SalesOrders = ({ orders, loading, onRefresh, onViewPo, getPoPdfUrl, onSend
 
   return (
     <Card id="sales-orders" title="Sales Order Board" subtitle="Downstream Workflow">
-      {loading && hasOrders && <p className="text-xs text-slate-400">Refreshing latest sales orders…</p>}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto" />
+            <p className="text-sm text-slate-500">Refreshing board...</p>
+          </div>
+        </div>
+      )}
 
-      {hasOrders ? (
+      {!loading && hasOrders ? (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+            <thead className="bg-slate-100 text-slate-500 uppercase tracking-[0.2em] text-[0.65rem]">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold">Sales Order</th>
-                <th className="px-4 py-3 text-left font-semibold">Customer PO</th>
-                <th className="px-4 py-3 text-left font-semibold">Company</th>
-                <th className="px-4 py-3 text-left font-semibold">Priority</th>
-                <th className="px-4 py-3 text-left font-semibold">Status</th>
-                <th className="px-4 py-3 text-left font-semibold">Created</th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                <th className="px-5 py-4 text-left font-semibold">Order Code</th>
+                <th className="px-5 py-4 text-left font-semibold">Customer / Project</th>
+                <th className="px-5 py-4 text-left font-semibold">PO Number</th>
+                <th className="px-5 py-4 text-left font-semibold">PO Date</th>
+                <th className="px-5 py-4 text-left font-semibold">Net Value</th>
+                <th className="px-5 py-4 text-left font-semibold">Priority</th>
+                <th className="px-5 py-4 text-left font-semibold">Status</th>
+                <th className="px-5 py-4 text-right font-semibold">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {list.map(order => {
                 const normalizedStatus = (order.status || 'DRAFT').toUpperCase()
                 const badgeClasses = statusStyles[normalizedStatus] || 'bg-slate-100 border-slate-200 text-slate-600'
-                const pdfUrl = typeof getPoPdfUrl === 'function' ? getPoPdfUrl(order.pdf_path) : null
                 const netValue = Number(order.po_net_total)
                 const hasNetValue = !Number.isNaN(netValue)
                 const canViewPo = typeof onViewPo === 'function' && Boolean(order.customer_po_id)
+                const pdfUrl = typeof getPoPdfUrl === 'function' ? getPoPdfUrl(order.pdf_path) : null
+
                 return (
-                  <tr key={`sales-order-row-${order.id}`} className="border-t border-slate-100">
-                    <td className="px-4 py-4">
-                      <p className="font-semibold text-slate-900">{formatOrderCode(order.id)}</p>
-                      <p className="text-xs text-slate-400">#{order.customer_po_id}</p>
+                  <tr key={`so-row-${order.id}`} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="px-5 py-5 align-middle">
+                      <p className="font-bold text-slate-900">{formatOrderCode(order.id)}</p>
                     </td>
-                    <td className="px-4 py-4">
-                      <p className="text-slate-900 font-medium">{order.po_number || 'Unassigned'}</p>
-                      <p className="text-xs text-slate-500">PO Date: {formatDate(order.po_date)}</p>
-                      {hasNetValue && <p className="text-xs text-slate-500">Value: {formatCurrency(netValue, order.po_currency)}</p>}
-                    </td>
-                    <td className="px-4 py-4">
+                    <td className="px-5 py-5 align-middle">
                       <p className="font-semibold text-slate-900">{order.company_name || '—'}</p>
-                      <p className="text-xs text-slate-400">Project: {order.project_name || '—'}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{order.project_name || '—'}</p>
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{formatPriority(order.production_priority)}</td>
-                    <td className="px-4 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${badgeClasses}`}>{formatStatus(order.status)}</span>
+                    <td className="px-5 py-5 text-slate-600 align-middle">
+                      {order.po_number || '—'}
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{formatDate(order.created_at)}</td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-5 py-5 text-slate-600 align-middle">
+                      {formatDate(order.po_date)}
+                    </td>
+                    <td className="px-5 py-5 text-slate-900 font-semibold align-middle">
+                      {hasNetValue ? formatCurrency(netValue, order.po_currency) : '—'}
+                    </td>
+                    <td className="px-5 py-5 align-middle">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">
+                        {formatPriority(order.production_priority)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-5 align-middle">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeClasses}`}>
+                        {formatStatus(order.status)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-5 align-middle">
+                      <div className="flex justify-end gap-2">
+                        {canViewPo && (
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                            onClick={() => onViewPo(order.customer_po_id)}
+                          >
+                            Details
+                          </button>
+                        )}
+                        {normalizedStatus === 'CREATED' && typeof onSendOrder === 'function' && (
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition shadow-sm"
+                            onClick={() => onSendOrder(order.id)}
+                          >
+                            Send
+                          </button>
+                        )}
                         {pdfUrl && (
                           <a
                             href={pdfUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                            className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 transition"
+                            title="View PDF"
                           >
-                            PDF
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
                           </a>
-                        )}
-                        {canViewPo && (
-                          <button
-                            type="button"
-                            className="px-3 py-2 rounded-xl border border-slate-900 text-xs font-semibold text-slate-900 hover:bg-slate-900 hover:text-white transition"
-                            onClick={() => onViewPo(order.customer_po_id)}
-                          >
-                            View
-                          </button>
-                        )}
-                        {typeof onSendOrder === 'function' && normalizedStatus === 'CREATED' && (
-                          <button
-                            type="button"
-                            className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition"
-                            onClick={() => onSendOrder(order.id)}
-                          >
-                            Send
-                          </button>
                         )}
                       </div>
                     </td>
@@ -135,18 +155,26 @@ const SalesOrders = ({ orders, loading, onRefresh, onViewPo, getPoPdfUrl, onSend
           </table>
         </div>
       ) : (
-        <div className="p-10 text-center space-y-3">
-          <p className="text-base font-semibold text-slate-900">No Sales Orders yet</p>
-          <p className="text-sm text-slate-500">Push a Customer PO or refresh to see new entries.</p>
-          <button
-            type="button"
-            className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600"
-            onClick={onRefresh}
-            disabled={loading}
-          >
-            {loading ? 'Syncing…' : 'Refresh List'}
-          </button>
-        </div>
+        !loading && (
+          <div className="py-20 text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-full">
+              <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-base font-bold text-slate-900">No Sales Orders Found</p>
+              <p className="text-sm text-slate-500 max-w-xs mx-auto mt-1">Push a Customer PO to start the workflow or refresh the list.</p>
+            </div>
+            <button
+              type="button"
+              className="px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition"
+              onClick={onRefresh}
+            >
+              Refresh List
+            </button>
+          </div>
+        )
       )}
     </Card>
   )

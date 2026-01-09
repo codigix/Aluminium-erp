@@ -74,8 +74,10 @@ CREATE TABLE IF NOT EXISTS customer_pos (
   special_notes TEXT,
   inspection_clause VARCHAR(50),
   test_certificate VARCHAR(50),
+  requesting_department_id INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY (requesting_department_id) REFERENCES departments(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS customer_po_items (
