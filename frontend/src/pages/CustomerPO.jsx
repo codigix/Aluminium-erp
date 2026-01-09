@@ -21,11 +21,11 @@ const CustomerPO = ({
   poSaving
 }) => (
   <div className="space-y-8">
-    <Card id="customer-po-upload" title="Upload Customer PO (PDF)" subtitle="Auto Read & Fill">
+    <Card id="customer-po-upload" title="Upload Customer PO (PDF or Excel)" subtitle="Auto Read & Fill">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">Step 1 • PDF Intake</p>
-          <p className="text-sm text-slate-500 mt-1">Upload SIDEL / Phoenix / Bossar PO PDFs to auto-fill the header and line items below.</p>
+          <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">Step 1 • File Intake</p>
+          <p className="text-sm text-slate-500 mt-1">Upload SIDEL / Phoenix / Bossar PO PDFs or Excel files to auto-fill the header and line items below.</p>
           <p className="text-xs text-slate-400 mt-1">{poPdfFile ? `Attached: ${poPdfFile.name}` : 'No file attached yet.'}</p>
         </div>
         <button
@@ -34,7 +34,7 @@ const CustomerPO = ({
           onClick={onTriggerUpload}
           disabled={poParseLoading}
         >
-          {poParseLoading ? 'Reading…' : 'Upload PDF'}
+          {poParseLoading ? 'Reading…' : 'Upload File'}
         </button>
       </div>
       {poParseResult && (

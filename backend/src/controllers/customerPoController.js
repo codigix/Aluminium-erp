@@ -1,5 +1,6 @@
 const fs = require('fs');
 const parsePoPdf = require('../utils/poParser');
+const parseExcelPo = require('../utils/excelPoParser');
 const customerPoService = require('../services/customerPoService');
 
 const deriveCreditDays = value => {
@@ -94,11 +95,33 @@ const createCustomerPo = async (req, res, next) => {
 const parseCustomerPoPdf = async (req, res, next) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'Upload a Customer PO PDF' });
+      return res.status(400).json({ message: 'Upload a Customer PO PDF or Excel file' });
     }
+
     const fileBuffer = fs.readFileSync(req.file.path);
-    const insights = await parsePoPdf(fileBuffer);
+    const fileName = req.file.originalname || '';
+    const fileExt = fileName.split('.').pop().toLowerCase();
+    
+    console.log(`[PO Parser] Processing file: ${fileName} (${fileExt})`);
+    
+    let insights = {};
+    
+    try {
+      if (['xls', 'xlsx'].includes(fileExt)) {
+        console.log('[PO Parser] Using Excel parser');
+        insights = await parseExcelPo(fileBuffer);
+      } else {
+        console.log('[PO Parser] Using PDF parser');
+        insights = await parsePoPdf(fileBuffer);
+      }
+    } catch (parseError) {
+      console.error('[PO Parser] Parse error:', parseError);
+      insights = { header: {}, items: [] };
+    }
+    
     fs.unlink(req.file.path, () => {});
+
+    console.log('[PO Parser] Parsed insights:', JSON.stringify(insights, null, 2));
 
     const header = {
       companyCode: insights.companyCode || '',
@@ -124,6 +147,7 @@ const parseCustomerPoPdf = async (req, res, next) => {
       items: Array.isArray(insights.items) ? insights.items : []
     });
   } catch (error) {
+    console.error('[PO Parser] Unexpected error:', error);
     next(error);
   }
 };

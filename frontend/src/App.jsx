@@ -417,213 +417,6 @@ function App() {
     }, 800)
   }, [showToast, navigate])
 
-  if (!token || !user) {
-    return (
-      <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
-            <div className="text-center space-y-2">
-              <div className="h-16 w-16 rounded-2xl bg-slate-900 flex items-center justify-center mx-auto p-2">
-                <img src={sptechLogo} alt="SPTECHPIONEER Logo" className="h-full w-full object-contain" />
-              </div>
-              <h1 className="text-2xl font-bold text-slate-900">SPTECHPIONEER</h1>
-              <p className="text-sm text-slate-500">Sales & Operations ERP</p>
-            </div>
-
-            <div className="flex gap-2 border-b border-slate-200">
-              <button
-                type="button"
-                onClick={() => setAuthMode('login')}
-                className={`flex-1 pb-3 text-sm font-semibold transition ${
-                  authMode === 'login'
-                    ? 'text-slate-900 border-b-2 border-slate-900'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAuthMode('signup'); loadDepartmentsAndRoles() }}
-                className={`flex-1 pb-3 text-sm font-semibold transition ${
-                  authMode === 'signup'
-                    ? 'text-slate-900 border-b-2 border-slate-900'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Sign Up
-              </button>
-            </div>
-
-            {authMode === 'login' ? (
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={e => setLoginEmail(e.target.value)}
-                    placeholder="your.email@company.com"
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={loginLoading}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
-                  <input
-                    type="password"
-                    value={loginPassword}
-                    onChange={e => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={loginLoading}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loginLoading}
-                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-60 transition"
-                >
-                  {loginLoading ? 'Signing in...' : 'Sign In'}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleSignup} className="space-y-3 max-h-96 overflow-y-auto">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">First Name</label>
-                    <input
-                      type="text"
-                      value={signupForm.first_name}
-                      onChange={e => setSignupForm({ ...signupForm, first_name: e.target.value })}
-                      placeholder="John"
-                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      disabled={signupLoading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
-                    <input
-                      type="text"
-                      value={signupForm.last_name}
-                      onChange={e => setSignupForm({ ...signupForm, last_name: e.target.value })}
-                      placeholder="Doe"
-                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      disabled={signupLoading}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={signupForm.email}
-                    onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
-                    placeholder="john@company.com"
-                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={signupLoading}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
-                  <select
-                    value={signupForm.department_id}
-                    onChange={e => {
-                      const deptId = e.target.value
-                      setSignupForm({ ...signupForm, department_id: deptId, role_id: '' })
-                      if (deptId) {
-                        fetch(`${API_BASE}/departments/${deptId}/roles`)
-                          .then(res => res.ok ? res.json() : [])
-                          .then(rolesData => setRoles(Array.isArray(rolesData) ? rolesData : []))
-                          .catch(() => setRoles([]))
-                      } else {
-                        setRoles([])
-                      }
-                    }}
-                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={signupLoading}
-                  >
-                    <option value="">Select Department</option>
-                    {departments.map(dept => (
-                      <option key={dept.id} value={dept.id}>{dept.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
-                  <select
-                    value={signupForm.role_id}
-                    onChange={e => setSignupForm({ ...signupForm, role_id: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={signupLoading || !signupForm.department_id}
-                  >
-                    <option value="">Select Role</option>
-                    {roles.map(role => (
-                      <option key={role.id} value={role.id}>{role.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
-                    <input
-                      type="password"
-                      value={signupForm.password}
-                      onChange={e => setSignupForm({ ...signupForm, password: e.target.value })}
-                      placeholder="••••••••"
-                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      disabled={signupLoading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm</label>
-                    <input
-                      type="password"
-                      value={signupForm.confirmPassword}
-                      onChange={e => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
-                      placeholder="••••••••"
-                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      disabled={signupLoading}
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={signupLoading}
-                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-60 transition text-sm"
-                >
-                  {signupLoading ? 'Creating account...' : 'Sign Up'}
-                </button>
-              </form>
-            )}
-
-            {toast && (
-              <div className={`p-3 rounded-xl border text-sm ${
-                toast.includes('success') || toast.includes('Welcome')
-                  ? 'bg-green-50 border-green-200 text-green-700'
-                  : 'bg-red-50 border-red-200 text-red-700'
-              }`}>
-                {toast}
-              </div>
-            )}
-
-            {authMode === 'login' && (
-              <div className="text-center text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
-                <p className="font-semibold">Demo Credentials:</p>
-                <div className="space-y-1 text-left bg-slate-50 p-3 rounded-lg">
-                  <p><strong>Admin:</strong> admin@company.com / Admin@123</p>
-                  <p><strong>Sales:</strong> sales@company.com / Sales@123</p>
-                  <p><strong>Design:</strong> design@company.com / Design@123</p>
-                  <p><strong>Production:</strong> production@company.com / Production@123</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   const loadCompanies = useCallback(async () => {
     const data = await apiRequest('/companies')
     setCompanies(Array.isArray(data) ? data : [])
@@ -1529,9 +1322,216 @@ function App() {
   const poDetailItems = Array.isArray(poDetail?.items) ? poDetail.items : []
   const poDetailPdfUrl = poDetail?.pdf_path ? getPoPdfUrl(poDetail.pdf_path) : null
 
+  if (!token || !user) {
+    return (
+      <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="h-16 w-16 rounded-2xl bg-slate-900 flex items-center justify-center mx-auto p-2">
+                <img src={sptechLogo} alt="SPTECHPIONEER Logo" className="h-full w-full object-contain" />
+              </div>
+              <h1 className="text-2xl font-bold text-slate-900">SPTECHPIONEER</h1>
+              <p className="text-sm text-slate-500">Sales & Operations ERP</p>
+            </div>
+
+            <div className="flex gap-2 border-b border-slate-200">
+              <button
+                type="button"
+                onClick={() => setAuthMode('login')}
+                className={`flex-1 pb-3 text-sm font-semibold transition ${
+                  authMode === 'login'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('signup'); loadDepartmentsAndRoles() }}
+                className={`flex-1 pb-3 text-sm font-semibold transition ${
+                  authMode === 'signup'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            {authMode === 'login' ? (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={e => setLoginEmail(e.target.value)}
+                    placeholder="your.email@company.com"
+                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={loginLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={loginLoading}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-60 transition"
+                >
+                  {loginLoading ? 'Signing in...' : 'Sign In'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleSignup} className="space-y-3 max-h-96 overflow-y-auto">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">First Name</label>
+                    <input
+                      type="text"
+                      value={signupForm.first_name}
+                      onChange={e => setSignupForm({ ...signupForm, first_name: e.target.value })}
+                      placeholder="John"
+                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      disabled={signupLoading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={signupForm.last_name}
+                      onChange={e => setSignupForm({ ...signupForm, last_name: e.target.value })}
+                      placeholder="Doe"
+                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      disabled={signupLoading}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={signupForm.email}
+                    onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
+                    placeholder="john@company.com"
+                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={signupLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
+                  <select
+                    value={signupForm.department_id}
+                    onChange={e => {
+                      const deptId = e.target.value
+                      setSignupForm({ ...signupForm, department_id: deptId, role_id: '' })
+                      if (deptId) {
+                        fetch(`${API_BASE}/departments/${deptId}/roles`)
+                          .then(res => res.ok ? res.json() : [])
+                          .then(rolesData => setRoles(Array.isArray(rolesData) ? rolesData : []))
+                          .catch(() => setRoles([]))
+                      } else {
+                        setRoles([])
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={signupLoading}
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
+                  <select
+                    value={signupForm.role_id}
+                    onChange={e => setSignupForm({ ...signupForm, role_id: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={signupLoading || !signupForm.department_id}
+                  >
+                    <option value="">Select Role</option>
+                    {roles.map(role => (
+                      <option key={role.id} value={role.id}>{role.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={signupForm.password}
+                      onChange={e => setSignupForm({ ...signupForm, password: e.target.value })}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      disabled={signupLoading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm</label>
+                    <input
+                      type="password"
+                      value={signupForm.confirmPassword}
+                      onChange={e => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      disabled={signupLoading}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={signupLoading}
+                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-60 transition text-sm"
+                >
+                  {signupLoading ? 'Creating account...' : 'Sign Up'}
+                </button>
+              </form>
+            )}
+
+            {toast && (
+              <div className={`p-3 rounded-xl border text-sm ${
+                toast.includes('success') || toast.includes('Welcome')
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-red-50 border-red-200 text-red-700'
+              }`}>
+                {toast}
+              </div>
+            )}
+
+            {authMode === 'login' && (
+              <div className="text-center text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
+                <p className="font-semibold">Demo Credentials:</p>
+                <div className="space-y-1 text-left bg-slate-50 p-3 rounded-lg">
+                  <p><strong>Admin:</strong> admin@company.com / Admin@123</p>
+                  <p><strong>Sales:</strong> sales@company.com / Sales@123</p>
+                  <p><strong>Design:</strong> design@company.com / Design@123</p>
+                  <p><strong>Production:</strong> production@company.com / Production@123</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
-      <input ref={poUploadInputRef} type="file" accept="application/pdf" className="hidden" onChange={handlePoPdfUpload} />
+      <input ref={poUploadInputRef} type="file" accept=".pdf,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={handlePoPdfUpload} />
       <div className="flex min-h-screen bg-slate-100 text-slate-900">
         <aside className={`fixed lg:flex inset-y-0 left-0 w-72 bg-slate-900 text-white flex-col transition-transform lg:transition-none z-50 ${
           mobileMenuOpen ? 'flex' : 'hidden'
