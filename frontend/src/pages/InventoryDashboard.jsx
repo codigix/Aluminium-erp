@@ -87,10 +87,10 @@ const InventoryDashboard = () => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
-          title="Incoming POs" 
+          title="Incoming Sales Orders" 
           count={stats.incomingPos.length} 
           color="bg-blue-50"
-          icon="📦"
+          icon="📊"
         />
         <StatCard 
           title="Pending GRNs" 

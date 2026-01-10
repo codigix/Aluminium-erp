@@ -55,12 +55,16 @@ const Quotations = () => {
     salesOrderId: '',
     validUntil: '',
     notes: '',
-    items: [{ item_code: '', description: '', quantity: 0, unit: 'NOS', unit_rate: 0 }]
+    items: [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
   });
   const [recordData, setRecordData] = useState({
+    projectId: '',
+    vendorId: '',
     quotationId: '',
     amount: 0,
-    validUntil: ''
+    validUntil: '',
+    items: [],
+    notes: ''
   });
   const [emailData, setEmailData] = useState({
     to: '',
@@ -163,18 +167,30 @@ const Quotations = () => {
   const handleAddItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { item_code: '', description: '', quantity: 0, unit: 'NOS', unit_rate: 0 }]
+      items: [...formData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
     });
   };
 
   const handleSalesOrderChange = async (e) => {
     const soId = e.target.value;
-    setFormData({ ...formData, salesOrderId: soId });
+    const selectedSO = salesOrders.find(so => String(so.id) === String(soId));
+    
+    let targetDate = '';
+    if (selectedSO && selectedSO.target_dispatch_date) {
+      // Format YYYY-MM-DD for date input
+      targetDate = new Date(selectedSO.target_dispatch_date).toISOString().split('T')[0];
+    }
+
+    setFormData({ 
+      ...formData, 
+      salesOrderId: soId,
+      validUntil: targetDate || formData.validUntil 
+    });
 
     if (!soId) {
       setFormData(prev => ({
         ...prev,
-        items: [{ item_code: '', description: '', quantity: 0, unit: 'NOS', unit_rate: 0 }]
+        items: [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
       }));
       return;
     }
@@ -190,17 +206,28 @@ const Quotations = () => {
 
       if (response.ok) {
         const items = await response.json();
-        const formattedItems = items.map(item => ({
-          item_code: item.item_code || '',
-          description: item.description || '',
-          quantity: item.quantity || 0,
-          unit: item.unit || 'NOS',
-          unit_rate: item.rate || 0
-        }));
+        
+        // Flatten materials into line items for the RFQ
+        const materialItems = [];
+        items.forEach(item => {
+          if (item.materials && item.materials.length > 0) {
+            item.materials.forEach(mat => {
+              materialItems.push({
+                drawing_no: item.item_code || '', // Reference the parent drawing
+                description: item.description || '',
+                material_name: mat.material_name || '',
+                material_type: mat.material_type || '',
+                quantity: (parseFloat(item.quantity) * parseFloat(mat.qty_per_pc)) || 0,
+                uom: mat.uom || 'NOS',
+                unit_rate: 0
+              });
+            });
+          }
+        });
 
         setFormData(prev => ({
           ...prev,
-          items: formattedItems.length > 0 ? formattedItems : [{ item_code: '', description: '', quantity: 0, unit: 'NOS', unit_rate: 0 }]
+          items: materialItems.length > 0 ? materialItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
         }));
       }
     } catch (error) {
@@ -219,6 +246,102 @@ const Quotations = () => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
     setFormData({ ...formData, items: newItems });
+  };
+
+  const handleRecordProjectChange = (projectId) => {
+    setRecordData({
+      ...recordData,
+      projectId,
+      vendorId: '',
+      quotationId: '',
+      items: [],
+      amount: 0,
+      notes: ''
+    });
+  };
+
+  const handleRecordVendorChange = async (vendorId) => {
+    // Find the quotation for this project and vendor
+    const quotation = quotations.find(q => 
+      String(q.sales_order_id) === String(recordData.projectId) && 
+      String(q.vendor_id) === String(vendorId) &&
+      ['SENT', 'DRAFT'].includes(q.status)
+    );
+
+    if (quotation) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/quotations/${quotation.id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const detailedQuotation = await response.json();
+          setRecordData({
+            ...recordData,
+            vendorId,
+            quotationId: quotation.id,
+            items: detailedQuotation.items || [],
+            amount: detailedQuotation.total_amount || 0,
+            validUntil: detailedQuotation.valid_until ? new Date(detailedQuotation.valid_until).toISOString().split('T')[0] : '',
+            notes: `Response to ${quotation.quote_number}`
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching quotation details:', error);
+      }
+    } else {
+      setRecordData({
+        ...recordData,
+        vendorId,
+        quotationId: '',
+        items: [],
+        amount: 0,
+        notes: ''
+      });
+    }
+  };
+
+  const handleRecordItemChange = (index, field, value) => {
+    const newItems = [...recordData.items];
+    newItems[index][field] = value;
+    
+    // Recalculate total amount
+    const totalAmount = newItems.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const rate = parseFloat(item.unit_rate) || 0;
+      return sum + (qty * rate);
+    }, 0);
+    
+    setRecordData({ 
+      ...recordData, 
+      items: newItems,
+      amount: totalAmount
+    });
+  };
+
+  const handleRecordAddEmptyItem = () => {
+    setRecordData({
+      ...recordData,
+      items: [...recordData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+    });
+  };
+
+  const handleRecordRemoveItem = (index) => {
+    const newItems = recordData.items.filter((_, i) => i !== index);
+    const totalAmount = newItems.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const rate = parseFloat(item.unit_rate) || 0;
+      return sum + (qty * rate);
+    }, 0);
+    setRecordData({
+      ...recordData,
+      items: newItems,
+      amount: totalAmount
+    });
   };
 
   const handleCreateQuotation = async (e) => {
@@ -253,7 +376,7 @@ const Quotations = () => {
         salesOrderId: '',
         validUntil: '',
         notes: '',
-        items: [{ item_code: '', description: '', quantity: 0, unit: 'NOS', unit_rate: 0 }]
+        items: [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
       });
       fetchQuotations();
       fetchStats();
@@ -266,12 +389,13 @@ const Quotations = () => {
     e.preventDefault();
 
     if (!recordData.quotationId) {
-      Swal.fire('Error', 'Select a quotation', 'error');
+      Swal.fire('Error', 'Select a project and vendor to identify the quotation', 'error');
       return;
     }
 
     try {
       const token = localStorage.getItem('authToken');
+      // Update the quotation with received items and rates
       const response = await fetch(`${API_BASE}/quotations/${recordData.quotationId}`, {
         method: 'PUT',
         headers: {
@@ -280,12 +404,14 @@ const Quotations = () => {
         },
         body: JSON.stringify({
           validUntil: recordData.validUntil,
-          items: [{ quantity: 1, unit_rate: recordData.amount, description: 'Quoted Amount' }]
+          items: recordData.items,
+          notes: recordData.notes
         })
       });
 
-      if (!response.ok) throw new Error('Failed to record quote');
+      if (!response.ok) throw new Error('Failed to record quote details');
 
+      // Update status to RECEIVED
       await fetch(`${API_BASE}/quotations/${recordData.quotationId}/status`, {
         method: 'PATCH',
         headers: {
@@ -295,14 +421,19 @@ const Quotations = () => {
         body: JSON.stringify({ status: 'RECEIVED' })
       });
 
-      await Swal.fire('Success', 'Quote recorded successfully', 'success');
-      setShowRecordModal(false);
-      setRecordData({ quotationId: '', amount: 0, validUntil: '' });
+      await Swal.fire('Success', 'Quote details recorded successfully', 'success');
+      setShowCreateModal(false);
+      setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, validUntil: '', items: [], notes: '' });
       fetchQuotations();
       fetchStats();
     } catch (error) {
       Swal.fire('Error', error.message || 'Failed to record quote', 'error');
     }
+  };
+
+  const handleViewPDF = (quotationId) => {
+    const pdfUrl = `${API_BASE}/quotations/${quotationId}/pdf`;
+    window.open(pdfUrl, '_blank');
   };
 
   const handleApproveQuote = async (quotationId) => {
@@ -360,7 +491,10 @@ const Quotations = () => {
         }
       });
 
-      if (!response.ok) throw new Error('Failed to delete quotation');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to delete quotation');
+      }
 
       await Swal.fire('Success', 'Quotation deleted successfully', 'success');
       fetchQuotations();
@@ -429,10 +563,21 @@ const Quotations = () => {
 
   const openEditModal = (quotation) => {
     setSelectedQuotation(quotation);
+    // Map backend item fields to frontend BOM fields
+    const mappedItems = (quotation.items || []).map(item => ({
+      drawing_no: item.item_code || '',
+      description: item.description || '',
+      material_name: item.material_name || '',
+      material_type: item.material_type || '',
+      quantity: item.quantity || 0,
+      uom: item.unit || 'NOS',
+      unit_rate: item.unit_rate || 0
+    }));
+
     setEditFormData({
       vendorId: quotation.vendor_id,
-      validUntil: quotation.valid_until || '',
-      items: quotation.items || [{ item_code: '', description: '', quantity: 0, unit: 'NOS', unit_rate: 0 }]
+      validUntil: quotation.valid_until ? new Date(quotation.valid_until).toISOString().split('T')[0] : '',
+      items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
     });
     setShowEditModal(true);
   };
@@ -468,7 +613,7 @@ const Quotations = () => {
 
   const filteredQuotations = quotations.filter(q => {
     const isTabMatch = activeTab === 'sent' 
-      ? ['SENT', 'DRAFT', 'CLOSED'].includes(q.status)
+      ? true // Show all in Sent Requests for history
       : ['RECEIVED', 'REVIEWED', 'PENDING'].includes(q.status);
 
     const matchesSearch = q.quote_number?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -597,6 +742,13 @@ const Quotations = () => {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right space-x-2">
+                      <button
+                        onClick={() => handleViewPDF(q.id)}
+                        className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition"
+                        title="View Quotation PDF"
+                      >
+                        👁 View
+                      </button>
                       {activeTab === 'sent' && (
                         <>
                           <button
@@ -662,47 +814,54 @@ const Quotations = () => {
 
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {activeTab === 'sent' ? 'Create Quote Request (RFQ)' : 'Record Received Quote'}
-              </h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl">✕</button>
+          <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {activeTab === 'sent' ? 'Create Quote Request (RFQ)' : 'Record Vendor Quote'}
+                </h3>
+                {activeTab !== 'sent' && (
+                  <p className="text-xs text-slate-500 mt-1">Record details from vendor response</p>
+                )}
+              </div>
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl leading-none">&times;</button>
             </div>
 
             <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="space-y-4">
               {activeTab === 'sent' ? (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Select Project (Optional)</label>
-                    <select
-                      value={formData.salesOrderId}
-                      onChange={handleSalesOrderChange}
-                      className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select Project to Load Requirements</option>
-                      {salesOrders.map(so => (
-                        <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Select Project (Optional)</label>
+                      <select
+                        value={formData.salesOrderId}
+                        onChange={handleSalesOrderChange}
+                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select Project to Load Requirements</option>
+                        {salesOrders.map(so => (
+                          <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Vendor *</label>
+                      <select
+                        value={formData.vendorId}
+                        onChange={(e) => setFormData({...formData, vendorId: e.target.value})}
+                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="">-- Select a Vendor --</option>
+                        {vendors.map(v => (
+                          <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Vendor *</label>
-                    <select
-                      value={formData.vendorId}
-                      onChange={(e) => setFormData({...formData, vendorId: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">-- Select a Vendor --</option>
-                      {vendors.map(v => (
-                        <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
+                  <div className="w-1/2">
                     <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
                     <input
                       type="date"
@@ -729,44 +888,62 @@ const Quotations = () => {
                         No items added yet. Click "Add Item" to include line items in this quotation.
                       </p>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          <div className="col-span-2">Drawing No</div>
+                          <div className="col-span-3">Description</div>
+                          <div className="col-span-3">Material Name</div>
+                          <div className="col-span-2">Type</div>
+                          <div className="col-span-1">Qty</div>
+                          <div className="col-span-1"></div>
+                        </div>
                         {formData.items.map((item, idx) => (
-                          <div key={idx} className="grid grid-cols-6 gap-2">
+                          <div key={idx} className="grid grid-cols-12 gap-2 items-center">
                             <input
                               type="text"
-                              placeholder="Item Code"
-                              value={item.item_code}
-                              onChange={(e) => handleItemChange(idx, 'item_code', e.target.value)}
-                              className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Drawing No"
+                              value={item.drawing_no}
+                              onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="text"
                               placeholder="Description"
                               value={item.description}
                               onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                              className="col-span-2 px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Material Name"
+                              value={item.material_name}
+                              onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
+                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Type"
+                              value={item.material_type}
+                              onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="number"
                               placeholder="Qty"
                               value={item.quantity}
                               onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                              className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <input
-                              type="number"
-                              placeholder="Rate"
-                              value={item.unit_rate}
-                              onChange={(e) => handleItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
-                              className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(idx)}
-                              className="px-2 py-1 text-red-600 hover:bg-red-50 text-xs font-medium rounded border border-red-200"
-                            >
-                              ✕
-                            </button>
+                            <div className="col-span-1 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(idx)}
+                                className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                title="Remove item"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -786,39 +963,153 @@ const Quotations = () => {
                 </>
               ) : (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Select Quote to Record</label>
-                    <select
-                      value={recordData.quotationId}
-                      onChange={(e) => setRecordData({...recordData, quotationId: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">-- Select a Quotation --</option>
-                      {quotations.filter(q => ['SENT', 'DRAFT'].includes(q.status)).map(q => (
-                        <option key={q.id} value={q.id}>{q.quote_number} - {getVendorName(q.vendor_id)}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Select Project</label>
+                      <select
+                        value={recordData.projectId}
+                        onChange={(e) => handleRecordProjectChange(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">-- Select Project to Filter Quotes --</option>
+                        {salesOrders.map(so => (
+                          <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Vendor *</label>
+                      <select
+                        value={recordData.vendorId}
+                        onChange={(e) => handleRecordVendorChange(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                        disabled={!recordData.projectId}
+                      >
+                        <option value="">-- Select a Vendor --</option>
+                        {vendors.map(v => (
+                          <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Amount (₹)</label>
+                      <div className="text-xl font-bold text-slate-900">{formatCurrency(recordData.amount)}</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
+                      <input
+                        type="date"
+                        value={recordData.validUntil}
+                        onChange={(e) => setRecordData({...recordData, validUntil: e.target.value})}
+                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Quoted Amount</label>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      value={recordData.amount}
-                      onChange={(e) => setRecordData({...recordData, amount: parseFloat(e.target.value) || 0})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-medium text-slate-700">Line Items</label>
+                      <button
+                        type="button"
+                        onClick={handleRecordAddEmptyItem}
+                        className="px-3 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700"
+                      >
+                        + Add Item
+                      </button>
+                    </div>
+
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold text-slate-600">DESCRIPTION</th>
+                            <th className="px-3 py-2 text-center font-semibold text-slate-600" style={{ width: '80px' }}>QTY</th>
+                            <th className="px-3 py-2 text-center font-semibold text-slate-600" style={{ width: '120px' }}>PRICE</th>
+                            <th className="px-3 py-2 text-right font-semibold text-slate-600" style={{ width: '120px' }}>TOTAL</th>
+                            <th className="px-3 py-2 text-center" style={{ width: '40px' }}></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {recordData.items.length === 0 ? (
+                            <tr>
+                              <td colSpan="5" className="px-3 py-8 text-center text-slate-400">
+                                Select a project and vendor to load items, or add manually.
+                              </td>
+                            </tr>
+                          ) : (
+                            recordData.items.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/50">
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="text"
+                                    value={item.description}
+                                    onChange={(e) => handleRecordItemChange(idx, 'description', e.target.value)}
+                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
+                                    placeholder="Item description..."
+                                  />
+                                  {(item.material_name || item.material_type) && (
+                                    <div className="text-[10px] text-slate-500 px-2 mt-0.5">
+                                      {item.material_name} {item.material_type ? `(${item.material_type})` : ''}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    value={item.quantity}
+                                    onChange={(e) => handleRecordItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    value={item.unit_rate}
+                                    onChange={(e) => handleRecordItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="0"
+                                  />
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium text-slate-700">
+                                  {formatCurrency((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0))}
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRecordRemoveItem(idx)}
+                                    className="text-red-400 hover:text-red-600 transition-colors"
+                                  >
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {recordData.items.length > 0 && (
+                      <div className="mt-4 p-4 bg-blue-50 rounded-lg flex justify-between items-center border border-blue-100">
+                        <span className="text-sm font-semibold text-blue-700">Quotation Total</span>
+                        <span className="text-xl font-bold text-blue-900">{formatCurrency(recordData.amount)}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
-                    <input
-                      type="date"
-                      value={recordData.validUntil}
-                      onChange={(e) => setRecordData({...recordData, validUntil: e.target.value})}
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Optional)</label>
+                    <textarea
+                      value={recordData.notes}
+                      onChange={(e) => setRecordData({...recordData, notes: e.target.value})}
+                      placeholder="Add any notes from vendor response"
                       className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows="3"
                     />
                   </div>
                 </>
@@ -836,7 +1127,7 @@ const Quotations = () => {
                   type="submit"
                   className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
                 >
-                  {activeTab === 'sent' ? 'Create Quotation' : 'Record Quote'}
+                  Create Quotation
                 </button>
               </div>
             </form>
@@ -918,59 +1209,81 @@ const Quotations = () => {
 
       {showEditModal && selectedQuotation && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-slate-900">Edit Quotation</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
             <form onSubmit={handleEditQuotation} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Vendor</label>
-                <select
-                  value={editFormData.vendorId}
-                  onChange={(e) => setEditFormData({...editFormData, vendorId: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {vendors.map(v => (
-                    <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                  ))}
-                </select>
-              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Vendor</label>
+                  <select
+                    value={editFormData.vendorId}
+                    onChange={(e) => setEditFormData({...editFormData, vendorId: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
-                <input
-                  type="date"
-                  value={editFormData.validUntil}
-                  onChange={(e) => setEditFormData({...editFormData, validUntil: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
+                  <input
+                    type="date"
+                    value={editFormData.validUntil}
+                    onChange={(e) => setEditFormData({...editFormData, validUntil: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
 
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="block text-sm font-medium text-slate-700">Line Items</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditFormData({
+                        ...editFormData,
+                        items: [...editFormData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+                      });
+                    }}
+                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700"
+                  >
+                    + Add Item
+                  </button>
                 </div>
 
                 {editFormData.items.length === 0 ? (
                   <p className="text-sm text-slate-500 p-4 text-center border border-dashed border-slate-200 rounded">
-                    No items
+                    No items added yet.
                   </p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      <div className="col-span-2">Drawing No</div>
+                      <div className="col-span-3">Description</div>
+                      <div className="col-span-3">Material Name</div>
+                      <div className="col-span-2">Type</div>
+                      <div className="col-span-1">Qty</div>
+                      <div className="col-span-1"></div>
+                    </div>
                     {editFormData.items.map((item, idx) => (
-                      <div key={idx} className="grid grid-cols-6 gap-2">
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-center">
                         <input
                           type="text"
-                          placeholder="Item Code"
-                          value={item.item_code}
+                          placeholder="Drawing No"
+                          value={item.drawing_no}
                           onChange={(e) => {
                             const newItems = [...editFormData.items];
-                            newItems[idx].item_code = e.target.value;
+                            newItems[idx].drawing_no = e.target.value;
                             setEditFormData({...editFormData, items: newItems});
                           }}
-                          className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <input
                           type="text"
@@ -981,7 +1294,29 @@ const Quotations = () => {
                             newItems[idx].description = e.target.value;
                             setEditFormData({...editFormData, items: newItems});
                           }}
-                          className="col-span-2 px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Material Name"
+                          value={item.material_name}
+                          onChange={(e) => {
+                            const newItems = [...editFormData.items];
+                            newItems[idx].material_name = e.target.value;
+                            setEditFormData({...editFormData, items: newItems});
+                          }}
+                          className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Type"
+                          value={item.material_type}
+                          onChange={(e) => {
+                            const newItems = [...editFormData.items];
+                            newItems[idx].material_type = e.target.value;
+                            setEditFormData({...editFormData, items: newItems});
+                          }}
+                          className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <input
                           type="number"
@@ -992,19 +1327,20 @@ const Quotations = () => {
                             newItems[idx].quantity = parseFloat(e.target.value) || 0;
                             setEditFormData({...editFormData, items: newItems});
                           }}
-                          className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
-                        <input
-                          type="number"
-                          placeholder="Rate"
-                          value={item.unit_rate}
-                          onChange={(e) => {
-                            const newItems = [...editFormData.items];
-                            newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
-                            setEditFormData({...editFormData, items: newItems});
-                          }}
-                          className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
+                        <div className="col-span-1 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newItems = editFormData.items.filter((_, i) => i !== idx);
+                              setEditFormData({...editFormData, items: newItems});
+                            }}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -40,6 +40,10 @@ const PurchaseOrders = () => {
   const [poItems, setPoItems] = useState([]);
   const [formData, setFormData] = useState({
     quotationId: '',
+    projectName: '',
+    quoteNumber: '',
+    poNumber: '',
+    vendorName: '',
     expectedDeliveryDate: '',
     notes: ''
   });
@@ -115,11 +119,38 @@ const PurchaseOrders = () => {
     }
   };
 
+  const handleQuotationChange = (quotationId) => {
+    const selected = quotations.find(q => String(q.id) === String(quotationId));
+    if (selected) {
+      setFormData({
+        ...formData,
+        quotationId,
+        vendorName: selected.vendor_name || 'Unknown Vendor'
+      });
+    } else {
+      setFormData({
+        ...formData,
+        quotationId: '',
+        vendorName: ''
+      });
+    }
+  };
+
   const handleCreatePO = async (e) => {
     e.preventDefault();
 
+    if (!formData.poNumber) {
+      Swal.fire('Error', 'Please enter a PO Number', 'error');
+      return;
+    }
+
     if (!formData.quotationId) {
       Swal.fire('Error', 'Please select a quotation', 'error');
+      return;
+    }
+
+    if (!formData.expectedDeliveryDate) {
+      Swal.fire('Error', 'Please select an expected delivery date', 'error');
       return;
     }
 
@@ -134,7 +165,8 @@ const PurchaseOrders = () => {
         body: JSON.stringify({
           quotationId: parseInt(formData.quotationId),
           expectedDeliveryDate: formData.expectedDeliveryDate || null,
-          notes: formData.notes || null
+          notes: formData.notes || null,
+          poNumber: formData.poNumber || null
         })
       });
 
@@ -142,7 +174,7 @@ const PurchaseOrders = () => {
 
       await Swal.fire('Success', 'Purchase Order created successfully', 'success');
       setShowCreateModal(false);
-      setFormData({ quotationId: '', expectedDeliveryDate: '', notes: '' });
+      setFormData({ quotationId: '', projectName: '', quoteNumber: '', poNumber: '', vendorName: '', expectedDeliveryDate: '', notes: '' });
       fetchPOs();
       fetchStats();
       fetchApprovedQuotations();
@@ -201,13 +233,18 @@ const PurchaseOrders = () => {
 
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/purchase-orders/${selectedPO.id}/status`, {
+      const response = await fetch(`${API_BASE}/purchase-orders/${selectedPO.id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: editFormData.status })
+        body: JSON.stringify({
+          status: editFormData.status,
+          poNumber: selectedPO.po_number,
+          expectedDeliveryDate: editFormData.expectedDeliveryDate,
+          notes: editFormData.notes
+        })
       });
 
       if (!response.ok) throw new Error('Failed to update PO');
@@ -358,36 +395,49 @@ const PurchaseOrders = () => {
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold text-slate-900">Create Purchase Order from Quotation</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl">✕</button>
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl leading-none">&times;</button>
             </div>
 
             <form onSubmit={handleCreatePO} className="space-y-4">
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">PO Number *</label>
+                <input
+                  type="text"
+                  value={formData.poNumber}
+                  onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
+                  placeholder="Enter PO Number manually"
+                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  required
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Select Approved Quotation *</label>
                 <select
                   value={formData.quotationId}
-                  onChange={(e) => setFormData({...formData, quotationId: e.target.value})}
+                  onChange={(e) => handleQuotationChange(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 >
                   <option value="">-- Select a Quotation --</option>
                   {quotations.map(q => (
                     <option key={q.id} value={q.id}>
-                      {q.quote_number} - ₹{formatCurrency(q.total_amount)} - {q.vendor_name || 'Vendor'}
+                      {q.quote_number} - {formatCurrency(q.total_amount)} - {q.vendor_name || 'Vendor'}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Expected Delivery Date</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Expected Delivery Date *</label>
                 <input
                   type="date"
                   value={formData.expectedDeliveryDate}
                   onChange={(e) => setFormData({...formData, expectedDeliveryDate: e.target.value})}
                   className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
                 />
               </div>
 
@@ -412,7 +462,7 @@ const PurchaseOrders = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700"
+                  className="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700 font-semibold"
                 >
                   Create PO
                 </button>
@@ -527,10 +577,18 @@ const PurchaseOrders = () => {
             </div>
 
             <form onSubmit={handleUpdatePO} className="space-y-4">
-              <div className="bg-slate-50 p-3 rounded text-sm">
-                <p className="text-slate-600"><span className="font-medium">PO Number:</span> {selectedPO.po_number}</p>
-                <p className="text-slate-600"><span className="font-medium">Vendor:</span> {selectedPO.vendor_name}</p>
-                <p className="text-slate-600"><span className="font-medium">Amount:</span> {formatCurrency(selectedPO.total_amount)}</p>
+              <div className="bg-slate-50 p-3 rounded text-sm space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-slate-600 w-24">PO Number:</span>
+                  <input
+                    type="text"
+                    value={selectedPO.po_number}
+                    onChange={(e) => setSelectedPO({...selectedPO, po_number: e.target.value})}
+                    className="flex-1 bg-white border border-slate-200 rounded px-2 py-0.5 text-blue-600 font-mono font-bold"
+                  />
+                </div>
+                <p className="text-slate-600"><span className="font-medium w-24 inline-block">Vendor:</span> {selectedPO.vendor_name}</p>
+                <p className="text-slate-600"><span className="font-medium w-24 inline-block">Amount:</span> {formatCurrency(selectedPO.total_amount)}</p>
               </div>
 
               <div>

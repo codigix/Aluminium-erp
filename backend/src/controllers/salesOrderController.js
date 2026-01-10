@@ -32,14 +32,15 @@ const getIncomingOrders = async (req, res, next) => {
 
 const createSalesOrder = async (req, res, next) => {
   try {
-    const { customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate } = req.body;
+    const { customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate, items } = req.body;
     const orderId = await salesOrderService.createSalesOrder(
       customerPoId,
       companyId,
       projectName,
       drawingRequired || 0,
       productionPriority || 'NORMAL',
-      targetDispatchDate
+      targetDispatchDate,
+      items
     );
     res.status(201).json({ id: orderId, message: 'Sales order created' });
   } catch (error) {
@@ -96,6 +97,43 @@ const getOrderTimeline = async (req, res, next) => {
   }
 };
 
+const generateSalesOrderPDF = async (req, res, next) => {
+  try {
+    const pdf = await salesOrderService.generateSalesOrderPDF(req.params.id);
+    res.contentType('application/pdf');
+    res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getItemMaterials = async (req, res, next) => {
+  try {
+    const materials = await salesOrderService.getItemMaterials(req.params.itemId);
+    res.json(materials);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addItemMaterial = async (req, res, next) => {
+  try {
+    const materialId = await salesOrderService.addItemMaterial(req.params.itemId, req.body);
+    res.status(201).json({ id: materialId, message: 'Material added' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteItemMaterial = async (req, res, next) => {
+  try {
+    await salesOrderService.deleteItemMaterial(req.params.id);
+    res.json({ message: 'Material deleted' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listSalesOrders,
   getIncomingOrders,
@@ -104,5 +142,9 @@ module.exports = {
   acceptRequest,
   rejectRequest,
   sendOrderToDesign,
-  getOrderTimeline
+  getOrderTimeline,
+  generateSalesOrderPDF,
+  getItemMaterials,
+  addItemMaterial,
+  deleteItemMaterial
 };

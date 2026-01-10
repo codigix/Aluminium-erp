@@ -325,7 +325,7 @@ const CompanyMaster = ({
                             ✏️
                           </button>
                           <button
-                            onClick={() => onDeleteCompany(company.id)}
+                            onClick={() => onDeleteCompany(company)}
                             title="Delete"
                             className="p-2 rounded-lg hover:bg-red-100 text-red-600 hover:text-red-900 transition"
                           >

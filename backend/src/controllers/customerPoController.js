@@ -174,9 +174,80 @@ const getCustomerPo = async (req, res, next) => {
   }
 };
 
+const updateCustomerPo = async (req, res, next) => {
+  try {
+    const parseItems = value => {
+      if (!value) return [];
+      if (Array.isArray(value)) return value;
+      try { return JSON.parse(value); } catch (e) { return []; }
+    };
+
+    const parsedItems = parseItems(req.body.items);
+    const sanitizedItems = parsedItems.map((item, index) => ({
+      drawingNo: item.drawingNo || null,
+      itemCode: item.itemCode || null,
+      description: item.description || `Line Item ${index + 1}`,
+      hsnCode: item.hsnCode || null,
+      quantity: Number(item.quantity) || 0,
+      unit: item.unit || 'NOS',
+      rate: Number(item.rate) || 0,
+      cgstPercent: Number(item.cgstPercent || 0),
+      sgstPercent: Number(item.sgstPercent || 0),
+      igstPercent: Number(item.igstPercent || 0),
+      deliveryDate: item.deliveryDate || null,
+      revisionNo: item.revisionNo || null,
+      purchaseReqNo: item.purchaseReqNo || null,
+      customerReference: item.customerReference || null,
+      discount: Number(item.discount) || 0
+    }));
+
+    const payload = {
+      header: {
+        poNumber: req.body.poNumber,
+        poDate: req.body.poDate,
+        poVersion: req.body.poVersion || '1.0',
+        orderType: req.body.orderType || 'STANDARD',
+        plant: req.body.plant || null,
+        currency: req.body.currency || 'INR',
+        paymentTerms: req.body.paymentTerms,
+        creditDays: req.body.creditDays,
+        freightTerms: req.body.freightTerms || null,
+        packingForwarding: req.body.packingForwarding || null,
+        insuranceTerms: req.body.insuranceTerms || null,
+        deliveryTerms: req.body.deliveryTerms || null
+      },
+      items: sanitizedItems,
+      remarks: req.body.remarks || null,
+      termsAndConditions: req.body.termsAndConditions,
+      specialNotes: req.body.specialNotes,
+      inspectionClause: req.body.inspectionClause,
+      testCertificate: req.body.testCertificate
+    };
+
+    const result = await customerPoService.updateCustomerPo(req.params.id, payload);
+    res.json({ message: 'Customer PO updated', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteCustomerPo = async (req, res, next) => {
+  try {
+    const success = await customerPoService.deleteCustomerPo(req.params.id);
+    if (!success) {
+      return res.status(404).json({ message: 'Customer PO not found' });
+    }
+    res.json({ message: 'Customer PO deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createCustomerPo,
   parseCustomerPoPdf,
   listCustomerPos,
-  getCustomerPo
+  getCustomerPo,
+  updateCustomerPo,
+  deleteCustomerPo
 };

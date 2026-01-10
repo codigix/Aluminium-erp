@@ -13,7 +13,48 @@ const generatePONumber = async () => {
   return `PO-${currentYear}-${paddedCount}`;
 };
 
-const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes) => {
+const previewPurchaseOrder = async (quotationId) => {
+  const [quotation] = await pool.query(
+    'SELECT q.*, so.project_name FROM quotations q LEFT JOIN sales_orders so ON so.id = q.sales_order_id WHERE q.id = ?',
+    [quotationId]
+  );
+
+  if (!quotation.length) {
+    throw new Error('Quotation not found');
+  }
+
+  const quote = quotation[0];
+  let poNumber = await generatePONumber();
+
+  if (quote.sales_order_id) {
+    const [salesOrder] = await pool.query(
+      'SELECT customer_po_id FROM sales_orders WHERE id = ?',
+      [quote.sales_order_id]
+    );
+
+    if (salesOrder.length && salesOrder[0].customer_po_id) {
+      const [customerPO] = await pool.query(
+        'SELECT po_number FROM customer_pos WHERE id = ?',
+        [salesOrder[0].customer_po_id]
+      );
+
+      if (customerPO.length && customerPO[0].po_number) {
+        poNumber = customerPO[0].po_number;
+      }
+    }
+  }
+
+  return {
+    poNumber,
+    projectName: quote.project_name || 'Direct Procurement',
+    totalAmount: quote.total_amount,
+    vendorName: quote.vendor_name,
+    notes: quote.notes,
+    expectedDeliveryDate: quote.valid_until ? new Date(quote.valid_until).toISOString().split('T')[0] : ''
+  };
+};
+
+const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, manualPoNumber = null) => {
   if (!quotationId) {
     const error = new Error('Quotation is required');
     error.statusCode = 400;
@@ -40,22 +81,26 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes) => 
       [quotationId]
     );
 
-    let poNumber = await generatePONumber();
+    let poNumber = manualPoNumber;
+    
+    if (!poNumber) {
+      poNumber = await generatePONumber();
 
-    if (quote.sales_order_id) {
-      const [salesOrder] = await connection.query(
-        'SELECT customer_po_id FROM sales_orders WHERE id = ?',
-        [quote.sales_order_id]
-      );
-
-      if (salesOrder.length && salesOrder[0].customer_po_id) {
-        const [customerPO] = await connection.query(
-          'SELECT po_number FROM customer_pos WHERE id = ?',
-          [salesOrder[0].customer_po_id]
+      if (quote.sales_order_id) {
+        const [salesOrder] = await connection.query(
+          'SELECT customer_po_id FROM sales_orders WHERE id = ?',
+          [quote.sales_order_id]
         );
 
-        if (customerPO.length && customerPO[0].po_number) {
-          poNumber = customerPO[0].po_number;
+        if (salesOrder.length && salesOrder[0].customer_po_id) {
+          const [customerPO] = await connection.query(
+            'SELECT po_number FROM customer_pos WHERE id = ?',
+            [salesOrder[0].customer_po_id]
+          );
+
+          if (customerPO.length && customerPO[0].po_number) {
+            poNumber = customerPO[0].po_number;
+          }
         }
       }
     }
@@ -254,9 +299,11 @@ const getPurchaseOrderById = async (poId) => {
   return { ...po, items };
 };
 
-const updatePurchaseOrderStatus = async (poId, status) => {
+const updatePurchaseOrder = async (poId, payload) => {
+  const { status, poNumber, expectedDeliveryDate, notes } = payload;
+  
   const validStatuses = ['DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'CLOSED'];
-  if (!validStatuses.includes(status)) {
+  if (status && !validStatuses.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
     throw error;
@@ -264,12 +311,35 @@ const updatePurchaseOrderStatus = async (poId, status) => {
 
   await getPurchaseOrderById(poId);
 
-  await pool.execute(
-    'UPDATE purchase_orders SET status = ? WHERE id = ?',
-    [status, poId]
-  );
+  const updates = [];
+  const params = [];
 
-  return status;
+  if (status) {
+    updates.push('status = ?');
+    params.push(status);
+  }
+  if (poNumber) {
+    updates.push('po_number = ?');
+    params.push(poNumber);
+  }
+  if (expectedDeliveryDate !== undefined) {
+    updates.push('expected_delivery_date = ?');
+    params.push(expectedDeliveryDate);
+  }
+  if (notes !== undefined) {
+    updates.push('notes = ?');
+    params.push(notes);
+  }
+
+  if (updates.length > 0) {
+    params.push(poId);
+    await pool.execute(
+      `UPDATE purchase_orders SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+  }
+
+  return { id: poId, status };
 };
 
 const deletePurchaseOrder = async (poId) => {
@@ -299,9 +369,10 @@ const getPurchaseOrderStats = async () => {
 
 module.exports = {
   createPurchaseOrder,
+  previewPurchaseOrder,
   getPurchaseOrders,
   getPurchaseOrderById,
-  updatePurchaseOrderStatus,
+  updatePurchaseOrder,
   deletePurchaseOrder,
   getPurchaseOrderStats
 };

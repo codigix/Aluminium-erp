@@ -161,7 +161,8 @@ const createCustomerPo = async payload => {
 
 const listCustomerPos = async () => {
   const [rows] = await pool.query(
-    `SELECT cp.*, c.company_name
+    `SELECT cp.*, c.company_name, 
+            (SELECT SUM(quantity) FROM customer_po_items WHERE customer_po_id = cp.id) as total_qty
      FROM customer_pos cp
      JOIN companies c ON c.id = cp.company_id
      ORDER BY cp.created_at DESC`
@@ -190,8 +191,135 @@ const getCustomerPoById = async id => {
   return { ...rows[0], items };
 };
 
+const updateCustomerPo = async (id, payload) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const {
+      header = {},
+      items = [],
+      remarks,
+      termsAndConditions,
+      specialNotes,
+      inspectionClause,
+      testCertificate
+    } = payload;
+
+    const totals = calculateAmounts(items);
+
+    await connection.execute(
+      `UPDATE customer_pos
+       SET po_number = ?, po_date = ?, po_version = ?, order_type = ?, plant = ?, currency = ?, 
+           payment_terms = ?, credit_days = ?, freight_terms = ?, packing_forwarding = ?, 
+           insurance_terms = ?, delivery_terms = ?, subtotal = ?, tax_total = ?, net_total = ?, 
+           remarks = ?, terms_and_conditions = ?, special_notes = ?, inspection_clause = ?, 
+           test_certificate = ?
+       WHERE id = ?`
+      ,
+      [
+        header.poNumber,
+        header.poDate,
+        header.poVersion || '1.0',
+        header.orderType || 'STANDARD',
+        header.plant,
+        header.currency || 'INR',
+        header.paymentTerms,
+        header.creditDays ? Number(header.creditDays) : null,
+        header.freightTerms || null,
+        header.packingForwarding || null,
+        header.insuranceTerms || null,
+        header.deliveryTerms || null,
+        totals.subtotal,
+        totals.taxTotal,
+        totals.netTotal,
+        remarks || null,
+        termsAndConditions || null,
+        specialNotes || null,
+        inspectionClause || null,
+        testCertificate || null,
+        id
+      ]
+    );
+
+    // Delete existing items and re-insert
+    await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
+
+    for (const item of items) {
+      await connection.execute(
+        `INSERT INTO customer_po_items
+          (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
+           unit, rate, basic_amount, discount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
+           igst_percent, igst_amount, delivery_date, purchase_req_no, customer_reference)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ,
+        [
+          id,
+          item.itemCode || null,
+          item.description,
+          item.hsnCode || null,
+          item.drawingNo || null,
+          item.revisionNo || null,
+          item.quantity,
+          item.unit || 'NOS',
+          item.rate,
+          item.basicAmount,
+          item.discount || 0,
+          item.cgstPercent || 0,
+          item.cgstAmount,
+          item.sgstPercent || 0,
+          item.sgstAmount,
+          item.igstPercent || 0,
+          item.igstAmount,
+          item.deliveryDate || null,
+          item.purchaseReqNo || null,
+          item.customerReference || null
+        ]
+      );
+    }
+
+    await connection.commit();
+    return { id, totals };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const deleteCustomerPo = async id => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Delete items first
+    await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
+    
+    // Delete linked sales order items and sales order
+    const [soRows] = await connection.execute('SELECT id FROM sales_orders WHERE customer_po_id = ?', [id]);
+    for (const so of soRows) {
+      await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [so.id]);
+    }
+    await connection.execute('DELETE FROM sales_orders WHERE customer_po_id = ?', [id]);
+
+    // Delete the PO
+    const [result] = await connection.execute('DELETE FROM customer_pos WHERE id = ?', [id]);
+
+    await connection.commit();
+    return result.affectedRows > 0;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   createCustomerPo,
   listCustomerPos,
-  getCustomerPoById
+  getCustomerPoById,
+  updateCustomerPo,
+  deleteCustomerPo
 };

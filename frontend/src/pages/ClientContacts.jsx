@@ -10,24 +10,35 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold">Company</th>
-                <th className="px-4 py-3 text-left font-semibold">Contacts</th>
+                <th className="px-4 py-3 text-left font-semibold">Primary Contact</th>
+                <th className="px-4 py-3 text-left font-semibold">Contact No</th>
                 <th className="px-4 py-3 text-left font-semibold">Status</th>
                 <th className="px-4 py-3 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {companies.map(company => (
-                <tr key={`contact-row-${company.id}`} className="border-t border-slate-100">
-                  <td className="px-4 py-4">
-                    <p className="font-semibold text-slate-900">{company.company_name}</p>
-                    <p className="text-xs text-slate-400">{company.company_code}</p>
-                  </td>
-                  <td className="px-4 py-4 text-slate-600">{Array.isArray(company.contacts) ? company.contacts.length : 0}</td>
-                  <td className="px-4 py-4">
-                    <StatusBadge status={company.status} />
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex justify-end">
+              {companies.map(company => {
+                const primaryContact = Array.isArray(company.contacts) 
+                  ? company.contacts.find(c => (c.contact_type || c.contactType) === 'PRIMARY') || company.contacts[0]
+                  : null;
+                
+                return (
+                  <tr key={`contact-row-${company.id}`} className="border-t border-slate-100">
+                    <td className="px-4 py-4">
+                      <p className="font-semibold text-slate-900">{company.company_name}</p>
+                      <p className="text-xs text-slate-400">{company.company_code}</p>
+                    </td>
+                    <td className="px-4 py-4 text-slate-900 font-medium">
+                      {primaryContact?.name || '—'}
+                    </td>
+                    <td className="px-4 py-4 text-slate-600">
+                      {primaryContact?.phone || '—'}
+                    </td>
+                    <td className="px-4 py-4">
+                      <StatusBadge status={company.status} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex justify-end">
                       <button
                         type="button"
                         className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:border-slate-300"
@@ -38,7 +49,7 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

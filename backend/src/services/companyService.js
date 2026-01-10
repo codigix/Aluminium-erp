@@ -161,8 +161,14 @@ const persistContacts = async (connection, companyId, contacts = []) => {
   return true;
 };
 
-const ensurePrimaryContactShell = async (connection, companyId) => {
-  await insertContact(connection, companyId, { contactType: 'PRIMARY', status: 'DRAFT' });
+const ensurePrimaryContactShell = async (connection, companyId, contactInfo = {}) => {
+  await insertContact(connection, companyId, { 
+    name: contactInfo.contactPerson || null,
+    email: contactInfo.contactEmail || null,
+    phone: contactInfo.contactMobile || null,
+    contactType: 'PRIMARY', 
+    status: 'ACTIVE' 
+  });
 };
 
 const createCompany = async payload => {
@@ -180,7 +186,10 @@ const createCompany = async payload => {
     insuranceTerms,
     billingAddress = {},
     shippingAddress = {},
-    contacts = []
+    contacts = [],
+    contactPerson,
+    contactMobile,
+    contactEmail
   } = payload;
 
   const connection = await pool.getConnection();
@@ -215,7 +224,7 @@ const createCompany = async payload => {
     await persistAddresses(connection, companyId, billingAddress, shippingAddress);
     const hasContacts = await persistContacts(connection, companyId, contacts);
     if (!hasContacts) {
-      await ensurePrimaryContactShell(connection, companyId);
+      await ensurePrimaryContactShell(connection, companyId, { contactPerson, contactMobile, contactEmail });
     }
 
     await connection.commit();

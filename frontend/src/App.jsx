@@ -130,6 +130,15 @@ const createCustomerPoForm = () => ({
   remarks: ''
 })
 
+const createSalesOrderForm = () => ({
+  companyId: '',
+  customerPoId: '',
+  projectName: '',
+  drawingRequired: false,
+  productionPriority: 'NORMAL',
+  targetDispatchDate: ''
+})
+
 const createCustomerPoItem = () => ({
   drawingNo: '',
   description: '',
@@ -139,7 +148,6 @@ const createCustomerPoItem = () => ({
   cgstPercent: '',
   sgstPercent: '',
   igstPercent: '',
-  deliveryDate: '',
   hsnCode: '',
   discount: ''
 })
@@ -253,6 +261,11 @@ function App() {
   const [poParseLoading, setPoParseLoading] = useState(false)
   const [poCompanyLocked, setPoCompanyLocked] = useState(false)
   const [poSaving, setPoSaving] = useState(false)
+  const [showPoForm, setShowPoForm] = useState(false)
+  const [showSalesOrderForm, setShowSalesOrderForm] = useState(false)
+  const [editingPoId, setEditingPoId] = useState(null)
+  const [customerPos, setCustomerPos] = useState([])
+  const [customerPosLoading, setCustomerPosLoading] = useState(false)
   const [salesOrders, setSalesOrders] = useState([])
   const [salesOrdersLoading, setSalesOrdersLoading] = useState(false)
   const [poDetailDrawerOpen, setPoDetailDrawerOpen] = useState(false)
@@ -260,6 +273,51 @@ function App() {
   const [poDetail, setPoDetail] = useState(null)
   const [poDetailError, setPoDetailError] = useState('')
   const [selectedPoId, setSelectedPoId] = useState(null)
+
+  const [salesOrderForm, setSalesOrderForm] = useState(createSalesOrderForm)
+  const [selectedPoForSo, setSelectedPoForSo] = useState(null)
+  const [soItems, setSoItems] = useState([])
+  const [poItemsLoading, setPoItemsLoading] = useState(false)
+
+  const handleSalesOrderFieldChange = (field, value) => {
+    setSalesOrderForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const resetSalesOrderForm = useCallback(() => {
+    setSalesOrderForm(createSalesOrderForm())
+    setSelectedPoForSo(null)
+    setSoItems([])
+    setShowSalesOrderForm(false)
+  }, [])
+
+  const handleCreateSalesOrder = async () => {
+    if (!salesOrderForm.companyId || !salesOrderForm.customerPoId) {
+      showToast('Company and Customer PO are required')
+      return
+    }
+    setSalesOrdersLoading(true)
+    try {
+      await apiRequest('/sales-orders', {
+        method: 'POST',
+        body: {
+          customerPoId: salesOrderForm.customerPoId,
+          companyId: salesOrderForm.companyId,
+          projectName: salesOrderForm.projectName,
+          drawingRequired: salesOrderForm.drawingRequired,
+          productionPriority: salesOrderForm.productionPriority,
+          targetDispatchDate: salesOrderForm.targetDispatchDate,
+          items: soItems
+        }
+      })
+      showToast('Sales Order created successfully')
+      resetSalesOrderForm()
+      await loadSalesOrders()
+    } catch (error) {
+      showToast(error.message)
+    } finally {
+      setSalesOrdersLoading(false)
+    }
+  }
 
   const showToast = useCallback(message => {
     if (toastTimeout.current) {
@@ -301,6 +359,81 @@ function App() {
     }
     return res.json()
   }, [token, showToast])
+
+  useEffect(() => {
+    const fetchPoDetails = async () => {
+      if (!salesOrderForm.customerPoId) {
+        setSelectedPoForSo(null)
+        return
+      }
+      setPoItemsLoading(true)
+      try {
+        const data = await apiRequest(`/customer-pos/${salesOrderForm.customerPoId}`)
+        setSelectedPoForSo(data)
+        setSoItems((data.items || []).map(item => ({
+          ...item,
+          drawing_no: item.item_code || '',
+          materials: []
+        })))
+        
+        // Autofill fields based on PO data
+        setSalesOrderForm(prev => {
+          const formatDateForInput = (dateInput) => {
+            if (!dateInput) return ''
+            const d = new Date(dateInput)
+            if (Number.isNaN(d.getTime())) return ''
+            const year = d.getFullYear()
+            const month = String(d.getMonth() + 1).padStart(2, '0')
+            const day = String(d.getDate()).padStart(2, '0')
+            return `${year}-${month}-${day}`
+          }
+
+          let targetDate = ''
+          if (data.items && data.items.length > 0) {
+            // Find the earliest delivery date among items
+            const dates = data.items
+              .map(item => item.delivery_date)
+              .filter(Boolean)
+              .sort()
+            if (dates.length > 0) {
+              targetDate = formatDateForInput(dates[0])
+            }
+          }
+          
+          // Fallback to PO Date if items don't have dates
+          if (!targetDate && data.po_date) {
+            targetDate = formatDateForInput(data.po_date)
+          }
+
+          // Try to extract project name from remarks if available, otherwise use PO Number
+          let extractedProject = data.project_name || ''
+          if (!extractedProject && data.remarks) {
+            const projectMatch = data.remarks.match(/Project[:\s]+([^,\n.]+)/i)
+            if (projectMatch) {
+              extractedProject = projectMatch[1].trim()
+            }
+          }
+          
+          // Fallback to PO Number if still empty
+          if (!extractedProject) {
+            extractedProject = data.po_number || ''
+          }
+
+          return {
+            ...prev,
+            projectName: extractedProject,
+            targetDispatchDate: targetDate || prev.targetDispatchDate || ''
+          }
+        })
+      } catch (error) {
+        showToast('Failed to fetch PO details: ' + error.message)
+        setSelectedPoForSo(null)
+      } finally {
+        setPoItemsLoading(false)
+      }
+    }
+    fetchPoDetails()
+  }, [salesOrderForm.customerPoId, apiRequest, showToast])
 
   const handleLogin = useCallback(async e => {
     e.preventDefault()
@@ -422,6 +555,18 @@ function App() {
     setCompanies(Array.isArray(data) ? data : [])
   }, [apiRequest])
 
+  const loadCustomerPos = useCallback(async () => {
+    setCustomerPosLoading(true)
+    try {
+      const data = await apiRequest('/customer-pos')
+      setCustomerPos(Array.isArray(data) ? data : [])
+    } catch (error) {
+      showToast(error.message)
+    } finally {
+      setCustomerPosLoading(false)
+    }
+  }, [apiRequest, showToast])
+
   const loadSalesOrders = useCallback(async () => {
     setSalesOrdersLoading(true)
     try {
@@ -449,6 +594,10 @@ function App() {
   useEffect(() => {
     loadSalesOrders().catch(() => null)
   }, [loadSalesOrders])
+
+  useEffect(() => {
+    loadCustomerPos().catch(() => null)
+  }, [loadCustomerPos])
 
   const handleSendOrderToDesign = useCallback(async (orderId) => {
     try {
@@ -562,6 +711,8 @@ function App() {
     setPoParseResult(null)
     setPoParseLoading(false)
     setPoCompanyLocked(false)
+    setEditingPoId(null)
+    setShowPoForm(false)
   }, [])
 
   const handlePoFieldChange = (field, value) => {
@@ -801,6 +952,11 @@ function App() {
   }
 
   const handleDeleteCompany = async company => {
+    const companyId = typeof company === 'object' ? company.id : company
+    if (!companyId) {
+      showToast('Invalid company selected')
+      return
+    }
     const result = await Swal.fire({
       icon: 'warning',
       title: 'Delete company?',
@@ -816,7 +972,7 @@ function App() {
     })
     if (!result.isConfirmed) return
     try {
-      await apiRequest(`/companies/${company.id}`, { method: 'DELETE' })
+      await apiRequest(`/companies/${companyId}`, { method: 'DELETE' })
       await loadCompanies()
       showToast('Company removed')
     } catch (error) {
@@ -921,7 +1077,6 @@ function App() {
             cgstPercent: parseIndianNumber(item.cgstPercent ?? item.cgst),
             sgstPercent: parseIndianNumber(item.sgstPercent ?? item.sgst),
             igstPercent: parseIndianNumber(item.igstPercent ?? item.igst),
-            deliveryDate: item.deliveryDate ? item.deliveryDate.slice(0, 10) : '',
             hsnCode: item.hsnCode || '',
             discount: parseIndianNumber(item.discount)
           }))
@@ -966,7 +1121,6 @@ function App() {
           cgstPercent: taxes.cgstPercent,
           sgstPercent: taxes.sgstPercent,
           igstPercent: taxes.igstPercent,
-          deliveryDate: item.deliveryDate || '',
           hsnCode: item.hsnCode || '',
           discount: parseIndianNumber(item.discount)
         }
@@ -1001,24 +1155,100 @@ function App() {
       if (poPdfFile) {
         formData.append('poPdf', poPdfFile)
       }
-      const response = await fetch(`${API_BASE}/customer-pos`, { 
-        method: 'POST', 
+      const url = editingPoId ? `${API_BASE}/customer-pos/${editingPoId}` : `${API_BASE}/customer-pos`
+      const method = editingPoId ? 'PUT' : 'POST'
+
+      const response = await fetch(url, { 
+        method, 
         body: formData,
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody.message || 'Unable to push Customer PO')
+        throw new Error(errorBody.message || 'Unable to save Customer PO')
       }
       await response.json()
-      showToast('Customer PO captured & Sales Order created')
-      await loadSalesOrders()
-      navigate('/sales-order')
+      showToast(editingPoId ? 'Customer PO updated' : 'Customer PO captured & Sales Order created')
+      await loadCustomerPos()
+      if (!editingPoId) {
+        await loadSalesOrders()
+        navigate('/sales-order')
+      }
       resetPoWorkflow()
     } catch (error) {
       showToast(error.message)
     } finally {
       setPoSaving(false)
+    }
+  }
+
+  const handleEditCustomerPo = async (po) => {
+    setEditingPoId(po.id)
+    setShowPoForm(true)
+    setPoForm({
+      companyId: po.company_id || '',
+      poNumber: po.po_number || '',
+      poDate: po.po_date ? po.po_date.split('T')[0] : '',
+      paymentTerms: po.payment_terms || '',
+      creditDays: po.credit_days || '',
+      freightTerms: po.freight_terms || '',
+      packingForwarding: po.packing_forwarding || '',
+      insuranceTerms: po.insurance_terms || '',
+      currency: po.currency || 'INR',
+      deliveryTerms: po.delivery_terms || '',
+      remarks: po.remarks || ''
+    })
+    
+    try {
+      const data = await apiRequest(`/customer-pos/${po.id}`)
+      if (data && data.items) {
+        setPoItems(data.items.map(item => ({
+          drawingNo: item.drawing_no || '',
+          description: item.description || '',
+          quantity: item.quantity || 0,
+          unit: item.unit || 'NOS',
+          rate: item.rate || 0,
+          cgstPercent: item.cgst_percent || 0,
+          sgstPercent: item.sgst_percent || 0,
+          igstPercent: item.igst_percent || 0,
+          hsnCode: item.hsn_code || '',
+          discount: item.discount || 0
+        })))
+      }
+    } catch (error) {
+      showToast('Failed to load PO items')
+    }
+    
+    // Scroll to form
+    const formElement = document.getElementById('customer-po-upload')
+    if (formElement) {
+      formElement.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
+  const handleDeleteCustomerPo = async (poId) => {
+    const result = await Swal.fire({
+      icon: 'warning',
+      title: 'Delete Customer PO?',
+      text: 'This will also delete the linked Sales Order. This action cannot be undone.',
+      confirmButtonText: 'Delete',
+      cancelButtonText: 'Cancel',
+      showCancelButton: true,
+      buttonsStyling: false,
+      customClass: {
+        confirmButton: 'px-5 py-2 rounded-xl bg-rose-500 text-white font-semibold ml-3',
+        cancelButton: 'px-5 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold'
+      }
+    })
+
+    if (!result.isConfirmed) return
+
+    try {
+      await apiRequest(`/customer-pos/${poId}`, { method: 'DELETE' })
+      showToast('Customer PO deleted')
+      await loadCustomerPos()
+    } catch (error) {
+      showToast(error.message)
     }
   }
 
@@ -1220,18 +1450,27 @@ function App() {
           <button
             type="button"
             className="px-5 py-2 rounded-2xl bg-slate-900 text-white text-sm font-semibold shadow-sm hover:bg-slate-800 disabled:opacity-60"
-            onClick={triggerPoUpload}
-            disabled={poParseLoading}
+            onClick={() => {
+              if (showPoForm) {
+                setShowPoForm(false)
+                resetPoWorkflow()
+              } else {
+                setShowPoForm(true)
+              }
+            }}
           >
-            {poParseLoading ? 'Reading…' : 'Upload PO PDF'}
+            {showPoForm ? 'View PO List' : '+ Add New PO'}
           </button>
-          <button
-            type="button"
-            className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600"
-            onClick={resetPoWorkflow}
-          >
-            Reset Form
-          </button>
+          {showPoForm && (
+            <button
+              type="button"
+              className="px-5 py-2 rounded-2xl bg-indigo-600 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+              onClick={triggerPoUpload}
+              disabled={poParseLoading}
+            >
+              {poParseLoading ? 'Reading…' : 'Upload PO PDF'}
+            </button>
+          )}
         </>
       )
     },
@@ -1240,14 +1479,29 @@ function App() {
       title: 'Sales Orders',
       description: 'Review Customer POs pushed into downstream Sales Orders',
       actions: (
-        <button
-          type="button"
-          className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600"
-          onClick={loadSalesOrders}
-          disabled={salesOrdersLoading}
-        >
-          {salesOrdersLoading ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <>
+          <button
+            type="button"
+            className="px-5 py-2 rounded-2xl bg-slate-900 text-white text-sm font-semibold shadow-sm hover:bg-slate-800 disabled:opacity-60"
+            onClick={() => {
+              if (showSalesOrderForm) {
+                resetSalesOrderForm()
+              } else {
+                setShowSalesOrderForm(true)
+              }
+            }}
+          >
+            {showSalesOrderForm ? 'View SO Board' : '+ Add New SO'}
+          </button>
+          <button
+            type="button"
+            className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600"
+            onClick={loadSalesOrders}
+            disabled={salesOrdersLoading}
+          >
+            {salesOrdersLoading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </>
       )
     },
     'incoming-orders': {
@@ -1716,8 +1970,17 @@ function App() {
                     onAddItem={addPoItem}
                     poSummary={poSummary}
                     formatCurrency={formatCurrency}
+                    parseIndianNumber={parseIndianNumber}
                     onPushToSalesOrder={handlePushToSalesOrder}
                     poSaving={poSaving}
+                    customerPos={customerPos}
+                    customerPosLoading={customerPosLoading}
+                    onEditPo={handleEditCustomerPo}
+                    onDeletePo={handleDeleteCustomerPo}
+                    onViewPo={handleViewPoDetail}
+                    editingPoId={editingPoId}
+                    onResetForm={resetPoWorkflow}
+                    showPoForm={showPoForm}
                   />
                 )}
 
@@ -1729,6 +1992,18 @@ function App() {
                     onViewPo={handleViewPoDetail}
                     getPoPdfUrl={getPoPdfUrl}
                     onSendOrder={handleSendOrderToDesign}
+                    showSalesOrderForm={showSalesOrderForm}
+                    salesOrderForm={salesOrderForm}
+                    onFieldChange={handleSalesOrderFieldChange}
+                    onSubmit={handleCreateSalesOrder}
+                    onResetForm={resetSalesOrderForm}
+                    companies={companies}
+                    customerPos={customerPos}
+                    selectedPoForSo={selectedPoForSo}
+                    soItems={soItems}
+                    setSoItems={setSoItems}
+                    poItemsLoading={poItemsLoading}
+                    fieldInputClass={fieldInputClass}
                   />
                 )}
 
@@ -2170,7 +2445,6 @@ function App() {
                             <th className="px-4 py-3 text-right font-semibold text-slate-700">Rate</th>
                             <th className="px-4 py-3 text-right font-semibold text-slate-700">Amount</th>
                             <th className="px-4 py-3 text-right font-semibold text-slate-700">Tax %</th>
-                            <th className="px-4 py-3 text-left font-semibold text-slate-700">Delivery</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2186,7 +2460,6 @@ function App() {
                                 <td className="px-4 py-3 text-right text-slate-600">{formatCurrencyByCode(item.rate, poDetail.currency)}</td>
                                 <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyByCode(item.basic_amount, poDetail.currency)}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatPercent(item.cgst_percent || item.sgst_percent || item.igst_percent)}</td>
-                                <td className="px-4 py-3 text-slate-600 text-xs">{formatDisplayDate(item.delivery_date)}</td>
                               </tr>
                             ))
                           )}

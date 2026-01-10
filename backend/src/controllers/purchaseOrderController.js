@@ -2,13 +2,23 @@ const purchaseOrderService = require('../services/purchaseOrderService');
 
 const createPurchaseOrder = async (req, res, next) => {
   try {
-    const { quotationId, expectedDeliveryDate, notes } = req.body;
+    const { quotationId, expectedDeliveryDate, notes, poNumber } = req.body;
     const result = await purchaseOrderService.createPurchaseOrder(
       quotationId,
       expectedDeliveryDate,
-      notes
+      notes,
+      poNumber
     );
     res.status(201).json({ message: 'Purchase Order created', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const previewPurchaseOrder = async (req, res, next) => {
+  try {
+    const preview = await purchaseOrderService.previewPurchaseOrder(req.params.quotationId);
+    res.json(preview);
   } catch (error) {
     next(error);
   }
@@ -32,13 +42,13 @@ const getPurchaseOrderById = async (req, res, next) => {
   }
 };
 
-const updatePurchaseOrderStatus = async (req, res, next) => {
+const updatePurchaseOrder = async (req, res, next) => {
   try {
-    const status = await purchaseOrderService.updatePurchaseOrderStatus(
+    const result = await purchaseOrderService.updatePurchaseOrder(
       req.params.poId,
-      req.body.status
+      req.body
     );
-    res.json({ message: 'Status updated', status });
+    res.json({ message: 'Purchase Order updated', data: result });
   } catch (error) {
     next(error);
   }
@@ -64,9 +74,10 @@ const getPurchaseOrderStats = async (req, res, next) => {
 
 module.exports = {
   createPurchaseOrder,
+  previewPurchaseOrder,
   getPurchaseOrders,
   getPurchaseOrderById,
-  updatePurchaseOrderStatus,
+  updatePurchaseOrder,
   deletePurchaseOrder,
   getPurchaseOrderStats
 };

@@ -78,6 +78,19 @@ const sendQuotationEmail = async (req, res, next) => {
   }
 };
 
+const getQuotationPDF = async (req, res, next) => {
+  try {
+    const pdfBuffer = await quotationService.generateQuotationPDF(req.params.quotationId);
+    const quotation = await quotationService.getQuotationById(req.params.quotationId);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename=Quotation_${quotation.quote_number}.pdf`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createQuotation,
   getQuotations,
@@ -86,5 +99,6 @@ module.exports = {
   updateQuotationStatus,
   deleteQuotation,
   getQuotationStats,
-  sendQuotationEmail
+  sendQuotationEmail,
+  getQuotationPDF
 };

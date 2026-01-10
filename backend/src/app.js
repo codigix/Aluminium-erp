@@ -33,6 +33,11 @@ app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_D
 
 app.use('/api/auth', authRoutes);
 app.use('/api/departments', departmentRoutes);
+
+// Public PDF routes - must be defined before authenticated routes
+app.get('/api/sales-orders/:id/pdf', require('./controllers/salesOrderController').generateSalesOrderPDF);
+app.get('/api/quotations/:quotationId/pdf', require('./controllers/quotationController').getQuotationPDF);
+
 app.use('/api/users', authenticate, userRoutes);
 app.use('/api/access', authenticate, departmentDocumentRoutes);
 app.use('/api/companies', authenticate, companyRoutes);

@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const emailService = require('./emailService');
+const puppeteer = require('puppeteer');
+const mustache = require('mustache');
 
 const generateQuoteNumber = async () => {
   const timestamp = Date.now();
@@ -44,15 +46,17 @@ const createQuotation = async (payload) => {
         totalAmount += amount;
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, quantity, unit, unit_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
-            item.item_code || null,
+            item.drawing_no || item.item_code || null,
             item.description || null,
+            item.material_name || null,
+            item.material_type || null,
             item.quantity || 0,
-            item.unit || 'NOS',
+            item.uom || item.unit || 'NOS',
             item.unit_rate || 0,
             amount
           ]
@@ -76,20 +80,25 @@ const createQuotation = async (payload) => {
 };
 
 const getQuotations = async (filters = {}) => {
-  let query = 'SELECT * FROM quotations WHERE 1=1';
+  let query = `
+    SELECT q.*, so.project_name 
+    FROM quotations q
+    LEFT JOIN sales_orders so ON so.id = q.sales_order_id
+    WHERE 1=1
+  `;
   const params = [];
 
   if (filters.status) {
-    query += ' AND status = ?';
+    query += ' AND q.status = ?';
     params.push(filters.status);
   }
 
   if (filters.vendorId) {
-    query += ' AND vendor_id = ?';
+    query += ' AND q.vendor_id = ?';
     params.push(filters.vendorId);
   }
 
-  query += ' ORDER BY created_at DESC';
+  query += ' ORDER BY q.created_at DESC';
 
   const [quotations] = await pool.query(query, params);
 
@@ -177,15 +186,17 @@ const updateQuotation = async (quotationId, payload) => {
         totalAmount += amount;
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, quantity, unit, unit_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
-            item.item_code || null,
+            item.drawing_no || item.item_code || null,
             item.description || null,
+            item.material_name || null,
+            item.material_type || null,
             item.quantity || 0,
-            item.unit || 'NOS',
+            item.uom || item.unit || 'NOS',
             item.unit_rate || 0,
             amount
           ]
@@ -210,7 +221,33 @@ const updateQuotation = async (quotationId, payload) => {
 
 const deleteQuotation = async (quotationId) => {
   await getQuotationById(quotationId);
-  await pool.execute('DELETE FROM quotations WHERE id = ?', [quotationId]);
+
+  // Check if any purchase orders reference this quotation
+  const [poRefs] = await pool.query('SELECT po_number FROM purchase_orders WHERE quotation_id = ?', [quotationId]);
+  if (poRefs.length > 0) {
+    const poNumbers = poRefs.map(p => p.po_number).join(', ');
+    const error = new Error(`Cannot delete quotation because it is referenced by Purchase Order(s): ${poNumbers}. Please delete the PO(s) first.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Delete related items first
+    await connection.execute('DELETE FROM quotation_items WHERE quotation_id = ?', [quotationId]);
+    
+    // Delete the quotation
+    await connection.execute('DELETE FROM quotations WHERE id = ?', [quotationId]);
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const getQuotationStats = async () => {
@@ -237,6 +274,8 @@ const sendQuotationEmail = async (quotationId, emailData) => {
   const { to, subject, message, attachPDF } = emailData;
 
   const quotation = await getQuotationById(quotationId);
+  const [vendorRows] = await pool.query('SELECT * FROM vendors WHERE id = ?', [quotation.vendor_id]);
+  const vendor = vendorRows[0];
 
   if (!to || !subject || !message) {
     const error = new Error('Email recipient, subject, and message are required');
@@ -251,7 +290,16 @@ const sendQuotationEmail = async (quotationId, emailData) => {
   }
 
   try {
-    const emailResult = await emailService.sendEmail(to, subject, message);
+    let attachments = [];
+    if (attachPDF) {
+      const pdfBuffer = await generateQuotationPDF(quotationId);
+      attachments.push({
+        filename: `Quotation_${quotation.quote_number}.pdf`,
+        content: pdfBuffer
+      });
+    }
+
+    const emailResult = await emailService.sendEmail(to, subject, message, attachments);
     
     console.log(`[sendQuotationEmail] Email sent successfully to ${to}`);
     
@@ -273,6 +321,132 @@ const sendQuotationEmail = async (quotationId, emailData) => {
   }
 };
 
+const generateQuotationPDF = async (quotationId) => {
+  const quotation = await getQuotationById(quotationId);
+  const [vendorRows] = await pool.query('SELECT * FROM vendors WHERE id = ?', [quotation.vendor_id]);
+  const vendor = vendorRows[0];
+
+  const htmlTemplate = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
+        .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
+        .quote-title { text-align: right; }
+        .quote-title h2 { margin: 0; color: #64748b; font-size: 18px; text-transform: uppercase; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+        .section-label { font-weight: bold; color: #64748b; font-size: 12px; text-transform: uppercase; margin-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th { background: #f8fafc; color: #64748b; text-align: left; padding: 12px 8px; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+        .notes-section { background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #cbd5e1; }
+        .footer { margin-top: 50px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+        .total-row { font-weight: bold; background: #eff6ff; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="company-info">
+          <h1>SPTECHPIONEER PVT LTD</h1>
+          <p>Industrial Area, Sector 5<br>Pune, Maharashtra - 411026</p>
+        </div>
+        <div class="quote-title">
+          <h2>Request for Quotation</h2>
+          <p><strong>RFQ No:</strong> {{quote_number}}<br>
+          <strong>Date:</strong> {{created_at}}<br>
+          <strong>Valid Till:</strong> {{valid_until}}</p>
+        </div>
+      </div>
+
+      <div class="details-grid">
+        <div>
+          <div class="section-label">Vendor Information</div>
+          <p><strong>{{vendor_name}}</strong><br>
+          {{location}}<br>
+          Email: {{vendor_email}}<br>
+          Phone: {{phone}}</p>
+        </div>
+        <div style="text-align: right;">
+          <div class="section-label">Project Reference</div>
+          <p>{{project_ref}}</p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 20%">Drawing No</th>
+            <th style="width: 30%">Description</th>
+            <th style="width: 30%">Material Name</th>
+            <th style="width: 10%">Type</th>
+            <th style="width: 10%">Quantity</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#items}}
+          <tr>
+            <td>{{item_code}}</td>
+            <td>{{description}}</td>
+            <td>{{material_name}}</td>
+            <td>{{material_type}}</td>
+            <td>{{quantity}}</td>
+          </tr>
+          {{/items}}
+        </tbody>
+      </table>
+
+      {{#notes}}
+      <div class="notes-section">
+        <div class="section-label">Special Instructions & Notes</div>
+        <p>{{notes}}</p>
+      </div>
+      {{/notes}}
+
+      <div class="footer">
+        <p>This is a computer-generated document. No signature is required.<br>
+        SPTECHPIONEER PVT LTD | Confidential | Page 1 of 1</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const viewData = {
+    ...quotation,
+    created_at: formatDate(quotation.created_at),
+    valid_until: formatDate(quotation.valid_until),
+    vendor_name: vendor?.vendor_name || 'N/A',
+    vendor_email: vendor?.email || 'N/A',
+    location: vendor?.location || 'N/A',
+    phone: vendor?.phone || 'N/A',
+    project_ref: quotation.sales_order_id ? `SO-${quotation.sales_order_id}` : 'General Requirement',
+    items: quotation.items.map(i => ({
+      ...i,
+      quantity: parseFloat(i.quantity).toFixed(2)
+    }))
+  };
+
+  const html = mustache.render(htmlTemplate, viewData);
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({ 
+    format: 'A4', 
+    printBackground: true,
+    margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+  });
+  await browser.close();
+
+  return pdf;
+};
+
 module.exports = {
   createQuotation,
   getQuotations,
@@ -281,5 +455,6 @@ module.exports = {
   updateQuotation,
   deleteQuotation,
   getQuotationStats,
-  sendQuotationEmail
+  sendQuotationEmail,
+  generateQuotationPDF
 };
