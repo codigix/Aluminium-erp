@@ -550,22 +550,217 @@ function App() {
     }, 800)
   }, [showToast, navigate])
 
+  if (!token || !user) {
+    return (
+      <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="h-16 w-16 rounded-2xl bg-slate-900 flex items-center justify-center mx-auto p-2">
+                <img src={sptechLogo} alt="SPTECHPIONEER Logo" className="h-full w-full object-contain" />
+              </div>
+              <h1 className="text-2xl font-bold text-slate-900">SPTECHPIONEER</h1>
+              <p className="text-sm text-slate-500">Sales & Operations ERP</p>
+            </div>
+
+            <div className="flex gap-2 border-b border-slate-200">
+              <button
+                type="button"
+                onClick={() => setAuthMode('login')}
+                className={`flex-1 pb-3 text-sm font-semibold transition ${
+                  authMode === 'login'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('signup'); loadDepartmentsAndRoles() }}
+                className={`flex-1 pb-3 text-sm font-semibold transition ${
+                  authMode === 'signup'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            {authMode === 'login' ? (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={e => setLoginEmail(e.target.value)}
+                    placeholder="your.email@company.com"
+                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={loginLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={loginLoading}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-60 transition"
+                >
+                  {loginLoading ? 'Signing in...' : 'Sign In'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleSignup} className="space-y-3 max-h-96 overflow-y-auto">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">First Name</label>
+                    <input
+                      type="text"
+                      value={signupForm.first_name}
+                      onChange={e => setSignupForm({ ...signupForm, first_name: e.target.value })}
+                      placeholder="John"
+                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      disabled={signupLoading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={signupForm.last_name}
+                      onChange={e => setSignupForm({ ...signupForm, last_name: e.target.value })}
+                      placeholder="Doe"
+                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      disabled={signupLoading}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={signupForm.email}
+                    onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
+                    placeholder="john@company.com"
+                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={signupLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
+                  <select
+                    value={signupForm.department_id}
+                    onChange={e => {
+                      const deptId = e.target.value
+                      setSignupForm({ ...signupForm, department_id: deptId, role_id: '' })
+                      if (deptId) {
+                        fetch(`${API_BASE}/departments/${deptId}/roles`)
+                          .then(res => res.ok ? res.json() : [])
+                          .then(rolesData => setRoles(Array.isArray(rolesData) ? rolesData : []))
+                          .catch(() => setRoles([]))
+                      } else {
+                        setRoles([])
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={signupLoading}
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
+                  <select
+                    value={signupForm.role_id}
+                    onChange={e => setSignupForm({ ...signupForm, role_id: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    disabled={signupLoading || !signupForm.department_id}
+                  >
+                    <option value="">Select Role</option>
+                    {roles.map(role => (
+                      <option key={role.id} value={role.id}>{role.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={signupForm.password}
+                      onChange={e => setSignupForm({ ...signupForm, password: e.target.value })}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      disabled={signupLoading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm</label>
+                    <input
+                      type="password"
+                      value={signupForm.confirmPassword}
+                      onChange={e => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      disabled={signupLoading}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={signupLoading}
+                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-60 transition text-sm"
+                >
+                  {signupLoading ? 'Creating account...' : 'Sign Up'}
+                </button>
+              </form>
+            )}
+
+            {toast && (
+              <div className={`p-3 rounded-xl border text-sm ${
+                toast.includes('success') || toast.includes('Welcome')
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-red-50 border-red-200 text-red-700'
+              }`}>
+                {toast}
+              </div>
+            )}
+
+            {authMode === 'login' && (
+              <div className="text-center text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
+                <p className="font-semibold">Demo Credentials:</p>
+                <div className="space-y-1 text-left bg-slate-50 p-3 rounded-lg">
+                  <p><strong>Admin:</strong> admin@company.com / Admin@123</p>
+                  <p><strong>Sales:</strong> sales@company.com / Sales@123</p>
+                  <p><strong>Design:</strong> design@company.com / Design@123</p>
+                  <p><strong>Production:</strong> production@company.com / Production@123</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const loadCompanies = useCallback(async () => {
     const data = await apiRequest('/companies')
     setCompanies(Array.isArray(data) ? data : [])
   }, [apiRequest])
-
-  const loadCustomerPos = useCallback(async () => {
-    setCustomerPosLoading(true)
-    try {
-      const data = await apiRequest('/customer-pos')
-      setCustomerPos(Array.isArray(data) ? data : [])
-    } catch (error) {
-      showToast(error.message)
-    } finally {
-      setCustomerPosLoading(false)
-    }
-  }, [apiRequest, showToast])
 
   const loadSalesOrders = useCallback(async () => {
     setSalesOrdersLoading(true)
@@ -594,10 +789,6 @@ function App() {
   useEffect(() => {
     loadSalesOrders().catch(() => null)
   }, [loadSalesOrders])
-
-  useEffect(() => {
-    loadCustomerPos().catch(() => null)
-  }, [loadCustomerPos])
 
   const handleSendOrderToDesign = useCallback(async (orderId) => {
     try {
@@ -711,8 +902,6 @@ function App() {
     setPoParseResult(null)
     setPoParseLoading(false)
     setPoCompanyLocked(false)
-    setEditingPoId(null)
-    setShowPoForm(false)
   }, [])
 
   const handlePoFieldChange = (field, value) => {
@@ -980,52 +1169,6 @@ function App() {
     }
   }
 
-  const findCompanyMatch = useCallback(header => {
-    if (!header) return null
-    const headerCode = (header.companyCode || '').toString().toUpperCase()
-    if (headerCode) {
-      const codeMatch = companies.find(company => (company.company_code || '').toUpperCase() === headerCode)
-      if (codeMatch) {
-        return codeMatch
-      }
-      const hints = COMPANY_HINTS[headerCode] || []
-      if (hints.length) {
-        const hintMatch = companies.find(company => {
-          const name = (company.company_name || '').toLowerCase()
-          return hints.some(hint => name.includes(hint))
-        })
-        if (hintMatch) {
-          return hintMatch
-        }
-      }
-    }
-    const normalizedName = normalizeKey(header.companyName)
-    if (normalizedName) {
-      const exactMatch = companies.find(company => normalizeKey(company.company_name) === normalizedName)
-      if (exactMatch) {
-        return exactMatch
-      }
-      const partialMatch = companies.find(company => normalizeKey(company.company_name).includes(normalizedName))
-      if (partialMatch) {
-        return partialMatch
-      }
-    }
-    return null
-  }, [companies])
-
-  const selectedCompany = useMemo(() => {
-    if (!poForm.companyId) return null
-    return companies.find(company => String(company.id) === String(poForm.companyId)) || null
-  }, [companies, poForm.companyId])
-
-  const companyState = useMemo(() => {
-    if (!selectedCompany?.addresses?.length) return ''
-    const billing = selectedCompany.addresses.find(address => (address.address_type || '').toUpperCase() === 'BILLING')
-    return (billing?.state || '').toLowerCase()
-  }, [selectedCompany])
-
-  const isIntrastate = companyState ? companyState === HOME_PLANT_STATE : true
-
   const handlePoPdfUpload = async event => {
     const file = event.target?.files?.[0]
     if (!file) return
@@ -1182,76 +1325,6 @@ function App() {
     }
   }
 
-  const handleEditCustomerPo = async (po) => {
-    setEditingPoId(po.id)
-    setShowPoForm(true)
-    setPoForm({
-      companyId: po.company_id || '',
-      poNumber: po.po_number || '',
-      poDate: po.po_date ? po.po_date.split('T')[0] : '',
-      paymentTerms: po.payment_terms || '',
-      creditDays: po.credit_days || '',
-      freightTerms: po.freight_terms || '',
-      packingForwarding: po.packing_forwarding || '',
-      insuranceTerms: po.insurance_terms || '',
-      currency: po.currency || 'INR',
-      deliveryTerms: po.delivery_terms || '',
-      remarks: po.remarks || ''
-    })
-    
-    try {
-      const data = await apiRequest(`/customer-pos/${po.id}`)
-      if (data && data.items) {
-        setPoItems(data.items.map(item => ({
-          drawingNo: item.drawing_no || '',
-          description: item.description || '',
-          quantity: item.quantity || 0,
-          unit: item.unit || 'NOS',
-          rate: item.rate || 0,
-          cgstPercent: item.cgst_percent || 0,
-          sgstPercent: item.sgst_percent || 0,
-          igstPercent: item.igst_percent || 0,
-          hsnCode: item.hsn_code || '',
-          discount: item.discount || 0
-        })))
-      }
-    } catch (error) {
-      showToast('Failed to load PO items')
-    }
-    
-    // Scroll to form
-    const formElement = document.getElementById('customer-po-upload')
-    if (formElement) {
-      formElement.scrollIntoView({ behavior: 'smooth' })
-    }
-  }
-
-  const handleDeleteCustomerPo = async (poId) => {
-    const result = await Swal.fire({
-      icon: 'warning',
-      title: 'Delete Customer PO?',
-      text: 'This will also delete the linked Sales Order. This action cannot be undone.',
-      confirmButtonText: 'Delete',
-      cancelButtonText: 'Cancel',
-      showCancelButton: true,
-      buttonsStyling: false,
-      customClass: {
-        confirmButton: 'px-5 py-2 rounded-xl bg-rose-500 text-white font-semibold ml-3',
-        cancelButton: 'px-5 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold'
-      }
-    })
-
-    if (!result.isConfirmed) return
-
-    try {
-      await apiRequest(`/customer-pos/${poId}`, { method: 'DELETE' })
-      showToast('Customer PO deleted')
-      await loadCustomerPos()
-    } catch (error) {
-      showToast(error.message)
-    }
-  }
-
   const handleViewPoDetail = useCallback(async customerPoId => {
     if (!customerPoId) {
       return
@@ -1276,7 +1349,6 @@ function App() {
     setPoDetailDrawerOpen(false)
     setPoDetail(null)
     setPoDetailError('')
-    setSelectedPoId(null)
   }
 
   const handleViewCompany = company => {
@@ -1293,52 +1365,7 @@ function App() {
 
   const fieldInputClass = 'w-full rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 outline-none transition disabled:bg-slate-100 disabled:text-slate-400'
 
-  const currencyFormatter = useMemo(() => {
-    const currencyCode = (poForm.currency || 'INR').toUpperCase()
-    try {
-      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: currencyCode, minimumFractionDigits: 2 })
-    } catch {
-      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })
-    }
-  }, [poForm.currency])
-
   const formatCurrency = value => currencyFormatter.format(Number(value) || 0)
-
-  const poSummary = useMemo(() => {
-    return poItems.reduce(
-      (acc, item) => {
-        const qty = parseIndianNumber(item.quantity)
-        const rate = parseIndianNumber(item.rate)
-        const line = qty * rate
-        if (!line) {
-          return acc
-        }
-        const taxes = normalizeTaxPercents(
-          parseIndianNumber(item.cgstPercent),
-          parseIndianNumber(item.sgstPercent),
-          parseIndianNumber(item.igstPercent),
-          isIntrastate
-        )
-        const cgst = line * (taxes.cgstPercent / 100)
-        const sgst = line * (taxes.sgstPercent / 100)
-        const igst = line * (taxes.igstPercent / 100)
-        acc.subtotal += line
-        acc.cgst += cgst
-        acc.sgst += sgst
-        acc.igst += igst
-        acc.net += line + cgst + sgst + igst
-        return acc
-      },
-      { subtotal: 0, cgst: 0, sgst: 0, igst: 0, net: 0 }
-    )
-  }, [poItems, isIntrastate])
-
-  const triggerPoUpload = useCallback(() => {
-    if (poUploadInputRef.current) {
-      poUploadInputRef.current.value = ''
-      poUploadInputRef.current.click()
-    }
-  }, [])
 
   const drawerTitle = drawerMode === 'edit' ? 'Edit Company' : drawerMode === 'view' ? 'Company Details' : 'Add New Company'
   const primaryButtonLabel = drawerMode === 'edit' ? 'Update Company' : 'Save Company'
@@ -1363,45 +1390,9 @@ function App() {
     { label: 'Stock Balance', moduleId: 'stock-balance', indent: true }
   ]
 
-  const getUserDepartmentCode = () => {
-    if (user?.department_code) return user.department_code
-    
-    const deptMap = {
-      'Sales': 'SALES',
-      'Design Engineering': 'DESIGN_ENG',
-      'Production': 'PRODUCTION',
-      'Quality': 'QUALITY',
-      'Procurement': 'PROCUREMENT',
-      'Shipment': 'SHIPMENT',
-      'Accounts': 'ACCOUNTS',
-      'Inventory': 'INVENTORY',
-      'Admin': 'ADMIN'
-    }
-    
-    if (user?.department_name && deptMap[user.department_name]) {
-      return deptMap[user.department_name]
-    }
-    
-    return user?.department_name?.toUpperCase().replace(/\s+/g, '_') || 'SALES'
-  }
-  
-  const userDepartmentCode = getUserDepartmentCode()
-  const allowedModules = DEPARTMENT_MODULES[userDepartmentCode] || DEPARTMENT_MODULES.SALES
-
-  const navigationItems = allNavigationItems.filter(item => 
+  const navigationItems = allowedModules ? allNavigationItems.filter(item => 
     !item.isGroup && (!item.moduleId || allowedModules.includes(item.moduleId))
-  )
-
-  useEffect(() => {
-    if (user && navigationItems.length > 0 && navigationItems[0].moduleId) {
-      const firstAllowedModule = navigationItems[0].moduleId
-      
-      // Redirect if trying to access unauthorized module or on root path
-      if (!allowedModules.includes(activeModule)) {
-        navigate(`/${firstAllowedModule}`)
-      }
-    }
-  }, [user, navigationItems, allowedModules, activeModule, navigate])
+  ) : []
 
   const moduleMeta = {
     'company-master': {
