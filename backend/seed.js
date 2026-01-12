@@ -82,6 +82,26 @@ const DEFAULT_USERS = [
     department_code: 'SHIPMENT',
     role_code: 'SHIP_OFFICER',
     phone: '9876543215'
+  },
+  {
+    username: 'quality_user',
+    email: 'quality@company.com',
+    password: 'Quality@123',
+    first_name: 'Alice',
+    last_name: 'Quality',
+    department_code: 'QUALITY',
+    role_code: 'QA_INSP',
+    phone: '9876543217'
+  },
+  {
+    username: 'inventory_user',
+    email: 'inventory@company.com',
+    password: 'Inventory@123',
+    first_name: 'Bob',
+    last_name: 'Inventory',
+    department_code: 'INVENTORY',
+    role_code: 'INV_MGR',
+    phone: '9876543218'
   }
 ];
 
@@ -93,11 +113,16 @@ const seedDatabase = async () => {
       const hashedPassword = await bcrypt.hash(userData.password, 10);
 
       const query = `
-        INSERT IGNORE INTO users (username, email, password, first_name, last_name, department_id, role_id, status, phone)
+        INSERT INTO users (username, email, password, first_name, last_name, department_id, role_id, status, phone)
         SELECT ?, ?, ?, ?, ?, d.id, r.id, 'ACTIVE', ?
         FROM departments d
         JOIN roles r ON r.department_id = d.id
         WHERE d.code = ? AND r.code = ?
+        ON DUPLICATE KEY UPDATE 
+        password = VALUES(password),
+        first_name = VALUES(first_name),
+        last_name = VALUES(last_name),
+        phone = VALUES(phone)
       `;
 
       pool.query(
@@ -114,15 +139,13 @@ const seedDatabase = async () => {
         ],
         (err, results) => {
           if (err) {
-            console.error(`✗ Error creating user ${userData.email}:`, err.message);
-          } else if (results.affectedRows > 0) {
+            console.error(`✗ Error creating/updating user ${userData.email}:`, err.message);
+          } else if (results.affectedRows === 1) {
             console.log(`✓ User created: ${userData.email}`);
-            console.log(`  Username: ${userData.username}`);
-            console.log(`  Password: ${userData.password}`);
-            console.log(`  Department: ${userData.department_code}`);
-            console.log(`  Role: ${userData.role_code}\n`);
+          } else if (results.affectedRows === 2) {
+            console.log(`✓ User updated: ${userData.email}`);
           } else {
-            console.log(`⊘ User already exists: ${userData.email}\n`);
+            console.log(`⊘ User verified (no changes): ${userData.email}\n`);
           }
         }
       );

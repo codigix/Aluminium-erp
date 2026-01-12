@@ -124,9 +124,18 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
 
     if (items.length > 0) {
       for (const item of items) {
+        // Inherit tax amounts from quotation if available, otherwise default to 0
+        const cgstAmount = item.cgst_amount || 0;
+        const sgstAmount = item.sgst_amount || 0;
+        const totalAmount = item.total_amount || (parseFloat(item.amount || 0) + parseFloat(cgstAmount) + parseFloat(sgstAmount));
+
         await connection.execute(
-          `INSERT INTO purchase_order_items (purchase_order_id, item_code, description, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO purchase_order_items (
+            purchase_order_id, item_code, description, quantity, unit, unit_rate, amount,
+            cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
+            material_name, material_type
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             poId,
             item.item_code || null,
@@ -134,7 +143,14 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
             item.quantity || 0,
             item.unit || 'NOS',
             item.unit_rate || 0,
-            item.amount || 0
+            item.amount || 0,
+            item.cgst_percent || 0,
+            cgstAmount,
+            item.sgst_percent || 0,
+            sgstAmount,
+            totalAmount,
+            item.material_name || null,
+            item.material_type || null
           ]
         );
       }
@@ -186,7 +202,8 @@ const getPurchaseOrders = async (filters = {}) => {
     SELECT 
       po.*,
       v.vendor_name,
-      COUNT(poi.id) as items_count
+      COUNT(poi.id) as items_count,
+      SUM(poi.quantity) as total_quantity
     FROM purchase_orders po
     LEFT JOIN vendors v ON v.id = po.vendor_id
     LEFT JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
@@ -226,71 +243,32 @@ const getPurchaseOrderById = async (poId) => {
   }
 
   const po = rows[0];
-  let items = [];
+  
+  const [items] = await pool.query(
+    `SELECT 
+      id,
+      item_code,
+      description,
+      quantity,
+      unit,
+      unit_rate,
+      amount,
+      cgst_percent,
+      cgst_amount,
+      sgst_percent,
+      sgst_amount,
+      total_amount,
+      material_name,
+      material_type
+     FROM purchase_order_items 
+     WHERE purchase_order_id = ?`,
+    [poId]
+  );
 
-  if (po.sales_order_id) {
-    const [soDetails] = await pool.query(
-      'SELECT customer_po_id FROM sales_orders WHERE id = ?',
-      [po.sales_order_id]
-    );
-
-    if (soDetails.length && soDetails[0].customer_po_id) {
-      const [cpItems] = await pool.query(
-        `SELECT 
-          id,
-          item_code,
-          description,
-          quantity,
-          unit,
-          rate as unit_rate,
-          basic_amount as amount
-         FROM customer_po_items 
-         WHERE customer_po_id = ?`,
-        [soDetails[0].customer_po_id]
-      );
-
-      const [totalResult] = await pool.query(
-        `SELECT SUM(basic_amount + COALESCE(cgst_amount, 0) + COALESCE(sgst_amount, 0) + COALESCE(igst_amount, 0)) as total 
-         FROM customer_po_items 
-         WHERE customer_po_id = ?`,
-        [soDetails[0].customer_po_id]
-      );
-
-      items = cpItems;
-      po.total_amount = totalResult[0]?.total || 0;
-    } else {
-      const [soItems] = await pool.query(
-        `SELECT 
-          id,
-          item_code,
-          description,
-          quantity,
-          unit,
-          rate as unit_rate,
-          (quantity * rate) as amount
-         FROM sales_order_items 
-         WHERE sales_order_id = ?`,
-        [po.sales_order_id]
-      );
-
-      const [totalResult] = await pool.query(
-        `SELECT SUM(quantity * rate) as total FROM sales_order_items 
-         WHERE sales_order_id = ?`,
-        [po.sales_order_id]
-      );
-
-      items = soItems;
-      po.total_amount = totalResult[0]?.total || 0;
-    }
-  } else {
-    const [poItems] = await pool.query(
-      'SELECT * FROM purchase_order_items WHERE purchase_order_id = ?',
-      [poId]
-    );
-    items = poItems;
-
+  // Use the total_amount stored in po if available, otherwise calculate from items
+  if (!po.total_amount || po.total_amount === 0) {
     const [totalResult] = await pool.query(
-      'SELECT SUM(amount) as total FROM purchase_order_items WHERE purchase_order_id = ?',
+      'SELECT SUM(total_amount) as total FROM purchase_order_items WHERE purchase_order_id = ?',
       [poId]
     );
     po.total_amount = totalResult[0]?.total || 0;

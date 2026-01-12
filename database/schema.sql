@@ -288,6 +288,11 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
   unit VARCHAR(20) DEFAULT 'NOS',
   unit_rate DECIMAL(12, 2) DEFAULT 0,
   amount DECIMAL(14, 2) DEFAULT 0,
+  cgst_percent DECIMAL(5, 2) DEFAULT 0,
+  cgst_amount DECIMAL(12, 2) DEFAULT 0,
+  sgst_percent DECIMAL(5, 2) DEFAULT 0,
+  sgst_amount DECIMAL(12, 2) DEFAULT 0,
+  total_amount DECIMAL(14, 2) DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
   INDEX idx_purchase_order_id (purchase_order_id)

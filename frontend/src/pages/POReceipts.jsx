@@ -117,6 +117,23 @@ const POReceipts = () => {
     }
   };
 
+  const handlePoChange = (poId) => {
+    const selectedPO = purchaseOrders.find(po => String(po.id) === String(poId));
+    if (selectedPO) {
+      setFormData({
+        ...formData,
+        poId,
+        receivedQuantity: selectedPO.total_quantity || selectedPO.items_count || ''
+      });
+    } else {
+      setFormData({
+        ...formData,
+        poId: '',
+        receivedQuantity: ''
+      });
+    }
+  };
+
   const handleCreateReceipt = async (e) => {
     e.preventDefault();
 
@@ -426,7 +443,7 @@ const POReceipts = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Select Purchase Order *</label>
                 <select
                   value={formData.poId}
-                  onChange={(e) => setFormData({...formData, poId: e.target.value})}
+                  onChange={(e) => handlePoChange(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 >

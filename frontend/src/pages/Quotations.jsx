@@ -1028,16 +1028,18 @@ const Quotations = () => {
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
                             <th className="px-3 py-2 font-semibold text-slate-600">DESCRIPTION</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600" style={{ width: '80px' }}>QTY</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600" style={{ width: '120px' }}>PRICE</th>
-                            <th className="px-3 py-2 text-right font-semibold text-slate-600" style={{ width: '120px' }}>TOTAL</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">MATERIAL NAME</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600" style={{ width: '100px' }}>TYPE</th>
+                            <th className="px-3 py-2 text-center font-semibold text-slate-600" style={{ width: '70px' }}>QTY</th>
+                            <th className="px-3 py-2 text-center font-semibold text-slate-600" style={{ width: '100px' }}>PRICE</th>
+                            <th className="px-3 py-2 text-right font-semibold text-slate-600" style={{ width: '100px' }}>TOTAL</th>
                             <th className="px-3 py-2 text-center" style={{ width: '40px' }}></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {recordData.items.length === 0 ? (
                             <tr>
-                              <td colSpan="5" className="px-3 py-8 text-center text-slate-400">
+                              <td colSpan="7" className="px-3 py-8 text-center text-slate-400">
                                 Select a project and vendor to load items, or add manually.
                               </td>
                             </tr>
@@ -1052,11 +1054,29 @@ const Quotations = () => {
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
                                     placeholder="Item description..."
                                   />
-                                  {(item.material_name || item.material_type) && (
-                                    <div className="text-[10px] text-slate-500 px-2 mt-0.5">
-                                      {item.material_name} {item.material_type ? `(${item.material_type})` : ''}
+                                  {item.item_code && (
+                                    <div className="text-[10px] text-slate-400 px-2 mt-0.5">
+                                      Code: {item.item_code}
                                     </div>
                                   )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="text"
+                                    value={item.material_name}
+                                    onChange={(e) => handleRecordItemChange(idx, 'material_name', e.target.value)}
+                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
+                                    placeholder="Material..."
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="text"
+                                    value={item.material_type}
+                                    onChange={(e) => handleRecordItemChange(idx, 'material_type', e.target.value)}
+                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
+                                    placeholder="Type..."
+                                  />
                                 </td>
                                 <td className="px-3 py-2">
                                   <input

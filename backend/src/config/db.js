@@ -110,10 +110,83 @@ const ensureCustomerPoColumns = async () => {
   }
 };
 
+const ensurePurchaseOrderItemColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM purchase_order_items');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'cgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
+      { name: 'cgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'sgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
+      { name: 'sgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'material_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) {
+      return;
+    }
+
+    const alterSql = `ALTER TABLE purchase_order_items ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Purchase order item columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Purchase order item column sync failed', error.message);
+    }
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
+const ensureQuotationItemColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM quotation_items');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'material_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) {
+      return;
+    }
+
+    const alterSql = `ALTER TABLE quotation_items ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Quotation item columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Quotation item column sync failed', error.message);
+    }
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
   await ensureCustomerPoColumns();
+  await ensurePurchaseOrderItemColumns();
+  await ensureQuotationItemColumns();
 };
 
 bootstrapDatabase();

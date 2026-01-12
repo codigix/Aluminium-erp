@@ -173,7 +173,7 @@ const DEPARTMENT_MODULES = {
   QUALITY: ['incoming-orders'],
   SHIPMENT: ['incoming-orders'],
   ACCOUNTS: [],
-  INVENTORY: ['inventory-dashboard', 'incoming-orders', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance'],
+  INVENTORY: ['inventory-dashboard', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
   ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders']
 }
@@ -435,18 +435,13 @@ function App() {
     fetchPoDetails()
   }, [salesOrderForm.customerPoId, apiRequest, showToast])
 
-  const handleLogin = useCallback(async e => {
-    e.preventDefault()
-    if (!loginEmail || !loginPassword) {
-      showToast('Email and password required')
-      return
-    }
+  const performLogin = async (email, password) => {
     setLoginLoading(true)
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+        body: JSON.stringify({ email, password })
       })
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({}))
@@ -465,6 +460,15 @@ function App() {
     } finally {
       setLoginLoading(false)
     }
+  }
+
+  const handleLogin = useCallback(async e => {
+    e.preventDefault()
+    if (!loginEmail || !loginPassword) {
+      showToast('Email and password required')
+      return
+    }
+    await performLogin(loginEmail, loginPassword)
   }, [loginEmail, loginPassword, showToast])
 
   const loadDepartmentsAndRoles = useCallback(async () => {
@@ -1189,9 +1193,14 @@ function App() {
 
   const allowedModules = user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
 
-  const navigationItems = allowedModules ? allNavigationItems.filter(item => 
-    !item.isGroup && (!item.moduleId || allowedModules.includes(item.moduleId))
-  ) : []
+  const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
+    if (item.isGroup) {
+      const nextGroupIndex = allNavigationItems.findIndex((it, i) => i > index && it.isGroup)
+      const groupItems = allNavigationItems.slice(index + 1, nextGroupIndex === -1 ? undefined : nextGroupIndex)
+      return groupItems.some(child => child.moduleId && allowedModules.includes(child.moduleId))
+    }
+    return !item.moduleId || allowedModules.includes(item.moduleId)
+  }) : []
 
   const moduleMeta = {
     'company-master': {
@@ -1559,11 +1568,70 @@ function App() {
             {authMode === 'login' && (
               <div className="text-center text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
                 <p className="font-semibold">Demo Credentials:</p>
-                <div className="space-y-1 text-left bg-slate-50 p-3 rounded-lg">
-                  <p><strong>Admin:</strong> admin@company.com / Admin@123</p>
-                  <p><strong>Sales:</strong> sales@company.com / Sales@123</p>
-                  <p><strong>Design:</strong> design@company.com / Design@123</p>
-                  <p><strong>Production:</strong> production@company.com / Production@123</p>
+                <div className="grid grid-cols-2 gap-2 text-left bg-slate-50 p-3 rounded-lg overflow-y-auto max-h-64">
+                  <button 
+                    onClick={() => performLogin('admin@company.com', 'Admin@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left col-span-2"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Admin</p>
+                    <p className="opacity-70">Full Access</p>
+                  </button>
+                  <button 
+                    onClick={() => performLogin('sales@company.com', 'Sales@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Sales</p>
+                    <p className="opacity-70">Sales Module</p>
+                  </button>
+                  <button 
+                    onClick={() => performLogin('design@company.com', 'Design@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Design</p>
+                    <p className="opacity-70">Orders & Files</p>
+                  </button>
+                  <button 
+                    onClick={() => performLogin('procurement@company.com', 'Procurement@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Procurement</p>
+                    <p className="opacity-70">PO & Vendors</p>
+                  </button>
+                  <button 
+                    onClick={() => performLogin('production@company.com', 'Production@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Production</p>
+                    <p className="opacity-70">Inventory & GRN</p>
+                  </button>
+                  <button 
+                    onClick={() => performLogin('quality@company.com', 'Quality@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Quality</p>
+                    <p className="opacity-70">QC & Inspection</p>
+                  </button>
+                  <button 
+                    onClick={() => performLogin('shipment@company.com', 'Shipment@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Shipment</p>
+                    <p className="opacity-70">Dispatch</p>
+                  </button>
+                  <button 
+                    onClick={() => performLogin('accounts@company.com', 'Accounts@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Accounts</p>
+                    <p className="opacity-70">Billing</p>
+                  </button>
+                  <button 
+                    onClick={() => performLogin('inventory@company.com', 'Inventory@123')}
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                  >
+                    <p className="font-bold text-slate-700 group-hover:text-blue-600">Inventory</p>
+                    <p className="opacity-70">Stock</p>
+                  </button>
                 </div>
               </div>
             )}

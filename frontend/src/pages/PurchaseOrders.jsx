@@ -38,6 +38,8 @@ const PurchaseOrders = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
   const [poItems, setPoItems] = useState([]);
+  const [poSuggestions, setPoSuggestions] = useState([]);
+  const [isManualPo, setIsManualPo] = useState(false);
   const [formData, setFormData] = useState({
     quotationId: '',
     projectName: '',
@@ -103,7 +105,7 @@ const PurchaseOrders = () => {
   const fetchApprovedQuotations = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotations?status=REVIEWED`, {
+      const response = await fetch(`${API_BASE}/quotations`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -112,14 +114,14 @@ const PurchaseOrders = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setQuotations(Array.isArray(data) ? data.filter(q => q.status === 'REVIEWED') : []);
+        setQuotations(Array.isArray(data) ? data.filter(q => ['REVIEWED', 'RECEIVED'].includes(q.status)) : []);
       }
     } catch (error) {
       console.error('Error fetching quotations:', error);
     }
   };
 
-  const handleQuotationChange = (quotationId) => {
+  const handleQuotationChange = async (quotationId) => {
     const selected = quotations.find(q => String(q.id) === String(quotationId));
     if (selected) {
       setFormData({
@@ -127,12 +129,53 @@ const PurchaseOrders = () => {
         quotationId,
         vendorName: selected.vendor_name || 'Unknown Vendor'
       });
+
+      // Fetch preview and quotation details to get suggested PO number and items
+      try {
+        const token = localStorage.getItem('authToken');
+        const [previewRes, quotationRes] = await Promise.all([
+          fetch(`${API_BASE}/purchase-orders/preview/${quotationId}`, {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+          }),
+          fetch(`${API_BASE}/quotations/${quotationId}`, {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+          })
+        ]);
+
+        if (previewRes.ok && quotationRes.ok) {
+          const preview = await previewRes.json();
+          const detailedQuotation = await quotationRes.json();
+          
+          const suggestions = [preview.poNumber];
+          if (selected.quote_number && selected.quote_number !== preview.poNumber) {
+            suggestions.push(selected.quote_number);
+          }
+
+          setPoSuggestions(suggestions);
+          setIsManualPo(false);
+          setPoItems(detailedQuotation.items || []);
+          setFormData(prev => ({
+            ...prev,
+            quotationId,
+            vendorName: selected.vendor_name || 'Unknown Vendor',
+            poNumber: suggestions[0],
+            projectName: preview.projectName || '',
+            expectedDeliveryDate: preview.expectedDeliveryDate || ''
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching PO preview or quotation:', error);
+      }
     } else {
       setFormData({
         ...formData,
         quotationId: '',
-        vendorName: ''
+        vendorName: '',
+        poNumber: '',
+        projectName: '',
+        expectedDeliveryDate: ''
       });
+      setPoSuggestions([]);
     }
   };
 
@@ -174,6 +217,7 @@ const PurchaseOrders = () => {
 
       await Swal.fire('Success', 'Purchase Order created successfully', 'success');
       setShowCreateModal(false);
+      setPoItems([]);
       setFormData({ quotationId: '', projectName: '', quoteNumber: '', poNumber: '', vendorName: '', expectedDeliveryDate: '', notes: '' });
       fetchPOs();
       fetchStats();
@@ -394,25 +438,16 @@ const PurchaseOrders = () => {
 
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold text-slate-900">Create Purchase Order from Quotation</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl leading-none">&times;</button>
+              <button onClick={() => {
+                setShowCreateModal(false);
+                setPoItems([]);
+              }} className="text-slate-500 text-2xl leading-none">&times;</button>
             </div>
 
             <form onSubmit={handleCreatePO} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">PO Number *</label>
-                <input
-                  type="text"
-                  value={formData.poNumber}
-                  onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
-                  placeholder="Enter PO Number manually"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  required
-                />
-              </div>
-
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Select Approved Quotation *</label>
                 <select
@@ -424,10 +459,53 @@ const PurchaseOrders = () => {
                   <option value="">-- Select a Quotation --</option>
                   {quotations.map(q => (
                     <option key={q.id} value={q.id}>
-                      {q.quote_number} - {formatCurrency(q.total_amount)} - {q.vendor_name || 'Vendor'}
+                      {q.quote_number} - {formatCurrency(q.total_amount)} - {q.vendor_name || 'Vendor'} ({q.status})
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">PO Number *</label>
+                <div className="flex gap-2">
+                  <select
+                    value={isManualPo ? 'MANUAL' : formData.poNumber}
+                    onChange={(e) => {
+                      if (e.target.value === 'MANUAL') {
+                        setIsManualPo(true);
+                        setFormData({...formData, poNumber: ''});
+                      } else {
+                        setIsManualPo(false);
+                        setFormData({...formData, poNumber: e.target.value});
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    required
+                    disabled={!formData.quotationId}
+                  >
+                    {!formData.quotationId ? (
+                      <option value="">-- Select Quotation First --</option>
+                    ) : (
+                      <>
+                        <option value="">-- Select PO Number --</option>
+                        {poSuggestions.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </>
+                    )}
+                    <option value="MANUAL">Enter Manually...</option>
+                  </select>
+                  {isManualPo && (
+                    <input
+                      type="text"
+                      value={formData.poNumber}
+                      onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
+                      placeholder="Enter PO Number"
+                      className="flex-1 px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                      required
+                    />
+                  )}
+                </div>
               </div>
 
               <div>
@@ -440,6 +518,50 @@ const PurchaseOrders = () => {
                   required
                 />
               </div>
+
+              {poItems.length > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">Quotation Items Preview</label>
+                  <div className="overflow-x-auto border border-slate-100 rounded">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 text-slate-600 uppercase">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold">Description</th>
+                          <th className="px-3 py-2 text-left font-semibold">Material</th>
+                          <th className="px-3 py-2 text-right font-semibold">Qty</th>
+                          <th className="px-3 py-2 text-center font-semibold">Unit</th>
+                          <th className="px-3 py-2 text-right font-semibold">Rate</th>
+                          <th className="px-3 py-2 text-right font-semibold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {poItems.map((item, idx) => (
+                          <tr key={idx} className="border-t border-slate-100">
+                            <td className="px-3 py-2">
+                              <p className="font-medium text-slate-900">{item.description}</p>
+                              {item.item_code && <p className="text-[10px] text-slate-500">{item.item_code}</p>}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              <p>{item.material_name || '—'}</p>
+                              {item.material_type && <p className="text-[10px] opacity-70">{item.material_type}</p>}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-600">{item.quantity}</td>
+                            <td className="px-3 py-2 text-center text-slate-600">{item.unit || 'NOS'}</td>
+                            <td className="px-3 py-2 text-right text-slate-600">{formatCurrency(item.unit_rate)}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-slate-50 font-bold border-t border-slate-200">
+                          <td colSpan="4" className="px-3 py-2 text-right text-slate-700">Total Amount</td>
+                          <td className="px-3 py-2 text-right text-emerald-600">
+                            {formatCurrency(poItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || (item.quantity * item.unit_rate)), 0))}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Optional)</label>
@@ -524,14 +646,11 @@ const PurchaseOrders = () => {
                     <tr>
                       <th className="px-3 py-2 text-left font-semibold">Item Code</th>
                       <th className="px-3 py-2 text-left font-semibold">Description</th>
+                      <th className="px-3 py-2 text-left font-semibold">Material</th>
                       <th className="px-3 py-2 text-right font-semibold">Qty</th>
                       <th className="px-3 py-2 text-center font-semibold">Unit</th>
                       <th className="px-3 py-2 text-right font-semibold">Rate</th>
                       <th className="px-3 py-2 text-right font-semibold">Amount</th>
-                      <th className="px-3 py-2 text-right font-semibold">CGST%</th>
-                      <th className="px-3 py-2 text-right font-semibold">CGST Amt</th>
-                      <th className="px-3 py-2 text-right font-semibold">SGST%</th>
-                      <th className="px-3 py-2 text-right font-semibold">SGST Amt</th>
                       <th className="px-3 py-2 text-right font-semibold">Total</th>
                     </tr>
                   </thead>
@@ -540,14 +659,18 @@ const PurchaseOrders = () => {
                       <tr key={idx} className="border-t border-slate-100">
                         <td className="px-3 py-2 text-slate-600">{item.item_code || '—'}</td>
                         <td className="px-3 py-2 text-slate-600">{item.description || '—'}</td>
+                        <td className="px-3 py-2 text-slate-600">
+                          {item.material_name ? (
+                            <div>
+                              <p className="font-medium">{item.material_name}</p>
+                              {item.material_type && <p className="text-[10px] opacity-70">{item.material_type}</p>}
+                            </div>
+                          ) : '—'}
+                        </td>
                         <td className="px-3 py-2 text-right font-medium text-slate-900">{item.quantity}</td>
                         <td className="px-3 py-2 text-center text-slate-600">{item.unit}</td>
                         <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrency(item.unit_rate)}</td>
                         <td className="px-3 py-2 text-right font-semibold text-emerald-600">{formatCurrency(item.amount)}</td>
-                        <td className="px-3 py-2 text-right text-slate-600">{item.cgst_percent || '—'}</td>
-                        <td className="px-3 py-2 text-right font-medium text-blue-600">{formatCurrency(item.cgst_amount)}</td>
-                        <td className="px-3 py-2 text-right text-slate-600">{item.sgst_percent || '—'}</td>
-                        <td className="px-3 py-2 text-right font-medium text-blue-600">{formatCurrency(item.sgst_amount)}</td>
                         <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrency(item.total_amount || (parseFloat(item.amount) + parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)))}</td>
                       </tr>
                     ))}
