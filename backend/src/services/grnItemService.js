@@ -375,6 +375,9 @@ const getGRNItemsByGrnId = async (grnId) => {
       poi.unit,
       poi.unit_rate,
       poi.amount,
+      poi.material_name,
+      poi.material_type,
+      poi.drawing_no,
       gea.id as excess_approval_id,
       gea.status as excess_approval_status,
       gea.excess_qty

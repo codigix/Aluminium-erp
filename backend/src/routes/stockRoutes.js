@@ -63,4 +63,22 @@ router.post('/ledger/entry', async (req, res) => {
   }
 });
 
+router.delete('/ledger/:id', async (req, res) => {
+  try {
+    await stockService.deleteStockLedgerEntry(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.delete('/balance/:id', async (req, res) => {
+  try {
+    await stockService.deleteStockBalance(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

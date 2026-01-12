@@ -20,14 +20,32 @@ import StockLedger from './pages/StockLedger'
 import StockBalance from './pages/StockBalance'
 import InventoryDashboard from './pages/InventoryDashboard'
 import POMaterialRequest from './pages/POMaterialRequest'
+import QualityDashboard from './pages/QualityDashboard'
+import IncomingQC from './pages/IncomingQC'
+import InProcessQC from './pages/InProcessQC'
+import FinalQC from './pages/FinalQC'
+import QualityRejections from './pages/QualityRejections'
+import QualityReports from './pages/QualityReports'
+import WarehouseAllocation from './pages/WarehouseAllocation'
+import DrawingMaster from './pages/DrawingMaster'
+import DesignOrders from './pages/DesignOrders'
+import BOMCreation from './pages/BOMCreation'
+import RoutingOperations from './pages/RoutingOperations'
+import ProcessSheet from './pages/ProcessSheet'
+import BOMApproval from './pages/BOMApproval'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance']
+const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval']
 const DEFAULT_MODULE = 'company-master'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
+const currencyFormatter = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  minimumFractionDigits: 2
+})
 const COMPANY_HINTS = {
   SIDEL: ['sidel'],
   PHOENIX: ['phoenix'],
@@ -169,14 +187,14 @@ const getContactStatusActionLabel = status => {
 
 const DEPARTMENT_MODULES = {
   SALES: ['company-master', 'client-contacts', 'customer-po', 'sales-order'],
-  DESIGN_ENG: ['incoming-orders'],
+  DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval'],
   PRODUCTION: ['incoming-orders'],
-  QUALITY: ['incoming-orders'],
+  QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
   SHIPMENT: ['incoming-orders'],
   ACCOUNTS: [],
-  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance'],
+  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
-  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders', 'po-material-request']
+  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval']
 }
 
 function App() {
@@ -279,6 +297,43 @@ function App() {
   const [selectedPoForSo, setSelectedPoForSo] = useState(null)
   const [soItems, setSoItems] = useState([])
   const [poItemsLoading, setPoItemsLoading] = useState(false)
+
+  const isIntrastate = useMemo(() => {
+    if (!poForm.companyId) return true
+    const company = companies.find(c => c.id.toString() === poForm.companyId.toString())
+    if (!company) return true
+    const billing = company.addresses?.find(a => a.address_type === 'BILLING')
+    if (!billing?.state) return true
+    return billing.state.toLowerCase() === HOME_PLANT_STATE
+  }, [poForm.companyId, companies])
+
+  const poSummary = useMemo(() => {
+    return poItems.reduce((acc, item) => {
+      const qty = parseIndianNumber(item.quantity)
+      const rate = parseIndianNumber(item.rate)
+      const basic = qty * rate
+      const disc = parseIndianNumber(item.discount)
+      const taxable = basic - disc
+      
+      const taxes = normalizeTaxPercents(
+        parseIndianNumber(item.cgstPercent),
+        parseIndianNumber(item.sgstPercent),
+        parseIndianNumber(item.igstPercent),
+        isIntrastate
+      )
+
+      const cgst = (taxable * taxes.cgstPercent) / 100
+      const sgst = (taxable * taxes.sgstPercent) / 100
+      const igst = (taxable * taxes.igstPercent) / 100
+
+      acc.subtotal += taxable
+      acc.cgst += cgst
+      acc.sgst += sgst
+      acc.igst += igst
+      acc.net += taxable + cgst + sgst + igst
+      return acc
+    }, { subtotal: 0, cgst: 0, sgst: 0, igst: 0, net: 0 })
+  }, [poItems, isIntrastate])
 
   const handleSalesOrderFieldChange = (field, value) => {
     setSalesOrderForm(prev => ({ ...prev, [field]: value }))
@@ -572,6 +627,18 @@ function App() {
     }
   }, [apiRequest, showToast])
 
+  const loadCustomerPos = useCallback(async () => {
+    setCustomerPosLoading(true)
+    try {
+      const data = await apiRequest('/customer-pos')
+      setCustomerPos(Array.isArray(data) ? data : [])
+    } catch (error) {
+      showToast(error.message)
+    } finally {
+      setCustomerPosLoading(false)
+    }
+  }, [apiRequest, showToast])
+
   const getPoPdfUrl = useCallback(path => {
     if (!path) {
       return null
@@ -591,6 +658,12 @@ function App() {
       loadSalesOrders().catch(() => null)
     }
   }, [loadSalesOrders, token, user])
+
+  useEffect(() => {
+    if (token && user) {
+      loadCustomerPos().catch(() => null)
+    }
+  }, [loadCustomerPos, token, user])
 
   const handleSendOrderToDesign = useCallback(async (orderId) => {
     try {
@@ -1040,6 +1113,10 @@ function App() {
     }
   }
 
+  const triggerPoUpload = () => {
+    poUploadInputRef.current?.click()
+  }
+
   const handlePushToSalesOrder = async () => {
     if (!poForm.companyId) {
       showToast('Select a company for the PO')
@@ -1147,6 +1224,61 @@ function App() {
     }
   }, [apiRequest, showToast])
 
+  const handleEditCustomerPo = po => {
+    setEditingPoId(po.id)
+    setPoForm({
+      companyId: po.company_id?.toString() || '',
+      poNumber: po.po_number || '',
+      poDate: po.po_date ? po.po_date.slice(0, 10) : '',
+      paymentTerms: po.payment_terms || '',
+      creditDays: po.credit_days || '',
+      freightTerms: po.freight_terms || '',
+      packingForwarding: po.packing_forwarding || '',
+      insuranceTerms: po.insurance_terms || '',
+      currency: po.currency || 'INR',
+      deliveryTerms: po.delivery_terms || '',
+      remarks: po.remarks || ''
+    })
+    if (Array.isArray(po.items)) {
+      setPoItems(po.items.map(item => ({
+        drawingNo: item.drawing_no || '',
+        description: item.description || '',
+        quantity: parseIndianNumber(item.quantity),
+        unit: item.unit || 'NOS',
+        rate: parseIndianNumber(item.rate),
+        cgstPercent: parseIndianNumber(item.cgst_percent),
+        sgstPercent: parseIndianNumber(item.sgst_percent),
+        igstPercent: parseIndianNumber(item.igst_percent),
+        hsnCode: item.hsn_code || '',
+        discount: parseIndianNumber(item.discount)
+      })))
+    }
+    setShowPoForm(true)
+    setPoCompanyLocked(true)
+  }
+
+  const handleDeleteCustomerPo = async poId => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    })
+
+    if (result.isConfirmed) {
+      try {
+        await apiRequest(`/customer-pos/${poId}`, { method: 'DELETE' })
+        showToast('PO deleted successfully')
+        await loadCustomerPos()
+      } catch (error) {
+        showToast(error.message)
+      }
+    }
+  }
+
   const closePoDetailDrawer = () => {
     setPoDetailDrawerOpen(false)
     setPoDetail(null)
@@ -1178,7 +1310,12 @@ function App() {
     { label: 'Client Contacts', moduleId: 'client-contacts' },
     { label: 'Customer PO', moduleId: 'customer-po' },
     { label: 'Sales Order', moduleId: 'sales-order' },
-    { label: 'Incoming Orders', moduleId: 'incoming-orders' },
+    { label: 'Design Orders', moduleId: 'design-orders' },
+    { label: 'Drawing Master', moduleId: 'drawing-master', indent: true },
+    { label: 'BOM Creation', moduleId: 'bom-creation', indent: true },
+    { label: 'Routing / Operations', moduleId: 'routing-operations', indent: true },
+    { label: 'Process Sheet', moduleId: 'process-sheet', indent: true },
+    { label: 'BOM Approval', moduleId: 'bom-approval', indent: true },
     { label: 'Vendor Management', isGroup: true, isDisabled: true, groupId: 'vendor-group' },
     { label: 'Vendors', moduleId: 'vendors', indent: true },
     { label: 'Quotations (RFQ)', moduleId: 'quotations', indent: true },
@@ -1188,9 +1325,17 @@ function App() {
     { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', indent: true },
     { label: 'PO Material Request', moduleId: 'po-material-request', indent: true },
     { label: 'GRN Processing', moduleId: 'grn', indent: true },
-    { label: 'QC Inspections', moduleId: 'qc-inspections', indent: true },
     { label: 'Stock Ledger', moduleId: 'stock-ledger', indent: true },
-    { label: 'Stock Balance', moduleId: 'stock-balance', indent: true }
+    { label: 'Stock Balance', moduleId: 'stock-balance', indent: true },
+    { label: 'Warehouse Allocation', moduleId: 'warehouse-allocation', indent: true },
+    { label: 'Quality Assurance', isGroup: true, isDisabled: true, groupId: 'quality-group' },
+    { label: 'Quality Dashboard', moduleId: 'quality-dashboard', indent: true },
+    { label: 'Incoming QC', moduleId: 'incoming-qc', indent: true },
+    { label: 'In-Process QC', moduleId: 'in-process-qc', indent: true },
+    { label: 'Final QC', moduleId: 'final-qc', indent: true },
+    { label: 'QC Inspections', moduleId: 'qc-inspections', indent: true },
+    { label: 'Rejections', moduleId: 'quality-rejections', indent: true },
+    { label: 'Quality Reports', moduleId: 'quality-reports', indent: true }
   ]
 
   const allowedModules = user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
@@ -1353,6 +1498,12 @@ function App() {
       description: 'Overview of incoming orders, stock levels, and pending activities',
       actions: null
     },
+    'quality-dashboard': {
+      badge: 'Quality Assurance',
+      title: 'Quality Dashboard',
+      description: 'Overview of QC stats and pending inspections',
+      actions: null
+    },
     'po-material-request': {
       badge: 'Inventory Management',
       title: 'PO Material Request',
@@ -1375,6 +1526,78 @@ function App() {
       badge: 'Inventory Management',
       title: 'Stock Balance',
       description: 'Current stock levels and inventory status',
+      actions: null
+    },
+    'incoming-qc': {
+      badge: 'Quality Assurance',
+      title: 'Incoming QC',
+      description: 'Perform and manage quality checks for incoming materials',
+      actions: null
+    },
+    'in-process-qc': {
+      badge: 'Quality Assurance',
+      title: 'In-Process QC',
+      description: 'Quality monitoring during production stages',
+      actions: null
+    },
+    'final-qc': {
+      badge: 'Quality Assurance',
+      title: 'Final QC',
+      description: 'Post-production quality clearance and certification',
+      actions: null
+    },
+    'quality-rejections': {
+      badge: 'Quality Assurance',
+      title: 'Quality Rejections',
+      description: 'Manage and track quality-related rejections and NRMs',
+      actions: null
+    },
+    'quality-reports': {
+      badge: 'Quality Assurance',
+      title: 'Quality Reports',
+      description: 'Comprehensive quality metrics and performance reports',
+      actions: null
+    },
+    'warehouse-allocation': {
+      badge: 'Inventory Management',
+      title: 'Warehouse Allocation',
+      description: 'Assign material to target warehouses',
+      actions: null
+    },
+    'design-orders': {
+      badge: 'Design Engineering',
+      title: 'Design Orders',
+      description: 'Entry point for design tasks after Sales Order approval',
+      actions: null
+    },
+    'drawing-master': {
+      badge: 'Design Engineering',
+      title: 'Drawing Master',
+      description: 'Manage engineering drawings and revisions',
+      actions: null
+    },
+    'bom-creation': {
+      badge: 'Design Engineering',
+      title: 'BOM Creation',
+      description: 'Define Bill of Materials for assembly and parts',
+      actions: null
+    },
+    'routing-operations': {
+      badge: 'Design Engineering',
+      title: 'Routing / Operations',
+      description: 'Define manufacturing operations and sequences',
+      actions: null
+    },
+    'process-sheet': {
+      badge: 'Design Engineering',
+      title: 'Process Sheet',
+      description: 'Create and manage production process sheets',
+      actions: null
+    },
+    'bom-approval': {
+      badge: 'Design Engineering',
+      title: 'BOM Approval',
+      description: 'Review and approve finalized BOMs',
       actions: null
     }
   }
@@ -1904,6 +2127,30 @@ function App() {
                   <InventoryDashboard />
                 )}
 
+                {activeModule === 'quality-dashboard' && (
+                  <QualityDashboard />
+                )}
+
+                {activeModule === 'incoming-qc' && (
+                  <IncomingQC />
+                )}
+
+                {activeModule === 'in-process-qc' && (
+                  <InProcessQC />
+                )}
+
+                {activeModule === 'final-qc' && (
+                  <FinalQC />
+                )}
+
+                {activeModule === 'quality-rejections' && (
+                  <QualityRejections />
+                )}
+
+                {activeModule === 'quality-reports' && (
+                  <QualityReports />
+                )}
+
                 {activeModule === 'po-material-request' && (
                   <POMaterialRequest />
                 )}
@@ -1922,6 +2169,34 @@ function App() {
 
                 {activeModule === 'stock-balance' && (
                   <StockBalance />
+                )}
+
+                {activeModule === 'warehouse-allocation' && (
+                  <WarehouseAllocation />
+                )}
+
+                {activeModule === 'design-orders' && (
+                  <DesignOrders />
+                )}
+
+                {activeModule === 'drawing-master' && (
+                  <DrawingMaster />
+                )}
+
+                {activeModule === 'bom-creation' && (
+                  <BOMCreation />
+                )}
+
+                {activeModule === 'routing-operations' && (
+                  <RoutingOperations />
+                )}
+
+                {activeModule === 'process-sheet' && (
+                  <ProcessSheet />
+                )}
+
+                {activeModule === 'bom-approval' && (
+                  <BOMApproval />
                 )}
               </>
             )}

@@ -64,6 +64,38 @@ const StockLedger = () => {
     fetchLedger({ itemCode, startDate, endDate });
   };
 
+  const handleDelete = async (id) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "This will delete the ledger entry and recalculate the stock balance!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/stock/ledger/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) throw new Error('Failed to delete ledger entry');
+
+        await Swal.fire('Deleted!', 'Ledger entry has been deleted.', 'success');
+        fetchLedger({ itemCode, startDate, endDate });
+      } catch (error) {
+        Swal.fire('Error', error.message || 'Failed to delete entry', 'error');
+      }
+    }
+  };
+
   const handleAddEntry = async (e) => {
     e.preventDefault();
 
@@ -179,18 +211,23 @@ const StockLedger = () => {
               <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold">Item Code</th>
+                  <th className="px-4 py-3 text-left font-semibold">Material Name</th>
+                  <th className="px-4 py-3 text-left font-semibold">Material Type</th>
                   <th className="px-4 py-3 text-left font-semibold">Date</th>
                   <th className="px-4 py-3 text-left font-semibold">Type</th>
                   <th className="px-4 py-3 text-right font-semibold">Quantity</th>
                   <th className="px-4 py-3 text-right font-semibold">Balance After</th>
                   <th className="px-4 py-3 text-left font-semibold">Reference</th>
                   <th className="px-4 py-3 text-left font-semibold">Remarks</th>
+                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {ledger.map((entry) => (
                   <tr key={entry.id} className="border-t border-slate-100">
                     <td className="px-4 py-4 font-medium text-slate-900">{entry.item_code}</td>
+                    <td className="px-4 py-4 text-slate-600">{entry.material_name || '—'}</td>
+                    <td className="px-4 py-4 text-slate-600">{entry.material_type || '—'}</td>
                     <td className="px-4 py-4 text-slate-600">
                       {new Date(entry.transaction_date).toLocaleDateString()}
                     </td>
@@ -208,6 +245,15 @@ const StockLedger = () => {
                       }
                     </td>
                     <td className="px-4 py-4 text-slate-600 text-xs">{entry.remarks || '—'}</td>
+                    <td className="px-4 py-4 text-right">
+                      <button
+                        onClick={() => handleDelete(entry.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Entry"
+                      >
+                        🗑️
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

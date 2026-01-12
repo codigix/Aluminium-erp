@@ -151,7 +151,7 @@ const GRNProcessing = () => {
   const fetchPurchaseOrders = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/purchase-orders`, {
+      const response = await fetch(`${API_BASE}/purchase-orders?storeAcceptanceStatus=ACCEPTED`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -318,6 +318,9 @@ const GRNProcessing = () => {
           poItemId: item.id,
           itemCode: item.item_code || item.itemCode,
           description: item.description,
+          materialName: item.material_name,
+          materialType: item.material_type,
+          drawingNo: item.drawing_no,
           poQty: item.quantity,
           acceptedQty: accepted,
           remarks: data.remarks || null
@@ -626,11 +629,10 @@ const GRNProcessing = () => {
                     <table className="w-full text-sm border-collapse">
                       <thead className="bg-slate-100">
                         <tr>
-                          <th className="px-4 py-2 text-left font-semibold min-w-[100px]">Item Code</th>
-                          <th className="px-4 py-2 text-left font-semibold min-w-[180px]">Description</th>
+                          <th className="px-4 py-2 text-left font-semibold min-w-[150px]">Material</th>
+                          <th className="px-4 py-2 text-left font-semibold min-w-[120px]">Type</th>
                           <th className="px-4 py-2 text-center font-semibold min-w-[70px]">PO Qty</th>
                           <th className="px-4 py-2 text-center font-semibold min-w-[70px]">Accepted *</th>
-                          <th className="px-4 py-2 text-center font-semibold min-w-[70px]">Difference</th>
                           <th className="px-4 py-2 text-center font-semibold min-w-[120px]">Status</th>
                           <th className="px-4 py-2 text-center font-semibold min-w-[100px]">Remarks</th>
                         </tr>
@@ -639,7 +641,7 @@ const GRNProcessing = () => {
                         {poItems.map((item) => {
                           const data = itemData[item.id] || {};
                           const accepted = parseInt(data.acceptedQty) || 0;
-                          const { status, difference } = calculateMetrics(
+                          const { status } = calculateMetrics(
                             item.quantity,
                             accepted
                           );
@@ -652,8 +654,8 @@ const GRNProcessing = () => {
                                 itemError ? 'bg-red-50' : 'hover:bg-slate-50'
                               }`}
                             >
-                              <td className="px-4 py-3 font-medium text-slate-900">{item.item_code || item.itemCode || '—'}</td>
-                              <td className="px-4 py-3 text-slate-600">{item.description || '—'}</td>
+                              <td className="px-4 py-3 text-slate-600 font-medium">{item.material_name || '—'}</td>
+                              <td className="px-4 py-3 text-slate-600">{item.material_type || '—'}</td>
                               <td className="px-4 py-3 text-center font-medium">{item.quantity}</td>
                               <td className="px-4 py-3">
                                 <input
@@ -664,9 +666,6 @@ const GRNProcessing = () => {
                                   placeholder="0"
                                   className="w-full px-2 py-1 border border-slate-300 rounded text-center text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                                 />
-                              </td>
-                              <td className="px-4 py-3 text-center font-medium">
-                                {difference !== 0 ? (difference > 0 ? `+${difference}` : difference) : '0'}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span className={`inline-block text-xs font-semibold px-3 py-1 rounded ${itemStatusColors[status] || itemStatusColors.PENDING}`}>
@@ -747,8 +746,8 @@ const GRNProcessing = () => {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
                     <tr>
-                      <th className="px-4 py-3 text-left font-semibold">Item Code</th>
-                      <th className="px-4 py-3 text-left font-semibold">Description</th>
+                      <th className="px-4 py-3 text-left font-semibold">Material</th>
+                      <th className="px-4 py-3 text-left font-semibold">Type</th>
                       <th className="px-4 py-3 text-center font-semibold">PO Qty</th>
                       <th className="px-4 py-3 text-center font-semibold">Received</th>
                       <th className="px-4 py-3 text-center font-semibold">Accepted</th>
@@ -760,8 +759,8 @@ const GRNProcessing = () => {
                   <tbody>
                     {grnItems.map((item) => (
                       <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="px-4 py-4 font-medium text-slate-900">{item.item_code || '—'}</td>
-                        <td className="px-4 py-4 text-slate-600">{item.description || '—'}</td>
+                        <td className="px-4 py-4 text-slate-600 font-medium">{item.material_name || '—'}</td>
+                        <td className="px-4 py-4 text-slate-600">{item.material_type || '—'}</td>
                         <td className="px-4 py-4 text-center">{item.po_qty || 0}</td>
                         <td className="px-4 py-4 text-center">{item.received_qty || 0}</td>
                         <td className="px-4 py-4 text-center font-medium">{item.accepted_qty || 0}</td>

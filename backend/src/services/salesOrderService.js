@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const designOrderService = require('./designOrderService');
 
 const listSalesOrders = async () => {
   const [rows] = await pool.query(
@@ -61,7 +62,7 @@ const createSalesOrder = async (customerPoId, companyId, projectName, drawingReq
       orderItems = items;
     } else {
       const [poItems] = await connection.query(
-        'SELECT item_code, description, quantity, unit, rate, delivery_date, (cgst_amount + sgst_amount + igst_amount) as tax_value FROM customer_po_items WHERE customer_po_id = ?',
+        'SELECT item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, (cgst_amount + sgst_amount + igst_amount) as tax_value FROM customer_po_items WHERE customer_po_id = ?',
         [customerPoId]
       );
       orderItems = poItems;
@@ -69,9 +70,9 @@ const createSalesOrder = async (customerPoId, companyId, projectName, drawingReq
 
     for (const item of orderItems) {
       const [itemResult] = await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, item_code, description, quantity, unit, rate, delivery_date, tax_value)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [salesOrderId, item.drawing_no || item.item_code, item.description, item.quantity, item.unit, item.rate, item.delivery_date, item.tax_value || 0]
+        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [salesOrderId, item.item_code, item.drawing_no, item.revision_no, item.description, item.quantity, item.unit, item.rate, item.delivery_date, item.tax_value || 0]
       );
 
       const salesOrderItemId = itemResult.insertId;
@@ -102,38 +103,53 @@ const updateSalesOrderStatus = async (salesOrderId, status) => {
 };
 
 const acceptRequest = async (salesOrderId, departmentCode) => {
-  const [order] = await pool.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
-  if (!order.length) throw new Error('Order not found');
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    const [order] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
+    if (!order.length) throw new Error('Order not found');
 
-  const currentOrder = order[0];
-  let newStatus = currentOrder.status;
-  let nextDepartment = currentOrder.current_department;
+    const currentOrder = order[0];
+    let newStatus = currentOrder.status;
+    let nextDepartment = currentOrder.current_department;
 
-  if (departmentCode === 'INVENTORY' && currentOrder.status === 'CREATED') {
-    newStatus = 'DESIGN_IN_REVIEW';
-    nextDepartment = 'DESIGN_ENG';
-  } else if (departmentCode === 'DESIGN_ENG' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW')) {
-    newStatus = 'DESIGN_APPROVED';
-    nextDepartment = 'PROCUREMENT';
-  } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_APPROVED' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
-    if (currentOrder.material_available) {
-      newStatus = 'MATERIAL_READY';
-      nextDepartment = 'PRODUCTION';
-    } else {
-      newStatus = 'MATERIAL_PURCHASE_IN_PROGRESS';
-      nextDepartment = 'PROCUREMENT';
+    if (departmentCode === 'INVENTORY' && currentOrder.status === 'CREATED') {
+      newStatus = 'DESIGN_IN_REVIEW';
+      nextDepartment = 'DESIGN_ENG';
+    } else if (departmentCode === 'DESIGN_ENG' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW')) {
+      newStatus = 'DESIGN_IN_REVIEW';
+      nextDepartment = 'DESIGN_ENG';
+    } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_APPROVED' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
+      if (currentOrder.material_available) {
+        newStatus = 'MATERIAL_READY';
+        nextDepartment = 'PRODUCTION';
+      } else {
+        newStatus = 'MATERIAL_PURCHASE_IN_PROGRESS';
+        nextDepartment = 'PROCUREMENT';
+      }
+    } else if (departmentCode === 'PRODUCTION' && (currentOrder.status === 'MATERIAL_READY' || currentOrder.status === 'IN_PRODUCTION')) {
+      newStatus = 'PRODUCTION_COMPLETED';
+      nextDepartment = 'QC';
     }
-  } else if (departmentCode === 'PRODUCTION' && (currentOrder.status === 'MATERIAL_READY' || currentOrder.status === 'IN_PRODUCTION')) {
-    newStatus = 'PRODUCTION_COMPLETED';
-    nextDepartment = 'QC';
+
+    await connection.execute(
+      'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id = ?',
+      [newStatus, nextDepartment, salesOrderId]
+    );
+
+    if (nextDepartment === 'DESIGN_ENG') {
+      await designOrderService.createDesignOrder(salesOrderId, connection);
+    }
+
+    await connection.commit();
+    return { status: newStatus, currentDepartment: nextDepartment };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
-
-  await pool.execute(
-    'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id = ?',
-    [newStatus, nextDepartment, salesOrderId]
-  );
-
-  return { status: newStatus, currentDepartment: nextDepartment };
 };
 
 const rejectRequest = async (salesOrderId) => {
@@ -325,27 +341,6 @@ const generateSalesOrderPDF = async (salesOrderId) => {
   return pdf;
 };
 
-const getItemMaterials = async (itemId) => {
-  const [rows] = await pool.query(
-    'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-    [itemId]
-  );
-  return rows;
-};
-
-const addItemMaterial = async (itemId, materialData) => {
-  const { materialName, materialType, qtyPerPc, uom } = materialData;
-  const [result] = await pool.execute(
-    'INSERT INTO sales_order_item_materials (sales_order_item_id, material_name, material_type, qty_per_pc, uom) VALUES (?, ?, ?, ?, ?)',
-    [itemId, materialName, materialType, qtyPerPc, uom]
-  );
-  return result.insertId;
-};
-
-const deleteItemMaterial = async (materialId) => {
-  await pool.execute('DELETE FROM sales_order_item_materials WHERE id = ?', [materialId]);
-};
-
 module.exports = {
   listSalesOrders,
   getIncomingOrders,
@@ -356,8 +351,5 @@ module.exports = {
   transitionToDepartment,
   sendOrderToDesign,
   getOrderTimeline,
-  generateSalesOrderPDF,
-  getItemMaterials,
-  addItemMaterial,
-  deleteItemMaterial
+  generateSalesOrderPDF
 };

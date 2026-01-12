@@ -133,9 +133,9 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
           `INSERT INTO purchase_order_items (
             purchase_order_id, item_code, description, quantity, unit, unit_rate, amount,
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            material_name, material_type
+            material_name, material_type, drawing_no
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             poId,
             item.item_code || null,
@@ -150,7 +150,8 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
             sgstAmount,
             totalAmount,
             item.material_name || null,
-            item.material_type || null
+            item.material_type || null,
+            item.drawing_no || null
           ]
         );
       }
@@ -221,6 +222,11 @@ const getPurchaseOrders = async (filters = {}) => {
     params.push(filters.vendorId);
   }
 
+  if (filters.storeAcceptanceStatus) {
+    query += ' AND po.store_acceptance_status = ?';
+    params.push(filters.storeAcceptanceStatus);
+  }
+
   query += ' GROUP BY po.id ORDER BY po.created_at DESC';
 
   const [pos] = await pool.query(query, params);
@@ -259,7 +265,9 @@ const getPurchaseOrderById = async (poId) => {
       sgst_amount,
       total_amount,
       material_name,
-      material_type
+      material_type,
+      drawing_no,
+      accepted_quantity
      FROM purchase_order_items 
      WHERE purchase_order_id = ?`,
     [poId]
@@ -354,6 +362,8 @@ const getPOMaterialRequests = async (filters = {}) => {
       v.vendor_name,
       poi.item_code,
       poi.material_name,
+      poi.material_type,
+      poi.drawing_no,
       poi.description,
       poi.quantity as po_qty,
       poi.unit,

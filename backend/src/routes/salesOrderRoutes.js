@@ -12,9 +12,4 @@ router.post('/:id/reject', salesOrderController.rejectRequest);
 router.get('/:id/timeline', salesOrderController.getOrderTimeline);
 router.get('/:id/pdf', salesOrderController.generateSalesOrderPDF);
 
-// Material Management for Items
-router.get('/items/:itemId/materials', salesOrderController.getItemMaterials);
-router.post('/items/:itemId/materials', salesOrderController.addItemMaterial);
-router.delete('/materials/:id', salesOrderController.deleteItemMaterial);
-
 module.exports = router;

@@ -46,15 +46,16 @@ const createQuotation = async (payload) => {
         totalAmount += amount;
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, unit, unit_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
-            item.drawing_no || item.item_code || null,
+            item.item_code || null,
             item.description || null,
             item.material_name || null,
             item.material_type || null,
+            item.drawing_no || null,
             item.quantity || 0,
             item.uom || item.unit || 'NOS',
             item.unit_rate || 0,
@@ -186,15 +187,16 @@ const updateQuotation = async (quotationId, payload) => {
         totalAmount += amount;
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, unit, unit_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
-            item.drawing_no || item.item_code || null,
+            item.item_code || null,
             item.description || null,
             item.material_name || null,
             item.material_type || null,
+            item.drawing_no || null,
             item.quantity || 0,
             item.uom || item.unit || 'NOS',
             item.unit_rate || 0,

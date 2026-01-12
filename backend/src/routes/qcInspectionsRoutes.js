@@ -3,7 +3,7 @@ const router = express.Router();
 const qcService = require('../services/qcInspectionsService');
 const { authorizeByDepartment } = require('../middleware/authMiddleware');
 
-router.use(authorizeByDepartment([8]));
+router.use(authorizeByDepartment([5, 8]));
 
 router.get('/stats', async (req, res) => {
   try {

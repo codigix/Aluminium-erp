@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui.jsx';
+import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -61,9 +62,42 @@ const StockBalance = () => {
 
     const filtered = balances.filter(item =>
       item.item_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.item_description?.toLowerCase().includes(searchTerm.toLowerCase())
+      item.material_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.material_type?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredBalances(filtered);
+  };
+
+  const handleDelete = async (id) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "This will remove the item from stock balance! (Ledger history remains)",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/stock/balance/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) throw new Error('Failed to delete stock balance');
+
+        await Swal.fire('Deleted!', 'Stock balance has been removed.', 'success');
+        fetchStockBalance();
+      } catch (error) {
+        Swal.fire('Error', error.message || 'Failed to delete balance', 'error');
+      }
+    }
   };
 
   const getStatusColor = (balance) => {
@@ -115,14 +149,12 @@ const StockBalance = () => {
               <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold">Item Code</th>
-                  <th className="px-4 py-3 text-left font-semibold">Description</th>
-                  <th className="px-4 py-3 text-right font-semibold">PO Qty</th>
-                  <th className="px-4 py-3 text-right font-semibold">Received</th>
-                  <th className="px-4 py-3 text-right font-semibold">Accepted</th>
-                  <th className="px-4 py-3 text-right font-semibold">Issued</th>
+                  <th className="px-4 py-3 text-left font-semibold">Material Name</th>
+                  <th className="px-4 py-3 text-left font-semibold">Material Type</th>
                   <th className="px-4 py-3 text-right font-semibold">Current Balance</th>
                   <th className="px-4 py-3 text-left font-semibold">Unit</th>
                   <th className="px-4 py-3 text-left font-semibold">Last Updated</th>
+                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,11 +163,8 @@ const StockBalance = () => {
                   return (
                     <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50">
                       <td className="px-4 py-4 font-medium text-slate-900">{item.item_code}</td>
-                      <td className="px-4 py-4 text-slate-600 text-xs max-w-xs truncate">{item.item_description || '—'}</td>
-                      <td className="px-4 py-4 text-right text-slate-600">{parseFloat(item.po_qty || 0).toFixed(3)}</td>
-                      <td className="px-4 py-4 text-right text-slate-600">{parseFloat(item.received_qty || 0).toFixed(3)}</td>
-                      <td className="px-4 py-4 text-right text-emerald-600 font-semibold">{parseFloat(item.accepted_qty || 0).toFixed(3)}</td>
-                      <td className="px-4 py-4 text-right text-orange-600 font-semibold">{parseFloat(item.issued_qty || 0).toFixed(3)}</td>
+                      <td className="px-4 py-4 text-slate-600">{item.material_name || '—'}</td>
+                      <td className="px-4 py-4 text-slate-600">{item.material_type || '—'}</td>
                       <td className={`px-4 py-4 text-right font-bold ${statusColor.text}`}>
                         <span className="flex items-center justify-end gap-2">
                           <span className={`inline-block w-2 h-2 rounded-full ${statusColor.indicator}`}></span>
@@ -145,6 +174,15 @@ const StockBalance = () => {
                       <td className="px-4 py-4 text-slate-600">{item.unit || 'NOS'}</td>
                       <td className="px-4 py-4 text-slate-600 text-xs">
                         {new Date(item.last_updated).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove from Balance"
+                        >
+                          🗑️
+                        </button>
                       </td>
                     </tr>
                   );

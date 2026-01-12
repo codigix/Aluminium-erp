@@ -3,7 +3,7 @@ const router = express.Router();
 const inventoryDashboardController = require('../controllers/inventoryDashboardController');
 const { authorizeByDepartment } = require('../middleware/authMiddleware');
 
-router.use(authorizeByDepartment([8]));
+router.use(authorizeByDepartment([5, 8]));
 
 router.get('/incoming-orders', inventoryDashboardController.getIncomingOrders);
 router.get('/pending-grns', inventoryDashboardController.getPendingGRNs);

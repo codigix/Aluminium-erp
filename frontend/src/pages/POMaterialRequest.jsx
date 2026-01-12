@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Card, StatusBadge } from '../components/ui.jsx';
+import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,6 +10,7 @@ const POMaterialRequest = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [expandedPos, setExpandedPos] = useState(new Set());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,6 +31,10 @@ const POMaterialRequest = () => {
       if (!response.ok) throw new Error('Failed to fetch Material Requests');
       const data = await response.json();
       setRequests(Array.isArray(data) ? data : []);
+      
+      // Auto-expand all for now
+      const poIds = new Set(data.map(req => req.po_id));
+      setExpandedPos(poIds);
     } catch (error) {
       console.error('Error fetching material requests:', error);
       setRequests([]);
@@ -72,8 +77,19 @@ const POMaterialRequest = () => {
     }
   };
 
-  const filteredRequests = useMemo(() => {
-    return requests.filter(req => {
+  const togglePo = (poId) => {
+    const newExpanded = new Set(expandedPos);
+    if (newExpanded.has(poId)) {
+      newExpanded.delete(poId);
+    } else {
+      newExpanded.add(poId);
+    }
+    setExpandedPos(newExpanded);
+  };
+
+  // Group requests by PO ID
+  const groupedRequests = useMemo(() => {
+    const filtered = requests.filter(req => {
       const matchesSearch = 
         req.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         req.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -83,6 +99,24 @@ const POMaterialRequest = () => {
       
       return matchesSearch && matchesStatus;
     });
+
+    const groups = {};
+    filtered.forEach(req => {
+      if (!groups[req.po_id]) {
+        groups[req.po_id] = {
+          po_id: req.po_id,
+          po_number: req.po_number,
+          po_date: req.po_date,
+          vendor_name: req.vendor_name,
+          expected_delivery_date: req.expected_delivery_date,
+          store_acceptance_status: req.store_acceptance_status,
+          items: []
+        };
+      }
+      groups[req.po_id].items.push(req);
+    });
+
+    return Object.values(groups).sort((a, b) => new Date(b.po_date) - new Date(a.po_date));
   }, [requests, searchTerm, filterStatus]);
 
   const formatDate = (dateString) => {
@@ -131,86 +165,114 @@ const POMaterialRequest = () => {
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
           </div>
-        ) : filteredRequests.length === 0 ? (
+        ) : groupedRequests.length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
             <p className="text-slate-500">No PO material requests found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-100">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-xs font-bold">
-                <tr>
-                  <th className="px-4 py-4">PO No</th>
-                  <th className="px-4 py-4">PO Date</th>
-                  <th className="px-4 py-4">Vendor</th>
-                  <th className="px-4 py-4">Material / Item</th>
-                  <th className="px-4 py-4 text-right">PO Qty</th>
-                  <th className="px-4 py-4 text-right">Pending GRN</th>
-                  <th className="px-4 py-4">Expected Date</th>
-                  <th className="px-4 py-4">Status</th>
-                  <th className="px-4 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredRequests.map((req, idx) => (
-                  <tr key={`${req.po_id}-${req.po_item_id}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-4 font-semibold text-slate-900">{req.po_number}</td>
-                    <td className="px-4 py-4 text-slate-600">{formatDate(req.po_date)}</td>
-                    <td className="px-4 py-4 text-slate-700 font-medium">{req.vendor_name}</td>
-                    <td className="px-4 py-4">
-                      <div className="font-medium text-slate-900">{req.material_name || req.item_code}</div>
-                      <div className="text-xs text-slate-500 truncate max-w-[200px]">{req.description}</div>
-                    </td>
-                    <td className="px-4 py-4 text-right font-medium text-slate-900">
-                      {parseFloat(req.po_qty || 0).toFixed(2)} {req.unit}
-                    </td>
-                    <td className="px-4 py-4 text-right font-bold text-blue-600">
-                      {parseFloat(req.pending_grn_qty || 0).toFixed(2)}
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">{formatDate(req.expected_delivery_date)}</td>
-                    <td className="px-4 py-4">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        req.store_acceptance_status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 
-                        req.store_acceptance_status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-700' : 
+          <div className="space-y-4">
+            {groupedRequests.map((group) => (
+              <div key={group.po_id} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm transition-all hover:shadow-md">
+                {/* PO Header */}
+                <div 
+                  className={`px-6 py-4 flex items-center justify-between cursor-pointer select-none transition-colors ${expandedPos.has(group.po_id) ? 'bg-slate-50 border-b border-slate-200' : 'bg-white hover:bg-slate-50/50'}`}
+                  onClick={() => togglePo(group.po_id)}
+                >
+                  <div className="flex items-center gap-6">
+                    <div className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <span className="text-slate-400 text-xs">{expandedPos.has(group.po_id) ? '▼' : '▶'}</span>
+                      {group.po_number}
+                    </div>
+                    <div className="h-4 w-[1px] bg-slate-200"></div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">PO Date</p>
+                      <p className="text-sm font-semibold text-slate-700">{formatDate(group.po_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Vendor</p>
+                      <p className="text-sm font-semibold text-slate-700">{group.vendor_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Status</p>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        group.store_acceptance_status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 
+                        group.store_acceptance_status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-700' : 
                         'bg-rose-100 text-rose-700'
                       }`}>
-                        {req.store_acceptance_status || 'PENDING'}
+                        {group.store_acceptance_status || 'PENDING'}
                       </span>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        {req.store_acceptance_status === 'PENDING' ? (
-                          <>
-                            <button 
-                              onClick={() => handleAcceptReject(req.po_id, 'ACCEPTED')}
-                              className="px-3 py-1 bg-emerald-500 text-white rounded-lg text-xs font-semibold hover:bg-emerald-600 transition-colors"
-                            >
-                              Accept
-                            </button>
-                            <button 
-                              onClick={() => handleAcceptReject(req.po_id, 'REJECTED')}
-                              className="px-3 py-1 bg-rose-500 text-white rounded-lg text-xs font-semibold hover:bg-rose-600 transition-colors"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        ) : req.store_acceptance_status === 'ACCEPTED' ? (
-                          <button 
-                            onClick={() => navigate('/grn', { state: { poNumber: req.po_number } })}
-                            className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition-colors"
-                          >
-                            Create GRN
-                          </button>
-                        ) : null}
-                        <button className="p-1 text-slate-400 hover:text-slate-900 transition-colors">
-                          👁️
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    {group.store_acceptance_status === 'PENDING' ? (
+                      <>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleAcceptReject(group.po_id, 'ACCEPTED'); }}
+                          className="px-4 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all shadow-sm active:scale-95"
+                        >
+                          Accept
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleAcceptReject(group.po_id, 'REJECTED'); }}
+                          className="px-4 py-1.5 bg-rose-500 text-white rounded-xl text-xs font-bold hover:bg-rose-600 transition-all shadow-sm active:scale-95"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    ) : group.store_acceptance_status === 'ACCEPTED' ? (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); navigate('/grn', { state: { poNumber: group.po_number } }); }}
+                        className="px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+                      >
+                        Create GRN
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Items Table */}
+                {expandedPos.has(group.po_id) && (
+                  <div className="p-0 bg-white">
+                    <table className="w-full text-sm text-left border-collapse">
+                      <thead className="bg-slate-50/50 text-slate-400 uppercase tracking-widest text-[10px] font-bold">
+                        <tr>
+                          <th className="px-6 py-3">Material / Item</th>
+                          <th className="px-6 py-3">Type</th>
+                          <th className="px-6 py-3">Drawing No</th>
+                          <th className="px-6 py-3 text-right">PO Quantity</th>
+                          <th className="px-6 py-3 text-right">Pending GRN</th>
+                          <th className="px-6 py-3">Exp. Delivery</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {group.items.map((item, idx) => (
+                          <tr key={`${item.po_item_id}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="font-semibold text-slate-900">{item.material_name || '—'}</div>
+                              <div className="text-xs text-slate-500 line-clamp-1 max-w-xl">{item.description}</div>
+                            </td>
+                            <td className="px-6 py-4 text-slate-600">{item.material_type || '—'}</td>
+                            <td className="px-6 py-4 text-slate-600">{item.drawing_no || '—'}</td>
+                            <td className="px-6 py-4 text-right font-medium text-slate-700">
+                              {parseFloat(item.po_qty || 0).toFixed(2)} <span className="text-[10px] text-slate-400">{item.unit}</span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <span className="font-bold text-blue-600">
+                                {parseFloat(item.pending_grn_qty || 0).toFixed(2)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-slate-600">
+                              {formatDate(item.expected_delivery_date)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </Card>

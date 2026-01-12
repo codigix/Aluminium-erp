@@ -1,0 +1,88 @@
+const pool = require('../config/db');
+
+const listDesignOrders = async () => {
+  const [rows] = await pool.query(`
+    SELECT 
+      do.*, 
+      so.id as sales_order_id,
+      so.project_name,
+      so.target_dispatch_date,
+      c.company_name,
+      cp.po_number,
+      (SELECT SUM(quantity) FROM sales_order_items WHERE sales_order_id = so.id) as total_quantity
+    FROM design_orders do
+    JOIN sales_orders so ON do.sales_order_id = so.id
+    JOIN companies c ON so.company_id = c.id
+    JOIN customer_pos cp ON so.customer_po_id = cp.id
+    ORDER BY do.created_at DESC
+  `);
+  return rows;
+};
+
+const createDesignOrder = async (salesOrderId, connection = null) => {
+  const exec = connection || pool;
+  
+  // Check if design order already exists
+  const [existing] = await exec.query('SELECT id FROM design_orders WHERE sales_order_id = ?', [salesOrderId]);
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+
+  const designOrderNumber = `DO-${String(salesOrderId).padStart(4, '0')}`;
+  
+  const [result] = await exec.execute(
+    'INSERT INTO design_orders (design_order_number, sales_order_id, status) VALUES (?, ?, ?)',
+    [designOrderNumber, salesOrderId, 'DRAFT']
+  );
+  
+  return result.insertId;
+};
+
+const updateDesignOrderStatus = async (designOrderId, status) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    let updateFields = 'status = ?';
+    const params = [status];
+    
+    if (status === 'IN_DESIGN') {
+      updateFields += ', start_date = CURRENT_TIMESTAMP';
+    } else if (status === 'COMPLETED') {
+      updateFields += ', completion_date = CURRENT_TIMESTAMP';
+    }
+    
+    params.push(designOrderId);
+    
+    await connection.execute(`UPDATE design_orders SET ${updateFields} WHERE id = ?`, params);
+
+    if (status === 'COMPLETED') {
+      const [doRows] = await connection.query('SELECT sales_order_id FROM design_orders WHERE id = ?', [designOrderId]);
+      if (doRows.length > 0) {
+        const salesOrderId = doRows[0].sales_order_id;
+        await connection.execute(
+          "UPDATE sales_orders SET status = 'DESIGN_APPROVED', current_department = 'PROCUREMENT', updated_at = NOW() WHERE id = ?",
+          [salesOrderId]
+        );
+      }
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const deleteDesignOrder = async (designOrderId) => {
+  await pool.execute('DELETE FROM design_orders WHERE id = ?', [designOrderId]);
+};
+
+module.exports = {
+  listDesignOrders,
+  createDesignOrder,
+  updateDesignOrderStatus,
+  deleteDesignOrder
+};

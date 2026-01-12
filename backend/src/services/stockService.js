@@ -1,11 +1,12 @@
 const pool = require('../config/db');
 
-const calculateBalanceDetailsFromLedger = async (itemCode) => {
-  const [ledgerData] = await pool.query(`
+const calculateBalanceDetailsFromLedger = async (itemCode, connection = null) => {
+  const executor = connection || pool;
+  const [ledgerData] = await executor.query(`
     SELECT 
       SUM(CASE WHEN transaction_type = 'GRN_IN' THEN quantity ELSE 0 END) as accepted_qty,
       SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) as issued_qty,
-      SUM(CASE WHEN transaction_type IN ('GRN_IN', 'ADJUSTMENT', 'RETURN') THEN quantity 
+      SUM(CASE WHEN transaction_type IN ('GRN_IN', 'ADJUSTMENT', 'RETURN', 'IN') THEN quantity 
                WHEN transaction_type = 'OUT' THEN -quantity ELSE 0 END) as current_balance
     FROM stock_ledger 
     WHERE item_code = ?
@@ -20,10 +21,56 @@ const calculateBalanceDetailsFromLedger = async (itemCode) => {
   };
 };
 
+const deleteStockLedgerEntry = async (id) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [entries] = await connection.query('SELECT item_code FROM stock_ledger WHERE id = ?', [id]);
+    if (entries.length === 0) {
+      const error = new Error('Ledger entry not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const { item_code } = entries[0];
+
+    await connection.execute('DELETE FROM stock_ledger WHERE id = ?', [id]);
+
+    const details = await calculateBalanceDetailsFromLedger(item_code, connection);
+
+    await connection.execute(`
+      UPDATE stock_balance 
+      SET current_balance = ?, last_updated = CURRENT_TIMESTAMP
+      WHERE item_code = ?
+    `, [details.current_balance, item_code]);
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const deleteStockBalance = async (id) => {
+  const [result] = await pool.execute('DELETE FROM stock_balance WHERE id = ?', [id]);
+  if (result.affectedRows === 0) {
+    const error = new Error('Stock balance not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  return { success: true };
+};
+
 const getStockLedger = async (itemCode = null, startDate = null, endDate = null) => {
   let query = `SELECT 
     id,
     item_code,
+    material_name,
+    material_type,
     transaction_date,
     transaction_type,
     quantity,
@@ -71,6 +118,8 @@ const getStockBalance = async () => {
       id,
       item_code,
       item_description,
+      material_name,
+      material_type,
       unit,
       last_updated
     FROM stock_balance
@@ -91,6 +140,8 @@ const getStockBalance = async () => {
       id: balance.id,
       item_code: balance.item_code,
       item_description: balance.item_description,
+      material_name: balance.material_name,
+      material_type: balance.material_type,
       po_qty: poQty,
       received_qty: details.received_qty,
       accepted_qty: details.accepted_qty,
@@ -106,7 +157,7 @@ const getStockBalance = async () => {
 
 const getStockBalanceByItem = async (itemCode) => {
   const [balance] = await pool.query(`
-    SELECT id, item_code, item_description, unit, last_updated FROM stock_balance WHERE item_code = ?
+    SELECT id, item_code, item_description, material_name, material_type, unit, last_updated FROM stock_balance WHERE item_code = ?
   `, [itemCode]);
 
   if (balance.length === 0) {
@@ -125,6 +176,8 @@ const getStockBalanceByItem = async (itemCode) => {
     id: balance[0].id,
     item_code: balance[0].item_code,
     item_description: balance[0].item_description,
+    material_name: balance[0].material_name,
+    material_type: balance[0].material_type,
     po_qty: poQty,
     received_qty: details.received_qty,
     accepted_qty: details.accepted_qty,
@@ -143,6 +196,9 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     let existingBalance = await getStockBalanceByItem(itemCode);
 
     let newBalance = 0;
+    const matName = existingBalance?.material_name || null;
+    const matType = existingBalance?.material_type || null;
+
     if (existingBalance) {
       const currentBalance = parseFloat(existingBalance.current_balance) || 0;
       const qty = parseFloat(quantity) || 0;
@@ -157,9 +213,9 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
       await connection.execute(`
         INSERT INTO stock_ledger 
-        (item_code, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [itemCode, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
+        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, matName, matType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
 
       await connection.execute(`
         UPDATE stock_balance 
@@ -174,15 +230,15 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
       await connection.execute(`
         INSERT INTO stock_ledger 
-        (item_code, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [itemCode, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
+        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, matName, matType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
 
       await connection.execute(`
         INSERT INTO stock_balance 
-        (item_code, current_balance)
-        VALUES (?, ?)
-      `, [itemCode, newBalance]);
+        (item_code, current_balance, material_name, material_type)
+        VALUES (?, ?, ?, ?)
+      `, [itemCode, newBalance, matName, matType]);
     }
 
     await connection.commit();
@@ -204,6 +260,15 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
     }
 
     console.log(`[Stock] Creating entry for QC:${qcId}, GRN:${grnId}, Item:${itemCode}, Qty:${passQty}`);
+
+    const [poItemRows] = await useConnection.query(
+      `SELECT material_name, material_type FROM purchase_order_items poi
+       JOIN grn_items gi ON poi.id = gi.po_item_id
+       WHERE gi.id = ?`,
+      [grnItemId]
+    );
+    const material_name = poItemRows[0]?.material_name || null;
+    const material_type = poItemRows[0]?.material_type || null;
 
     const [existing] = await useConnection.query(
       `SELECT id FROM stock_ledger 
@@ -236,14 +301,14 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
       await useConnection.execute(
         `INSERT INTO stock_ledger 
-        (item_code, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemCode, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
+        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemCode, material_name, material_type, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
       );
 
       await useConnection.execute(
-        `UPDATE stock_balance SET current_balance = ?, last_updated = CURRENT_TIMESTAMP WHERE item_code = ?`,
-        [newBalance, itemCode]
+        `UPDATE stock_balance SET current_balance = ?, material_name = ?, material_type = ?, last_updated = CURRENT_TIMESTAMP WHERE item_code = ?`,
+        [newBalance, material_name, material_type, itemCode]
       );
       console.log(`[Stock] Created ledger entry and updated balance`);
     } else {
@@ -252,15 +317,15 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
       await useConnection.execute(
         `INSERT INTO stock_ledger 
-        (item_code, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemCode, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
+        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemCode, material_name, material_type, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
       );
 
       await useConnection.execute(
-        `INSERT INTO stock_balance (item_code, current_balance) VALUES (?, ?)
-         ON DUPLICATE KEY UPDATE current_balance = VALUES(current_balance), last_updated = CURRENT_TIMESTAMP`,
-        [itemCode, newBalance]
+        `INSERT INTO stock_balance (item_code, material_name, material_type, current_balance) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE current_balance = VALUES(current_balance), material_name = VALUES(material_name), material_type = VALUES(material_type), last_updated = CURRENT_TIMESTAMP`,
+        [itemCode, material_name, material_type, newBalance]
       );
       console.log(`[Stock] Created new balance and ledger entry`);
     }
@@ -281,7 +346,7 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
   }
 };
 
-const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, acceptedQty = null, issuedQty = null, itemDescription = null, unit = null) => {
+const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, acceptedQty = null, issuedQty = null, itemDescription = null, unit = null, materialName = null, materialType = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -321,6 +386,16 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
       params.push(unit);
     }
 
+    if (materialName !== null && materialName !== undefined) {
+      setClauses.push('material_name = ?');
+      params.push(materialName);
+    }
+
+    if (materialType !== null && materialType !== undefined) {
+      setClauses.push('material_type = ?');
+      params.push(materialType);
+    }
+
     if (existing) {
       if (setClauses.length > 0) {
         setClauses.push('last_updated = CURRENT_TIMESTAMP');
@@ -332,8 +407,8 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
       }
     } else {
       await connection.execute(`
-        INSERT INTO stock_balance (item_code, item_description, unit, po_qty, received_qty, accepted_qty, issued_qty)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO stock_balance (item_code, item_description, unit, po_qty, received_qty, accepted_qty, issued_qty, material_name, material_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         itemCode,
         itemDescription || null,
@@ -341,7 +416,9 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
         poQty || 0,
         receivedQty || 0,
         acceptedQty || 0,
-        issuedQty || 0
+        issuedQty || 0,
+        materialName || null,
+        materialType || null
       ]);
     }
 
@@ -361,5 +438,7 @@ module.exports = {
   getStockBalanceByItem,
   addStockLedgerEntry,
   updateStockBalance,
-  createQCStockLedgerEntry
+  createQCStockLedgerEntry,
+  deleteStockLedgerEntry,
+  deleteStockBalance
 };

@@ -123,7 +123,8 @@ const ensurePurchaseOrderItemColumns = async () => {
       { name: 'sgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
-      { name: 'material_type', definition: 'VARCHAR(100) NULL' }
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -156,7 +157,8 @@ const ensureQuotationItemColumns = async () => {
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
-      { name: 'material_type', definition: 'VARCHAR(100) NULL' }
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -259,7 +261,8 @@ const ensurePoMaterialRequestColumns = async () => {
     const requiredItemCols = [
       { name: 'accepted_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
-      { name: 'material_type', definition: 'VARCHAR(100) NULL' }
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' }
     ];
 
     const missingItemCols = requiredItemCols.filter(c => !existingItemCols.has(c.name));
@@ -277,6 +280,147 @@ const ensurePoMaterialRequestColumns = async () => {
   }
 };
 
+const ensureStockColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // Update stock_ledger table
+    const [ledgerCols] = await connection.query('SHOW COLUMNS FROM stock_ledger');
+    const existingLedgerCols = new Set(ledgerCols.map(c => c.Field));
+    const requiredStockCols = [
+      { name: 'material_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' }
+    ];
+    
+    const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));
+    if (missingLedgerCols.length > 0) {
+      const alterLedgerSql = `ALTER TABLE stock_ledger ${missingLedgerCols
+        .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
+        .join(', ')};`;
+      await connection.query(alterLedgerSql);
+      console.log('Stock Ledger material columns synchronized');
+    }
+
+    // Update stock_balance table
+    const [balanceCols] = await connection.query('SHOW COLUMNS FROM stock_balance');
+    const existingBalanceCols = new Set(balanceCols.map(c => c.Field));
+    
+    const missingBalanceCols = requiredStockCols.filter(c => !existingBalanceCols.has(c.name));
+    if (missingBalanceCols.length > 0) {
+      const alterBalanceSql = `ALTER TABLE stock_balance ${missingBalanceCols
+        .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
+        .join(', ')};`;
+      await connection.query(alterBalanceSql);
+      console.log('Stock Balance material columns synchronized');
+    }
+
+    // Populate existing records if possible
+    await connection.query(`
+      UPDATE stock_ledger sl
+      JOIN (
+        SELECT item_code, ANY_VALUE(material_name) as material_name, ANY_VALUE(material_type) as material_type 
+        FROM purchase_order_items 
+        WHERE material_name IS NOT NULL
+        GROUP BY item_code
+      ) poi ON sl.item_code = poi.item_code
+      SET sl.material_name = poi.material_name, sl.material_type = poi.material_type
+      WHERE sl.material_name IS NULL
+    `);
+
+    await connection.query(`
+      UPDATE stock_balance sb
+      JOIN (
+        SELECT item_code, ANY_VALUE(material_name) as material_name, ANY_VALUE(material_type) as material_type 
+        FROM purchase_order_items 
+        WHERE material_name IS NOT NULL
+        GROUP BY item_code
+      ) poi ON sb.item_code = poi.item_code
+      SET sb.material_name = poi.material_name, sb.material_type = poi.material_type
+      WHERE sb.material_name IS NULL
+    `);
+
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Stock columns sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureWarehouseAllocationTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    // Update grn_items table
+    const [grnItemCols] = await connection.query('SHOW COLUMNS FROM grn_items');
+    const existingGrnItemCols = new Set(grnItemCols.map(c => c.Field));
+    const requiredGrnItemCols = [
+      { name: 'allocated_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'allocation_status', definition: "ENUM('PENDING', 'PARTIAL', 'FULLY_ALLOCATED') DEFAULT 'PENDING'" }
+    ];
+
+    const missingGrnItemCols = requiredGrnItemCols.filter(c => !existingGrnItemCols.has(c.name));
+    if (missingGrnItemCols.length > 0) {
+      const alterGrnItemSql = `ALTER TABLE grn_items ${missingGrnItemCols
+        .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
+        .join(', ')};`;
+      await connection.query(alterGrnItemSql);
+      console.log('GRN Item allocation columns synchronized');
+    }
+
+    // Create warehouse_allocations table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS warehouse_allocations (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        grn_item_id INT NOT NULL,
+        from_warehouse VARCHAR(50) DEFAULT 'RM-HOLD',
+        to_warehouse VARCHAR(50) NOT NULL,
+        quantity DECIMAL(12, 3) NOT NULL,
+        allocated_by INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (grn_item_id) REFERENCES grn_items(id) ON DELETE CASCADE,
+        FOREIGN KEY (allocated_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+    console.log('Warehouse allocation table synchronized');
+
+  } catch (error) {
+    console.error('Warehouse Allocation table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureDesignOrderTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS design_orders (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        design_order_number VARCHAR(100) UNIQUE NOT NULL,
+        sales_order_id INT NOT NULL,
+        status ENUM('DRAFT', 'IN_DESIGN', 'COMPLETED') DEFAULT 'DRAFT',
+        start_date TIMESTAMP NULL,
+        completion_date TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Design Order table synchronized');
+
+  } catch (error) {
+    console.error('Design Order table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -286,6 +430,9 @@ const bootstrapDatabase = async () => {
   await ensurePoReceiptItemTable();
   await ensureGrnColumns();
   await ensurePoMaterialRequestColumns();
+  await ensureStockColumns();
+  await ensureWarehouseAllocationTables();
+  await ensureDesignOrderTables();
 };
 
 bootstrapDatabase();
