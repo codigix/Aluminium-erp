@@ -8,7 +8,8 @@ const InventoryDashboard = () => {
     incomingPos: [],
     pendingGRNs: [],
     lowStockItems: [],
-    qcPendingItems: []
+    qcPendingItems: [],
+    materialRequests: []
   });
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +22,7 @@ const InventoryDashboard = () => {
       setLoading(true);
       const token = localStorage.getItem('authToken');
 
-      const [incomingRes, grnRes, stockRes, qcRes] = await Promise.all([
+      const [incomingRes, grnRes, stockRes, qcRes, mrRes] = await Promise.all([
         fetch(`${API_BASE}/inventory/incoming-orders`, {
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         }),
@@ -33,6 +34,9 @@ const InventoryDashboard = () => {
         }),
         fetch(`${API_BASE}/inventory/qc-pending`, {
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        }),
+        fetch(`${API_BASE}/purchase-orders/material-requests`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         })
       ]);
 
@@ -40,12 +44,14 @@ const InventoryDashboard = () => {
       const grnData = grnRes.ok ? await grnRes.json() : [];
       const stockData = stockRes.ok ? await stockRes.json() : [];
       const qcData = qcRes.ok ? await qcRes.json() : [];
+      const mrData = mrRes.ok ? await mrRes.json() : [];
 
       setStats({
         incomingPos: Array.isArray(incomingData) ? incomingData : [],
         pendingGRNs: Array.isArray(grnData) ? grnData : [],
         lowStockItems: Array.isArray(stockData) ? stockData : [],
-        qcPendingItems: Array.isArray(qcData) ? qcData : []
+        qcPendingItems: Array.isArray(qcData) ? qcData : [],
+        materialRequests: Array.isArray(mrData) ? mrData : []
       });
     } catch (error) {
       console.error('Error fetching inventory dashboard:', error);
@@ -85,12 +91,18 @@ const InventoryDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard 
-          title="Incoming Sales Orders" 
+          title="Incoming Orders" 
           count={stats.incomingPos.length} 
           color="bg-blue-50"
           icon="📊"
+        />
+        <StatCard 
+          title="Material Requests" 
+          count={stats.materialRequests.length} 
+          color="bg-emerald-50"
+          icon="📝"
         />
         <StatCard 
           title="Pending GRNs" 
@@ -112,10 +124,10 @@ const InventoryDashboard = () => {
         />
       </div>
 
-      <Card title="Incoming Sales Orders" subtitle="Active sales orders in production pipeline">
+      <Card title="Incoming Orders" subtitle="Active orders in production pipeline">
         {stats.incomingPos.length === 0 ? (
           <div className="text-center py-8 text-slate-500">
-            <p className="text-sm">No incoming sales orders</p>
+            <p className="text-sm">No incoming orders</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -145,6 +157,51 @@ const InventoryDashboard = () => {
                     <td className="px-4 py-4">
                       <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
                         {order.status?.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Material Requests" subtitle="Recent purchase requests from production/inventory">
+        {stats.materialRequests.length === 0 ? (
+          <div className="text-center py-8 text-slate-500">
+            <p className="text-sm">No pending material requests</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold">Request No</th>
+                  <th className="px-4 py-3 text-left font-semibold">Material</th>
+                  <th className="px-4 py-3 text-right font-semibold">Qty</th>
+                  <th className="px-4 py-3 text-left font-semibold">Req. Date</th>
+                  <th className="px-4 py-3 text-left font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.materialRequests.slice(0, 5).map((req) => (
+                  <tr key={req.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-4 font-medium text-slate-900">{req.request_no}</td>
+                    <td className="px-4 py-4 text-slate-600">{req.material_name}</td>
+                    <td className="px-4 py-4 text-right text-slate-600">
+                      {req.quantity} {req.unit}
+                    </td>
+                    <td className="px-4 py-4 text-slate-600">
+                      {req.required_date ? new Date(req.required_date).toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        req.status === 'PENDING' ? 'bg-orange-100 text-orange-600' : 
+                        req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-600' : 
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {req.status}
                       </span>
                     </td>
                   </tr>

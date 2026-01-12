@@ -46,42 +46,73 @@ const getPOReceiptById = async (receiptId) => {
     throw error;
   }
 
-  return rows[0];
+  const receipt = rows[0];
+
+  const [items] = await pool.query(
+    `SELECT pri.*, poi.item_code, poi.description, poi.material_name, poi.material_type, poi.unit, poi.quantity as expected_quantity
+     FROM po_receipt_items pri
+     LEFT JOIN purchase_order_items poi ON poi.id = pri.po_item_id
+     WHERE pri.receipt_id = ?`,
+    [receiptId]
+  );
+
+  return { ...receipt, items };
 };
 
-const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes) => {
+const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items = []) => {
   if (!poId) {
     const error = new Error('Purchase Order ID is required');
     error.statusCode = 400;
     throw error;
   }
 
-  const [po] = await pool.query(
-    'SELECT id FROM purchase_orders WHERE id = ?',
-    [poId]
-  );
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  if (!po.length) {
-    const error = new Error('Purchase Order not found');
-    error.statusCode = 404;
+    const [po] = await connection.query(
+      'SELECT id FROM purchase_orders WHERE id = ?',
+      [poId]
+    );
+
+    if (!po.length) {
+      throw new Error('Purchase Order not found');
+    }
+
+    const dateValue = receiptDate ? new Date(receiptDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    
+    const [result] = await connection.execute(
+      `INSERT INTO po_receipts (po_id, receipt_date, received_quantity, status, notes)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        poId,
+        dateValue,
+        receivedQuantity || 0,
+        'DRAFT',
+        notes || null
+      ]
+    );
+
+    const receiptId = result.insertId;
+
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        await connection.execute(
+          `INSERT INTO po_receipt_items (receipt_id, po_item_id, received_quantity)
+           VALUES (?, ?, ?)`,
+          [receiptId, item.id, item.received_qty || 0]
+        );
+      }
+    }
+
+    await connection.commit();
+    return { id: receiptId, po_id: poId };
+  } catch (error) {
+    await connection.rollback();
     throw error;
+  } finally {
+    connection.release();
   }
-
-  const dateValue = receiptDate ? new Date(receiptDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-  
-  const [result] = await pool.execute(
-    `INSERT INTO po_receipts (po_id, receipt_date, received_quantity, status, notes)
-     VALUES (?, ?, ?, ?, ?)`,
-    [
-      poId,
-      dateValue,
-      receivedQuantity || 0,
-      'DRAFT',
-      notes || null
-    ]
-  );
-
-  return { id: result.insertId, po_id: poId };
 };
 
 const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, status) => {

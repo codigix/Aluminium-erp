@@ -19,12 +19,13 @@ import QCInspections from './pages/QCInspections'
 import StockLedger from './pages/StockLedger'
 import StockBalance from './pages/StockBalance'
 import InventoryDashboard from './pages/InventoryDashboard'
+import POMaterialRequest from './pages/POMaterialRequest'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance']
+const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance']
 const DEFAULT_MODULE = 'company-master'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const COMPANY_HINTS = {
@@ -173,9 +174,9 @@ const DEPARTMENT_MODULES = {
   QUALITY: ['incoming-orders'],
   SHIPMENT: ['incoming-orders'],
   ACCOUNTS: [],
-  INVENTORY: ['inventory-dashboard', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance'],
+  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
-  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders']
+  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'incoming-orders', 'po-material-request']
 }
 
 function App() {
@@ -1185,6 +1186,7 @@ function App() {
     { label: 'PO Receipts', moduleId: 'po-receipts', indent: true },
     { label: 'Inventory Management', isGroup: true, isDisabled: true, groupId: 'inventory-group' },
     { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', indent: true },
+    { label: 'PO Material Request', moduleId: 'po-material-request', indent: true },
     { label: 'GRN Processing', moduleId: 'grn', indent: true },
     { label: 'QC Inspections', moduleId: 'qc-inspections', indent: true },
     { label: 'Stock Ledger', moduleId: 'stock-ledger', indent: true },
@@ -1349,6 +1351,12 @@ function App() {
       badge: 'Inventory Management',
       title: 'Inventory Dashboard',
       description: 'Overview of incoming orders, stock levels, and pending activities',
+      actions: null
+    },
+    'po-material-request': {
+      badge: 'Inventory Management',
+      title: 'PO Material Request',
+      description: 'Manage and track material requests for purchase orders',
       actions: null
     },
     'po-receipts': {
@@ -1894,6 +1902,10 @@ function App() {
 
                 {activeModule === 'inventory-dashboard' && (
                   <InventoryDashboard />
+                )}
+
+                {activeModule === 'po-material-request' && (
+                  <POMaterialRequest />
                 )}
 
                 {activeModule === 'grn' && (

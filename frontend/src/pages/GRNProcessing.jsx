@@ -28,7 +28,9 @@ const GRNProcessing = () => {
   });
 
   const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [poReceipts, setPoReceipts] = useState([]);
   const [poItems, setPoItems] = useState([]);
+  const [selectedReceiptId, setSelectedReceiptId] = useState('');
   const [itemData, setItemData] = useState({});
   const [validationErrors, setValidationErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -36,7 +38,26 @@ const GRNProcessing = () => {
   useEffect(() => {
     fetchGRNs();
     fetchPurchaseOrders();
+    fetchPOReceipts();
   }, []);
+
+  const fetchPOReceipts = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/po-receipts`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPoReceipts(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching PO receipts:', error);
+    }
+  };
 
   const fetchGRNs = async () => {
     try {
@@ -148,6 +169,7 @@ const GRNProcessing = () => {
 
   const handlePOSelect = async (poId) => {
     setFormData({ ...formData, poId });
+    setSelectedReceiptId('');
     setPoItems([]);
     setItemData({});
     setValidationErrors({});
@@ -179,6 +201,39 @@ const GRNProcessing = () => {
     } catch (error) {
       console.error('Error fetching PO details:', error);
       Swal.fire('Error', 'Failed to fetch PO details', 'error');
+    }
+  };
+
+  const handleReceiptSelect = async (receiptId) => {
+    setSelectedReceiptId(receiptId);
+    if (!receiptId) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/po-receipts/${receiptId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const receipt = await response.json();
+        const updatedItemData = { ...itemData };
+        
+        (receipt.items || []).forEach(item => {
+          // item here is from po_receipt_items which has po_item_id
+          if (updatedItemData[item.po_item_id]) {
+            updatedItemData[item.po_item_id].acceptedQty = item.received_quantity;
+          }
+        });
+        
+        setItemData(updatedItemData);
+        setFormData({ ...formData, notes: receipt.notes || formData.notes });
+      }
+    } catch (error) {
+      console.error('Error fetching receipt details:', error);
+      Swal.fire('Error', 'Failed to fetch receipt details', 'error');
     }
   };
 
@@ -288,6 +343,7 @@ const GRNProcessing = () => {
         },
         body: JSON.stringify({
           poId: parseInt(formData.poId),
+          receiptId: selectedReceiptId ? parseInt(selectedReceiptId) : null,
           grnDate: formData.grnDate,
           notes: formData.notes || null,
           items
@@ -398,6 +454,7 @@ const GRNProcessing = () => {
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold">GRN ID</th>
                   <th className="px-4 py-3 text-left font-semibold">PO Number</th>
+                  <th className="px-4 py-3 text-left font-semibold">Receipt Ref</th>
                   <th className="px-4 py-3 text-left font-semibold">GRN Date</th>
                   <th className="px-4 py-3 text-right font-semibold">Received Qty</th>
                   <th className="px-4 py-3 text-left font-semibold">Status</th>
@@ -409,6 +466,13 @@ const GRNProcessing = () => {
                   <tr key={grn.id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-4 font-medium text-slate-900">{grn.id}</td>
                     <td className="px-4 py-4 text-slate-600">{grn.poNumber || '—'}</td>
+                    <td className="px-4 py-4">
+                      {grn.receiptId ? (
+                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-medium border border-blue-100">
+                          REC-{grn.receiptId}
+                        </span>
+                      ) : '—'}
+                    </td>
                     <td className="px-4 py-4 text-slate-600">
                       {grn.grnDate ? new Date(grn.grnDate).toLocaleDateString('en-IN') : '—'}
                     </td>
@@ -454,7 +518,7 @@ const GRNProcessing = () => {
             </div>
 
             <form onSubmit={handleCreateGRN} className="space-y-6">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Purchase Order *
@@ -476,6 +540,27 @@ const GRNProcessing = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
+                    PO Receipt (Optional)
+                  </label>
+                  <select
+                    value={selectedReceiptId}
+                    onChange={(e) => handleReceiptSelect(e.target.value)}
+                    disabled={!formData.poId}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Select Receipt...</option>
+                    {poReceipts
+                      .filter(r => String(r.po_id) === String(formData.poId))
+                      .map((receipt) => (
+                        <option key={receipt.id} value={receipt.id}>
+                          {new Date(receipt.receipt_date).toLocaleDateString()} - {receipt.received_quantity} Qty
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     GRN Date *
                   </label>
                   <input
@@ -489,7 +574,7 @@ const GRNProcessing = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Notes (Optional)
+                    Notes
                   </label>
                   <input
                     type="text"
@@ -500,6 +585,35 @@ const GRNProcessing = () => {
                   />
                 </div>
               </div>
+
+              {formData.poId && (
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 grid grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">Vendor</p>
+                    <p className="font-bold text-slate-900">
+                      {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.vendor_name || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">PO Total</p>
+                    <p className="font-bold text-slate-900">
+                      ₹{purchaseOrders.find(p => String(p.id) === String(formData.poId))?.total_amount?.toLocaleString('en-IN') || '0'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">Expected Delivery</p>
+                    <p className="font-bold text-slate-900">
+                      {new Date(purchaseOrders.find(p => String(p.id) === String(formData.poId))?.expected_delivery_date).toLocaleDateString('en-IN') || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">Status</p>
+                    <p className="font-bold text-emerald-600">
+                      {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.status || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {poItems.length > 0 && (
                 <div className="border border-slate-200 rounded-lg overflow-hidden">

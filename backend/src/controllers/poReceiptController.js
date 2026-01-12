@@ -3,12 +3,13 @@ const generatePoPdf = require('../utils/generatePoPdf');
 
 const createPOReceipt = async (req, res, next) => {
   try {
-    const { poId, receiptDate, receivedQuantity, notes } = req.body;
+    const { poId, receiptDate, receivedQuantity, notes, items } = req.body;
     const result = await poReceiptService.createPOReceipt(
       poId,
       receiptDate,
       receivedQuantity,
-      notes
+      notes,
+      items
     );
     res.status(201).json({ message: 'PO Receipt created', data: result });
   } catch (error) {
@@ -88,7 +89,9 @@ const generatePOReceiptPdf = async (req, res, next) => {
 
     res.download(pdfPath, `PO_Receipt_${receipt.po_number}.pdf`, (err) => {
       if (err) {
-        console.error('Download error:', err);
+        if (err.code !== 'ECONNABORTED') {
+          console.error('Download error:', err);
+        }
         next(err);
       }
     });

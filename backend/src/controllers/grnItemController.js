@@ -7,6 +7,7 @@ const createGRNWithItems = async (req, res, next) => {
   try {
     const {
       poId,
+      receiptId,
       grnDate,
       items, // [{ poItemId, receivedQty, acceptedQty, rejectedQty, remarks }, ...]
       notes
@@ -26,7 +27,7 @@ const createGRNWithItems = async (req, res, next) => {
       return res.status(404).json({ error: 'Purchase Order not found' });
     }
 
-    const grn = await grnService.createGRN(po.po_number, grnDate || new Date(), 0, notes);
+    const grn = await grnService.createGRN(po.po_number, grnDate || new Date(), 0, notes, receiptId || null);
 
     const grnItemResults = [];
     let totalAcceptedQty = 0;

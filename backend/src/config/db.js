@@ -181,12 +181,111 @@ const ensureQuotationItemColumns = async () => {
   }
 };
 
+const ensurePoReceiptItemTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS po_receipt_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        receipt_id INT NOT NULL,
+        po_item_id INT NOT NULL,
+        received_quantity DECIMAL(12, 3) DEFAULT 0,
+        FOREIGN KEY (receipt_id) REFERENCES po_receipts(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('PO Receipt items table synchronized');
+  } catch (error) {
+    console.error('PO Receipt items table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureGrnColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM grns');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'po_receipt_id', definition: 'INT NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE grns ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('GRN columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('GRN column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensurePoMaterialRequestColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // Update purchase_orders table
+    const [poCols] = await connection.query('SHOW COLUMNS FROM purchase_orders');
+    const existingPoCols = new Set(poCols.map(c => c.Field));
+    const requiredPoCols = [
+      { name: 'store_acceptance_status', definition: "ENUM('PENDING', 'ACCEPTED', 'REJECTED') DEFAULT 'PENDING'" },
+      { name: 'store_acceptance_date', definition: 'TIMESTAMP NULL' },
+      { name: 'store_acceptance_notes', definition: 'TEXT NULL' }
+    ];
+    
+    const missingPoCols = requiredPoCols.filter(c => !existingPoCols.has(c.name));
+    if (missingPoCols.length > 0) {
+      const alterPoSql = `ALTER TABLE purchase_orders ${missingPoCols
+        .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
+        .join(', ')};`;
+      await connection.query(alterPoSql);
+      console.log('Purchase Order material request columns synchronized');
+    }
+
+    // Update purchase_order_items table
+    const [itemCols] = await connection.query('SHOW COLUMNS FROM purchase_order_items');
+    const existingItemCols = new Set(itemCols.map(c => c.Field));
+    const requiredItemCols = [
+      { name: 'accepted_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'material_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' }
+    ];
+
+    const missingItemCols = requiredItemCols.filter(c => !existingItemCols.has(c.name));
+    if (missingItemCols.length > 0) {
+      const alterItemSql = `ALTER TABLE purchase_order_items ${missingItemCols
+        .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
+        .join(', ')};`;
+      await connection.query(alterItemSql);
+      console.log('Purchase Order Item material request columns synchronized');
+    }
+  } catch (error) {
+    console.error('PO Material Request column sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
   await ensureCustomerPoColumns();
   await ensurePurchaseOrderItemColumns();
   await ensureQuotationItemColumns();
+  await ensurePoReceiptItemTable();
+  await ensureGrnColumns();
+  await ensurePoMaterialRequestColumns();
 };
 
 bootstrapDatabase();

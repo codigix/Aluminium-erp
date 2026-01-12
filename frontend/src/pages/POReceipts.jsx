@@ -41,7 +41,8 @@ const POReceipts = () => {
     poId: '',
     receiptDate: new Date().toISOString().split('T')[0],
     receivedQuantity: '',
-    notes: ''
+    notes: '',
+    items: []
   });
 
   const [editFormData, setEditFormData] = useState({
@@ -117,19 +118,48 @@ const POReceipts = () => {
     }
   };
 
-  const handlePoChange = (poId) => {
+  const handlePoChange = async (poId) => {
     const selectedPO = purchaseOrders.find(po => String(po.id) === String(poId));
     if (selectedPO) {
-      setFormData({
-        ...formData,
-        poId,
-        receivedQuantity: selectedPO.total_quantity || selectedPO.items_count || ''
-      });
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/purchase-orders/${poId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const detailedPO = await response.json();
+          // Initialize items with their full quantity as default received
+          const items = (detailedPO.items || []).map(item => ({
+            ...item,
+            received_qty: item.quantity
+          }));
+
+          setFormData({
+            ...formData,
+            poId,
+            items,
+            receivedQuantity: items.reduce((sum, item) => sum + parseFloat(item.received_qty || 0), 0)
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching PO details:', error);
+        setFormData({
+          ...formData,
+          poId,
+          receivedQuantity: selectedPO.total_quantity || selectedPO.items_count || '',
+          items: []
+        });
+      }
     } else {
       setFormData({
         ...formData,
         poId: '',
-        receivedQuantity: ''
+        receivedQuantity: '',
+        items: []
       });
     }
   };
@@ -154,7 +184,8 @@ const POReceipts = () => {
           poId: parseInt(formData.poId),
           receiptDate: formData.receiptDate,
           receivedQuantity: formData.receivedQuantity,
-          notes: formData.notes || null
+          notes: formData.notes || null,
+          items: formData.items
         })
       });
 
@@ -432,51 +463,103 @@ const POReceipts = () => {
 
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-slate-900">Create PO Receipt</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
             <form onSubmit={handleCreateReceipt} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Select Purchase Order *</label>
-                <select
-                  value={formData.poId}
-                  onChange={(e) => handlePoChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">-- Select a PO --</option>
-                  {purchaseOrders.map(po => (
-                    <option key={po.id} value={po.id}>
-                      {po.po_number} - {po.vendor_name} - ₹{formatCurrency(po.total_amount)}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Select Purchase Order *</label>
+                  <select
+                    value={formData.poId}
+                    onChange={(e) => handlePoChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">-- Select a PO --</option>
+                    {purchaseOrders.map(po => (
+                      <option key={po.id} value={po.id}>
+                        {po.po_number} - {po.vendor_name} - ₹{formatCurrency(po.total_amount)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Receipt Date *</label>
+                  <input
+                    type="date"
+                    value={formData.receiptDate}
+                    onChange={(e) => setFormData({...formData, receiptDate: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Receipt Date *</label>
-                <input
-                  type="date"
-                  value={formData.receiptDate}
-                  onChange={(e) => setFormData({...formData, receiptDate: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
+              {formData.items.length > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">Materials in PO</label>
+                  <div className="border border-slate-100 rounded overflow-hidden">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold text-slate-600">Material / Description</th>
+                          <th className="px-3 py-2 text-center font-semibold text-slate-600">Expected</th>
+                          <th className="px-3 py-2 text-center font-semibold text-slate-600">Received Qty</th>
+                          <th className="px-3 py-2 text-center font-semibold text-slate-600">Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {formData.items.map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="px-3 py-2">
+                              <p className="font-medium text-slate-900">{item.material_name || item.description}</p>
+                              {item.material_type && <p className="text-[10px] text-slate-500">{item.material_type}</p>}
+                            </td>
+                            <td className="px-3 py-2 text-center text-slate-600">{item.quantity}</td>
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="number"
+                                value={item.received_qty}
+                                onChange={(e) => {
+                                  const newItems = [...formData.items];
+                                  newItems[idx].received_qty = parseFloat(e.target.value) || 0;
+                                  const total = newItems.reduce((sum, it) => sum + (parseFloat(it.received_qty) || 0), 0);
+                                  setFormData({
+                                    ...formData,
+                                    items: newItems,
+                                    receivedQuantity: total
+                                  });
+                                }}
+                                className="w-20 px-2 py-1 border border-slate-200 rounded text-center focus:ring-1 focus:ring-blue-500 outline-none"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-center text-slate-600">{item.unit || 'NOS'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Received Quantity *</label>
-                <input
-                  type="number"
-                  value={formData.receivedQuantity}
-                  onChange={(e) => setFormData({...formData, receivedQuantity: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter quantity"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Total Received Quantity *</label>
+                  <input
+                    type="number"
+                    value={formData.receivedQuantity}
+                    onChange={(e) => setFormData({...formData, receivedQuantity: e.target.value})}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none cursor-not-allowed font-bold text-blue-600"
+                    placeholder="Total quantity"
+                    required
+                    readOnly
+                  />
+                </div>
               </div>
 
               <div>
@@ -486,7 +569,7 @@ const POReceipts = () => {
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   placeholder="Add any notes about the receipt"
                   className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows="3"
+                  rows="2"
                 />
               </div>
 
@@ -551,6 +634,37 @@ const POReceipts = () => {
               <div className="mb-6 bg-blue-50 border border-blue-200 p-4 rounded">
                 <p className="text-xs text-blue-600 uppercase tracking-wider font-semibold mb-2">Notes</p>
                 <p className="text-slate-700">{selectedReceipt.notes}</p>
+              </div>
+            )}
+
+            {selectedReceipt.items && selectedReceipt.items.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">Received Items</h4>
+                <div className="border border-slate-100 rounded overflow-hidden">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 font-semibold text-slate-600">Material / Description</th>
+                        <th className="px-3 py-2 text-center font-semibold text-slate-600">Expected</th>
+                        <th className="px-3 py-2 text-center font-semibold text-slate-600">Received</th>
+                        <th className="px-3 py-2 text-center font-semibold text-slate-600">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedReceipt.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2">
+                            <p className="font-medium text-slate-900">{item.material_name || item.description}</p>
+                            {item.material_type && <p className="text-[10px] text-slate-500">{item.material_type}</p>}
+                          </td>
+                          <td className="px-3 py-2 text-center text-slate-600">{item.expected_quantity}</td>
+                          <td className="px-3 py-2 text-center font-bold text-blue-600">{item.received_quantity}</td>
+                          <td className="px-3 py-2 text-center text-slate-600">{item.unit || 'NOS'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

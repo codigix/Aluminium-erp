@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const purchaseOrderController = require('../controllers/purchaseOrderController');
 
+router.get('/material-requests', purchaseOrderController.getPOMaterialRequests);
+router.post('/:poId/store-acceptance', purchaseOrderController.handleStoreAcceptance);
 router.get('/preview/:quotationId', purchaseOrderController.previewPurchaseOrder);
 router.post('/', purchaseOrderController.createPurchaseOrder);
 router.get('/stats', purchaseOrderController.getPurchaseOrderStats);

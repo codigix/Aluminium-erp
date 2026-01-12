@@ -72,6 +72,24 @@ const getPurchaseOrderStats = async (req, res, next) => {
   }
 };
 
+const getPOMaterialRequests = async (req, res, next) => {
+  try {
+    const requests = await purchaseOrderService.getPOMaterialRequests(req.query);
+    res.json(requests);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const handleStoreAcceptance = async (req, res, next) => {
+  try {
+    const result = await purchaseOrderService.handleStoreAcceptance(req.params.poId, req.body);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -79,5 +97,7 @@ module.exports = {
   getPurchaseOrderById,
   updatePurchaseOrder,
   deletePurchaseOrder,
-  getPurchaseOrderStats
+  getPurchaseOrderStats,
+  getPOMaterialRequests,
+  handleStoreAcceptance
 };

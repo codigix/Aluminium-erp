@@ -9,6 +9,7 @@ const getGRNWithDetails = async (grnId) => {
       g.received_quantity AS receivedQuantity,
       g.status,
       g.notes,
+      g.po_receipt_id AS receiptId,
       g.created_at AS createdAt,
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
@@ -35,6 +36,7 @@ const getAllGRNs = async () => {
       g.received_quantity AS receivedQuantity,
       g.status,
       g.notes,
+      g.po_receipt_id AS receiptId,
       g.created_at AS createdAt,
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
@@ -51,7 +53,7 @@ const getAllGRNs = async () => {
   return grns;
 };
 
-const createGRN = async (poNumber, grnDate, receivedQuantity, notes) => {
+const createGRN = async (poNumber, grnDate, receivedQuantity, notes, receiptId = null) => {
   if (!poNumber || receivedQuantity === undefined) {
     const error = new Error('PO number and received quantity are required');
     error.statusCode = 400;
@@ -59,9 +61,9 @@ const createGRN = async (poNumber, grnDate, receivedQuantity, notes) => {
   }
 
   const [result] = await pool.execute(
-    `INSERT INTO grns (po_number, grn_date, received_quantity, notes)
-     VALUES (?, ?, ?, ?)`,
-    [poNumber, grnDate, receivedQuantity, notes || null]
+    `INSERT INTO grns (po_number, grn_date, received_quantity, notes, po_receipt_id)
+     VALUES (?, ?, ?, ?, ?)`,
+    [poNumber, grnDate, receivedQuantity, notes || null, receiptId]
   );
 
   return getGRNWithDetails(result.insertId);

@@ -345,6 +345,94 @@ const getPurchaseOrderStats = async () => {
   };
 };
 
+const getPOMaterialRequests = async (filters = {}) => {
+  let query = `
+    SELECT 
+      po.id as po_id,
+      po.po_number,
+      po.created_at as po_date,
+      v.vendor_name,
+      poi.item_code,
+      poi.material_name,
+      poi.description,
+      poi.quantity as po_qty,
+      poi.unit,
+      poi.accepted_quantity,
+      (poi.quantity - IFNULL((
+        SELECT SUM(pri.received_quantity)
+        FROM po_receipt_items pri
+        JOIN po_receipts pr ON pr.id = pri.receipt_id
+        WHERE pri.po_item_id = poi.id AND pr.status != 'REJECTED'
+      ), 0)) as pending_grn_qty,
+      po.expected_delivery_date,
+      po.store_acceptance_status,
+      po.store_acceptance_date,
+      po.store_acceptance_notes,
+      poi.id as po_item_id
+    FROM purchase_orders po
+    JOIN vendors v ON v.id = po.vendor_id
+    JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (filters.status) {
+    query += ' AND po.store_acceptance_status = ?';
+    params.push(filters.status);
+  }
+
+  query += ' ORDER BY po.created_at DESC';
+
+  const [rows] = await pool.query(query, params);
+  return rows;
+};
+
+const handleStoreAcceptance = async (poId, payload) => {
+  const { status, notes, items } = payload;
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Update PO status
+    await connection.execute(
+      `UPDATE purchase_orders 
+       SET store_acceptance_status = ?, 
+           store_acceptance_date = CURRENT_TIMESTAMP,
+           store_acceptance_notes = ?
+       WHERE id = ?`,
+      [status, notes || null, poId]
+    );
+
+    // If accepted, we might want to update item-level accepted quantities if provided
+    if (status === 'ACCEPTED' && items && Array.isArray(items)) {
+      for (const item of items) {
+        await connection.execute(
+          `UPDATE purchase_order_items 
+           SET accepted_quantity = ? 
+           WHERE id = ? AND purchase_order_id = ?`,
+          [item.accepted_quantity, item.po_item_id, poId]
+        );
+      }
+    } else if (status === 'ACCEPTED') {
+      // Default to full quantity if not specified
+      await connection.execute(
+        `UPDATE purchase_order_items 
+         SET accepted_quantity = quantity 
+         WHERE purchase_order_id = ?`,
+        [poId]
+      );
+    }
+
+    await connection.commit();
+    return { success: true, poId, status };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -352,5 +440,7 @@ module.exports = {
   getPurchaseOrderById,
   updatePurchaseOrder,
   deletePurchaseOrder,
-  getPurchaseOrderStats
+  getPurchaseOrderStats,
+  getPOMaterialRequests,
+  handleStoreAcceptance
 };
