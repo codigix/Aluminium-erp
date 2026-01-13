@@ -14,6 +14,16 @@ const DrawingMaster = () => {
   const [selectedDrawing, setSelectedDrawing] = useState(null);
   const [revisions, setRevisions] = useState([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
+  
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState({
+    drawing_no: '',
+    revision_no: '',
+    description: '',
+    drawing_pdf: null
+  });
+  const [saveLoading, setSaveLoading] = useState(false);
 
   const fetchDrawings = async (search = '') => {
     try {
@@ -70,6 +80,49 @@ const DrawingMaster = () => {
     }
   };
 
+  const handleEdit = (drawing) => {
+    setEditData({
+      drawing_no: drawing.drawing_no,
+      revision_no: drawing.revision_no || '0',
+      description: drawing.description || '',
+      drawing_pdf: null
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    try {
+      setSaveLoading(true);
+      const token = localStorage.getItem('authToken');
+      const formData = new FormData();
+      formData.append('revisionNo', editData.revision_no);
+      formData.append('description', editData.description);
+      if (editData.drawing_pdf) {
+        formData.append('drawing_pdf', editData.drawing_pdf);
+      }
+
+      const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(editData.drawing_no)}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Failed to update drawing');
+      
+      Swal.fire('Success', 'Drawing updated successfully', 'success');
+      setShowEditModal(false);
+      fetchDrawings(searchTerm);
+    } catch (error) {
+      console.error(error);
+      Swal.fire('Error', error.message, 'error');
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -80,7 +133,7 @@ const DrawingMaster = () => {
         <form onSubmit={handleSearch} className="flex gap-2">
           <input 
             type="text" 
-            placeholder="Search Drawing No, Item or Desc..." 
+            placeholder="Search Drawing No, PO or Desc..." 
             className="px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 w-64"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -108,7 +161,7 @@ const DrawingMaster = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Drawing No</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Latest Rev</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Item Code</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">PO / SO Ref</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Used</th>
                 <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">PDF</th>
@@ -127,7 +180,10 @@ const DrawingMaster = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
                       <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-mono">{drawing.revision_no || '0'}</span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">{drawing.item_code}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-xs font-bold text-slate-900">{drawing.po_number || 'N/A'}</div>
+                      <div className="text-[10px] text-slate-500">SO-{String(drawing.sales_order_id).padStart(4, '0')}</div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">{drawing.description}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
                       {new Date(drawing.last_used_at).toLocaleDateString('en-IN')}
@@ -146,12 +202,18 @@ const DrawingMaster = () => {
                         </a>
                       ) : '—'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                       <button 
-                        onClick={() => handleViewRevisions(drawing)}
+                        onClick={() => handleEdit(drawing)}
                         className="text-indigo-600 hover:text-indigo-900 font-semibold"
                       >
-                        Revision History
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleViewRevisions(drawing)}
+                        className="text-slate-600 hover:text-slate-900 font-semibold"
+                      >
+                        History
                       </button>
                     </td>
                   </tr>
@@ -161,6 +223,62 @@ const DrawingMaster = () => {
           </table>
         </div>
       </Card>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-slate-900 opacity-75" onClick={() => setShowEditModal(false)}></div>
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+              <h3 className="text-xl font-bold text-slate-900 mb-4">Edit Drawing: {editData.drawing_no}</h3>
+              <form onSubmit={handleSave} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Revision No</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={editData.revision_no}
+                    onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
+                  <textarea 
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px]"
+                    value={editData.description}
+                    onChange={(e) => setEditData({...editData, description: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Upload PDF</label>
+                  <input 
+                    type="file" 
+                    accept=".pdf"
+                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
+                  />
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button 
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 text-slate-600 font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={saveLoading}
+                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {saveLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Revisions Modal */}
       {showRevisions && (
@@ -179,7 +297,6 @@ const DrawingMaster = () => {
                     <h3 className="text-xl font-bold text-slate-900">
                       Revision History: {selectedDrawing?.drawing_no}
                     </h3>
-                    <p className="text-sm text-slate-500">{selectedDrawing?.item_code}</p>
                   </div>
                   <button 
                     onClick={() => setShowRevisions(false)}
@@ -226,8 +343,9 @@ const DrawingMaster = () => {
                                   </a>
                                 ) : '—'}
                               </td>
-                              <td className="px-6 py-4 text-right text-xs font-medium text-slate-400">
-                                SO-{String(rev.sales_order_id).padStart(4, '0')}
+                              <td className="px-6 py-4 text-right">
+                                <div className="text-xs font-bold text-slate-700">{rev.po_number || 'N/A'}</div>
+                                <div className="text-[10px] text-slate-400">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
                               </td>
                             </tr>
                           ))}

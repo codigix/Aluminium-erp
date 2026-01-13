@@ -43,7 +43,6 @@ const createCustomerPo = async (req, res, next) => {
         sgstPercent: Number(item.sgstPercent || item.sgst || 0),
         igstPercent: Number(item.igstPercent || item.igst || 0),
         deliveryDate: item.deliveryDate || null,
-        drawingNo: item.drawingNo || null,
         revisionNo: item.revisionNo || null,
         purchaseReqNo: item.purchaseReqNo || null,
         customerReference: item.customerReference || null,
@@ -184,8 +183,8 @@ const updateCustomerPo = async (req, res, next) => {
 
     const parsedItems = parseItems(req.body.items);
     const sanitizedItems = parsedItems.map((item, index) => ({
-      drawingNo: item.drawingNo || null,
-      itemCode: item.itemCode || null,
+      drawingNo: item.drawingNo || item.itemCode || `DRW-${index + 1}`,
+      itemCode: item.itemCode || item.drawingNo || `ITEM-${index + 1}`,
       description: item.description || `Line Item ${index + 1}`,
       hsnCode: item.hsnCode || null,
       quantity: Number(item.quantity) || 0,

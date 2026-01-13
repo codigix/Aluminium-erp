@@ -19,7 +19,7 @@ const listDesignOrders = async () => {
   return rows;
 };
 
-const createDesignOrder = async (salesOrderId, connection = null) => {
+const createDesignOrder = async (salesOrderId, connection = null, status = 'DRAFT') => {
   const exec = connection || pool;
   
   // Check if design order already exists
@@ -30,10 +30,18 @@ const createDesignOrder = async (salesOrderId, connection = null) => {
 
   const designOrderNumber = `DO-${String(salesOrderId).padStart(4, '0')}`;
   
-  const [result] = await exec.execute(
-    'INSERT INTO design_orders (design_order_number, sales_order_id, status) VALUES (?, ?, ?)',
-    [designOrderNumber, salesOrderId, 'DRAFT']
-  );
+  let query = 'INSERT INTO design_orders (design_order_number, sales_order_id, status';
+  let placeholders = '?, ?, ?';
+  const params = [designOrderNumber, salesOrderId, status];
+  
+  if (status === 'IN_DESIGN') {
+    query += ', start_date';
+    placeholders += ', CURRENT_TIMESTAMP';
+  }
+  
+  query += `) VALUES (${placeholders})`;
+  
+  const [result] = await exec.execute(query, params);
   
   return result.insertId;
 };

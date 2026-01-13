@@ -394,6 +394,49 @@ const ensureWarehouseAllocationTables = async () => {
   }
 };
 
+const ensureCustomerDrawingTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS customer_drawings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        client_name VARCHAR(255),
+        drawing_no VARCHAR(120) NOT NULL,
+        revision VARCHAR(50),
+        qty INT DEFAULT 1,
+        description TEXT,
+        file_path VARCHAR(500) NOT NULL,
+        file_type VARCHAR(20),
+        remarks TEXT,
+        type VARCHAR(50) DEFAULT 'Customer',
+        purpose VARCHAR(50) DEFAULT 'Reference Only',
+        uploaded_by VARCHAR(120),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Add client_name column if it doesn't exist
+    const [cols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'client_name'");
+    if (cols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN client_name VARCHAR(255) AFTER id");
+      console.log('Added client_name column to customer_drawings');
+    }
+
+    const [qtyCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'qty'");
+    if (qtyCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN qty INT DEFAULT 1 AFTER revision");
+      console.log('Added qty column to customer_drawings');
+    }
+
+    console.log('Customer drawings table synchronized');
+  } catch (error) {
+    console.error('Customer drawing table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureDesignOrderTables = async () => {
   let connection;
   try {
@@ -421,6 +464,64 @@ const ensureDesignOrderTables = async () => {
   }
 };
 
+const ensureSalesOrderItemColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM sales_order_items');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
+      { name: 'revision_no', definition: 'VARCHAR(50) NULL' },
+      { name: 'drawing_pdf', definition: 'VARCHAR(500) NULL' },
+      { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE sales_order_items ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Sales order item columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Sales order item column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureSalesOrderStatuses = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query("SHOW COLUMNS FROM sales_orders LIKE 'status'");
+    if (columns.length > 0) {
+      const type = columns[0].Type;
+      if (!type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED')) {
+        await connection.query(`
+          ALTER TABLE sales_orders 
+          MODIFY COLUMN status ENUM(
+            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY', 
+            'BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 
+            'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 
+            'PRODUCTION_COMPLETED', 'CLOSED'
+          ) DEFAULT 'CREATED'
+        `);
+        console.log('Sales order statuses updated');
+      }
+    }
+  } catch (error) {
+    console.error('Sales order status sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -433,6 +534,9 @@ const bootstrapDatabase = async () => {
   await ensureStockColumns();
   await ensureWarehouseAllocationTables();
   await ensureDesignOrderTables();
+  await ensureSalesOrderItemColumns();
+  await ensureSalesOrderStatuses();
+  await ensureCustomerDrawingTable();
 };
 
 bootstrapDatabase();

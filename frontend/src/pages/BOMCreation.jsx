@@ -28,15 +28,19 @@ const BOMCreation = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      // Fetch orders that are in DESIGN_IN_REVIEW or DESIGN_APPROVED
-      const response = await fetch(`${API_BASE}/sales-orders/incoming?department=DESIGN_ENG`, {
+      // Fetch all sales orders and filter for those currently in the design phase
+      const response = await fetch(`${API_BASE}/sales-orders`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       if (!response.ok) throw new Error('Failed to fetch orders');
       const data = await response.json();
-      setOrders(data);
+      // Filter for orders that are accepted and in design phase
+      const designPhaseOrders = data.filter(order => 
+        ['DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY'].includes(order.status)
+      );
+      setOrders(designPhaseOrders);
     } catch (error) {
       console.error(error);
       Swal.fire('Error', error.message, 'error');
@@ -94,6 +98,15 @@ const BOMCreation = () => {
 
   const handleAddMaterial = async (e) => {
     e.preventDefault();
+
+    if (!materialFormData.materialName.trim()) {
+      return Swal.fire('Validation Error', 'Please enter a material name.', 'warning');
+    }
+
+    if (parseFloat(materialFormData.qtyPerPc) <= 0 || !materialFormData.qtyPerPc) {
+      return Swal.fire('Validation Error', 'Quantity must be greater than zero.', 'warning');
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/bom/items/${selectedItem.id}`, {
@@ -108,7 +121,25 @@ const BOMCreation = () => {
       if (!response.ok) throw new Error('Failed to add material');
       
       const result = await response.json();
-      setItemMaterials([...itemMaterials, { id: result.id, ...materialFormData, sales_order_item_id: selectedItem.id }]);
+      const newMaterial = {
+        id: result.id,
+        material_name: materialFormData.materialName,
+        material_type: materialFormData.materialType,
+        qty_per_pc: materialFormData.qtyPerPc,
+        uom: materialFormData.uom,
+        sales_order_item_id: selectedItem.id
+      };
+      
+      const updatedMaterials = [...itemMaterials, newMaterial];
+      setItemMaterials(updatedMaterials);
+      
+      // Update the main items list to reflect the count change
+      setOrderItems(prevItems => prevItems.map(item => 
+        item.id === selectedItem.id 
+          ? { ...item, materials: updatedMaterials }
+          : item
+      ));
+
       setMaterialFormData({
         materialName: '',
         materialType: 'RAW',
@@ -118,6 +149,43 @@ const BOMCreation = () => {
       Swal.fire('Success', 'Material added to BOM', 'success');
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
+    }
+  };
+
+  const handleSubmitBOM = async () => {
+    if (!selectedOrder) return;
+    
+    const result = await Swal.fire({
+      title: 'Submit Final BOM?',
+      text: "This will finalize the BOM for this order and send it for technical approval.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#4f46e5',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, Submit BOM'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/sales-orders/${selectedOrder.id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: 'BOM_SUBMITTED' })
+        });
+
+        if (!response.ok) throw new Error('Failed to submit BOM');
+        
+        Swal.fire('Submitted!', 'BOM has been submitted for approval.', 'success');
+        setSelectedOrder(null);
+        setOrderItems([]);
+        fetchOrders();
+      } catch (error) {
+        Swal.fire('Error', error.message, 'error');
+      }
     }
   };
 
@@ -133,7 +201,16 @@ const BOMCreation = () => {
 
       if (!response.ok) throw new Error('Failed to delete material');
       
-      setItemMaterials(itemMaterials.filter(m => m.id !== materialId));
+      const updatedMaterials = itemMaterials.filter(m => m.id !== materialId);
+      setItemMaterials(updatedMaterials);
+
+      // Update the main items list
+      setOrderItems(prevItems => prevItems.map(item => 
+        item.id === selectedItem.id 
+          ? { ...item, materials: updatedMaterials }
+          : item
+      ));
+
       Swal.fire('Deleted', 'Material removed from BOM', 'success');
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
@@ -173,11 +250,11 @@ const BOMCreation = () => {
                     onClick={() => handleSelectOrder(order)}
                   >
                     <div className="flex justify-between items-start mb-1">
-                      <span className="text-sm font-bold text-slate-900">SO-{String(order.id).padStart(4, '0')}</span>
+                      <span className="text-sm font-bold text-slate-900">PO: {order.po_number || 'N/A'}</span>
                       <StatusBadge status={order.status} />
                     </div>
                     <div className="text-sm font-medium text-slate-700 truncate">{order.company_name}</div>
-                    <div className="text-xs text-slate-500 truncate">{order.project_name}</div>
+                    <div className="text-xs text-slate-500 truncate">SO-{String(order.id).padStart(4, '0')} | {order.project_name}</div>
                     <div className="mt-2 text-[10px] text-slate-400 uppercase tracking-wider">
                       Target: {order.target_dispatch_date ? new Date(order.target_dispatch_date).toLocaleDateString('en-IN') : '—'}
                     </div>
@@ -190,9 +267,22 @@ const BOMCreation = () => {
 
         {/* Items List */}
         <div className="lg:col-span-2">
-          <h2 className="text-lg font-bold text-slate-800 mb-4">
-            {selectedOrder ? `Items for SO-${String(selectedOrder.id).padStart(4, '0')}` : 'Select an order to view items'}
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold text-slate-800">
+              {selectedOrder ? `Items for PO: ${selectedOrder.po_number} (SO-${String(selectedOrder.id).padStart(4, '0')})` : 'Select an order to view items'}
+            </h2>
+            {selectedOrder && (
+              <button
+                onClick={handleSubmitBOM}
+                className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Submit Final BOM
+              </button>
+            )}
+          </div>
           <Card>
             {!selectedOrder ? (
               <div className="p-12 text-center text-slate-400 italic">
@@ -332,7 +422,6 @@ const BOMCreation = () => {
                       <tr>
                         <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Material Name</th>
                         <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Type</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase">Qty / Pc</th>
                         <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase">Total Qty</th>
                         <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase">UOM</th>
                         <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase">Actions</th>
@@ -350,9 +439,13 @@ const BOMCreation = () => {
                             <td className="px-4 py-3 text-xs">
                               <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">{mat.material_type}</span>
                             </td>
-                            <td className="px-4 py-3 text-sm text-center font-mono">{parseFloat(mat.qty_per_pc).toFixed(4)}</td>
-                            <td className="px-4 py-3 text-sm text-center font-bold text-indigo-600">
-                              {(parseFloat(mat.qty_per_pc) * parseFloat(selectedItem.quantity)).toFixed(3)}
+                            <td className="px-4 py-3 text-sm text-center">
+                              <div className="font-bold text-indigo-600">
+                                {(parseFloat(mat.qty_per_pc || 0) * parseFloat(selectedItem?.quantity || 0)).toFixed(4)}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-medium">
+                                {parseFloat(mat.qty_per_pc || 0).toFixed(4)} / pc
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-xs text-center font-medium text-slate-500">{mat.uom}</td>
                             <td className="px-4 py-3 text-right">
