@@ -17,7 +17,7 @@ const getIncomingOrders = async (departmentCode) => {
   
   let whereClause = '';
   if (departmentCode === 'DESIGN_ENG') {
-    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_QUERY')`;
+    whereClause = `so.status IN ('CREATED', 'DESIGN_QUERY')`;
   } else if (departmentCode === 'PROCUREMENT') {
     whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS')`;
   } else if (departmentCode === 'INVENTORY') {
@@ -34,7 +34,7 @@ const getIncomingOrders = async (departmentCode) => {
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
-     WHERE ${whereClause}
+     WHERE (${whereClause}) AND so.request_accepted = 0
      ORDER BY so.created_at DESC`;
   
   const [rows] = await pool.query(query);
@@ -99,7 +99,18 @@ const createSalesOrder = async (customerPoId, companyId, projectName, drawingReq
 };
 
 const updateSalesOrderStatus = async (salesOrderId, status) => {
-  await pool.execute('UPDATE sales_orders SET status = ? WHERE id = ?', [status, salesOrderId]);
+  let department = null;
+  if (status === 'BOM_APPROVED') {
+    department = 'PROCUREMENT';
+  } else if (status === 'BOM_SUBMITTED') {
+    department = 'DESIGN_ENG'; // Stay in design for approval
+  }
+
+  if (department) {
+    await pool.execute('UPDATE sales_orders SET status = ?, current_department = ? WHERE id = ?', [status, department, salesOrderId]);
+  } else {
+    await pool.execute('UPDATE sales_orders SET status = ? WHERE id = ?', [status, salesOrderId]);
+  }
 };
 
 const acceptRequest = async (salesOrderId, departmentCode) => {
@@ -139,7 +150,7 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
     );
 
     if (nextDepartment === 'DESIGN_ENG') {
-      await designOrderService.createDesignOrder(salesOrderId, connection);
+      await designOrderService.createDesignOrder(salesOrderId, connection, 'IN_DESIGN');
     }
 
     await connection.commit();

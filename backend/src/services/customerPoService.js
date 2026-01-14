@@ -132,12 +132,14 @@ const createCustomerPo = async payload => {
     for (const item of items) {
       await connection.execute(
         `INSERT INTO sales_order_items
-          (sales_order_id, item_code, description, quantity, unit, rate, delivery_date, tax_value)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ,
         [
           salesOrderId,
           item.itemCode || null,
+          item.drawingNo || null,
+          item.revisionNo || null,
           item.description,
           item.quantity,
           item.unit || 'NOS',

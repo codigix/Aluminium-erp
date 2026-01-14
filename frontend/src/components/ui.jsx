@@ -22,17 +22,40 @@ export const FormControl = ({ label, children }) => (
 
 export const StatusBadge = ({ status }) => {
   const normalized = (status || 'ACTIVE').toUpperCase()
-  if (normalized === 'DRAFT') {
-    return <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-amber-50 border-amber-200 text-amber-600">Draft</span>
+  
+  const getStatusStyles = (s) => {
+    switch (s) {
+      case 'DRAFT':
+      case 'CREATED':
+        return 'bg-amber-50 border-amber-200 text-amber-600'
+      case 'DESIGN_IN_REVIEW':
+      case 'IN_DESIGN':
+        return 'bg-blue-50 border-blue-200 text-blue-600'
+      case 'BOM_SUBMITTED':
+        return 'bg-indigo-50 border-indigo-200 text-indigo-600'
+      case 'ACTIVE':
+      case 'DESIGN_APPROVED':
+      case 'BOM_APPROVED':
+      case 'COMPLETED':
+      case 'PRODUCTION_COMPLETED':
+        return 'bg-emerald-50 border-emerald-200 text-emerald-600'
+      case 'DESIGN_QUERY':
+      case 'INACTIVE':
+      case 'REJECTED':
+      case 'BLOCKED':
+        return 'bg-rose-50 border-rose-200 text-rose-600'
+      default:
+        return 'bg-slate-50 border-slate-200 text-slate-600'
+    }
   }
-  const isActive = normalized === 'ACTIVE'
+
+  const formatStatus = (s) => {
+    return s.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')
+  }
+
   return (
-    <span
-      className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-        isActive ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'
-      }`}
-    >
-      {isActive ? 'Active' : 'Inactive'}
+    <span className={`px-3 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getStatusStyles(normalized)}`}>
+      {formatStatus(normalized)}
     </span>
   )
 }

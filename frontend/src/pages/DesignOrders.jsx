@@ -16,6 +16,15 @@ const DesignOrders = () => {
   const [orderDetails, setOrderDetails] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
+  // Item Edit State
+  const [editingItem, setEditingItem] = useState(null);
+  const [editItemData, setEditItemData] = useState({
+    drawing_no: '',
+    revision_no: '',
+    drawing_pdf: null
+  });
+  const [itemSaveLoading, setItemSaveLoading] = useState(false);
+
   const fetchOrders = async () => {
     try {
       setLoading(true);
@@ -125,6 +134,48 @@ const DesignOrders = () => {
     }
   };
 
+  const handleEditItem = (item) => {
+    setEditingItem(item);
+    setEditItemData({
+      drawing_no: item.drawing_no || '',
+      revision_no: item.revision_no || '0',
+      drawing_pdf: null
+    });
+  };
+
+  const handleSaveItem = async (itemId) => {
+    try {
+      setItemSaveLoading(true);
+      const token = localStorage.getItem('authToken');
+      const formData = new FormData();
+      formData.append('drawingNo', editItemData.drawing_no);
+      formData.append('revisionNo', editItemData.revision_no);
+      if (editItemData.drawing_pdf) {
+        formData.append('drawing_pdf', editItemData.drawing_pdf);
+      }
+
+      const response = await fetch(`${API_BASE}/drawings/items/${itemId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Failed to update item drawing');
+      
+      Swal.fire('Success', 'Item drawing updated', 'success');
+      setEditingItem(null);
+      // Refresh details
+      handleViewDetails(selectedOrder);
+    } catch (error) {
+      console.error(error);
+      Swal.fire('Error', error.message, 'error');
+    } finally {
+      setItemSaveLoading(false);
+    }
+  };
+
   const handleDelete = async (id) => {
     const result = await Swal.fire({
       title: 'Are you sure?',
@@ -195,9 +246,9 @@ const DesignOrders = () => {
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">SO Number</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">PO Number</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer / Project</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">PO Ref</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">SO Ref</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Target Date</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -214,12 +265,12 @@ const DesignOrders = () => {
                 ) : (
                   incomingOrders.map((order) => (
                     <tr key={order.id} className="hover:bg-indigo-50/30 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">SO-{String(order.id).padStart(4, '0')}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">{order.po_number || '—'}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-slate-900">{order.company_name}</div>
                         <div className="text-xs text-slate-500">{order.project_name}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{order.po_number || '—'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">SO-{String(order.id).padStart(4, '0')}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
                         {order.target_dispatch_date ? new Date(order.target_dispatch_date).toLocaleDateString('en-IN') : '—'}
                       </td>
@@ -251,7 +302,7 @@ const DesignOrders = () => {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Design Order No</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Sales Order / PO</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">PO / Sales Order</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Project</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Qty</th>
@@ -274,8 +325,8 @@ const DesignOrders = () => {
                     <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">{order.design_order_number}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-slate-900">SO-{String(order.sales_order_id).padStart(4, '0')}</div>
-                        <div className="text-xs text-slate-500">PO: {order.po_number}</div>
+                        <div className="text-sm font-bold text-slate-900">PO: {order.po_number}</div>
+                        <div className="text-xs text-slate-500">SO-{String(order.sales_order_id).padStart(4, '0')}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{order.company_name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{order.project_name}</td>
@@ -284,9 +335,15 @@ const DesignOrders = () => {
                         {order.target_dispatch_date ? new Date(order.target_dispatch_date).toLocaleDateString('en-IN') : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(order.status)}`}>
-                          {order.status}
-                        </span>
+                        <select
+                          value={order.status}
+                          onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                          className={`text-xs font-semibold rounded-full px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer ${getStatusColor(order.status)}`}
+                        >
+                          <option value="DRAFT">DRAFT</option>
+                          <option value="IN_DESIGN">IN_DESIGN</option>
+                          <option value="COMPLETED">COMPLETED</option>
+                        </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <button 
@@ -296,22 +353,6 @@ const DesignOrders = () => {
                         >
                           View
                         </button>
-                        {order.status === 'DRAFT' && (
-                          <button 
-                            onClick={() => handleUpdateStatus(order.id, 'IN_DESIGN')}
-                            className="text-blue-600 hover:text-blue-900 font-semibold"
-                          >
-                            Start
-                          </button>
-                        )}
-                        {order.status === 'IN_DESIGN' && (
-                          <button 
-                            onClick={() => handleUpdateStatus(order.id, 'COMPLETED')}
-                            className="text-green-600 hover:text-green-900 font-semibold"
-                          >
-                            Complete
-                          </button>
-                        )}
                         <button 
                           onClick={() => handleDelete(order.id)}
                           className="text-red-600 hover:text-red-900"
@@ -343,7 +384,7 @@ const DesignOrders = () => {
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h3 className="text-xl font-bold text-slate-900">
-                      Technical Details: SO-{String(selectedOrder?.sales_order_id).padStart(4, '0')}
+                      Technical Details: PO {selectedOrder?.po_number} (SO-{String(selectedOrder?.sales_order_id).padStart(4, '0')})
                     </h3>
                     <p className="text-sm text-slate-500">{selectedOrder?.company_name} - {selectedOrder?.project_name}</p>
                   </div>
@@ -377,20 +418,79 @@ const DesignOrders = () => {
                           {orderDetails.map((item) => (
                             <tr key={item.id} className="hover:bg-slate-50">
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{item.item_code}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">{item.drawing_no || '—'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{item.revision_no || '—'}</td>
-                              <td className="px-6 py-4 text-sm text-slate-600">{item.description}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">{parseFloat(item.quantity).toFixed(0)} {item.unit}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                {item.drawing_pdf ? (
-                                  <button 
-                                    onClick={() => window.open(`${API_BASE}/drawings/${item.drawing_pdf}`, '_blank')}
-                                    className="text-indigo-600 hover:text-indigo-900 font-bold"
-                                  >
-                                    View PDF
-                                  </button>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                {editingItem?.id === item.id ? (
+                                  <input 
+                                    type="text" 
+                                    className="w-32 px-2 py-1 border rounded text-sm"
+                                    value={editItemData.drawing_no}
+                                    onChange={(e) => setEditItemData({...editItemData, drawing_no: e.target.value})}
+                                  />
                                 ) : (
-                                  <span className="text-slate-400 italic">No PDF Attached</span>
+                                  <span className="font-bold text-slate-900">{item.drawing_no || '—'}</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                {editingItem?.id === item.id ? (
+                                  <input 
+                                    type="text" 
+                                    className="w-16 px-2 py-1 border rounded text-sm"
+                                    value={editItemData.revision_no}
+                                    onChange={(e) => setEditItemData({...editItemData, revision_no: e.target.value})}
+                                  />
+                                ) : (
+                                  <span className="text-slate-600">{item.revision_no || '—'}</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-slate-600">{item.description}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">{parseFloat(item.quantity).toFixed(3)} {item.unit}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                {editingItem?.id === item.id ? (
+                                  <div className="flex flex-col gap-2">
+                                    <input 
+                                      type="file" 
+                                      accept=".pdf"
+                                      className="text-xs"
+                                      onChange={(e) => setEditItemData({...editItemData, drawing_pdf: e.target.files[0]})}
+                                    />
+                                    <div className="space-x-2">
+                                      <button 
+                                        onClick={() => handleSaveItem(item.id)}
+                                        disabled={itemSaveLoading}
+                                        className="text-emerald-600 font-bold hover:text-emerald-800 disabled:opacity-50"
+                                      >
+                                        Save
+                                      </button>
+                                      <button 
+                                        onClick={() => setEditingItem(null)}
+                                        className="text-slate-400 font-medium hover:text-slate-600"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-3">
+                                    {item.drawing_pdf ? (
+                                      <button 
+                                        onClick={() => window.open(`${API_BASE.replace('/api', '')}/${item.drawing_pdf}`, '_blank')}
+                                        className="text-indigo-600 hover:text-indigo-900 font-bold"
+                                      >
+                                        View PDF
+                                      </button>
+                                    ) : (
+                                      <span className="text-slate-400 italic">No PDF</span>
+                                    )}
+                                    <button 
+                                      onClick={() => handleEditItem(item)}
+                                      className="text-slate-400 hover:text-indigo-600 transition-colors"
+                                      title="Edit Drawing Info"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
