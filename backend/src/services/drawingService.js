@@ -57,6 +57,10 @@ const deleteCustomerDrawing = async (id) => {
   await pool.execute('DELETE FROM customer_drawings WHERE id = ?', [id]);
 };
 
+const shareWithDesign = async (id) => {
+  await pool.execute('UPDATE customer_drawings SET status = "SHARED" WHERE id = ?', [id]);
+};
+
 const getDrawingRevisions = async (drawingNo) => {
   const [rows] = await pool.query(
     `SELECT 
@@ -135,5 +139,6 @@ module.exports = {
   updateItemDrawing,
   createCustomerDrawing,
   createBatchCustomerDrawings,
-  deleteCustomerDrawing
+  deleteCustomerDrawing,
+  shareWithDesign
 };

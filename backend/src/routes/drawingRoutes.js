@@ -6,6 +6,7 @@ const upload = require('../middleware/upload');
 
 router.get('/', authenticate, drawingController.listDrawings);
 router.post('/', authenticate, upload.single('file'), drawingController.createDrawing);
+router.post('/:id/share', authenticate, drawingController.shareDrawing);
 router.delete('/:id', authenticate, drawingController.deleteDrawing);
 router.get('/:drawingNo/revisions', authenticate, drawingController.getDrawingRevisions);
 router.patch('/:drawingNo', authenticate, upload.single('drawing_pdf'), drawingController.updateDrawing);

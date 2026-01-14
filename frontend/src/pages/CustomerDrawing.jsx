@@ -166,25 +166,23 @@ const CustomerDrawing = () => {
     qty: 1,
     description: '',
     file: null,
-    file_type: '',
     remarks: ''
   });
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const ext = file.name.split('.').pop().toUpperCase();
       setNewDrawing({
         ...newDrawing,
-        file: file,
-        file_type: ext
+        file: file
       });
     }
   };
 
   const handleAddDrawing = async (e) => {
     e.preventDefault();
-    const isExcel = newDrawing.file_type === 'XLSX' || newDrawing.file_type === 'XLS';
+    const fileExt = newDrawing.file ? newDrawing.file.name.split('.').pop().toUpperCase() : '';
+    const isExcel = fileExt === 'XLSX' || fileExt === 'XLS';
     
     if (!newDrawing.file) {
       return Swal.fire('Missing Info', 'Drawing File is mandatory', 'warning');
@@ -204,7 +202,7 @@ const CustomerDrawing = () => {
       formData.append('qty', newDrawing.qty);
       formData.append('description', newDrawing.description);
       formData.append('remarks', newDrawing.remarks);
-      formData.append('fileType', newDrawing.file_type);
+      formData.append('fileType', fileExt);
       formData.append('file', newDrawing.file);
 
       const response = await fetch(`${API_BASE}/drawings`, {
@@ -228,7 +226,6 @@ const CustomerDrawing = () => {
           qty: 1,
           description: '',
           file: null,
-          file_type: '',
           remarks: ''
         }));
         setClientLocked(true);
@@ -241,7 +238,6 @@ const CustomerDrawing = () => {
           qty: 1,
           description: '',
           file: null,
-          file_type: '',
           remarks: ''
         });
         setClientLocked(false);
@@ -253,6 +249,26 @@ const CustomerDrawing = () => {
       Swal.fire('Error', error.message, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShareWithDesign = async (id) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings/${id}/share`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Share failed');
+      
+      Swal.fire('Shared', 'Drawing shared with Engineering Department', 'success');
+      fetchDrawings(searchTerm);
+    } catch (error) {
+      console.error(error);
+      Swal.fire('Error', error.message, 'error');
     }
   };
 
@@ -467,7 +483,7 @@ const CustomerDrawing = () => {
                     className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                     onChange={handleFileChange}
                   />
-                  {newDrawing.file && (newDrawing.file_type === 'XLSX' || newDrawing.file_type === 'XLS') && (
+                  {newDrawing.file && (newDrawing.file.name.endsWith('.xlsx') || newDrawing.file.name.endsWith('.xls')) && (
                     <p className="mt-1 text-[10px] text-emerald-600 font-bold italic">✅ Ready to import rows from: {newDrawing.file.name}</p>
                   )}
                 </div>
@@ -485,7 +501,7 @@ const CustomerDrawing = () => {
             <button 
               type="button"
               onClick={() => {
-                setNewDrawing({ client_name: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, file_type: '', remarks: '' });
+                setNewDrawing({ client_name: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' });
                 setClientLocked(false);
               }}
               className="px-6 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
@@ -597,7 +613,6 @@ const CustomerDrawing = () => {
                             <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Rev</th>
                             <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Qty</th>
                             <th className="px-6 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">File</th>
-                            <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Type</th>
                             <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Uploaded By</th>
                             <th className="px-6 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider">Action</th>
                           </tr>
@@ -630,13 +645,14 @@ const CustomerDrawing = () => {
                                     VIEW
                                   </a>
                                 ) : (
-                                  <span className="text-slate-300 text-[10px] font-bold">MISSING</span>
+                                  <button 
+                                    onClick={() => handleEdit(drawing)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-md text-[10px] font-black hover:bg-amber-600 hover:text-white transition-all shadow-sm"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                    UPLOAD
+                                  </button>
                                 )}
-                              </td>
-                              <td className="px-6 py-3 whitespace-nowrap">
-                                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-black border border-blue-100">
-                                  {drawing.file_type || 'PDF'}
-                                </span>
                               </td>
                               <td className="px-6 py-3 whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
@@ -647,6 +663,26 @@ const CustomerDrawing = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-3 whitespace-nowrap text-right space-x-2">
+                                {drawing.status === 'SHARED' ? (
+                                  <span className="p-1.5 text-emerald-600 bg-emerald-50 rounded-lg inline-block" title="Shared with Engineering">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                  </span>
+                                ) : (
+                                  <button 
+                                    onClick={() => handleShareWithDesign(drawing.id)}
+                                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                    title="Share with Engineering"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={() => handleEdit(drawing)}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                  title="Edit"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                </button>
                                 <button 
                                   onClick={() => handleViewRevisions(drawing)}
                                   className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"

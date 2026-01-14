@@ -105,11 +105,21 @@ const deleteDrawing = async (req, res, next) => {
   }
 };
 
+const shareDrawing = async (req, res, next) => {
+  try {
+    await drawingService.shareWithDesign(req.params.id);
+    res.json({ message: 'Drawing shared with Design Engineering successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listDrawings,
   getDrawingRevisions,
   updateDrawing,
   updateItemDrawing,
   createDrawing,
-  deleteDrawing
+  deleteDrawing,
+  shareDrawing
 };

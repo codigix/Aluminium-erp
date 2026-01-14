@@ -412,6 +412,7 @@ const ensureCustomerDrawingTable = async () => {
         type VARCHAR(50) DEFAULT 'Customer',
         purpose VARCHAR(50) DEFAULT 'Reference Only',
         uploaded_by VARCHAR(120),
+        status ENUM('PENDING', 'SHARED') DEFAULT 'PENDING',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
