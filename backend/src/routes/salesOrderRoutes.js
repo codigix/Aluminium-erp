@@ -8,6 +8,7 @@ router.get('/', salesOrderController.listSalesOrders);
 router.post('/', salesOrderController.createSalesOrder);
 router.post('/bulk/approve-designs', salesOrderController.bulkApproveDesigns);
 router.post('/bulk/reject-designs', salesOrderController.bulkRejectDesigns);
+router.post('/bulk/update-status', salesOrderController.bulkUpdateStatus);
 router.patch('/:id/status', salesOrderController.updateSalesOrderStatus);
 router.post('/:id/send-to-design', salesOrderController.sendOrderToDesign);
 router.post('/:id/approve-design', salesOrderController.approveDesign);

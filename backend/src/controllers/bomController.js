@@ -102,6 +102,15 @@ const getBOMBySalesOrder = async (req, res, next) => {
   }
 };
 
+const createBOMRequest = async (req, res, next) => {
+  try {
+    const result = await bomService.createBOMRequest(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getItemMaterials,
   addItemMaterial,
@@ -113,5 +122,6 @@ module.exports = {
   deleteComponent,
   deleteOperation,
   deleteScrap,
-  getBOMBySalesOrder
+  getBOMBySalesOrder,
+  createBOMRequest
 };

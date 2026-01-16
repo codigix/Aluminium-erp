@@ -579,11 +579,52 @@ const getSalesOrderItem = async itemId => {
   return items[0];
 };
 
+const bulkUpdateStatus = async (orderIds, status) => {
+  if (!Array.isArray(orderIds) || orderIds.length === 0) {
+    throw new Error('No order IDs provided');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    const placeholders = orderIds.map(() => '?').join(',');
+    
+    let department = null;
+    if (status === 'BOM_APPROVED') {
+      department = 'PROCUREMENT';
+    } else if (status === 'BOM_SUBMITTED') {
+      department = 'DESIGN_ENG';
+    }
+
+    if (department) {
+      await connection.execute(
+        `UPDATE sales_orders SET status = ?, current_department = ?, updated_at = NOW() WHERE id IN (${placeholders})`,
+        [status, department, ...orderIds]
+      );
+    } else {
+      await connection.execute(
+        `UPDATE sales_orders SET status = ?, updated_at = NOW() WHERE id IN (${placeholders})`,
+        [status, ...orderIds]
+      );
+    }
+    
+    await connection.commit();
+    return { updatedCount: orderIds.length };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   listSalesOrders,
   getIncomingOrders,
   createSalesOrder,
   updateSalesOrderStatus,
+  bulkUpdateStatus,
   acceptRequest,
   rejectRequest,
   transitionToDepartment,

@@ -15,5 +15,6 @@ router.delete('/components/:id', authenticate, bomController.deleteComponent);
 router.delete('/operations/:id', authenticate, bomController.deleteOperation);
 router.delete('/scrap/:id', authenticate, bomController.deleteScrap);
 router.get('/sales-order/:salesOrderId', authenticate, bomController.getBOMBySalesOrder);
+router.post('/createRequest', authenticate, bomController.createBOMRequest);
 
 module.exports = router;

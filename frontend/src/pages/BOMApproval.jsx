@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
@@ -15,7 +15,7 @@ const BOMApproval = () => {
   const [orderItems, setOrderItems] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
@@ -40,11 +40,11 @@ const BOMApproval = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
     fetchOrders();
-  }, [activeTab]);
+  }, [fetchOrders]);
 
   const handleViewBOM = async (order) => {
     try {
@@ -92,7 +92,7 @@ const BOMApproval = () => {
 
         if (!response.ok) throw new Error('Failed to approve BOM');
         Swal.fire('Approved!', 'BOM has been approved.', 'success');
-        fetchSubmittedBOMs();
+        fetchOrders();
       } catch (error) {
         Swal.fire('Error', error.message, 'error');
       }
@@ -221,39 +221,236 @@ const BOMApproval = () => {
                             QTY: {item.quantity} {item.unit}
                           </div>
                         </div>
+                        
+                        {/* Materials Section */}
+                        <div className="px-4 py-2 bg-slate-50 border-y border-slate-200 flex justify-between items-center">
+                          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Raw Materials</h4>
+                          <span className="text-[10px] font-bold text-slate-400">Total: ₹{item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0).toFixed(2)}</span>
+                        </div>
                         <table className="min-w-full divide-y divide-slate-100">
                           <thead className="bg-white">
                             <tr>
-                              <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Material Name</th>
-                              <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Type</th>
+                              <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Material</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Qty/pc</th>
                               <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Total Qty</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Rate</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Amount</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {item.materials?.length > 0 ? (
-                              item.materials.map((mat) => (
-                                <tr key={mat.id}>
-                                  <td className="px-4 py-2 text-xs text-slate-700">{mat.material_name}</td>
-                                  <td className="px-4 py-2 text-xs text-slate-500">{mat.material_type}</td>
-                                  <td className="px-4 py-2 text-xs text-right">
-                                    <div className="font-bold text-indigo-600">
-                                      {(parseFloat(mat.qty_per_pc) * parseFloat(item.quantity)).toFixed(4)} {mat.uom}
-                                    </div>
-                                    <div className="text-[9px] text-slate-400 font-medium">
-                                      {parseFloat(mat.qty_per_pc).toFixed(4)} {mat.uom} / pc
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))
+                              item.materials.map((mat) => {
+                                const totalQty = parseFloat(mat.qty_per_pc) * parseFloat(item.quantity);
+                                const amount = totalQty * parseFloat(mat.rate || 0);
+                                return (
+                                  <tr key={mat.id}>
+                                    <td className="px-4 py-2 text-xs text-slate-700">
+                                      <div className="font-medium">{mat.material_name}</div>
+                                      <div className="text-[9px] text-slate-400">{mat.material_type}</div>
+                                    </td>
+                                    <td className="px-4 py-2 text-xs text-right text-slate-500">{parseFloat(mat.qty_per_pc).toFixed(4)}</td>
+                                    <td className="px-4 py-2 text-xs text-right text-slate-900 font-medium">{totalQty.toFixed(2)} {mat.uom}</td>
+                                    <td className="px-4 py-2 text-xs text-right text-slate-500">₹{parseFloat(mat.rate || 0).toFixed(2)}</td>
+                                    <td className="px-4 py-2 text-xs text-right font-bold text-indigo-600">₹{amount.toFixed(2)}</td>
+                                  </tr>
+                                );
+                              })
                             ) : (
-                              <tr>
-                                <td colSpan="4" className="px-4 py-4 text-center text-xs text-slate-400 italic">No materials defined for this item</td>
-                              </tr>
+                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">No materials defined</td></tr>
                             )}
                           </tbody>
                         </table>
+
+                        {/* Components Section */}
+                        <div className="px-4 py-2 bg-slate-50 border-y border-slate-200 flex justify-between items-center">
+                          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Components</h4>
+                          <span className="text-[10px] font-bold text-slate-400">Total: ₹{item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0).toFixed(2)}</span>
+                        </div>
+                        <table className="min-w-full divide-y divide-slate-100">
+                          <thead className="bg-white">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Component</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Qty</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Rate</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {item.components?.length > 0 ? (
+                              item.components.map((comp) => {
+                                const amount = parseFloat(comp.quantity || 0) * parseFloat(comp.rate || 0);
+                                return (
+                                  <tr key={comp.id}>
+                                    <td className="px-4 py-2 text-xs text-slate-700">
+                                      <div className="font-medium">{comp.component_code}</div>
+                                      <div className="text-[9px] text-slate-400">{comp.description}</div>
+                                    </td>
+                                    <td className="px-4 py-2 text-xs text-right text-slate-900 font-medium">{comp.quantity} {comp.uom}</td>
+                                    <td className="px-4 py-2 text-xs text-right text-slate-500">₹{parseFloat(comp.rate || 0).toFixed(2)}</td>
+                                    <td className="px-4 py-2 text-xs text-right font-bold text-indigo-600">₹{amount.toFixed(2)}</td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr><td colSpan="4" className="px-4 py-4 text-center text-xs text-slate-400 italic">No components defined</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+
+                        {/* Operations Section */}
+                        <div className="px-4 py-2 bg-slate-50 border-y border-slate-200 flex justify-between items-center">
+                          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operations</h4>
+                          <span className="text-[10px] font-bold text-slate-400">Total: ₹{item.operations?.reduce((sum, o) => {
+                            const cycle = parseFloat(o.cycle_time_min || 0);
+                            const setup = parseFloat(o.setup_time_min || 0);
+                            const rate = parseFloat(o.hourly_rate || 0);
+                            return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                          }, 0).toFixed(2)}</span>
+                        </div>
+                        <table className="min-w-full divide-y divide-slate-100">
+                          <thead className="bg-white">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Operation</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Cycle (m)</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Rate/hr</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Time (h)</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Cost</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {item.operations?.length > 0 ? (
+                              item.operations.map((op) => {
+                                const totalTimeMin = (parseFloat(op.cycle_time_min || 0) * parseFloat(item.quantity)) + parseFloat(op.setup_time_min || 0);
+                                const totalTimeHrs = totalTimeMin / 60;
+                                const cost = totalTimeHrs * parseFloat(op.hourly_rate || 0);
+                                return (
+                                  <tr key={op.id}>
+                                    <td className="px-4 py-2 text-xs text-slate-700">
+                                      <div className="font-medium">{op.operation_name}</div>
+                                      <div className="text-[9px] text-slate-400">{op.workstation}</div>
+                                    </td>
+                                    <td className="px-4 py-2 text-xs text-right text-slate-500">{op.cycle_time_min}</td>
+                                    <td className="px-4 py-2 text-xs text-right text-slate-500">₹{parseFloat(op.hourly_rate || 0).toFixed(2)}</td>
+                                    <td className="px-4 py-2 text-xs text-right text-slate-500">{totalTimeHrs.toFixed(2)} hrs</td>
+                                    <td className="px-4 py-2 text-xs text-right font-bold text-indigo-600">₹{cost.toFixed(2)}</td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">No operations defined</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+
+                        {/* Scrap Section */}
+                        {item.scrap?.length > 0 && (
+                          <>
+                            <div className="px-4 py-2 bg-slate-50 border-y border-slate-200 flex justify-between items-center">
+                              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Scrap Recovery</h4>
+                              <span className="text-[10px] font-bold text-rose-400">Recovery: ₹{item.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0).toFixed(2)}</span>
+                            </div>
+                            <table className="min-w-full divide-y divide-slate-100">
+                              <thead className="bg-white">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Scrap Item</th>
+                                  <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Input</th>
+                                  <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Loss %</th>
+                                  <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Value</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {item.scrap.map((s) => {
+                                  const value = parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0);
+                                  return (
+                                    <tr key={s.id}>
+                                      <td className="px-4 py-2 text-xs text-slate-700">{s.item_name}</td>
+                                      <td className="px-4 py-2 text-xs text-right text-slate-500">{s.input_qty}</td>
+                                      <td className="px-4 py-2 text-xs text-right text-rose-500 font-medium">{s.loss_percent}%</td>
+                                      <td className="px-4 py-2 text-xs text-right font-bold text-rose-600">₹{value.toFixed(2)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </>
+                        )}
+                        
+                        {/* Item Total Breakdown */}
+                        <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+                           <div className="text-xs font-bold uppercase tracking-widest opacity-60">Item Cost Summary</div>
+                           <div className="flex gap-8">
+                              <div className="text-right">
+                                 <div className="text-[9px] uppercase opacity-50 font-bold">Total Item Cost</div>
+                                 <div className="text-lg font-bold">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.operations?.reduce((sum, o) => {
+                                       const cycle = parseFloat(o.cycle_time_min || 0);
+                                       const setup = parseFloat(o.setup_time_min || 0);
+                                       const rate = parseFloat(o.hourly_rate || 0);
+                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                     }, 0) - 
+                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0).toFixed(2)}</div>
+                              </div>
+                              <div className="text-right border-l border-white/10 pl-8">
+                                 <div className="text-[9px] uppercase opacity-50 font-bold">Cost Per Unit</div>
+                                 <div className="text-lg font-bold text-amber-400">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.operations?.reduce((sum, o) => {
+                                       const cycle = parseFloat(o.cycle_time_min || 0);
+                                       const setup = parseFloat(o.setup_time_min || 0);
+                                       const rate = parseFloat(o.hourly_rate || 0);
+                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                     }, 0) - 
+                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0) / parseFloat(item.quantity || 1)).toFixed(2)}</div>
+                              </div>
+                           </div>
+                        </div>
                       </div>
                     ))}
+
+                    {/* Overall Order Summary Breakdown */}
+                    <div className="mt-8 flex justify-end">
+                      <div className="w-80 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+                          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Overall Cost Breakdown</h4>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          {(() => {
+                            const subtotal = orderItems.reduce((total, item) => {
+                              const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
+                              const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
+                              const labor = item.operations?.reduce((sum, o) => {
+                                const cycle = parseFloat(o.cycle_time_min || 0);
+                                const setup = parseFloat(o.setup_time_min || 0);
+                                const rate = parseFloat(o.hourly_rate || 0);
+                                return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                              }, 0) || 0;
+                              const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
+                              return total + (mat + comp + labor - scrap);
+                            }, 0);
+                            const gst = subtotal * 0.18;
+                            const total = subtotal + gst;
+
+                            return (
+                              <>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-slate-500 font-medium">BOM Subtotal:</span>
+                                  <span className="text-slate-900 font-bold">₹{subtotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-slate-500 font-medium">GST (18.0%):</span>
+                                  <span className="text-slate-900 font-bold">₹{gst.toFixed(2)}</span>
+                                </div>
+                                <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+                                  <span className="text-sm font-bold text-slate-700">Sales Order Price:</span>
+                                  <span className="text-xl font-extrabold text-emerald-600">₹{total.toFixed(2)}</span>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

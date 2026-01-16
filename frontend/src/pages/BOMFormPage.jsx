@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const BOMFormPage = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [bomData, setBomData] = useState({
@@ -171,8 +173,8 @@ const BOMFormPage = () => {
       if (!productForm.quantity || productForm.quantity <= 0) {
         throw new Error('Quantity must be greater than 0');
       }
-      if (bomData.materials.length === 0) {
-        throw new Error('At least one raw material is required');
+      if (bomData.materials.length === 0 && bomData.components.length === 0) {
+        throw new Error('At least one raw material or sub-assembly component is required');
       }
 
       const token = localStorage.getItem('authToken');
@@ -195,7 +197,7 @@ const BOMFormPage = () => {
         }
       };
 
-      const response = await fetch(`${API_BASE}/bom/create`, {
+      const response = await fetch(`${API_BASE}/bom/createRequest`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -211,7 +213,7 @@ const BOMFormPage = () => {
 
       await response.json();
       Swal.fire('Success', 'BOM created successfully', 'success').then(() => {
-        window.location.href = '/bom-creation';
+        navigate('/bom-creation');
       });
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
@@ -263,7 +265,7 @@ const BOMFormPage = () => {
           </div>
           <div className="flex gap-2">
             <button className="px-4 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold border border-blue-100">Drafts</button>
-            <button onClick={() => window.location.href = '/bom-creation'} className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-sm transition-all flex items-center gap-1">
+            <button onClick={() => navigate('/bom-creation')} className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-sm transition-all flex items-center gap-1">
               ← Back
             </button>
           </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
@@ -9,7 +10,6 @@ const BOMCreation = () => {
   const [loading, setLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
   
   const fetchOrders = async () => {
     try {
@@ -23,7 +23,29 @@ const BOMCreation = () => {
       const designPhaseOrders = data.filter(order => 
         ['DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY'].includes(order.status)
       );
-      setOrders(designPhaseOrders);
+      
+      // Group by PO Number
+      const grouped = designPhaseOrders.reduce((acc, order) => {
+        const key = order.po_number || 'N/A';
+        if (!acc[key]) {
+          acc[key] = {
+            id: key, 
+            po_number: key,
+            company_name: order.company_name,
+            project_name: order.project_name,
+            orderIds: [order.id],
+            statuses: [order.status]
+          };
+        } else {
+          acc[key].orderIds.push(order.id);
+          if (!acc[key].statuses.includes(order.status)) {
+            acc[key].statuses.push(order.status);
+          }
+        }
+        return acc;
+      }, {});
+
+      setOrders(Object.values(grouped));
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     } finally {
@@ -35,21 +57,25 @@ const BOMCreation = () => {
     fetchOrders();
   }, []);
 
-  const handleSelectOrder = async (order) => {
+  const handleSelectOrder = async (group) => {
     try {
-      setSelectedOrder(order);
-      setItemsLoading(true);
+      setSelectedOrder(group);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/${order.id}/timeline`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error('Failed to fetch order items');
-      const data = await response.json();
-      setOrderItems(data);
-    } catch (error) {
+      
+      const allItems = [];
+      for (const orderId of group.orderIds) {
+        const response = await fetch(`${API_BASE}/sales-orders/${orderId}/timeline`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          allItems.push(...data);
+        }
+      }
+      setOrderItems(allItems);
+    } catch (err) {
+      console.error(err);
       Swal.fire('Error', 'Failed to load order items', 'error');
-    } finally {
-      setItemsLoading(false);
     }
   };
 
@@ -79,28 +105,34 @@ const BOMCreation = () => {
       } else {
         const confirm = await Swal.fire({
           title: 'Submit Final BOM?',
-          text: 'This will finalize the Bill of Materials for this order and move it to the next stage.',
+          text: 'This will finalize the Bill of Materials for this entire PO and move all associated orders to the next stage.',
           icon: 'question',
           showCancelButton: true,
-          confirmButtonText: 'Yes, Submit',
+          confirmButtonText: 'Yes, Submit All',
         });
         if (!confirm.isConfirmed) return;
       }
 
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/${selectedOrder.id}/status`, {
-        method: 'PATCH',
+      
+      const response = await fetch(`${API_BASE}/sales-orders/bulk/update-status`, {
+        method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify({ status: 'BOM_SUBMITTED' })
+        body: JSON.stringify({ 
+          orderIds: selectedOrder.orderIds,
+          status: 'BOM_SUBMITTED' 
+        })
       });
 
-      if (!response.ok) throw new Error('Failed to submit BOM');
+      if (!response.ok) {
+        throw new Error('Failed to submit bulk BOMs');
+      }
       
-      await Swal.fire('Success', 'BOM has been submitted successfully', 'success');
+      await Swal.fire('Success', 'BOMs for this PO have been submitted successfully', 'success');
       setSelectedOrder(null);
       setOrderItems([]);
       fetchOrders();
@@ -172,23 +204,52 @@ const BOMCreation = () => {
                   <h2 className="text-lg font-bold text-slate-900">Order Items: {selectedOrder.po_number}</h2>
                   <p className="text-sm text-slate-500">{selectedOrder.company_name} • {selectedOrder.project_name}</p>
                 </div>
-                <button 
-                  onClick={handleSubmitFinalBOM}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all flex items-center gap-2"
-                >
-                  <span>Submit Final BOM</span>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                </button>
+                <div className="flex gap-4">
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">BOM Coverage</p>
+                    <p className="text-sm font-bold text-slate-700">
+                      {orderItems.filter(i => i.has_bom).length} / {orderItems.length} Drawings
+                    </p>
+                  </div>
+                  <button 
+                    onClick={handleSubmitFinalBOM}
+                    className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all flex items-center gap-2"
+                  >
+                    <span>Submit Final BOM</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                  </button>
+                </div>
               </div>
+
+              {/* Summary Stats */}
+              <div className="grid grid-cols-4 border-b border-slate-100 bg-slate-50/30">
+                <div className="p-4 border-r border-slate-100">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">Total Drawings</div>
+                  <div className="text-xl font-bold text-slate-900">{orderItems.length}</div>
+                </div>
+                <div className="p-4 border-r border-slate-100">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">BOMs Completed</div>
+                  <div className="text-xl font-bold text-emerald-600">{orderItems.filter(i => i.has_bom).length}</div>
+                </div>
+                <div className="p-4 border-r border-slate-100">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">BOMs Pending</div>
+                  <div className="text-xl font-bold text-amber-600">{orderItems.filter(i => !i.has_bom).length}</div>
+                </div>
+                <div className="p-4">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">Total Est. Cost</div>
+                  <div className="text-xl font-bold text-indigo-600">₹{orderItems.reduce((sum, item) => sum + (parseFloat(item.bom_cost || 0) * parseFloat(item.quantity || 0)), 0).toFixed(2)}</div>
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-50">
+                  <thead className="bg-slate-50/50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Details</th>
+                      <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Independent BOM / Drawing</th>
                       <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                      <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Quantity</th>
+                      <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Order Qty</th>
                       <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">BOM Status</th>
-                      <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Unit Cost</th>
+                      <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cost / Unit</th>
                       <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
                     </tr>
                   </thead>
@@ -217,12 +278,12 @@ const BOMCreation = () => {
                           <div className="text-sm font-bold text-slate-900">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</div>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <a 
-                            href={`/bom-form/${item.id}`}
+                          <Link 
+                            to={`/bom-form/${item.id}`}
                             className="inline-block px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all border border-indigo-100"
                           >
                             Manage BOM
-                          </a>
+                          </Link>
                         </td>
                       </tr>
                     ))}

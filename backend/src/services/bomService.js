@@ -120,6 +120,38 @@ const getBOMBySalesOrder = async (salesOrderId) => {
   return fullBOM;
 };
 
+const createBOMRequest = async (bomData) => {
+  const { itemId, productForm } = bomData;
+  const { itemGroup, uom, revision, description, isActive, isDefault, quantity } = productForm;
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Update sales_order_items with BOM metadata
+    await connection.execute(
+      `UPDATE sales_order_items 
+       SET item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, quantity = ?
+       WHERE id = ?`,
+      [itemGroup, uom, revision, description, isActive ? 1 : 0, isDefault ? 1 : 0, quantity, itemId]
+    );
+
+    // Get sales_order_id to update sales_orders status
+    const [itemRows] = await connection.query(
+      'SELECT sales_order_id FROM sales_order_items WHERE id = ?',
+      [itemId]
+    );
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getItemMaterials,
   getItemComponents,
@@ -134,5 +166,6 @@ module.exports = {
   deleteComponent,
   deleteOperation,
   deleteScrap,
-  getBOMBySalesOrder
+  getBOMBySalesOrder,
+  createBOMRequest
 };
