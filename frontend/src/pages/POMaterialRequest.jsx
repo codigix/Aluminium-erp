@@ -175,7 +175,7 @@ const POMaterialRequest = () => {
               <div key={group.po_id} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm transition-all hover:shadow-md">
                 {/* PO Header */}
                 <div 
-                  className={`px-6 py-4 flex items-center justify-between cursor-pointer select-none transition-colors ${expandedPos.has(group.po_id) ? 'bg-slate-50 border-b border-slate-200' : 'bg-white hover:bg-slate-50/50'}`}
+                  className={`p-2 flex items-center justify-between cursor-pointer select-none transition-colors ${expandedPos.has(group.po_id) ? 'bg-slate-50 border-b border-slate-200' : 'bg-white hover:bg-slate-50/50'}`}
                   onClick={() => togglePo(group.po_id)}
                 >
                   <div className="flex items-center gap-6">
@@ -237,32 +237,32 @@ const POMaterialRequest = () => {
                     <table className="w-full text-sm text-left border-collapse">
                       <thead className="bg-slate-50/50 text-slate-400 uppercase tracking-widest text-[10px] font-bold">
                         <tr>
-                          <th className="px-6 py-3">Material / Item</th>
-                          <th className="px-6 py-3">Type</th>
-                          <th className="px-6 py-3">Drawing No</th>
-                          <th className="px-6 py-3 text-right">PO Quantity</th>
-                          <th className="px-6 py-3 text-right">Pending GRN</th>
-                          <th className="px-6 py-3">Exp. Delivery</th>
+                          <th className="p-2">Material / Item</th>
+                          <th className="p-2">Type</th>
+                          <th className="p-2">Drawing No</th>
+                          <th className="p-2 text-right">PO Quantity</th>
+                          <th className="p-2 text-right">Pending GRN</th>
+                          <th className="p-2">Exp. Delivery</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {group.items.map((item, idx) => (
                           <tr key={`${item.po_item_id}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
-                            <td className="px-6 py-4">
-                              <div className="font-semibold text-slate-900">{item.material_name || '—'}</div>
+                            <td className="p-2">
+                              <div className="font-semibold text-slate-900 text-xs">{item.material_name || '—'}</div>
                               <div className="text-xs text-slate-500 line-clamp-1 max-w-xl">{item.description}</div>
                             </td>
-                            <td className="px-6 py-4 text-slate-600">{item.material_type || '—'}</td>
-                            <td className="px-6 py-4 text-slate-600">{item.drawing_no || '—'}</td>
-                            <td className="px-6 py-4 text-right font-medium text-slate-700">
+                            <td className="p-2 text-slate-600">{item.material_type || '—'}</td>
+                            <td className="p-2 text-slate-600">{item.drawing_no || '—'}</td>
+                            <td className="p-2 text-right font-medium text-slate-700">
                               {parseFloat(item.po_qty || 0).toFixed(2)} <span className="text-[10px] text-slate-400">{item.unit}</span>
                             </td>
-                            <td className="px-6 py-4 text-right">
+                            <td className="p-2 text-right">
                               <span className="font-bold text-blue-600">
                                 {parseFloat(item.pending_grn_qty || 0).toFixed(2)}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-slate-600">
+                            <td className="p-2 text-slate-600">
                               {formatDate(item.expected_delivery_date)}
                             </td>
                           </tr>

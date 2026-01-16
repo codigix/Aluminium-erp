@@ -817,7 +817,7 @@ const Quotations = () => {
           <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">
+                <h3 className="text-lg font-semibold text-slate-900 text-xs">
                   {activeTab === 'sent' ? 'Create Quote Request (RFQ)' : 'Record Vendor Quote'}
                 </h3>
                 {activeTab !== 'sent' && (
@@ -1159,7 +1159,7 @@ const Quotations = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Send Quotation via Email</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Send Quotation via Email</h3>
               <button onClick={() => setShowEmailModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -1231,7 +1231,7 @@ const Quotations = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Edit Quotation</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Edit Quotation</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 

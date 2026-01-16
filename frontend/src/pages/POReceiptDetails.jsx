@@ -178,7 +178,7 @@ const POReceiptDetails = () => {
             {/* Items Table */}
             {poItems.length > 0 && (
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">PO Items</h3>
+                <h3 className="text-lg font-semibold text-slate-900 text-xs mb-4">PO Items</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-100 text-slate-600 uppercase">

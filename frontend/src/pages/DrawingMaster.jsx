@@ -159,13 +159,13 @@ const DrawingMaster = () => {
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Drawing No</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Latest Rev</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">PO / SO Ref</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Used</th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">PDF</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Drawing No</th>
+                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Latest Rev</th>
+                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">PO / SO Ref</th>
+                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
+                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Used</th>
+                <th className="p-2text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">PDF</th>
+                <th className="p-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
@@ -176,19 +176,19 @@ const DrawingMaster = () => {
               ) : (
                 drawings.map((drawing, idx) => (
                   <tr key={`${drawing.drawing_no}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">{drawing.drawing_no}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                    <td className="p-2 whitespace-nowrap text-sm font-bold text-slate-900">{drawing.drawing_no}</td>
+                    <td className="p-2 whitespace-nowrap text-sm text-slate-600">
                       <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-mono">{drawing.revision_no || '0'}</span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="p-2 whitespace-nowrap">
                       <div className="text-xs font-bold text-slate-900">{drawing.po_number || 'N/A'}</div>
                       <div className="text-[10px] text-slate-500">SO-{String(drawing.sales_order_id).padStart(4, '0')}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">{drawing.description}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
+                    <td className="p-2 text-sm text-slate-500 max-w-xs truncate">{drawing.description}</td>
+                    <td className="p-2 whitespace-nowrap text-xs text-slate-500">
                       {new Date(drawing.last_used_at).toLocaleDateString('en-IN')}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="p-2 text-left">
                       {drawing.drawing_pdf ? (
                         <a 
                           href={`${API_BASE.replace('/api', '')}/${drawing.drawing_pdf}`} 
@@ -202,7 +202,7 @@ const DrawingMaster = () => {
                         </a>
                       ) : '—'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                    <td className="p-2 whitespace-nowrap text-right text-sm font-medium space-x-2">
                       <button 
                         onClick={() => handleEdit(drawing)}
                         className="text-indigo-600 hover:text-indigo-900 font-semibold"
@@ -316,22 +316,22 @@ const DrawingMaster = () => {
                       <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Rev</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Description</th>
-                            <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">File</th>
-                            <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Order</th>
+                            <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">Rev</th>
+                            <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
+                            <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">Description</th>
+                            <th className="p-2text-center text-xs font-semibold text-slate-500 uppercase">File</th>
+                            <th className="p-2 text-right text-xs font-semibold text-slate-500 uppercase">Order</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
                           {revisions.map((rev, i) => (
                             <tr key={i} className="hover:bg-slate-50">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono font-bold text-indigo-600">{rev.revision_no || '0'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                              <td className="p-2 whitespace-nowrap text-sm font-mono font-bold text-indigo-600">{rev.revision_no || '0'}</td>
+                              <td className="p-2 whitespace-nowrap text-sm text-slate-600">
                                 {new Date(rev.created_at).toLocaleDateString('en-IN')}
                               </td>
-                              <td className="px-6 py-4 text-sm text-slate-500">{rev.description}</td>
-                              <td className="px-6 py-4 text-center">
+                              <td className="p-2 text-sm text-slate-500">{rev.description}</td>
+                              <td className="p-2 text-left">
                                 {rev.drawing_pdf ? (
                                   <a 
                                     href={`${API_BASE.replace('/api', '')}/${rev.drawing_pdf}`} 
@@ -343,7 +343,7 @@ const DrawingMaster = () => {
                                   </a>
                                 ) : '—'}
                               </td>
-                              <td className="px-6 py-4 text-right">
+                              <td className="p-2 text-right">
                                 <div className="text-xs font-bold text-slate-700">{rev.po_number || 'N/A'}</div>
                                 <div className="text-[10px] text-slate-400">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
                               </td>

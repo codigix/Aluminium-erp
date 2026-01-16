@@ -4,7 +4,7 @@ export const Card = ({ id, title, subtitle, action, children }) => (
       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between px-8 py-6 border-b border-slate-100/80 rounded-t-[32px]">
         <div>
           {subtitle && <p className="text-[0.65rem] font-semibold tracking-[0.35em] text-slate-400 uppercase">{subtitle}</p>}
-          {title && <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>}
+          {title && <h2 className="text-2xl font-semibold text-slate-900 text-xs">{title}</h2>}
         </div>
         {action}
       </div>

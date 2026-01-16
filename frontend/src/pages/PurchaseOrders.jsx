@@ -394,7 +394,7 @@ const PurchaseOrders = () => {
                   <tr key={`po-${po.id}`} className="border-t border-slate-100">
                     <td className="px-4 py-4 font-medium text-slate-900">{po.po_number || `PO-${String(po.id).padStart(4, '0')}`}</td>
                     <td className="px-4 py-4 text-slate-600">{po.vendor_name}</td>
-                    <td className="px-4 py-4 font-semibold text-slate-900">{formatCurrency(po.total_amount)}</td>
+                    <td className="px-4 py-4 font-semibold text-slate-900 text-xs">{formatCurrency(po.total_amount)}</td>
                     <td className="px-4 py-4 text-slate-600">{formatDate(po.expected_delivery_date)}</td>
                     <td className="px-4 py-4">
                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${poStatusColors[po.status]?.badge}`}>
@@ -440,7 +440,7 @@ const PurchaseOrders = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-slate-900">Create Purchase Order from Quotation</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create Purchase Order from Quotation</h3>
               <button onClick={() => {
                 setShowCreateModal(false);
                 setPoItems([]);
@@ -548,7 +548,7 @@ const PurchaseOrders = () => {
                             <td className="px-3 py-2 text-right text-slate-600">{item.quantity}</td>
                             <td className="px-3 py-2 text-center text-slate-600">{item.unit || 'NOS'}</td>
                             <td className="px-3 py-2 text-right text-slate-600">{formatCurrency(item.unit_rate)}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-slate-900 text-xs">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
                           </tr>
                         ))}
                         <tr className="bg-slate-50 font-bold border-t border-slate-200">
@@ -598,7 +598,7 @@ const PurchaseOrders = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-slate-900">Purchase Order Details</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Purchase Order Details</h3>
               <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -639,7 +639,7 @@ const PurchaseOrders = () => {
             )}
 
             <div className="mb-6">
-              <h4 className="text-sm font-semibold text-slate-900 mb-3">Order Items ({poItems.length})</h4>
+              <h4 className="text-sm font-semibold text-slate-900 text-xs mb-3">Order Items ({poItems.length})</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-slate-100 text-slate-600 uppercase">
@@ -671,7 +671,7 @@ const PurchaseOrders = () => {
                         <td className="px-3 py-2 text-center text-slate-600">{item.unit}</td>
                         <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrency(item.unit_rate)}</td>
                         <td className="px-3 py-2 text-right font-semibold text-emerald-600">{formatCurrency(item.amount)}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrency(item.total_amount || (parseFloat(item.amount) + parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)))}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-slate-900 text-xs">{formatCurrency(item.total_amount || (parseFloat(item.amount) + parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -695,7 +695,7 @@ const PurchaseOrders = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Edit Purchase Order</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Edit Purchase Order</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 

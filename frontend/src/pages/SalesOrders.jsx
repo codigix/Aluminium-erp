@@ -369,7 +369,7 @@ const SalesOrders = ({
                           <React.Fragment key={`so-item-wrapper-${idx}`}>
                             <tr className="hover:bg-slate-50/50 transition-colors">
                               <td className="px-5 py-4">
-                                <p className="font-semibold text-slate-900">{item.description}</p>
+                                <p className="font-semibold text-slate-900 text-xs">{item.description}</p>
                                 {item.item_code && <p className="text-[10px] text-slate-400 mt-0.5">{item.item_code}</p>}
                               </td>
                               <td className="px-5 py-4">
@@ -528,7 +528,7 @@ const SalesOrders = ({
                       <p className="font-bold text-slate-900">{formatOrderCode(order.id)}</p>
                     </td>
                     <td className="px-5 py-5 align-middle">
-                      <p className="font-semibold text-slate-900">{order.company_name || '—'}</p>
+                      <p className="font-semibold text-slate-900 text-xs">{order.company_name || '—'}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{order.project_name || '—'}</p>
                     </td>
                     <td className="px-5 py-5 text-slate-600 align-middle">

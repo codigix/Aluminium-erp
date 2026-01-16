@@ -18,13 +18,13 @@ const listDrawings = async (searchTerm = '') => {
 };
 
 const createCustomerDrawing = async (data) => {
-  const { clientName, drawingNo, revision, qty, description, filePath, fileType, remarks, uploadedBy } = data;
+  const { clientName, drawingNo, revision, qty, description, filePath, fileType, remarks, uploadedBy, contactPerson, phoneNumber, emailAddress } = data;
   const [result] = await pool.execute(
     `INSERT INTO customer_drawings 
-      (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, uploaded_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, uploaded_by, contact_person, phone, email)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ,
-    [clientName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, uploadedBy || 'Sales']
+    [clientName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null]
   );
   return result.insertId;
 };
@@ -41,12 +41,15 @@ const createBatchCustomerDrawings = async (drawings) => {
     d.filePath, 
     d.fileType, 
     d.remarks || null, 
-    d.uploadedBy || 'Sales'
+    d.uploadedBy || 'Sales',
+    d.contactPerson || null,
+    d.phoneNumber || null,
+    d.emailAddress || null
   ]);
 
   const [result] = await pool.query(
     `INSERT INTO customer_drawings 
-      (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, uploaded_by)
+      (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, uploaded_by, contact_person, phone, email)
      VALUES ?`,
     [values]
   );
@@ -58,7 +61,84 @@ const deleteCustomerDrawing = async (id) => {
 };
 
 const shareWithDesign = async (id) => {
-  await pool.execute('UPDATE customer_drawings SET status = "SHARED" WHERE id = ?', [id]);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    await connection.execute('UPDATE customer_drawings SET status = "SHARED" WHERE id = ?', [id]);
+    
+    const [drawings] = await connection.query('SELECT * FROM customer_drawings WHERE id = ?', [id]);
+    if (!drawings.length) throw new Error('Drawing not found');
+    
+    const drawing = drawings[0];
+    
+    const [companies] = await connection.query(
+      'SELECT id FROM companies WHERE company_name = ?',
+      [drawing.client_name]
+    );
+    
+    let companyId;
+    if (companies.length > 0) {
+      companyId = companies[0].id;
+    } else {
+      const [companyResult] = await connection.execute(
+        'INSERT INTO companies (company_name, company_code, status) VALUES (?, ?, ?)',
+        [drawing.client_name, drawing.client_name.replace(/\s+/g, '_').toUpperCase(), 'ACTIVE']
+      );
+      companyId = companyResult.insertId;
+    }
+    
+    if (drawing.email || drawing.phone || drawing.contact_person) {
+      const [existingContact] = await connection.query(
+        'SELECT id FROM contacts WHERE company_id = ? AND contact_type = "PRIMARY" LIMIT 1',
+        [companyId]
+      );
+      
+      if (existingContact.length === 0) {
+        await connection.execute(
+          'INSERT INTO contacts (company_id, name, email, phone, contact_type, status) VALUES (?, ?, ?, ?, ?, ?)',
+          [companyId, drawing.contact_person || drawing.client_name, drawing.email || null, drawing.phone || null, 'PRIMARY', 'ACTIVE']
+        );
+      }
+    }
+    
+    const [pos] = await connection.query(
+      'SELECT id FROM customer_pos WHERE company_id = ? ORDER BY created_at DESC LIMIT 1',
+      [companyId]
+    );
+    
+    let poId;
+    if (pos.length > 0) {
+      poId = pos[0].id;
+    } else {
+      const [poResult] = await connection.execute(
+        'INSERT INTO customer_pos (company_id, po_number, po_date, status) VALUES (?, ?, ?, ?)',
+        [companyId, `PO-${drawing.client_name.substring(0, 3).toUpperCase()}-${Date.now()}`, new Date().toISOString().split('T')[0], 'APPROVED']
+      );
+      poId = poResult.insertId;
+    }
+    
+    const [soResult] = await connection.execute(
+      `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, status, current_department, request_accepted)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [poId, companyId, `Design Review - ${drawing.drawing_no}`, 1, 'CREATED', 'DESIGN_ENG', 0]
+    );
+    
+    const salesOrderId = soResult.insertId;
+    
+    await connection.execute(
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, description, quantity, unit, rate)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [salesOrderId, drawing.drawing_no, drawing.description || 'Design Review', drawing.qty || 1, 'NOS', 0]
+    );
+    
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const getDrawingRevisions = async (drawingNo) => {

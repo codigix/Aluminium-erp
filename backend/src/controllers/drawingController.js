@@ -48,7 +48,7 @@ const updateItemDrawing = async (req, res, next) => {
 
 const createDrawing = async (req, res, next) => {
   try {
-    const { clientName, drawingNo, revision, qty, description, remarks, fileType } = req.body;
+    const { clientName, drawingNo, revision, qty, description, remarks, fileType, contactPerson, phoneNumber, emailAddress } = req.body;
     const filePath = req.file ? req.file.path : null;
     if (!filePath) throw new Error('Drawing file is required');
 
@@ -67,7 +67,10 @@ const createDrawing = async (req, res, next) => {
           filePath,
           fileType,
           remarks: d.remarks || remarks,
-          uploadedBy
+          uploadedBy,
+          contactPerson,
+          phoneNumber,
+          emailAddress
         }));
         
         const count = await drawingService.createBatchCustomerDrawings(batchData);
@@ -87,7 +90,10 @@ const createDrawing = async (req, res, next) => {
       filePath,
       fileType,
       remarks,
-      uploadedBy
+      uploadedBy,
+      contactPerson,
+      phoneNumber,
+      emailAddress
     });
 
     res.status(201).json({ message: 'Customer drawing uploaded successfully', id });

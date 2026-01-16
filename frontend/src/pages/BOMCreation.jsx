@@ -315,7 +315,7 @@ const BOMCreation = () => {
                           <div className="text-xs text-slate-600 line-clamp-2 max-w-xs">{item.description}</div>
                         </td>
                         <td className="px-4 py-4 text-center whitespace-nowrap">
-                          <div className="text-sm font-semibold text-slate-900">{item.quantity}</div>
+                          <div className="text-sm font-semibold text-slate-900 text-xs">{item.quantity}</div>
                           <div className="text-[10px] text-slate-500 uppercase">{item.unit}</div>
                         </td>
                         <td className="px-4 py-4 text-center">
@@ -348,7 +348,7 @@ const BOMCreation = () => {
             <div className="fixed inset-0 bg-slate-900/75 transition-opacity" onClick={() => setShowMaterialModal(false)}></div>
             
             <div className="relative bg-white rounded-2xl shadow-xl max-w-4xl w-full overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">Manage BOM: {selectedItem?.item_code}</h3>
                   <p className="text-xs text-slate-500 truncate max-w-md">{selectedItem?.description}</p>
@@ -466,7 +466,7 @@ const BOMCreation = () => {
                 </div>
               </div>
               
-              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 text-right">
+              <div className="p-2 bg-slate-50 border-t border-slate-100 text-right">
                 <button 
                   onClick={() => setShowMaterialModal(false)}
                   className="px-6 py-2 bg-slate-200 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-300 transition-colors"

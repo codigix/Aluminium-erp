@@ -134,10 +134,10 @@ const BOMApproval = () => {
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">PO / SO Ref</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Customer / Project</th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Actions</th>
+                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">PO / SO Ref</th>
+                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">Customer / Project</th>
+                <th className="p-2text-center text-xs font-semibold text-slate-500 uppercase">Status</th>
+                <th className="p-2 text-right text-xs font-semibold text-slate-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
@@ -148,20 +148,20 @@ const BOMApproval = () => {
               ) : (
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="p-2 whitespace-nowrap">
                       <div className="text-sm font-bold text-slate-900">{order.po_number || 'N/A'}</div>
                       <div className="text-[10px] text-slate-500">SO-{String(order.id).padStart(4, '0')}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="p-2 whitespace-nowrap">
                       <div className="text-sm font-medium text-slate-900">{order.company_name}</div>
                       <div className="text-xs text-slate-500">{order.project_name}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <td className="p-2 whitespace-nowrap text-center">
                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${order.status === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                         {order.status.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                    <td className="p-2 whitespace-nowrap text-right text-sm font-medium space-x-3">
                       <button 
                         onClick={() => handleViewBOM(order)}
                         className="text-indigo-600 hover:text-indigo-900 font-bold"
@@ -192,7 +192,7 @@ const BOMApproval = () => {
             <div className="fixed inset-0 bg-slate-900/75 transition-opacity" onClick={() => setShowDetails(false)}></div>
             
             <div className="relative bg-white rounded-2xl shadow-xl max-w-5xl w-full overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">BOM Details: PO {selectedOrder?.po_number}</h3>
                   <p className="text-xs text-slate-500">{selectedOrder?.company_name} - {selectedOrder?.project_name}</p>
@@ -257,7 +257,7 @@ const BOMApproval = () => {
                   </div>
                 )}
               </div>
-              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <div className="p-2 bg-slate-50 border-t border-slate-100 flex justify-end">
                 <button 
                   onClick={() => setShowDetails(false)}
                   className="px-6 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50"

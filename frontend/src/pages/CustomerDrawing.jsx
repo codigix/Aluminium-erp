@@ -13,6 +13,7 @@ const CustomerDrawing = () => {
   const [clientLocked, setClientLocked] = useState(false);
   const [expandedClients, setExpandedClients] = useState({});
   const [clientFilter, setClientFilter] = useState('ALL');
+  const [lastUploadedDrawings, setLastUploadedDrawings] = useState([]);
   
   // Revisions Modal State
   const [showRevisions, setShowRevisions] = useState(false);
@@ -29,6 +30,16 @@ const CustomerDrawing = () => {
     drawing_pdf: null
   });
   const [saveLoading, setSaveLoading] = useState(false);
+
+  // Approved Drawings Modal State
+  const [showApprovedDrawings, setShowApprovedDrawings] = useState(false);
+  const [approvedGroupedByClient, setApprovedGroupedByClient] = useState({});
+  const [approvedLoading, setApprovedLoading] = useState(false);
+  const [selectedApprovedClient, setSelectedApprovedClient] = useState(null);
+  const [selectedApprovedItems, setSelectedApprovedItems] = useState([]);
+  const [quotePrices, setQuotePrices] = useState({});
+  const [quotationNotes, setQuotationNotes] = useState('');
+  const [creatingQuotation, setCreatingQuotation] = useState(false);
 
   const fetchDrawings = async (search = '') => {
     try {
@@ -68,6 +79,162 @@ const CustomerDrawing = () => {
     }
   };
 
+  const fetchApprovedDrawings = async () => {
+    try {
+      setApprovedLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch approved drawings');
+      const data = await response.json();
+
+      const grouped = {};
+      data.forEach(order => {
+        const clientName = order.company_name || 'Unassigned';
+        if (!grouped[clientName]) {
+          grouped[clientName] = {
+            company_name: clientName,
+            company_id: order.company_id,
+            contact_person: order.contact_person || '',
+            email: order.email || '',
+            phone: order.phone || '',
+            address: order.address || '',
+            orders: []
+          };
+        }
+        grouped[clientName].orders.push(order);
+      });
+      setApprovedGroupedByClient(grouped);
+    } catch (error) {
+      console.error('Fetch approved drawings error:', error);
+      Swal.fire('Error', 'Failed to load approved drawings', 'error');
+    } finally {
+      setApprovedLoading(false);
+    }
+  };
+
+  const handleSelectApprovedClient = (clientName) => {
+    const client = approvedGroupedByClient[clientName];
+    setSelectedApprovedClient(clientName);
+    const items = [];
+    client.orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          items.push({
+            ...item,
+            sales_order_id: order.id,
+            po_number: order.po_number,
+            po_date: order.po_date,
+            po_net_total: order.po_net_total
+          });
+        });
+      }
+    });
+    setSelectedApprovedItems(items);
+    setQuotePrices({});
+    setQuotationNotes('');
+  };
+
+  const handlePriceChange = (itemId, price) => {
+    setQuotePrices(prev => ({
+      ...prev,
+      [itemId]: parseFloat(price) || 0
+    }));
+  };
+
+  const calculateQuotationTotal = () => {
+    return selectedApprovedItems.reduce((sum, item) => {
+      const price = quotePrices[item.id] || 0;
+      return sum + price;
+    }, 0);
+  };
+
+  const handleCreateQuotation = async () => {
+    if (!selectedApprovedClient || selectedApprovedItems.length === 0) {
+      Swal.fire('Error', 'Please select a client and items', 'error');
+      return;
+    }
+
+    const hasPrices = selectedApprovedItems.some(item => quotePrices[item.id] && quotePrices[item.id] > 0);
+    if (!hasPrices) {
+      Swal.fire('Error', 'Please enter quote prices for at least one item', 'error');
+      return;
+    }
+
+    const clientData = approvedGroupedByClient[selectedApprovedClient];
+    if (!clientData.email) {
+      Swal.fire('Error', 'Client email address not available. Cannot create quotation.', 'error');
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: 'Create Quotation',
+      html: `
+        <div style="text-align: left; font-size: 14px;">
+          <p><strong>Client:</strong> ${clientData.company_name}</p>
+          <p><strong>Items:</strong> ${selectedApprovedItems.length}</p>
+          <p><strong>Total Value:</strong> ₹${calculateQuotationTotal().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+          <p style="color: #666; margin-top: 8px;">Quotation will be created and sent to client.</p>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Create Quotation',
+      confirmButtonColor: '#10b981'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setCreatingQuotation(true);
+        const token = localStorage.getItem('authToken');
+        
+        const quotationData = {
+          company_id: clientData.company_id,
+          company_name: clientData.company_name,
+          contact_person: clientData.contact_person,
+          email: clientData.email,
+          phone: clientData.phone,
+          address: clientData.address,
+          items: selectedApprovedItems.map(item => ({
+            sales_order_id: item.sales_order_id,
+            sales_order_item_id: item.id,
+            drawing_no: item.drawing_no,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            quoted_price: quotePrices[item.id] || 0
+          })),
+          total_amount: calculateQuotationTotal(),
+          notes: quotationNotes
+        };
+
+        const response = await fetch(`${API_BASE}/quotation-requests`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(quotationData)
+        });
+
+        if (!response.ok) throw new Error('Failed to create quotation');
+        
+        Swal.fire('Success', 'Quotation created and sent to client', 'success');
+        setShowApprovedDrawings(false);
+        setSelectedApprovedClient(null);
+        setSelectedApprovedItems([]);
+        setQuotePrices({});
+        setQuotationNotes('');
+        fetchApprovedDrawings();
+      } catch (error) {
+        console.error(error);
+        Swal.fire('Error', error.message, 'error');
+      } finally {
+        setCreatingQuotation(false);
+      }
+    }
+  };
+
   const toggleClientGroup = (clientName) => {
     setExpandedClients(prev => ({
       ...prev,
@@ -86,6 +253,18 @@ const CustomerDrawing = () => {
   useEffect(() => {
     fetchDrawings();
     fetchCompanies();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      const clientInput = event.target.closest('.client-input-container');
+      if (!clientInput) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
   const handleSearch = (e) => {
@@ -161,6 +340,15 @@ const CustomerDrawing = () => {
   // New Form State
   const [newDrawing, setNewDrawing] = useState({
     client_name: '',
+    contact_person: '',
+    phone_number: '',
+    email_address: '',
+    customer_type: '',
+    gstin: '',
+    city: '',
+    state: '',
+    billing_address: '',
+    shipping_address: '',
     drawing_no: '',
     revision: '',
     qty: 1,
@@ -168,6 +356,8 @@ const CustomerDrawing = () => {
     file: null,
     remarks: ''
   });
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -177,6 +367,43 @@ const CustomerDrawing = () => {
         file: file
       });
     }
+  };
+
+  const handleClientInput = (value) => {
+    setNewDrawing({...newDrawing, client_name: value});
+    
+    if (value.trim()) {
+      const filtered = companies.filter(company =>
+        company.company_name.toLowerCase().includes(value.toLowerCase())
+      );
+      setClientSuggestions(filtered);
+      setShowSuggestions(true);
+    } else {
+      setClientSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelectClient = (company) => {
+    const billingAddress = company.addresses?.find(a => a.address_type === 'BILLING');
+    const shippingAddress = company.addresses?.find(a => a.address_type === 'SHIPPING');
+    const billingAddressLine = billingAddress ? `${billingAddress.line1}${billingAddress.line2 ? ', ' + billingAddress.line2 : ''}, ${billingAddress.city}, ${billingAddress.state} ${billingAddress.pincode}` : '';
+    const shippingAddressLine = shippingAddress ? `${shippingAddress.line1}${shippingAddress.line2 ? ', ' + shippingAddress.line2 : ''}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}` : '';
+    
+    setNewDrawing({
+      ...newDrawing,
+      client_name: company.company_name,
+      contact_person: company.contact_person || '',
+      phone_number: company.contact_mobile || '',
+      email_address: company.contact_email || '',
+      customer_type: company.customer_type || '',
+      gstin: company.gstin || '',
+      city: billingAddress?.city || '',
+      state: billingAddress?.state || '',
+      billing_address: billingAddressLine,
+      shipping_address: shippingAddressLine
+    });
+    setShowSuggestions(false);
   };
 
   const handleAddDrawing = async (e) => {
@@ -192,11 +419,37 @@ const CustomerDrawing = () => {
       return Swal.fire('Missing Info', 'Drawing Number is mandatory for non-Excel files', 'warning');
     }
 
+    return await saveDrawing(false);
+  };
+
+  const saveDrawing = async (sendToDesign = false) => {
+    const fileExt = newDrawing.file ? newDrawing.file.name.split('.').pop().toUpperCase() : '';
+    const isExcel = fileExt === 'XLSX' || fileExt === 'XLS';
+    
+    if (!newDrawing.file) {
+      Swal.fire('Missing Info', 'Drawing File is mandatory', 'warning');
+      return null;
+    }
+    
+    if (!isExcel && !newDrawing.drawing_no) {
+      Swal.fire('Missing Info', 'Drawing Number is mandatory for non-Excel files', 'warning');
+      return null;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
       formData.append('clientName', newDrawing.client_name);
+      formData.append('contactPerson', newDrawing.contact_person);
+      formData.append('phoneNumber', newDrawing.phone_number);
+      formData.append('emailAddress', newDrawing.email_address);
+      formData.append('customerType', newDrawing.customer_type);
+      formData.append('gstin', newDrawing.gstin);
+      formData.append('city', newDrawing.city);
+      formData.append('state', newDrawing.state);
+      formData.append('billingAddress', newDrawing.billing_address);
+      formData.append('shippingAddress', newDrawing.shipping_address);
       formData.append('drawingNo', newDrawing.drawing_no || (newDrawing.file ? newDrawing.file.name : 'BATCH_IMPORT'));
       formData.append('revision', newDrawing.revision);
       formData.append('qty', newDrawing.qty);
@@ -214,8 +467,18 @@ const CustomerDrawing = () => {
       });
 
       if (!response.ok) throw new Error('Upload failed');
+      
+      const savedDrawing = await response.json();
+      const drawingId = savedDrawing.id || savedDrawing.drawing_id;
+      const isExcelUpload = isExcel && savedDrawing.count;
 
-      Swal.fire('Success', uploadMode === 'bulk' ? 'Excel drawings imported successfully' : 'Drawing added successfully', 'success');
+      if (sendToDesign && drawingId) {
+        await shareDrawingWithDesign(drawingId);
+      } else if (isExcelUpload && sendToDesign) {
+        await sendBulkUploadedToDesign(newDrawing.client_name, savedDrawing.count);
+      } else {
+        Swal.fire('Success', isExcelUpload ? `${savedDrawing.count} Excel drawings imported successfully` : 'Drawing added successfully', 'success');
+      }
       
       // If manual mode, keep the client but clear drawing details
       if (uploadMode === 'manual') {
@@ -230,9 +493,18 @@ const CustomerDrawing = () => {
         }));
         setClientLocked(true);
       } else {
-        // If bulk mode, clear everything
+        // If bulk mode, clear everything and show send option
         setNewDrawing({
           client_name: '',
+          contact_person: '',
+          phone_number: '',
+          email_address: '',
+          customer_type: '',
+          gstin: '',
+          city: '',
+          state: '',
+          billing_address: '',
+          shipping_address: '',
           drawing_no: '',
           revision: '',
           qty: 1,
@@ -241,15 +513,84 @@ const CustomerDrawing = () => {
           remarks: ''
         });
         setClientLocked(false);
+        
+        if (isExcelUpload) {
+          setLastUploadedDrawings({
+            clientName: newDrawing.client_name,
+            count: savedDrawing.count,
+            timestamp: Date.now()
+          });
+        }
       }
       
+      fetchDrawings();
+      return drawingId;
+    } catch (error) {
+      console.error(error);
+      Swal.fire('Error', error.message, 'error');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendBulkUploadedToDesign = async (clientName, count) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const allDrawings = await fetch(`${API_BASE}/drawings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).then(r => r.json());
+
+      const clientDrawings = allDrawings.filter(d => d.client_name === clientName && !d.status || d.status !== 'SHARED');
+      const recentDrawings = clientDrawings.slice(-count);
+
+      const sharePromises = recentDrawings.map(drawing =>
+        fetch(`${API_BASE}/drawings/${drawing.id}/share`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      );
+
+      const results = await Promise.all(sharePromises);
+      const failed = results.filter(r => !r.ok);
+
+      if (failed.length === 0) {
+        Swal.fire('Success', `All ${count} imported drawings sent to Design Engineer for review and approval`, 'success');
+        setLastUploadedDrawings([]);
+        fetchDrawings();
+      } else {
+        Swal.fire('Partial Error', `${failed.length} drawings failed to share.`, 'warning');
+        fetchDrawings();
+      }
+    } catch (error) {
+      console.error(error);
+      Swal.fire('Error', error.message, 'error');
+    }
+  };
+
+  const shareDrawingWithDesign = async (drawingId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings/${drawingId}/share`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Share failed');
+      
+      Swal.fire('Success', 'Drawing saved and sent to Design Engineer for review and approval', 'success');
       fetchDrawings();
     } catch (error) {
       console.error(error);
       Swal.fire('Error', error.message, 'error');
-    } finally {
-      setLoading(false);
     }
+  };
+
+  const handleAddAndSendToDesign = async (e) => {
+    e.preventDefault();
+    await saveDrawing(true);
   };
 
   const handleShareWithDesign = async (id) => {
@@ -301,464 +642,705 @@ const CustomerDrawing = () => {
     }
   };
 
+  const handleDeleteClientGroup = async (clientName) => {
+    const clientDrawings = groupedDrawings[clientName];
+    const result = await Swal.fire({
+      title: 'Delete All Drawings?',
+      html: `<p>Remove all <strong>${clientDrawings.length}</strong> drawings for <strong>${clientName}</strong>?</p><p style="color: #ef4444; font-size: 0.875rem; margin-top: 8px;">This action cannot be undone.</p>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, delete all'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        setLoading(true);
+        
+        const deletePromises = clientDrawings.map(drawing =>
+          fetch(`${API_BASE}/drawings/${drawing.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
+        );
+
+        const results = await Promise.all(deletePromises);
+        const failed = results.filter(r => !r.ok);
+
+        if (failed.length === 0) {
+          Swal.fire('Deleted!', `All drawings for ${clientName} have been deleted.`, 'success');
+          fetchDrawings();
+        } else {
+          Swal.fire('Partial Error', `${failed.length} drawings failed to delete.`, 'warning');
+          fetchDrawings();
+        }
+      } catch (error) {
+        Swal.fire('Error', error.message, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   return (
-    <div className="p-6">
-      {/* SECTION 4: SYSTEM LABEL */}
-      <div className="mb-6 bg-amber-50 border-l-4 border-amber-500 p-4 rounded shadow-sm">
-        <div className="flex items-center">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+      <div className="max-w-7xl mx-auto">
+        {/* HEADER SECTION */}
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-3 gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">Customer Drawing Master</h1>
+              <p className="text-xs text-slate-600">Manage customer reference drawings and technical documentation</p>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Approved Drawings
+              </button>
+            </div>
           </div>
-          <div className="ml-3">
-            <p className="text-sm text-amber-800 font-bold">
-              ⚠️ Customer drawings are for reference only. Final production drawings will be created by Engineering.
+          <div className="flex gap-2">
+            <form onSubmit={handleSearch} className="flex gap-2 flex-1 max-w-md">
+              <div className="relative flex-1">
+                <input 
+                  type="text" 
+                  placeholder="Search drawings, clients..." 
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <svg className="absolute right-2 top-2 w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <button 
+                type="submit"
+                className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
+              >
+                Search
+              </button>
+              <button 
+                type="button"
+                onClick={() => { setSearchTerm(''); fetchDrawings(); }}
+                className="px-3 py-2 bg-white text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50 border border-slate-300 transition-colors"
+              >
+                Reset
+              </button>
+            </form>
+          </div>
+
+          {/* INFO BANNER */}
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg className="h-4 w-4 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <p className="text-xs text-amber-900 font-medium">
+              Customer drawings are reference only. Production drawings created by Engineering.
             </p>
           </div>
         </div>
-      </div>
 
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Customer Drawing Master</h1>
-          <p className="text-sm text-slate-500">View and manage drawings provided by customers across all orders</p>
-        </div>
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input 
-            type="text" 
-            placeholder="Search Drawing, Client, PO or Desc..." 
-            className="px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 w-64"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <button 
-            type="submit"
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-colors"
-          >
-            Search
-          </button>
-          <button 
-            type="button"
-            onClick={() => { setSearchTerm(''); fetchDrawings(); }}
-            className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
-          >
-            Reset
-          </button>
-        </form>
-      </div>
-
-      {/* SECTION 2: ADD CUSTOMER DRAWING (FORM) */}
-      <Card className="mb-8 overflow-hidden border-indigo-100 border-2">
-        <div className="bg-indigo-50 px-6 py-3 border-b border-indigo-100 flex justify-between items-center">
-          <div className="flex items-center gap-6">
-            <h2 className="text-sm font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-2">
-              <span className="bg-indigo-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">➕</span>
-              Add Customer Drawing
-            </h2>
-            <div className="flex bg-white p-1 rounded-lg border border-indigo-100">
-              <button 
-                onClick={() => setUploadMode('bulk')}
-                className={`px-4 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all ${uploadMode === 'bulk' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-indigo-600'}`}
-              >
-                Bulk Upload (Excel)
-              </button>
-              <button 
-                onClick={() => setUploadMode('manual')}
-                className={`px-4 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all ${uploadMode === 'manual' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-indigo-600'}`}
-              >
-                Manual Entry
-              </button>
-            </div>
-          </div>
-          <span className="text-[10px] font-bold text-indigo-500 uppercase">
-            Mode: {uploadMode === 'bulk' ? '🚀 Bulk Import' : '📝 Single Entry'}
-          </span>
-        </div>
-        
-        <form onSubmit={handleAddDrawing} className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            <div className="relative">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Client Name <span className="text-red-500">*</span></label>
-              <div className="flex gap-2">
-                <select 
-                  required
-                  disabled={clientLocked}
-                  className={`w-full px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white ${clientLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500 font-bold' : ''}`}
-                  value={newDrawing.client_name}
-                  onChange={(e) => setNewDrawing({...newDrawing, client_name: e.target.value})}
+        {/* SECTION 2: ADD CUSTOMER DRAWING (FORM) */}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200 mb-4">
+          <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-5 py-3 border-b border-indigo-800">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                  Add New Customer Drawing
+                </h2>
+                <p className="text-indigo-100 text-xs">Upload or manually enter drawings</p>
+              </div>
+              <div className="flex gap-1 bg-white/20 p-1 rounded-lg">
+                <button 
+                  onClick={() => setUploadMode('bulk')}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${uploadMode === 'bulk' ? 'bg-white text-indigo-600' : 'text-white hover:bg-white/10'}`}
                 >
-                  <option value="">Select Client</option>
-                  {companies.map(company => (
-                    <option key={company.id} value={company.company_name}>{company.company_name}</option>
-                  ))}
-                </select>
-                {clientLocked && (
-                  <button 
-                    type="button"
-                    onClick={() => setClientLocked(false)}
-                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-100 transition-colors"
-                    title="Change Client"
-                  >
-                    🔄
-                  </button>
-                )}
+                  📊 Bulk
+                </button>
+                <button 
+                  onClick={() => setUploadMode('manual')}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${uploadMode === 'manual' ? 'bg-white text-indigo-600' : 'text-white hover:bg-white/10'}`}
+                >
+                  ✍️ Manual
+                </button>
               </div>
             </div>
-
-            {/* CONDITIONAL FIELDS BASED ON MODE */}
-            {uploadMode === 'manual' ? (
-              <>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Client Drawing Number <span className="text-red-500">*</span></label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="e.g. DRW-1001"
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={newDrawing.drawing_no}
-                    onChange={(e) => setNewDrawing({...newDrawing, drawing_no: e.target.value})}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Drawing Description</label>
-                  <input 
-                    type="text" 
-                    placeholder="Brief description of the drawing"
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={newDrawing.description}
-                    onChange={(e) => setNewDrawing({...newDrawing, description: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Revision</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. A, B, 0"
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={newDrawing.revision}
-                    onChange={(e) => setNewDrawing({...newDrawing, revision: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Qty</label>
-                  <input 
-                    type="number" 
-                    min="1"
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={newDrawing.qty}
-                    onChange={(e) => setNewDrawing({...newDrawing, qty: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Upload Drawing File <span className="text-red-500">*</span></label>
-                  <input 
-                    type="file" 
-                    required
-                    accept=".pdf,.dwg,.step,.stp"
-                    className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    onChange={handleFileChange}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Remarks</label>
-                  <textarea 
-                    rows="1"
-                    placeholder="Any clarifications..."
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                    value={newDrawing.remarks}
-                    onChange={(e) => setNewDrawing({...newDrawing, remarks: e.target.value})}
-                  />
-                </div>
-              </>
-            ) : (
-              /* BULK MODE */
-              <>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Upload Excel (.xlsx/.xls) <span className="text-red-500">*</span></label>
-                  <input 
-                    type="file" 
-                    required
-                    accept=".xlsx,.xls"
-                    className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    onChange={handleFileChange}
-                  />
-                  {newDrawing.file && (newDrawing.file.name.endsWith('.xlsx') || newDrawing.file.name.endsWith('.xls')) && (
-                    <p className="mt-1 text-[10px] text-emerald-600 font-bold italic">✅ Ready to import rows from: {newDrawing.file.name}</p>
+          </div>
+        
+          <form onSubmit={handleAddDrawing} className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="relative lg:col-span-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Client <span className="text-red-500">*</span></label>
+                <div className="flex gap-1">
+                  <div className="relative flex-1 client-input-container">
+                    <input 
+                      type="text"
+                      required
+                      disabled={clientLocked}
+                      placeholder="Type client name..."
+                      className={`w-full px-3 py-1.5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all ${clientLocked ? 'bg-slate-100 cursor-not-allowed text-slate-600 font-semibold border-slate-300' : 'border-slate-300 hover:border-slate-400'}`}
+                      value={newDrawing.client_name}
+                      onChange={(e) => handleClientInput(e.target.value)}
+                      onFocus={() => newDrawing.client_name && setShowSuggestions(true)}
+                    />
+                    {showSuggestions && clientSuggestions.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                        {clientSuggestions.map((company) => (
+                          <button
+                            key={company.id}
+                            type="button"
+                            onClick={() => handleSelectClient(company)}
+                            className="w-full text-left px-3 py-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
+                          >
+                            <div className="font-semibold text-slate-900 text-xs">{company.company_name}</div>
+                            {company.contact_email && <div className="text-slate-500 text-xs">{company.contact_email}</div>}
+                            {company.contact_mobile && <div className="text-slate-500 text-xs">{company.contact_mobile}</div>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {clientLocked && (
+                    <button 
+                      type="button"
+                      onClick={() => setClientLocked(false)}
+                      className="p-1 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-100 transition-colors text-sm"
+                      title="Change Client"
+                    >
+                      🔄
+                    </button>
                   )}
                 </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1 italic text-slate-400">Excel Import Logic</label>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                    <p className="text-[10px] text-slate-500">System will automatically extract <span className="font-bold">Drawing No, Revision, and Description</span> from the uploaded file.</p>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+              </div>
 
-          <div className="mt-6 flex gap-3 justify-end border-t pt-6">
-            <button 
-              type="button"
-              onClick={() => {
-                setNewDrawing({ client_name: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' });
-                setClientLocked(false);
-              }}
-              className="px-6 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
-            >
-              Reset All
-            </button>
-            <button 
-              type="submit"
-              disabled={loading}
-              className={`px-8 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {loading ? 'Processing...' : uploadMode === 'bulk' ? 'Upload & Import' : 'Add Drawing'}
-            </button>
-          </div>
-        </form>
-      </Card>
-
-      {/* SECTION 3: CUSTOMER DRAWINGS TABLE */}
-      <Card>
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-          <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-            📋 Drawing List (Grouped by Client)
-          </h2>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Quick Filter:</span>
-            <select 
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-bold text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500"
-              value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
-            >
-              <option value="ALL">ALL CLIENTS</option>
-              {Object.keys(drawings.reduce((acc, d) => {
-                if (d.client_name) acc[d.client_name] = true;
-                return acc;
-              }, {})).sort().map(client => (
-                <option key={client} value={client}>{client}</option>
-              ))}
-            </select>
-            <button 
-              onClick={() => {
-                const allExpanded = Object.keys(groupedDrawings).reduce((acc, client) => {
-                  acc[client] = true;
-                  return acc;
-                }, {});
-                setExpandedClients(allExpanded);
-              }}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 transition-colors"
-            >
-              EXPAND ALL
-            </button>
-            <button 
-              onClick={() => setExpandedClients({})}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-500 hover:bg-slate-50 transition-colors"
-            >
-              COLLAPSE ALL
-            </button>
-          </div>
-        </div>
-        
-        <div className="overflow-x-auto p-4 bg-slate-50/50">
-          {loading ? (
-            <div className="py-12 text-center text-slate-500 italic font-medium">
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                Loading drawing records...
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Contact Person</label>
+                <input 
+                  type="text"
+                  placeholder="Contact person name"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.contact_person}
+                  onChange={(e) => setNewDrawing({...newDrawing, contact_person: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Phone</label>
+                <input 
+                  type="text"
+                  placeholder="Phone number"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.phone_number}
+                  onChange={(e) => setNewDrawing({...newDrawing, phone_number: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Email</label>
+                <input 
+                  type="email"
+                  placeholder="Email address"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.email_address}
+                  onChange={(e) => setNewDrawing({...newDrawing, email_address: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Type</label>
+                <input 
+                  type="text"
+                  placeholder="Customer type"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.customer_type}
+                  onChange={(e) => setNewDrawing({...newDrawing, customer_type: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">GSTIN</label>
+                <input 
+                  type="text"
+                  placeholder="GST number"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.gstin}
+                  onChange={(e) => setNewDrawing({...newDrawing, gstin: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">City</label>
+                <input 
+                  type="text"
+                  placeholder="City"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.city}
+                  onChange={(e) => setNewDrawing({...newDrawing, city: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">State</label>
+                <input 
+                  type="text"
+                  placeholder="State"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.state}
+                  onChange={(e) => setNewDrawing({...newDrawing, state: e.target.value})}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Billing Address</label>
+                <input 
+                  type="text"
+                  placeholder="Billing address"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.billing_address}
+                  onChange={(e) => setNewDrawing({...newDrawing, billing_address: e.target.value})}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Shipping Address</label>
+                <input 
+                  type="text"
+                  placeholder="Shipping address"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                  value={newDrawing.shipping_address}
+                  onChange={(e) => setNewDrawing({...newDrawing, shipping_address: e.target.value})}
+                />
               </div>
             </div>
-          ) : Object.keys(groupedDrawings).length === 0 ? (
-            <div className="py-12 text-center text-slate-400 italic">No drawings found matching your criteria</div>
-          ) : (
-            <div className="space-y-4">
-              {Object.entries(groupedDrawings).map(([clientName, clientDrawings]) => (
-                <div key={clientName} className="border border-slate-200 rounded-lg bg-white overflow-hidden shadow-sm transition-all hover:shadow-md">
-                  {/* CLIENT GROUP HEADER */}
-                  <div 
-                    onClick={() => toggleClientGroup(clientName)}
-                    className={`px-6 py-4 cursor-pointer flex justify-between items-center transition-all ${expandedClients[clientName] ? 'bg-indigo-50/30' : 'bg-white hover:bg-slate-50'}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`p-1 rounded bg-slate-100 transition-transform duration-200 ${expandedClients[clientName] ? 'rotate-90' : ''}`}>
-                        <svg className="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-indigo-900 uppercase tracking-tight">{clientName}</span>
-                        <span className="text-[10px] font-bold text-slate-400">CUSTOMER GROUP</span>
-                      </div>
-                      <span className="ml-2 px-2.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-black border border-indigo-200">
-                        {clientDrawings.length}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-2">
-                        {expandedClients[clientName] ? 'Click to collapse' : 'Click to expand'}
-                      </span>
+
+              {/* CONDITIONAL FIELDS BASED ON MODE */}
+              {uploadMode === 'manual' ? (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Drawing # <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="DRW-1001"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                      value={newDrawing.drawing_no}
+                      onChange={(e) => setNewDrawing({...newDrawing, drawing_no: e.target.value})}
+                    />
+                  </div>
+                  <div className="lg:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                    <input 
+                      type="text" 
+                      placeholder="Aluminum Frame"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                      value={newDrawing.description}
+                      onChange={(e) => setNewDrawing({...newDrawing, description: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Rev</label>
+                    <input 
+                      type="text" 
+                      placeholder="A"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                      value={newDrawing.revision}
+                      onChange={(e) => setNewDrawing({...newDrawing, revision: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Qty</label>
+                    <input 
+                      type="number" 
+                      min="1"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                      value={newDrawing.qty}
+                      onChange={(e) => setNewDrawing({...newDrawing, qty: e.target.value})}
+                    />
+                  </div>
+                  <div className="lg:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">File <span className="text-red-500">*</span></label>
+                    <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-3 hover:border-indigo-400 transition-colors bg-slate-50/50 cursor-pointer">
+                      <input 
+                        type="file" 
+                        required
+                        accept=".pdf,.dwg,.step,.stp"
+                        className="hidden"
+                        onChange={handleFileChange}
+                        id="manual-file"
+                      />
+                      <label htmlFor="manual-file" className="cursor-pointer text-center w-full">
+                        <svg className="mx-auto h-6 w-6 text-slate-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                        <p className="text-xs text-slate-600 font-semibold">{newDrawing.file ? newDrawing.file.name : 'Click'}</p>
+                        <p className="text-xs text-slate-500">PDF, DWG, STEP</p>
+                      </label>
                     </div>
                   </div>
+                  <div className="lg:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Notes</label>
+                    <textarea 
+                      rows="1"
+                      placeholder="Special notes..."
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors resize-none"
+                      value={newDrawing.remarks}
+                      onChange={(e) => setNewDrawing({...newDrawing, remarks: e.target.value})}
+                    />
+                  </div>
+                </>
+              ) : (
+                /* BULK MODE */
+                <>
+                  <div className="lg:col-span-4">
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Excel File <span className="text-red-500">*</span></label>
+                    <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-4 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                      <input 
+                        type="file" 
+                        required
+                        accept=".xlsx,.xls"
+                        className="hidden"
+                        onChange={handleFileChange}
+                        id="bulk-file"
+                      />
+                      <label htmlFor="bulk-file" className="cursor-pointer text-center w-full">
+                        <svg className="mx-auto h-8 w-8 text-indigo-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 7v6m0 0v6m0-6h6m0 0h6m-6-6H6m0 0H0"/></svg>
+                        <p className="text-sm text-slate-900 font-bold">{newDrawing.file ? newDrawing.file.name : 'Drag Excel file or click'}</p>
+                        <p className="text-xs text-slate-600">Columns: Drawing No, Revision, Description, Qty</p>
+                        {newDrawing.file && (newDrawing.file.name.endsWith('.xlsx') || newDrawing.file.name.endsWith('.xls')) && (
+                          <p className="mt-1 text-xs text-emerald-600 font-semibold">✅ Ready</p>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+                </>
+              )}
 
-                  {/* DRAWINGS TABLE (ACCORDION CONTENT) */}
-                  {expandedClients[clientName] && (
-                    <div className="overflow-x-auto border-t border-slate-100">
-                      <table className="min-w-full divide-y divide-slate-100">
-                        <thead className="bg-slate-50/80">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Sr</th>
-                            <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Drawing No</th>
-                            <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Description</th>
-                            <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Rev</th>
-                            <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Qty</th>
-                            <th className="px-6 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">File</th>
-                            <th className="px-6 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Uploaded By</th>
-                            <th className="px-6 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-slate-50">
-                          {clientDrawings.map((drawing, idx) => (
-                            <tr key={drawing.id || `${drawing.drawing_no}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="px-6 py-3 whitespace-nowrap text-[10px] text-slate-400 font-mono font-bold">{idx + 1}</td>
-                              <td className="px-6 py-3 whitespace-nowrap text-xs font-bold text-slate-900">{drawing.drawing_no}</td>
-                              <td className="px-6 py-3 whitespace-nowrap text-xs text-slate-500 font-medium">
-                                {drawing.description || <span className="text-slate-300 italic">No description</span>}
-                              </td>
-                              <td className="px-6 py-3 whitespace-nowrap text-xs">
-                                <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-mono text-[10px] font-bold border border-slate-200">
-                                  {drawing.revision || drawing.revision_no || '0'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-3 whitespace-nowrap text-xs font-bold text-indigo-600">
-                                {drawing.qty || 1}
-                              </td>
-                              <td className="px-6 py-3 text-center">
-                                {(drawing.file_path || drawing.drawing_pdf) ? (
-                                  <a 
-                                    href={`${API_BASE.replace('/api', '')}/${drawing.file_path || drawing.drawing_pdf}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                                  >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                    VIEW
-                                  </a>
-                                ) : (
-                                  <button 
-                                    onClick={() => handleEdit(drawing)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-md text-[10px] font-black hover:bg-amber-600 hover:text-white transition-all shadow-sm"
-                                  >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                                    UPLOAD
-                                  </button>
-                                )}
-                              </td>
-                              <td className="px-6 py-3 whitespace-nowrap">
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-[8px] font-bold text-slate-500">
-                                    {(drawing.uploaded_by || 'S')[0]}
-                                  </div>
-                                  <span className="text-[10px] font-bold text-slate-600">{drawing.uploaded_by || 'Sales'}</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-3 whitespace-nowrap text-right space-x-2">
-                                {drawing.status === 'SHARED' ? (
-                                  <span className="p-1.5 text-emerald-600 bg-emerald-50 rounded-lg inline-block" title="Shared with Engineering">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <div className="mt-3 flex gap-2 justify-end border-t border-slate-200 pt-3">
+              <button 
+                type="button"
+                onClick={() => {
+                  setNewDrawing({ client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' });
+                  setClientLocked(false);
+                }}
+                className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold transition-colors"
+              >
+                Clear
+              </button>
+              <button 
+                type="submit"
+                disabled={loading}
+                className={`px-5 py-1.5 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700 transition-all flex items-center gap-1 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                {loading ? 'Processing...' : uploadMode === 'bulk' ? 'Upload' : 'Save'}
+              </button>
+              {uploadMode === 'manual' && (
+                <button 
+                  type="button"
+                  onClick={handleAddAndSendToDesign}
+                  disabled={loading}
+                  className={`px-5 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-all flex items-center gap-1 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                  {loading ? 'Sending...' : '➤ Send to Design Engineer'}
+                </button>
+              )}
+            </div>
+
+            {lastUploadedDrawings && lastUploadedDrawings.clientName && (
+              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                    <div>
+                      <p className="text-xs font-bold text-emerald-900">✅ {lastUploadedDrawings.count} drawings uploaded from Excel</p>
+                      <p className="text-xs text-emerald-700 mt-0.5">Ready to send to Design Engineer for review and approval</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => sendBulkUploadedToDesign(lastUploadedDrawings.clientName, lastUploadedDrawings.count)}
+                    disabled={loading}
+                    className={`px-4 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-all flex items-center gap-1 whitespace-nowrap ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                    {loading ? 'Sending...' : '➤ Send to Design'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </form>
+        </div>
+
+        {/* SECTION 3: CUSTOMER DRAWINGS TABLE */}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200">
+          <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-0.5">
+                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Drawings Database
+              </h2>
+              <p className="text-xs text-slate-600"><span className="font-semibold">{drawings.length}</span> drawings | <span className="font-semibold">{Object.keys(groupedDrawings).length}</span> clients</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select 
+                className="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={clientFilter}
+                onChange={(e) => setClientFilter(e.target.value)}
+              >
+                <option value="ALL">👥 All</option>
+                {Object.keys(drawings.reduce((acc, d) => {
+                  if (d.client_name) acc[d.client_name] = true;
+                  return acc;
+                }, {})).sort().map(client => (
+                  <option key={client} value={client}>{client}</option>
+                ))}
+              </select>
+              <button 
+                onClick={() => {
+                  const allExpanded = Object.keys(groupedDrawings).reduce((acc, client) => {
+                    acc[client] = true;
+                    return acc;
+                  }, {});
+                  setExpandedClients(allExpanded);
+                }}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700 transition-colors"
+              >
+                ⬇️ Expand
+              </button>
+              <button 
+                onClick={() => setExpandedClients({})}
+                className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded text-xs font-semibold hover:bg-slate-50 transition-colors"
+              >
+                ⬆️ Collapse
+              </button>
+            </div>
+          </div>
+        
+          <div className="p-3">
+            {loading ? (
+              <div className="py-8 text-center">
+                <div className="flex justify-center mb-2">
+                  <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <p className="text-slate-600 font-semibold text-xs">Loading...</p>
+              </div>
+            ) : Object.keys(groupedDrawings).length === 0 ? (
+              <div className="py-8 text-center">
+                <svg className="mx-auto w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6v12m6-6H6"/></svg>
+                <p className="text-slate-500 font-semibold text-xs">No drawings found</p>
+                <p className="text-slate-400 text-xs">Add drawings using the form above</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(groupedDrawings).map(([clientName, clientDrawings]) => (
+                  <div key={clientName} className="border border-slate-200 rounded bg-white overflow-hidden transition-all hover:shadow-sm">
+                    {/* CLIENT GROUP HEADER */}
+                    <div 
+                      onClick={() => toggleClientGroup(clientName)}
+                      className={`px-4 py-2 cursor-pointer flex justify-between items-center transition-all group ${expandedClients[clientName] ? 'bg-indigo-50 border-b border-slate-200' : 'hover:bg-slate-50'}`}
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className={`p-1 rounded text-indigo-600 transition-all ${expandedClients[clientName] ? 'rotate-90' : ''}`}>
+                          <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="flex flex-col flex-1">
+                          <span className="text-sm font-bold text-slate-900">{clientName}</span>
+                        </div>
+                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold">
+                          {clientDrawings.length}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClientGroup(clientName);
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-all"
+                        title="Delete all drawings for this client"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                      </button>
+                    </div>
+
+                    {/* DRAWINGS TABLE (ACCORDION CONTENT) */}
+                    {expandedClients[clientName] && (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-100">
+                          <thead className="bg-slate-100">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">#</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">Drawing</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">Description</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">Rev</th>
+                              <th className="px-3 py-2 text-center text-xs font-bold text-slate-600">Qty</th>
+                              <th className="px-3 py-2 text-center text-xs font-bold text-slate-600">File</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">By</th>
+                              <th className="px-3 py-2 text-right text-xs font-bold text-slate-600">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {clientDrawings.map((drawing, idx) => (
+                              <tr key={drawing.id || `${drawing.drawing_no}-${idx}`} className="hover:bg-indigo-50/30 transition-colors text-xs">
+                                <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-semibold">{idx + 1}</td>
+                                <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-900">{drawing.drawing_no}</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-slate-600">
+                                  {drawing.description || <span className="text-slate-400 italic">—</span>}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-mono text-xs font-semibold">
+                                    {drawing.revision || drawing.revision_no || '0'}
                                   </span>
-                                ) : (
-                                  <button 
-                                    onClick={() => handleShareWithDesign(drawing.id)}
-                                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                                    title="Share with Engineering"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
-                                  </button>
-                                )}
-                                <button 
-                                  onClick={() => handleEdit(drawing)}
-                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                  title="Edit"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                </button>
-                                <button 
-                                  onClick={() => handleViewRevisions(drawing)}
-                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                  title="Revisions"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                </button>
-                                <button 
-                                  onClick={() => handleDelete(drawing.id)}
-                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                  title="Delete"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                </button>
-                              </td>
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-center">
+                                  <span className="font-bold text-indigo-600">{drawing.qty || 1}</span>
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  {(drawing.file_path || drawing.drawing_pdf) ? (
+                                    <a 
+                                      href={`${API_BASE.replace('/api', '')}/${drawing.file_path || drawing.drawing_pdf}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs font-semibold hover:bg-indigo-600 hover:text-white transition-all"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                      View
+                                    </a>
+                                  ) : (
+                                    <button 
+                                      onClick={() => handleEdit(drawing)}
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-semibold hover:bg-amber-600 hover:text-white transition-all"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                                      Upload
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <div className="flex items-center gap-1">
+                                    <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700">
+                                      {(drawing.uploaded_by || 'S')[0].toUpperCase()}
+                                    </div>
+                                    <span className="text-slate-600 font-medium hidden sm:inline">{drawing.uploaded_by || 'Sales'}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right">
+                                  <div className="flex justify-end gap-0.5">
+                                    {drawing.status === 'SHARED' ? (
+                                      <span className="p-1 text-emerald-600 bg-emerald-100 rounded inline-block hover:bg-emerald-200 transition-colors" title="Shared">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                      </span>
+                                    ) : (
+                                      <button 
+                                        onClick={() => handleShareWithDesign(drawing.id)}
+                                        className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100 rounded transition-all"
+                                        title="Share"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                                      </button>
+                                    )}
+                                    <button 
+                                      onClick={() => handleEdit(drawing)}
+                                      className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100 rounded transition-all"
+                                      title="Edit"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                    </button>
+                                    <button 
+                                      onClick={() => handleViewRevisions(drawing)}
+                                      className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded transition-all"
+                                      title="Revisions"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDelete(drawing.id)}
+                                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-all"
+                                      title="Delete"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    </button>
+                                  </div>
+                                </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </Card>
+      </div>
 
       {/* Edit Modal */}
       {showEditModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-slate-900 opacity-75" onClick={() => setShowEditModal(false)}></div>
-            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-              <h3 className="text-xl font-bold text-slate-900 mb-4">Edit Drawing: {editData.drawing_no}</h3>
-              <form onSubmit={handleSave} className="space-y-4">
+          <div className="flex items-center justify-center min-h-screen px-4 py-4">
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowEditModal(false)}></div>
+            <div className="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-5 transform transition-all">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-bold text-slate-900">Edit Drawing</h3>
+                <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">
+                  ✕
+                </button>
+              </div>
+              <p className="text-slate-600 text-xs mb-3">Drawing: <span className="font-semibold text-indigo-600">{editData.drawing_no}</span></p>
+              
+              <form onSubmit={handleSave} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Revision No</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Revision</label>
                   <input 
                     type="text" 
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors text-xs"
                     value={editData.revision_no}
                     onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
                   <textarea 
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px]"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none text-xs"
                     value={editData.description}
                     onChange={(e) => setEditData({...editData, description: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Upload PDF</label>
-                  <input 
-                    type="file" 
-                    accept=".pdf"
-                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
-                  />
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">PDF File</label>
+                  <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                    <input 
+                      type="file" 
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
+                      id="edit-file"
+                    />
+                    <label htmlFor="edit-file" className="cursor-pointer text-center w-full">
+                      <svg className="mx-auto h-6 w-6 text-slate-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                      <p className="text-xs text-slate-600 font-semibold">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click'}</p>
+                    </label>
+                  </div>
                 </div>
-                <div className="flex justify-end gap-3 mt-6">
+                <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200">
                   <button 
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="px-4 py-2 text-slate-600 font-semibold"
+                    className="flex-1 px-3 py-1.5 text-slate-700 font-semibold hover:bg-slate-100 rounded transition-colors text-xs"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
                     disabled={saveLoading}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50"
+                    className="flex-1 px-3 py-1.5 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 text-xs"
                   >
-                    {saveLoading ? 'Saving...' : 'Save Changes'}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+                    {saveLoading ? 'Saving...' : 'Save'}
                   </button>
                 </div>
               </form>
@@ -770,62 +1352,222 @@ const CustomerDrawing = () => {
       {/* Revisions Modal */}
       {showRevisions && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-slate-900 opacity-75" onClick={() => setShowRevisions(false)}></div>
-            <div className="relative bg-white rounded-2xl shadow-xl max-w-3xl w-full p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-slate-900">Revision History: {selectedDrawing?.drawing_no}</h3>
-                <button onClick={() => setShowRevisions(false)} className="text-slate-400 hover:text-slate-600">
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+          <div className="flex items-center justify-center min-h-screen px-4 py-4">
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowRevisions(false)}></div>
+            <div className="relative bg-white rounded-lg shadow-2xl max-w-3xl w-full p-5">
+              <div className="flex justify-between items-center mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Revision History</h3>
+                  <p className="text-slate-600 text-xs mt-0.5">Drawing: <span className="font-semibold text-indigo-600">{selectedDrawing?.drawing_no}</span></p>
+                </div>
+                <button onClick={() => setShowRevisions(false)} className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-light">
+                  ✕
                 </button>
               </div>
 
               {revisionsLoading ? (
-                <div className="py-12 text-center text-slate-500 italic">Fetching revisions...</div>
+                <div className="py-8 text-center">
+                  <div className="flex justify-center mb-2">
+                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                  <p className="text-slate-600 font-semibold text-xs">Loading...</p>
+                </div>
               ) : (
-                <div className="overflow-hidden border border-slate-100 rounded-xl">
+                <div className="overflow-hidden border border-slate-200 rounded">
                   <table className="min-w-full divide-y divide-slate-200">
-                    <thead className="bg-slate-50">
+                    <thead className="bg-slate-100">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Rev</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Description</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">File</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Order</th>
+                        <th className="px-3 py-2 text-left text-xs font-bold text-slate-700">Revision</th>
+                        <th className="px-3 py-2 text-left text-xs font-bold text-slate-700">Date</th>
+                        <th className="px-3 py-2 text-left text-xs font-bold text-slate-700">Description</th>
+                        <th className="px-3 py-2 text-center text-xs font-bold text-slate-700">File</th>
+                        <th className="px-3 py-2 text-right text-xs font-bold text-slate-700">Reference</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-slate-200">
-                      {revisions.map((rev, i) => (
-                        <tr key={i} className="hover:bg-slate-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono font-bold text-indigo-600">{rev.revision_no || '0'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                            {new Date(rev.created_at).toLocaleDateString('en-IN')}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-500">{rev.description}</td>
-                          <td className="px-6 py-4 text-center">
-                            {rev.drawing_pdf ? (
-                              <a 
-                                href={`${API_BASE.replace('/api', '')}/${rev.drawing_pdf}`} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="text-indigo-600 hover:text-indigo-900"
-                              >
-                                <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                </svg>
-                              </a>
-                            ) : '—'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <div className="text-xs font-bold text-slate-900">{rev.po_number || 'N/A'}</div>
-                            <div className="text-[10px] text-slate-500">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {revisions.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="px-3 py-4 text-center text-slate-500 text-xs">
+                            No revisions found
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        revisions.map((rev, i) => (
+                          <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold">{rev.revision_no || '0'}</span>
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-slate-600 font-medium">
+                              {new Date(rev.created_at).toLocaleDateString('en-IN')}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">{rev.description || '—'}</td>
+                            <td className="px-3 py-2 text-center">
+                              {rev.drawing_pdf ? (
+                                <a 
+                                  href={`${API_BASE.replace('/api', '')}/${rev.drawing_pdf}`} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="inline-flex items-center justify-center p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-100 rounded transition-colors"
+                                  title="Download"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </a>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right">
+                              <div className="font-semibold text-slate-900 text-xs text-xs">{rev.po_number || '—'}</div>
+                              <div className="text-xs text-slate-500">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approved Drawings Modal */}
+      {showApprovedDrawings && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 py-4">
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowApprovedDrawings(false)}></div>
+            <div className="relative bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-5">
+              <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pb-3 border-b border-slate-200">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Approved Drawings</h3>
+                  <p className="text-slate-600 text-xs mt-0.5">Design-approved drawings ready for quotation</p>
+                </div>
+                <button onClick={() => setShowApprovedDrawings(false)} className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-light">
+                  ✕
+                </button>
+              </div>
+
+              {approvedLoading ? (
+                <div className="py-8 text-center">
+                  <div className="flex justify-center mb-2">
+                    <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                  <p className="text-slate-600 font-semibold text-xs">Loading approved drawings...</p>
+                </div>
+              ) : Object.keys(approvedGroupedByClient).length === 0 ? (
+                <div className="py-8 text-center">
+                  <svg className="mx-auto w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <p className="text-slate-500 font-semibold text-xs">No approved drawings found</p>
+                  <p className="text-slate-400 text-xs">Drawings must be approved by Design Engineer first</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {!selectedApprovedClient ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-slate-700 uppercase">Select a Client</p>
+                      {Object.entries(approvedGroupedByClient).map(([clientName, clientData]) => (
+                        <button
+                          key={clientName}
+                          onClick={() => handleSelectApprovedClient(clientName)}
+                          className="w-full p-3 text-left border border-slate-200 rounded hover:border-emerald-400 hover:bg-emerald-50 transition-all group"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <p className="font-bold text-slate-900 text-xs group-hover:text-emerald-700">{clientName}</p>
+                              {clientData.email && <p className="text-xs text-slate-500">{clientData.email}</p>}
+                              {clientData.phone && <p className="text-xs text-slate-500">{clientData.phone}</p>}
+                            </div>
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">
+                              {clientData.orders.reduce((sum, order) => sum + (order.items?.length || 0), 0)} items
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{selectedApprovedClient}</p>
+                          <p className="text-xs text-slate-500">{selectedApprovedItems.length} items selected</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedApprovedClient(null);
+                            setSelectedApprovedItems([]);
+                            setQuotePrices({});
+                          }}
+                          className="px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                        >
+                          ← Back
+                        </button>
+                      </div>
+
+                      <div className="overflow-hidden border border-slate-200 rounded">
+                        <table className="min-w-full divide-y divide-slate-100 text-xs">
+                          <thead className="bg-slate-100">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-bold text-slate-700">Drawing</th>
+                              <th className="px-3 py-2 text-left font-bold text-slate-700">Description</th>
+                              <th className="px-3 py-2 text-center font-bold text-slate-700">Qty</th>
+                              <th className="px-3 py-2 text-left font-bold text-slate-700">Unit</th>
+                              <th className="px-3 py-2 text-right font-bold text-slate-700">Price</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {selectedApprovedItems.map((item) => (
+                              <tr key={item.id} className="hover:bg-emerald-50/30 transition-colors">
+                                <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-900">{item.drawing_no}</td>
+                                <td className="px-3 py-2 text-slate-600">{item.description || '—'}</td>
+                                <td className="px-3 py-2 text-center text-slate-900 font-semibold">{item.quantity}</td>
+                                <td className="px-3 py-2 text-slate-600">{item.unit}</td>
+                                <td className="px-3 py-2 text-right">
+                                  <input
+                                    type="number"
+                                    placeholder="0.00"
+                                    step="0.01"
+                                    value={quotePrices[item.id] || ''}
+                                    onChange={(e) => handlePriceChange(item.id, e.target.value)}
+                                    className="w-24 px-2 py-1 border border-slate-300 rounded text-right outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="space-y-2 p-3 bg-slate-50 rounded border border-slate-200">
+                        <label className="block text-xs font-bold text-slate-700 uppercase">Notes</label>
+                        <textarea
+                          value={quotationNotes}
+                          onChange={(e) => setQuotationNotes(e.target.value)}
+                          placeholder="Add any special notes or terms..."
+                          className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-emerald-500 min-h-[60px] resize-none"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-emerald-50 rounded border border-emerald-200">
+                        <div>
+                          <p className="text-xs text-slate-600">Total Quotation Value</p>
+                          <p className="text-xl font-bold text-emerald-700">
+                            ₹{calculateQuotationTotal().toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleCreateQuotation}
+                          disabled={creatingQuotation || calculateQuotationTotal() === 0}
+                          className="px-4 py-2 bg-emerald-600 text-white rounded font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-xs"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                          {creatingQuotation ? 'Creating...' : 'Create Quotation'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

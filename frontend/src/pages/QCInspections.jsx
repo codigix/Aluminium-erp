@@ -307,7 +307,7 @@ const QCInspections = () => {
                     <td className="px-4 py-4 font-medium text-slate-900">GRN-{String(qc.grn_id).padStart(4, '0')}</td>
                     <td className="px-4 py-4 text-slate-600">{qc.po_number || '—'}</td>
                     <td className="px-4 py-4 text-slate-600">{qc.vendor_name || '—'}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-slate-900">{qc.items || 0}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-slate-900 text-xs">{qc.items || 0}</td>
                     <td className="px-4 py-4 text-right font-semibold text-emerald-600">{qc.accepted_quantity || 0}</td>
                     <td className="px-4 py-4 text-right font-semibold text-orange-600">{qc.shortage || 0}</td>
                     <td className="px-4 py-4 text-right font-semibold text-blue-600">{qc.overage || 0}</td>
@@ -354,7 +354,7 @@ const QCInspections = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Create QC Inspection</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create QC Inspection</h3>
               <button onClick={() => setShowModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -460,7 +460,7 @@ const QCInspections = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6 sticky top-0 bg-white">
-              <h3 className="text-lg font-semibold text-slate-900">QC Inspection - GRN-{String(selectedQC.grn_id).padStart(4, '0')}</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">QC Inspection - GRN-{String(selectedQC.grn_id).padStart(4, '0')}</h3>
               <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -510,7 +510,7 @@ const QCInspections = () => {
 
             {selectedQC.items_detail && selectedQC.items_detail.length > 0 && (
               <div className="mb-6">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">Items Inspection</h4>
+                <h4 className="text-sm font-semibold text-slate-900 text-xs mb-3">Items Inspection</h4>
                 <div className="overflow-x-auto border border-slate-200 rounded">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-widest">
@@ -530,8 +530,8 @@ const QCInspections = () => {
                             <p className="font-medium text-slate-900">{item.item_code || 'N/A'}</p>
                             {item.description && <p className="text-xs text-slate-500">{item.description}</p>}
                           </td>
-                          <td className="px-3 py-2 text-right font-semibold text-slate-900">{item.ordered_qty}</td>
-                          <td className="px-3 py-2 text-center font-semibold text-slate-900">{item.ordered_qty}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-900 text-xs">{item.ordered_qty}</td>
+                          <td className="px-3 py-2 text-center font-semibold text-slate-900 text-xs">{item.ordered_qty}</td>
                           <td className="px-3 py-2 text-right font-semibold text-emerald-600">{item.received_qty}</td>
                           <td className="px-3 py-2 text-right font-semibold text-orange-600">{item.shortage || 0}</td>
                           <td className="px-3 py-2 text-right font-semibold text-cyan-600">{item.overage || 0}</td>
@@ -545,7 +545,7 @@ const QCInspections = () => {
 
             {(selectedQC.defects || selectedQC.remarks) && (
               <div className="mb-6 pt-4 border-t border-slate-200">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">General Remarks</h4>
+                <h4 className="text-sm font-semibold text-slate-900 text-xs mb-3">General Remarks</h4>
                 <div className="grid grid-cols-2 gap-4">
                   {selectedQC.defects && (
                     <div className="bg-yellow-50 border border-yellow-200 p-4 rounded">
@@ -580,7 +580,7 @@ const QCInspections = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Edit QC Inspection</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Edit QC Inspection</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 

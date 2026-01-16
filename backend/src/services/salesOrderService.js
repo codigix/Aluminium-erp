@@ -184,26 +184,182 @@ const sendOrderToDesign = async (salesOrderId) => {
   );
 };
 
+const approveDesignAndCreateQuotation = async (salesOrderId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    const [orders] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
+    if (!orders.length) throw new Error('Sales order not found');
+    
+    const order = orders[0];
+    
+    await connection.execute(
+      'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id = ?',
+      ['DESIGN_APPROVED', 'SALES', salesOrderId]
+    );
+    
+    const [quotationResult] = await connection.execute(
+      `INSERT INTO quotation_requests (sales_order_id, company_id, status, created_at)
+       VALUES (?, ?, ?, NOW())`,
+      [salesOrderId, order.company_id, 'PENDING']
+    );
+    
+    await connection.commit();
+    return quotationResult.insertId;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const rejectDesign = async (salesOrderId, reason) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    await connection.execute(
+      'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id = ?',
+      ['DESIGN_QUERY', 'SALES', salesOrderId]
+    );
+    
+    const [requestResult] = await connection.execute(
+      `INSERT INTO design_rejections (sales_order_id, reason, created_at)
+       VALUES (?, ?, NOW())`,
+      [salesOrderId, reason]
+    );
+    
+    await connection.commit();
+    return requestResult.insertId;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const bulkApproveDesigns = async (orderIds) => {
+  if (!Array.isArray(orderIds) || orderIds.length === 0) {
+    throw new Error('No order IDs provided');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    const placeholders = orderIds.map(() => '?').join(',');
+    
+    const [orders] = await connection.query(
+      `SELECT id, company_id FROM sales_orders WHERE id IN (${placeholders})`,
+      orderIds
+    );
+    
+    if (orders.length === 0) throw new Error('No sales orders found');
+    
+    await connection.execute(
+      `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id IN (${placeholders})`,
+      ['DESIGN_APPROVED', 'SALES', ...orderIds]
+    );
+    
+    for (const order of orders) {
+      await connection.execute(
+        `INSERT INTO quotation_requests (sales_order_id, company_id, status, created_at)
+         VALUES (?, ?, ?, NOW())`,
+        [order.id, order.company_id, 'PENDING']
+      );
+    }
+    
+    await connection.commit();
+    return { approvedCount: orders.length };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const bulkRejectDesigns = async (orderIds, reason) => {
+  if (!Array.isArray(orderIds) || orderIds.length === 0) {
+    throw new Error('No order IDs provided');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    const placeholders = orderIds.map(() => '?').join(',');
+    
+    await connection.execute(
+      `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id IN (${placeholders})`,
+      ['DESIGN_QUERY', 'SALES', ...orderIds]
+    );
+    
+    for (const orderId of orderIds) {
+      await connection.execute(
+        `INSERT INTO design_rejections (sales_order_id, reason, created_at)
+         VALUES (?, ?, NOW())`,
+        [orderId, reason]
+      );
+    }
+    
+    await connection.commit();
+    return { rejectedCount: orderIds.length };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const getApprovedDrawings = async () => {
+  const [rows] = await pool.query(
+    `SELECT so.*, c.company_name, c.company_code, c.id as company_id_check,
+     IFNULL(ct.email, '') as email,
+     IFNULL(ct.phone, '') as phone,
+     IFNULL(ct.name, '') as contact_person,
+     cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total
+     FROM sales_orders so
+     LEFT JOIN companies c ON c.id = so.company_id
+     LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     LEFT JOIN (
+       SELECT company_id, email, phone, name, 
+              ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+       FROM contacts
+     ) ct ON ct.company_id = c.id AND ct.rn = 1
+     WHERE so.status = 'DESIGN_APPROVED' AND so.current_department = 'SALES'
+     ORDER BY so.created_at DESC`
+  );
+  
+  for (const order of rows) {
+    const [items] = await pool.query(
+      'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
+      [order.id]
+    );
+    order.items = items;
+    
+    if (order.company_id) {
+      const [companyContacts] = await pool.query(
+        'SELECT id, name, email, phone, contact_type, status FROM contacts WHERE company_id = ? ORDER BY contact_type = "PRIMARY" DESC LIMIT 5',
+        [order.company_id]
+      );
+      order._debug_contacts = companyContacts;
+    }
+  }
+  
+  return rows;
+};
+
 const getOrderTimeline = async salesOrderId => {
   const [items] = await pool.query(
     'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
     [salesOrderId]
   );
-  
-  // Fetch materials for all items in this order
-  const [materials] = await pool.query(
-    `SELECT som.* 
-     FROM sales_order_item_materials som
-     JOIN sales_order_items soi ON som.sales_order_item_id = soi.id
-     WHERE soi.sales_order_id = ?`,
-    [salesOrderId]
-  );
-
-  // Attach materials to items
-  return items.map(item => ({
-    ...item,
-    materials: materials.filter(m => m.sales_order_item_id === item.id)
-  }));
+  return items;
 };
 
 const generateSalesOrderPDF = async (salesOrderId) => {
@@ -340,16 +496,24 @@ const generateSalesOrderPDF = async (salesOrderId) => {
 
   const html = mustache.render(htmlTemplate, viewData);
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'networkidle0' });
-  const pdf = await page.pdf({ format: 'A4', printBackground: true });
-  await browser.close();
+  try {
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({ format: 'A4', printBackground: true });
+    await browser.close();
+    return pdf;
+  } catch (error) {
+    console.error('[PDF Generation] Puppeteer error:', error.message);
+    throw new Error('PDF generation unavailable. Please configure Chrome/Chromium browser.');
+  }
+};
 
-  return pdf;
+const deleteSalesOrder = async (salesOrderId) => {
+  await pool.execute('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
 };
 
 module.exports = {
@@ -361,6 +525,12 @@ module.exports = {
   rejectRequest,
   transitionToDepartment,
   sendOrderToDesign,
+  approveDesignAndCreateQuotation,
+  rejectDesign,
+  bulkApproveDesigns,
+  bulkRejectDesigns,
+  getApprovedDrawings,
   getOrderTimeline,
-  generateSalesOrderPDF
+  generateSalesOrderPDF,
+  deleteSalesOrder
 };

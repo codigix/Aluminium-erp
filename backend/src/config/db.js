@@ -430,6 +430,24 @@ const ensureCustomerDrawingTable = async () => {
       console.log('Added qty column to customer_drawings');
     }
 
+    const [contactPersonCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'contact_person'");
+    if (contactPersonCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN contact_person VARCHAR(255) NULL");
+      console.log('Added contact_person column to customer_drawings');
+    }
+
+    const [emailCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'email'");
+    if (emailCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN email VARCHAR(255) NULL");
+      console.log('Added email column to customer_drawings');
+    }
+
+    const [phoneCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'phone'");
+    if (phoneCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN phone VARCHAR(20) NULL");
+      console.log('Added phone column to customer_drawings');
+    }
+
     console.log('Customer drawings table synchronized');
   } catch (error) {
     console.error('Customer drawing table sync failed', error.message);
@@ -460,6 +478,61 @@ const ensureDesignOrderTables = async () => {
 
   } catch (error) {
     console.error('Design Order table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureQuotationRequestTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS quotation_requests (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        sales_order_id INT NOT NULL,
+        company_id INT NOT NULL,
+        status ENUM('PENDING', 'APPROVED', 'REJECTED', 'COMPLETED') DEFAULT 'PENDING',
+        total_amount DECIMAL(14, 2) DEFAULT 0,
+        notes TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Quotation Request table synchronized');
+
+    const [quotationCols] = await connection.query('SHOW COLUMNS FROM quotation_requests');
+    const existing = new Set(quotationCols.map(c => c.Field));
+    const requiredColumns = [
+      { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'notes', definition: 'TEXT NULL' }
+    ];
+    
+    const missing = requiredColumns.filter(c => !existing.has(c.name));
+    if (missing.length > 0) {
+      const alterSql = `ALTER TABLE quotation_requests ${missing
+        .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
+        .join(', ')};`;
+      await connection.query(alterSql);
+      console.log('Quotation request columns synchronized');
+    }
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS design_rejections (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        sales_order_id INT NOT NULL,
+        reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Design Rejections table synchronized');
+
+  } catch (error) {
+    console.error('Quotation Request/Design Rejection tables sync failed', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -535,6 +608,7 @@ const bootstrapDatabase = async () => {
   await ensureStockColumns();
   await ensureWarehouseAllocationTables();
   await ensureDesignOrderTables();
+  await ensureQuotationRequestTables();
   await ensureSalesOrderItemColumns();
   await ensureSalesOrderStatuses();
   await ensureCustomerDrawingTable();

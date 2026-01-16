@@ -301,7 +301,7 @@ const QualityControl = () => {
                         <td className="px-4 py-4 font-medium text-slate-900">GRN-{String(grn.id).padStart(4, '0')}</td>
                         <td className="px-4 py-4 text-slate-600">{grn.poNumber}</td>
                         <td className="px-4 py-4 text-slate-600">{formatDate(grn.grnDate)}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-slate-900">{grn.receivedQuantity}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-slate-900 text-xs">{grn.receivedQuantity}</td>
                         <td className="px-4 py-4">
                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${grnStatusColors[grn.status]?.badge}`}>
                             {grnStatusColors[grn.status]?.label || grn.status}
@@ -415,7 +415,7 @@ const QualityControl = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Create GRN (Goods Received Note)</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create GRN (Goods Received Note)</h3>
               <button onClick={() => setShowGRNModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -491,7 +491,7 @@ const QualityControl = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Create QC Inspection</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create QC Inspection</h3>
               <button onClick={() => setShowQCModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 

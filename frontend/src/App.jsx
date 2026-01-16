@@ -30,6 +30,7 @@ import WarehouseAllocation from './pages/WarehouseAllocation'
 import DrawingMaster from './pages/DrawingMaster'
 import CustomerDrawing from './pages/CustomerDrawing'
 import DesignOrders from './pages/DesignOrders'
+import ClientQuotations from './pages/ClientQuotations'
 import BOMCreation from './pages/BOMCreation'
 import RoutingOperations from './pages/RoutingOperations'
 import ProcessSheet from './pages/ProcessSheet'
@@ -39,7 +40,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval']
+const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval']
 const DEFAULT_MODULE = 'company-master'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -187,7 +188,7 @@ const getContactStatusActionLabel = status => {
 }
 
 const DEPARTMENT_MODULES = {
-  SALES: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing'],
+  SALES: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
   DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval'],
   PRODUCTION: ['incoming-orders'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
@@ -195,7 +196,7 @@ const DEPARTMENT_MODULES = {
   ACCOUNTS: [],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
-  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval']
+  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations']
 }
 
 function App() {
@@ -1307,37 +1308,38 @@ function App() {
   const isReadOnly = drawerMode === 'view'
 
   const allNavigationItems = [
-    { label: 'Customer Drawing', moduleId: 'customer-drawing' },
-    { label: 'Company / Customer Master', moduleId: 'company-master' },
-    { label: 'Client Contacts', moduleId: 'client-contacts' },
-    { label: 'Customer PO', moduleId: 'customer-po' },
-    { label: 'Sales Order', moduleId: 'sales-order' },
-    { label: 'Design Orders', moduleId: 'design-orders' },
-    { label: 'Drawing Master', moduleId: 'drawing-master', indent: true },
-    { label: 'BOM Creation', moduleId: 'bom-creation', indent: true },
-    { label: 'Routing / Operations', moduleId: 'routing-operations', indent: true },
-    { label: 'Process Sheet', moduleId: 'process-sheet', indent: true },
-    { label: 'BOM Approval', moduleId: 'bom-approval', indent: true },
+    { label: 'Customer Drawing', moduleId: 'customer-drawing', icon: '📋' },
+    { label: 'Company / Customer Master', moduleId: 'company-master', icon: '🏢' },
+    { label: 'Client Contacts', moduleId: 'client-contacts', icon: '👥' },
+    { label: 'Customer PO', moduleId: 'customer-po', icon: '📄' },
+    { label: 'Sales Order', moduleId: 'sales-order', icon: '📦' },
+    { label: 'Design Orders', moduleId: 'design-orders', icon: '🎨' },
+    { label: 'Client Quotations', moduleId: 'client-quotations', icon: '📋' },
+    { label: 'Drawing Master', moduleId: 'drawing-master', icon: '✏️', indent: true },
+    { label: 'BOM Creation', moduleId: 'bom-creation', icon: '📝', indent: true },
+    { label: 'Routing / Operations', moduleId: 'routing-operations', icon: '⚙️', indent: true },
+    { label: 'Process Sheet', moduleId: 'process-sheet', icon: '📊', indent: true },
+    { label: 'BOM Approval', moduleId: 'bom-approval', icon: '✅', indent: true },
     { label: 'Vendor Management', isGroup: true, isDisabled: true, groupId: 'vendor-group' },
-    { label: 'Vendors', moduleId: 'vendors', indent: true },
-    { label: 'Quotations (RFQ)', moduleId: 'quotations', indent: true },
-    { label: 'Purchase Orders', moduleId: 'purchase-orders', indent: true },
-    { label: 'PO Receipts', moduleId: 'po-receipts', indent: true },
+    { label: 'Vendors', moduleId: 'vendors', icon: '🤝', indent: true },
+    { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: '💬', indent: true },
+    { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: '🛒', indent: true },
+    { label: 'PO Receipts', moduleId: 'po-receipts', icon: '📥', indent: true },
     { label: 'Inventory Management', isGroup: true, isDisabled: true, groupId: 'inventory-group' },
-    { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', indent: true },
-    { label: 'PO Material Request', moduleId: 'po-material-request', indent: true },
-    { label: 'GRN Processing', moduleId: 'grn', indent: true },
-    { label: 'Stock Ledger', moduleId: 'stock-ledger', indent: true },
-    { label: 'Stock Balance', moduleId: 'stock-balance', indent: true },
-    { label: 'Warehouse Allocation', moduleId: 'warehouse-allocation', indent: true },
+    { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', icon: '📊', indent: true },
+    { label: 'PO Material Request', moduleId: 'po-material-request', icon: '📋', indent: true },
+    { label: 'GRN Processing', moduleId: 'grn', icon: '🔄', indent: true },
+    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: '📖', indent: true },
+    { label: 'Stock Balance', moduleId: 'stock-balance', icon: '⚖️', indent: true },
+    { label: 'Warehouse Allocation', moduleId: 'warehouse-allocation', icon: '🏭', indent: true },
     { label: 'Quality Assurance', isGroup: true, isDisabled: true, groupId: 'quality-group' },
-    { label: 'Quality Dashboard', moduleId: 'quality-dashboard', indent: true },
-    { label: 'Incoming QC', moduleId: 'incoming-qc', indent: true },
-    { label: 'In-Process QC', moduleId: 'in-process-qc', indent: true },
-    { label: 'Final QC', moduleId: 'final-qc', indent: true },
-    { label: 'QC Inspections', moduleId: 'qc-inspections', indent: true },
-    { label: 'Rejections', moduleId: 'quality-rejections', indent: true },
-    { label: 'Quality Reports', moduleId: 'quality-reports', indent: true }
+    { label: 'Quality Dashboard', moduleId: 'quality-dashboard', icon: '📈', indent: true },
+    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: '📥', indent: true },
+    { label: 'In-Process QC', moduleId: 'in-process-qc', icon: '🔍', indent: true },
+    { label: 'Final QC', moduleId: 'final-qc', icon: '✓', indent: true },
+    { label: 'QC Inspections', moduleId: 'qc-inspections', icon: '🔎', indent: true },
+    { label: 'Rejections', moduleId: 'quality-rejections', icon: '❌', indent: true },
+    { label: 'Quality Reports', moduleId: 'quality-reports', icon: '📑', indent: true }
   ]
 
   const allowedModules = user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
@@ -1877,73 +1879,76 @@ function App() {
   return (
     <>
       <input ref={poUploadInputRef} type="file" accept=".pdf,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={handlePoPdfUpload} />
-      <div className="flex min-h-screen bg-slate-100 text-slate-900">
-        <aside className={`fixed lg:flex inset-y-0 left-0 w-72 bg-slate-900 text-white flex-col transition-transform lg:transition-none z-50 ${
+      <div className="flex min-h-screen bg-slate-50 text-slate-900">
+        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-gradient-to-b from-slate-950 to-slate-900 text-white flex-col transition-transform lg:transition-none z-50 ${
           mobileMenuOpen ? 'flex' : 'hidden'
         } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="px-6 py-8 border-b border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="h-12 w-12 rounded-2xl bg-white flex items-center justify-center p-1.5">
+          <div className="px-5 py-5 border-b border-slate-700/50 flex items-center justify-between">
+            <div className="flex items-center gap-2.5 flex-1">
+              <div className="h-10 w-10 rounded-lg bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
                 <img src={sptechLogo} alt="SPTECHPIONEER Logo" className="h-full w-full object-contain" />
               </div>
-              <div>
-                <p className="text-lg font-semibold leading-tight">SPTECHPIONEER PVT LTD</p>
-                <p className="text-sm text-white/70">{user?.department_name || 'Department'}</p>
+              <div className="min-w-0">
+                <p className="text-sm font-bold leading-tight text-white">SPTECHPIONEER</p>
+                <p className="text-xs text-slate-400 truncate">{user?.department_code || 'ERP'}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden p-1 hover:bg-white/10 rounded transition"
+              className="lg:hidden p-1 hover:bg-slate-700/50 rounded transition text-slate-300"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
-            <p className="text-xs uppercase tracking-[0.35em] text-white/50">{user?.department_name || 'Department'}</p>
-            <div className="space-y-1">
-              {navigationItems.map((item, index) => {
-                const isActive = item.moduleId ? activeModule === item.moduleId : Boolean(item.active)
-                const isDisabled = item.isGroup || !item.moduleId
+          <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+            {navigationItems.map((item) => {
+              const isActive = item.moduleId ? activeModule === item.moduleId : Boolean(item.active)
+              const isDisabled = item.isGroup || !item.moduleId
+              
+              if (item.isGroup) {
                 return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => {
-                      if (item.moduleId) {
-                        navigate(`/${item.moduleId}`)
-                        setMobileMenuOpen(false)
-                      }
-                    }}
-                    className={`flex items-center gap-3 w-full px-4 py-2 rounded-xl text-sm font-medium transition ${item.indent ? 'ml-4' : ''} ${
-                      isActive ? 'bg-white/15 text-white shadow-inner' : isDisabled ? 'text-white/40 cursor-not-allowed' : 'text-white/70 hover:bg-white/5 hover:text-white'
-                    }`}
-                    disabled={isDisabled}
-                  >
-                    {!item.indent && <span className="text-[0.65rem] font-semibold tracking-[0.35em] text-white/50">{String(index + 1).padStart(2, '0')}</span>}
-                    <span>{item.label}</span>
-                  </button>
+                  <div key={item.label} className="pt-3 first:pt-0">
+                    <p className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">{item.label}</p>
+                  </div>
                 )
-              })}
-            </div>
+              }
+              
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    if (item.moduleId) {
+                      navigate(`/${item.moduleId}`)
+                      setMobileMenuOpen(false)
+                    }
+                  }}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${item.indent ? 'ml-2' : ''} ${
+                    isActive 
+                      ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/30' 
+                      : isDisabled 
+                      ? 'text-slate-500 cursor-not-allowed' 
+                      : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                  }`}
+                  disabled={isDisabled}
+                >
+                  <span className="text-base flex-shrink-0">{item.icon}</span>
+                  <span className="flex-1 text-left truncate">{item.label}</span>
+                  {isActive && <span className="text-indigo-300 text-xs font-bold">●</span>}
+                </button>
+              )
+            })}
           </div>
-          <div className="px-6 py-6 border-t border-white/10 space-y-3">
-            <div className="bg-white/10 rounded-2xl px-5 py-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-white font-semibold">
-                  {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold">{user?.first_name || user?.username || 'User'}</p>
-                  <p className="text-xs text-white/70">{user?.department_name || user?.role_name || 'User'}</p>
-                </div>
-              </div>
+          <div className="px-3 py-4 border-t border-slate-700/50 space-y-3">
+            <div className="bg-slate-800/50 rounded-xl px-4 py-3 space-y-3 backdrop-blur-sm">
+              
               <button
                 type="button"
                 onClick={handleLogout}
-                className="w-full px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition"
+                className="w-full px-3 py-2 rounded-lg bg-slate-700/60 hover:bg-slate-600/60 text-white text-xs font-semibold transition-colors"
               >
                 Logout
               </button>
@@ -1958,7 +1963,7 @@ function App() {
           />
         )}
 
-        <div className="flex-1 lg:ml-72 flex flex-col bg-slate-50">
+        <div className="flex-1 lg:ml-64 flex flex-col bg-slate-50">
           <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
             <div className="px-4 sm:px-6 lg:px-10 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-3">
@@ -1988,7 +1993,7 @@ function App() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-900">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                  <p className="text-sm font-semibold text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
                   <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-semibold text-lg">
@@ -1998,7 +2003,7 @@ function App() {
             </div>
           </div>
 
-          <div className="flex-1 px-4 sm:px-6 lg:px-10 py-10 space-y-8">
+          <div className="flex-1 p-3 space-y-8">
             {location.pathname.startsWith('/receipt-details/') ? (
               <POReceiptDetails />
             ) : (
@@ -2009,16 +2014,16 @@ function App() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-start justify-between gap-4">
+                {/* <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">{activeModuleMeta.badge}</p>
-                    <h1 className="text-3xl font-semibold text-slate-900 mt-2">{activeModuleMeta.title}</h1>
+                    <h1 className="text-3xl font-semibold text-slate-900 text-xs mt-2">{activeModuleMeta.title}</h1>
                     <p className="text-sm text-slate-500 mt-1">{activeModuleMeta.description}</p>
                   </div>
                   <div className="flex items-center gap-3 flex-wrap justify-end">
                     {activeModuleMeta.actions}
                   </div>
-                </div>
+                </div> */}
 
                 {activeModule === 'company-master' && (
                   <CompanyMaster
@@ -2181,6 +2186,10 @@ function App() {
                   <DesignOrders />
                 )}
 
+                {activeModule === 'client-quotations' && (
+                  <ClientQuotations />
+                )}
+
                 {activeModule === 'drawing-master' && (
                   <DrawingMaster />
                 )}
@@ -2217,7 +2226,7 @@ function App() {
             <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">{drawerMode === 'view' ? 'Overview' : 'Workflow'}</p>
-                <h3 className="text-2xl font-semibold text-slate-900">{drawerTitle}</h3>
+                <h3 className="text-2xl font-semibold text-slate-900 text-xs">{drawerTitle}</h3>
               </div>
               <button type="button" onClick={closeDrawer} className="h-10 w-10 rounded-full border border-slate-200 text-slate-500 hover:text-slate-900">
                 ✕
@@ -2332,7 +2341,7 @@ function App() {
             <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">Client Contacts</p>
-                <h3 className="text-2xl font-semibold text-slate-900">{contactCompany.company_name}</h3>
+                <h3 className="text-2xl font-semibold text-slate-900 text-xs">{contactCompany.company_name}</h3>
                 <p className="text-sm text-slate-500">{contactCompany.company_code}</p>
               </div>
               <div className="flex items-center gap-3">
@@ -2351,7 +2360,7 @@ function App() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">Directory</p>
-                    <h4 className="text-lg font-semibold text-slate-900">Existing Contacts</h4>
+                    <h4 className="text-lg font-semibold text-slate-900 text-xs">Existing Contacts</h4>
                   </div>
                   <button
                     type="button"
@@ -2370,7 +2379,7 @@ function App() {
                       <div key={contact.id} className="border border-slate-200 rounded-2xl bg-white p-4 space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-base font-semibold text-slate-900">{contact.name || 'Untitled Contact'}</p>
+                            <p className="text-base font-semibold text-slate-900 text-xs">{contact.name || 'Untitled Contact'}</p>
                             <p className="text-sm text-slate-500">{contact.designation || '—'}</p>
                             <p className="text-[0.6rem] font-semibold tracking-[0.35em] uppercase text-slate-400 mt-2">
                               {contact.contact_type || contact.contactType || 'PRIMARY'}
@@ -2420,7 +2429,7 @@ function App() {
               <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 space-y-5">
                 <div>
                   <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">{editingContactId ? 'Update Contact' : 'Add Contact'}</p>
-                  <h4 className="text-xl font-semibold text-slate-900">{editingContactId ? 'Edit Existing Contact' : 'Create New Contact'}</h4>
+                  <h4 className="text-xl font-semibold text-slate-900 text-xs">{editingContactId ? 'Edit Existing Contact' : 'Create New Contact'}</h4>
                 </div>
                 {!isCompanyActive(contactCompany) && (
                   <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-2xl text-sm">
@@ -2534,9 +2543,9 @@ function App() {
                   <button type="button" onClick={closePoDetailDrawer} className="h-10 w-10 rounded-full border border-slate-200 text-slate-500 hover:text-slate-900">✕</button>
                 </div>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-2">
                 <p className="text-[0.65rem] font-bold tracking-[0.35em] text-slate-500 uppercase mb-2">Bill To</p>
-                <p className="text-lg font-semibold text-slate-900">{poDetail?.company_name || '—'}</p>
+                <p className="text-lg font-semibold text-slate-900 text-xs">{poDetail?.company_name || '—'}</p>
               </div>
             </div>
 
@@ -2550,15 +2559,15 @@ function App() {
                   <div className="grid md:grid-cols-3 gap-6">
                     <div className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-[0.65rem] font-bold tracking-[0.35em] text-slate-500 uppercase mb-2">PO Date</p>
-                      <p className="text-lg font-semibold text-slate-900">{formatDisplayDate(poDetail.po_date)}</p>
+                      <p className="text-lg font-semibold text-slate-900 text-xs">{formatDisplayDate(poDetail.po_date)}</p>
                     </div>
                     <div className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-[0.65rem] font-bold tracking-[0.35em] text-slate-500 uppercase mb-2">Status</p>
-                      <p className="text-lg font-semibold text-slate-900">{(poDetail.status || 'DRAFT').split('_').map(chunk => chunk.charAt(0) + chunk.slice(1).toLowerCase()).join(' ')}</p>
+                      <p className="text-lg font-semibold text-slate-900 text-xs">{(poDetail.status || 'DRAFT').split('_').map(chunk => chunk.charAt(0) + chunk.slice(1).toLowerCase()).join(' ')}</p>
                     </div>
                     <div className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-[0.65rem] font-bold tracking-[0.35em] text-slate-500 uppercase mb-2">Currency</p>
-                      <p className="text-lg font-semibold text-slate-900">{poDetail.currency || 'INR'}</p>
+                      <p className="text-lg font-semibold text-slate-900 text-xs">{poDetail.currency || 'INR'}</p>
                     </div>
                   </div>
 
@@ -2604,12 +2613,12 @@ function App() {
                           ) : (
                             poDetailItems.map((item, index) => (
                               <tr key={`po-detail-item-${item.id ?? index}`} className="border-b border-slate-100 hover:bg-slate-50">
-                                <td className="px-4 py-3 font-semibold text-slate-900">{index + 1}</td>
-                                <td className="px-4 py-3"><div className="font-semibold text-slate-900">{item.description}</div><div className="text-xs text-slate-500">Drw No: {item.drawing_no || item.item_code || 'N/A'}</div></td>
+                                <td className="px-4 py-3 font-semibold text-slate-900 text-xs">{index + 1}</td>
+                                <td className="px-4 py-3"><div className="font-semibold text-slate-900 text-xs">{item.description}</div><div className="text-xs text-slate-500">Drw No: {item.drawing_no || item.item_code || 'N/A'}</div></td>
                                 <td className="px-4 py-3 text-right font-medium text-slate-900">{item.quantity ?? '—'}</td>
                                 <td className="px-4 py-3 text-slate-600">{item.unit || '—'}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatCurrencyByCode(item.rate, poDetail.currency)}</td>
-                                <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyByCode(item.basic_amount, poDetail.currency)}</td>
+                                <td className="px-4 py-3 text-right font-semibold text-slate-900 text-xs">{formatCurrencyByCode(item.basic_amount, poDetail.currency)}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatPercent(item.cgst_percent || item.sgst_percent || item.igst_percent)}</td>
                               </tr>
                             ))
@@ -2624,7 +2633,7 @@ function App() {
                       <div className="w-full md:w-80 space-y-3">
                         <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal:</span><span className="font-medium text-slate-900">{formatCurrencyByCode(poDetail.subtotal, poDetail.currency)}</span></div>
                         <div className="flex justify-between text-sm border-t border-slate-200 pt-3"><span className="text-slate-600">Taxes:</span><span className="font-medium text-slate-900">{formatCurrencyByCode(poDetail.tax_total, poDetail.currency)}</span></div>
-                        <div className="flex justify-between bg-slate-900 text-white rounded-2xl px-6 py-4 font-bold"><span>Total Amount:</span><span className="text-xl">{formatCurrencyByCode(poDetail.net_total, poDetail.currency)}</span></div>
+                        <div className="flex justify-between bg-slate-900 text-white rounded-2xl p-2 font-bold"><span>Total Amount:</span><span className="text-xl">{formatCurrencyByCode(poDetail.net_total, poDetail.currency)}</span></div>
                       </div>
                     </div>
                   </div>

@@ -621,7 +621,7 @@ const GRNProcessing = () => {
               {poItems.length > 0 && (
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-                    <h3 className="font-semibold text-slate-900">PO Items - Enter Accepted Quantities</h3>
+                    <h3 className="font-semibold text-slate-900 text-xs">PO Items - Enter Accepted Quantities</h3>
                     <p className="text-xs text-slate-500 mt-1">Enter how much you accepted. Status shows: APPROVED (match), SHORTAGE (less), OVERAGE (more)</p>
                   </div>
 

@@ -207,7 +207,7 @@ const PurchaseOrders = ({ onCreatePO }) => {
                 <tr key={`po-${po.id}`} className="border-t border-slate-100">
                   <td className="px-4 py-4 font-medium text-slate-900">PO-{String(po.id).padStart(4, '0')}</td>
                   <td className="px-4 py-4 text-slate-600">{po.vendor_name}</td>
-                  <td className="px-4 py-4 font-semibold text-slate-900">{formatCurrency(po.total_amount)}</td>
+                  <td className="px-4 py-4 font-semibold text-slate-900 text-xs">{formatCurrency(po.total_amount)}</td>
                   <td className="px-4 py-4">
                     <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${poStatusColors[po.status]?.bg} ${poStatusColors[po.status]?.text} ${poStatusColors[po.status]?.border}`}>
                       {poStatusColors[po.status]?.label || po.status}

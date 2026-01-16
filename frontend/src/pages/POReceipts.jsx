@@ -465,7 +465,7 @@ const POReceipts = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Create PO Receipt</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create PO Receipt</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -597,7 +597,7 @@ const POReceipts = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-slate-900">PO Receipt Details</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">PO Receipt Details</h3>
               <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -639,7 +639,7 @@ const POReceipts = () => {
 
             {selectedReceipt.items && selectedReceipt.items.length > 0 && (
               <div className="mb-6">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">Received Items</h4>
+                <h4 className="text-sm font-semibold text-slate-900 text-xs mb-3">Received Items</h4>
                 <div className="border border-slate-100 rounded overflow-hidden">
                   <table className="w-full text-xs text-left">
                     <thead className="bg-slate-50 border-b border-slate-200">
@@ -715,7 +715,7 @@ const POReceipts = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Edit PO Receipt</h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-xs">Edit PO Receipt</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 

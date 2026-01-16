@@ -66,10 +66,10 @@ const CustomerPO = ({
 
       {poParseResult && (
         <div className="grid gap-3 md:grid-cols-2 text-sm text-slate-600 mt-4">
-          <p><span className="font-semibold text-slate-900">Detected Company:</span> {poParseResult.companyName || '—'}</p>
-          <p><span className="font-semibold text-slate-900">GSTIN:</span> {poParseResult.customerGstin || '—'}</p>
-          <p><span className="font-semibold text-slate-900">PO Number:</span> {poParseResult.poNumber || '—'}</p>
-          <p><span className="font-semibold text-slate-900">PO Date:</span> {poParseResult.poDate || '—'}</p>
+          <p><span className="font-semibold text-slate-900 text-xs">Detected Company:</span> {poParseResult.companyName || '—'}</p>
+          <p><span className="font-semibold text-slate-900 text-xs">GSTIN:</span> {poParseResult.customerGstin || '—'}</p>
+          <p><span className="font-semibold text-slate-900 text-xs">PO Number:</span> {poParseResult.poNumber || '—'}</p>
+          <p><span className="font-semibold text-slate-900 text-xs">PO Date:</span> {poParseResult.poDate || '—'}</p>
         </div>
       )}
     </Card>
@@ -182,7 +182,7 @@ const CustomerPO = ({
                 <td className="p-2">
                   <input type="number" className={`${fieldInputClass} py-2`} value={item.igstPercent} onChange={e => onItemChange(index, 'igstPercent', e.target.value)} min="0" />
                 </td>
-                <td className="p-2 text-right font-semibold text-slate-900">
+                <td className="p-2 text-right font-semibold text-slate-900 text-xs">
                   {formatCurrency((parseIndianNumber(item.quantity) || 0) * (parseIndianNumber(item.rate) || 0))}
                 </td>
                 <td className="p-2">
@@ -212,24 +212,24 @@ const CustomerPO = ({
         <div className="rounded-2xl bg-slate-50 p-4 space-y-2 text-sm">
           <div className="flex items-center justify-between text-slate-600">
             <span>Subtotal</span>
-            <span className="font-semibold text-slate-900">{formatCurrency(poSummary.subtotal)}</span>
+            <span className="font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.subtotal)}</span>
           </div>
           <div className="flex items-center justify-between text-slate-600">
             <span>CGST</span>
-            <span className="font-semibold text-slate-900">{formatCurrency(poSummary.cgst)}</span>
+            <span className="font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.cgst)}</span>
           </div>
           <div className="flex items-center justify-between text-slate-600">
             <span>SGST</span>
-            <span className="font-semibold text-slate-900">{formatCurrency(poSummary.sgst)}</span>
+            <span className="font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.sgst)}</span>
           </div>
           <div className="flex items-center justify-between text-slate-600">
             <span>IGST</span>
-            <span className="font-semibold text-slate-900">{formatCurrency(poSummary.igst)}</span>
+            <span className="font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.igst)}</span>
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
           <p className="text-sm text-slate-500">Net Value</p>
-          <p className="text-3xl font-semibold text-slate-900">{formatCurrency(poSummary.net)}</p>
+          <p className="text-3xl font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.net)}</p>
           <p className="text-xs text-slate-500">Totals auto-update as you tweak line items.</p>
         </div>
       </div>
@@ -237,7 +237,7 @@ const CustomerPO = ({
         <p className="text-sm text-slate-500">Validate the PO, then push it forward to Sales Order. The workflow automatically hands off to Design → Production → Dispatch → Invoice.</p>
         <button
           type="button"
-          className="px-6 py-3 rounded-2xl bg-slate-900 text-white text-sm font-semibold shadow-sm hover:bg-slate-800 disabled:opacity-50"
+          className="p-2rounded-2xl bg-slate-900 text-white text-sm font-semibold shadow-sm hover:bg-slate-800 disabled:opacity-50"
           onClick={onPushToSalesOrder}
           disabled={poSaving}
         >
@@ -285,7 +285,7 @@ const CustomerPO = ({
                     <td className="px-4 py-3 text-center text-slate-600 font-semibold">
                       {po.total_qty || 0}
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(po.net_total)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900 text-xs">{formatCurrency(po.net_total)}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-flex px-2 py-1 rounded-lg text-[0.65rem] font-bold uppercase tracking-wider ${
                         po.status === 'DRAFT' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
