@@ -548,7 +548,10 @@ const ensureSalesOrderItemColumns = async () => {
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
       { name: 'revision_no', definition: 'VARCHAR(50) NULL' },
       { name: 'drawing_pdf', definition: 'VARCHAR(500) NULL' },
-      { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' }
+      { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
+      { name: 'item_group', definition: 'VARCHAR(100)' },
+      { name: 'is_active', definition: 'TINYINT(1) DEFAULT 1' },
+      { name: 'is_default', definition: 'TINYINT(1) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -596,6 +599,131 @@ const ensureSalesOrderStatuses = async () => {
   }
 };
 
+const ensureSalesOrderItemMaterialsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS sales_order_item_materials (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sales_order_item_id INT NOT NULL,
+        material_name VARCHAR(255) NOT NULL,
+        material_type VARCHAR(100),
+        item_group VARCHAR(100),
+        qty_per_pc DECIMAL(12, 4) NOT NULL,
+        uom VARCHAR(20) DEFAULT 'KG',
+        rate DECIMAL(12, 2) DEFAULT 0,
+        warehouse VARCHAR(100),
+        operation VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Sales order item materials table synchronized');
+  } catch (error) {
+    console.error('Sales order item materials table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureBOMAdditionalTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // Components Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS sales_order_item_components (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sales_order_item_id INT NOT NULL,
+        component_code VARCHAR(100),
+        description TEXT,
+        quantity DECIMAL(12, 4) NOT NULL,
+        uom VARCHAR(20),
+        rate DECIMAL(12, 2) DEFAULT 0,
+        loss_percent DECIMAL(5, 2) DEFAULT 0,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Operations Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS sales_order_item_operations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sales_order_item_id INT NOT NULL,
+        operation_name VARCHAR(100) NOT NULL,
+        workstation VARCHAR(100),
+        cycle_time_min DECIMAL(10, 2) DEFAULT 0,
+        setup_time_min DECIMAL(10, 2) DEFAULT 0,
+        hourly_rate DECIMAL(12, 2) DEFAULT 0,
+        operation_type ENUM('In-House', 'Outsource') DEFAULT 'In-House',
+        target_warehouse VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Scrap Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS sales_order_item_scrap (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sales_order_item_id INT NOT NULL,
+        item_code VARCHAR(100),
+        item_name VARCHAR(255),
+        input_qty DECIMAL(12, 4) DEFAULT 0,
+        loss_percent DECIMAL(5, 2) DEFAULT 0,
+        rate DECIMAL(12, 2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('BOM Additional tables (Components, Operations, Scrap) synchronized');
+  } catch (error) {
+    console.error('BOM Additional tables sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureBOMMaterialsColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM sales_order_item_materials');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'item_group', definition: 'VARCHAR(100)' },
+      { name: 'warehouse', definition: 'VARCHAR(100)' },
+      { name: 'operation', definition: 'VARCHAR(100)' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE sales_order_item_materials ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('BOM Materials columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('BOM Materials column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -612,6 +740,9 @@ const bootstrapDatabase = async () => {
   await ensureSalesOrderItemColumns();
   await ensureSalesOrderStatuses();
   await ensureCustomerDrawingTable();
+  await ensureSalesOrderItemMaterialsTable();
+  await ensureBOMAdditionalTables();
+  await ensureBOMMaterialsColumns();
 };
 
 bootstrapDatabase();

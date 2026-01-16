@@ -8,20 +8,71 @@ const getItemMaterials = async (itemId) => {
   return rows;
 };
 
+const getItemComponents = async (itemId) => {
+  const [rows] = await pool.query(
+    'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+    [itemId]
+  );
+  return rows;
+};
+
+const getItemOperations = async (itemId) => {
+  const [rows] = await pool.query(
+    'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+    [itemId]
+  );
+  return rows;
+};
+
+const getItemScrap = async (itemId) => {
+  const [rows] = await pool.query(
+    'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+    [itemId]
+  );
+  return rows;
+};
+
 const addItemMaterial = async (itemId, materialData) => {
-  const { materialName, materialType, qtyPerPc, uom } = materialData;
+  const { materialName, materialType, itemGroup, qtyPerPc, uom, rate, warehouse, operation } = materialData;
   const [result] = await pool.execute(
-    'INSERT INTO sales_order_item_materials (sales_order_item_id, material_name, material_type, qty_per_pc, uom) VALUES (?, ?, ?, ?, ?)',
-    [itemId, materialName, materialType, qtyPerPc, uom]
+    'INSERT INTO sales_order_item_materials (sales_order_item_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [itemId || null, materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null]
+  );
+  return result.insertId;
+};
+
+const addComponent = async (itemId, componentData) => {
+  const { componentCode, description, quantity, uom, rate, lossPercent, notes } = componentData;
+  const [result] = await pool.execute(
+    'INSERT INTO sales_order_item_components (sales_order_item_id, component_code, description, quantity, uom, rate, loss_percent, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [itemId || null, componentCode || null, description || null, quantity || null, uom || null, rate || null, lossPercent || null, notes || null]
+  );
+  return result.insertId;
+};
+
+const addOperation = async (itemId, operationData) => {
+  const { operationName, workstation, cycleTimeMin, setupTimeMin, hourlyRate, operationType, targetWarehouse } = operationData;
+  const [result] = await pool.execute(
+    'INSERT INTO sales_order_item_operations (sales_order_item_id, operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [itemId || null, operationName || null, workstation || null, cycleTimeMin || null, setupTimeMin || null, hourlyRate || null, operationType || null, targetWarehouse || null]
+  );
+  return result.insertId;
+};
+
+const addScrap = async (itemId, scrapData) => {
+  const { itemCode, itemName, inputQty, lossPercent, rate } = scrapData;
+  const [result] = await pool.execute(
+    'INSERT INTO sales_order_item_scrap (sales_order_item_id, item_code, item_name, input_qty, loss_percent, rate) VALUES (?, ?, ?, ?, ?, ?)',
+    [itemId || null, itemCode || null, itemName || null, inputQty || null, lossPercent || null, rate || null]
   );
   return result.insertId;
 };
 
 const updateItemMaterial = async (materialId, materialData) => {
-  const { materialName, materialType, qtyPerPc, uom } = materialData;
+  const { materialName, materialType, itemGroup, qtyPerPc, uom, rate, warehouse, operation } = materialData;
   await pool.execute(
-    'UPDATE sales_order_item_materials SET material_name = ?, material_type = ?, qty_per_pc = ?, uom = ? WHERE id = ?',
-    [materialName, materialType, qtyPerPc, uom, materialId]
+    'UPDATE sales_order_item_materials SET material_name = ?, material_type = ?, item_group = ?, qty_per_pc = ?, uom = ?, rate = ?, warehouse = ?, operation = ? WHERE id = ?',
+    [materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, materialId]
   );
 };
 
@@ -29,22 +80,59 @@ const deleteItemMaterial = async (materialId) => {
   await pool.execute('DELETE FROM sales_order_item_materials WHERE id = ?', [materialId]);
 };
 
+const deleteComponent = async (id) => {
+  await pool.execute('DELETE FROM sales_order_item_components WHERE id = ?', [id]);
+};
+
+const deleteOperation = async (id) => {
+  await pool.execute('DELETE FROM sales_order_item_operations WHERE id = ?', [id]);
+};
+
+const deleteScrap = async (id) => {
+  await pool.execute('DELETE FROM sales_order_item_scrap WHERE id = ?', [id]);
+};
+
 const getBOMBySalesOrder = async (salesOrderId) => {
-  const [rows] = await pool.query(
-    `SELECT som.*, soi.item_code, soi.description as item_description
-     FROM sales_order_item_materials som
-     JOIN sales_order_items soi ON som.sales_order_item_id = soi.id
-     WHERE soi.sales_order_id = ?
-     ORDER BY soi.id, som.created_at ASC`,
+  const [items] = await pool.query(
+    'SELECT id, item_code, description FROM sales_order_items WHERE sales_order_id = ?',
     [salesOrderId]
   );
-  return rows;
+
+  const fullBOM = [];
+
+  for (const item of items) {
+    const materials = await getItemMaterials(item.id);
+    const components = await getItemComponents(item.id);
+    const operations = await getItemOperations(item.id);
+    const scrap = await getItemScrap(item.id);
+
+    fullBOM.push({
+      item_id: item.id,
+      item_code: item.item_code,
+      item_description: item.description,
+      materials,
+      components,
+      operations,
+      scrap
+    });
+  }
+
+  return fullBOM;
 };
 
 module.exports = {
   getItemMaterials,
+  getItemComponents,
+  getItemOperations,
+  getItemScrap,
   addItemMaterial,
+  addComponent,
+  addOperation,
+  addScrap,
   updateItemMaterial,
   deleteItemMaterial,
+  deleteComponent,
+  deleteOperation,
+  deleteScrap,
   getBOMBySalesOrder
 };

@@ -35,12 +35,13 @@ import BOMCreation from './pages/BOMCreation'
 import RoutingOperations from './pages/RoutingOperations'
 import ProcessSheet from './pages/ProcessSheet'
 import BOMApproval from './pages/BOMApproval'
+import BOMFormPage from './pages/BOMFormPage'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval']
+const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form']
 const DEFAULT_MODULE = 'company-master'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -189,14 +190,14 @@ const getContactStatusActionLabel = status => {
 
 const DEPARTMENT_MODULES = {
   SALES: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
-  DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval'],
+  DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form'],
   PRODUCTION: ['incoming-orders'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
   SHIPMENT: ['incoming-orders'],
   ACCOUNTS: [],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
-  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations']
+  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form']
 }
 
 function App() {
@@ -1874,6 +1875,10 @@ function App() {
         </div>
       </div>
     )
+  }
+
+  if (activeModule === 'bom-form') {
+    return <BOMFormPage />;
   }
 
   return (

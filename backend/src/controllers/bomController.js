@@ -3,7 +3,10 @@ const bomService = require('../services/bomService');
 const getItemMaterials = async (req, res, next) => {
   try {
     const materials = await bomService.getItemMaterials(req.params.itemId);
-    res.json(materials);
+    const components = await bomService.getItemComponents(req.params.itemId);
+    const operations = await bomService.getItemOperations(req.params.itemId);
+    const scrap = await bomService.getItemScrap(req.params.itemId);
+    res.json({ materials, components, operations, scrap });
   } catch (error) {
     next(error);
   }
@@ -13,6 +16,33 @@ const addItemMaterial = async (req, res, next) => {
   try {
     const materialId = await bomService.addItemMaterial(req.params.itemId, req.body);
     res.status(201).json({ id: materialId, message: 'Material added to BOM' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addComponent = async (req, res, next) => {
+  try {
+    const id = await bomService.addComponent(req.params.itemId, req.body);
+    res.status(201).json({ id, message: 'Component added to BOM' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addOperation = async (req, res, next) => {
+  try {
+    const id = await bomService.addOperation(req.params.itemId, req.body);
+    res.status(201).json({ id, message: 'Operation added to BOM' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addScrap = async (req, res, next) => {
+  try {
+    const id = await bomService.addScrap(req.params.itemId, req.body);
+    res.status(201).json({ id, message: 'Scrap added to BOM' });
   } catch (error) {
     next(error);
   }
@@ -36,6 +66,33 @@ const deleteItemMaterial = async (req, res, next) => {
   }
 };
 
+const deleteComponent = async (req, res, next) => {
+  try {
+    await bomService.deleteComponent(req.params.id);
+    res.json({ message: 'Component removed from BOM' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteOperation = async (req, res, next) => {
+  try {
+    await bomService.deleteOperation(req.params.id);
+    res.json({ message: 'Operation removed from BOM' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteScrap = async (req, res, next) => {
+  try {
+    await bomService.deleteScrap(req.params.id);
+    res.json({ message: 'Scrap removed from BOM' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getBOMBySalesOrder = async (req, res, next) => {
   try {
     const bom = await bomService.getBOMBySalesOrder(req.params.salesOrderId);
@@ -48,7 +105,13 @@ const getBOMBySalesOrder = async (req, res, next) => {
 module.exports = {
   getItemMaterials,
   addItemMaterial,
+  addComponent,
+  addOperation,
+  addScrap,
   updateItemMaterial,
   deleteItemMaterial,
+  deleteComponent,
+  deleteOperation,
+  deleteScrap,
   getBOMBySalesOrder
 };

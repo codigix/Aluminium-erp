@@ -154,6 +154,16 @@ const getOrderTimeline = async (req, res, next) => {
   }
 };
 
+const getSalesOrderItem = async (req, res, next) => {
+  try {
+    const item = await salesOrderService.getSalesOrderItem(req.params.itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    res.json(item);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const generateSalesOrderPDF = async (req, res, next) => {
   try {
     const pdf = await salesOrderService.generateSalesOrderPDF(req.params.id);
@@ -187,6 +197,7 @@ module.exports = {
   bulkRejectDesigns,
   getApprovedDrawings,
   getOrderTimeline,
+  getSalesOrderItem,
   generateSalesOrderPDF,
   deleteSalesOrder
 };

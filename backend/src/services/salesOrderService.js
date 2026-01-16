@@ -359,6 +359,55 @@ const getOrderTimeline = async salesOrderId => {
     'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
     [salesOrderId]
   );
+  
+  // Fetch materials, components, operations, and scrap for each item to show in BOM creation and other lists
+  for (const item of items) {
+    const [materials] = await pool.query(
+      'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [item.id]
+    );
+    item.materials = materials;
+
+    const [components] = await pool.query(
+      'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [item.id]
+    );
+    item.components = components;
+
+    const [operations] = await pool.query(
+      'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [item.id]
+    );
+    item.operations = operations;
+
+    const [scrap] = await pool.query(
+      'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [item.id]
+    );
+    item.scrap = scrap;
+
+    // Calculate summary costs
+    const orderQty = parseFloat(item.quantity || 1);
+    const matCost = materials.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * orderQty * parseFloat(m.rate || 0)), 0);
+    const compCost = components.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0);
+    const laborCost = operations.reduce((sum, o) => {
+      const cycle = parseFloat(o.cycle_time_min || 0);
+      const setup = parseFloat(o.setup_time_min || 0);
+      const rate = parseFloat(o.hourly_rate || 0);
+      return sum + (((cycle * orderQty) + setup) / 60 * rate);
+    }, 0);
+    const scrapRecovery = scrap.reduce((sum, s) => {
+      const input = parseFloat(s.input_qty || 0);
+      const loss = parseFloat(s.loss_percent || 0) / 100;
+      const rate = parseFloat(s.rate || 0);
+      return sum + (input * loss * rate);
+    }, 0);
+    
+    const totalOrderCost = matCost + compCost + laborCost - scrapRecovery;
+    item.bom_cost = orderQty > 0 ? totalOrderCost / orderQty : 0;
+    item.has_bom = materials.length > 0 || components.length > 0 || operations.length > 0;
+  }
+  
   return items;
 };
 
@@ -516,6 +565,20 @@ const deleteSalesOrder = async (salesOrderId) => {
   await pool.execute('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
 };
 
+const getSalesOrderItem = async itemId => {
+  const [items] = await pool.query(
+    `SELECT soi.*, so.project_name, c.company_name, cp.po_number 
+     FROM sales_order_items soi
+     JOIN sales_orders so ON so.id = soi.sales_order_id
+     LEFT JOIN companies c ON c.id = so.company_id
+     LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     WHERE soi.id = ?`,
+    [itemId]
+  );
+  if (!items.length) return null;
+  return items[0];
+};
+
 module.exports = {
   listSalesOrders,
   getIncomingOrders,
@@ -531,6 +594,7 @@ module.exports = {
   bulkRejectDesigns,
   getApprovedDrawings,
   getOrderTimeline,
+  getSalesOrderItem,
   generateSalesOrderPDF,
   deleteSalesOrder
 };
