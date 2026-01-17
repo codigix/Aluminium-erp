@@ -568,6 +568,53 @@ const CustomerDrawing = () => {
     }
   };
 
+  const handleShareClientGroupWithDesign = async (clientName) => {
+    const unsharedDrawings = groupedDrawings[clientName].filter(d => !d.status || d.status !== 'SHARED');
+    
+    if (unsharedDrawings.length === 0) {
+      Swal.fire('Info', 'All drawings for this client are already shared.', 'info');
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: 'Send to Design?',
+      text: `Send all ${unsharedDrawings.length} unshared drawings to Design Department for review?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, send all',
+      confirmButtonColor: '#10b981'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        
+        const sharePromises = unsharedDrawings.map(drawing =>
+          fetch(`${API_BASE}/drawings/${drawing.id}/share`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+        );
+
+        const results = await Promise.all(sharePromises);
+        const failed = results.filter(r => !r.ok);
+
+        if (failed.length === 0) {
+          Swal.fire('Success', `All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer`, 'success');
+          fetchDrawings();
+        } else {
+          Swal.fire('Partial Error', `${failed.length} drawings failed to share.`, 'warning');
+          fetchDrawings();
+        }
+      } catch (error) {
+        Swal.fire('Error', error.message, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const shareDrawingWithDesign = async (drawingId) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -1152,6 +1199,19 @@ const CustomerDrawing = () => {
                         <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold">
                           {clientDrawings.length}
                         </span>
+                        {clientDrawings.some(d => !d.status || d.status !== 'SHARED') && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleShareClientGroupWithDesign(clientName);
+                            }}
+                            className="px-2 py-0.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded text-[10px] font-bold transition-all flex items-center gap-1"
+                            title="Send all unshared drawings to Design"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                            Send to Design
+                          </button>
+                        )}
                       </div>
                       <button
                         onClick={(e) => {

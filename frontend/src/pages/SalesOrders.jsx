@@ -2,6 +2,122 @@ import React, { useState } from 'react'
 import { Card, FormControl } from '../components/ui.jsx'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
+const formatDate = (date) => {
+  if (!date) return '—'
+  return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+const formatCurrency = (value, currency = 'INR') => {
+  if (!value || isNaN(value)) return '—'
+  const validCurrency = currency && ['USD', 'EUR', 'INR', 'GBP'].includes(currency.toUpperCase()) ? currency.toUpperCase() : 'INR'
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: validCurrency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+const formatOrderCode = (id) => {
+  return `SO-${String(id).padStart(4, '0')}`
+}
+
+const formatStatus = (s) => {
+  if (!s) return 'DRAFT'
+  return s.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')
+}
+
+const formatPriority = (p) => {
+  if (!p) return 'NORMAL'
+  return p.toUpperCase()
+}
+
+const statusStyles = {
+  DRAFT: 'bg-slate-100 border-slate-200 text-slate-600',
+  CREATED: 'bg-blue-50 border-blue-200 text-blue-600',
+  DESIGN_IN_REVIEW: 'bg-indigo-50 border-indigo-200 text-indigo-600',
+  DESIGN_APPROVED: 'bg-emerald-50 border-emerald-200 text-emerald-600',
+  DESIGN_QUERY: 'bg-amber-50 border-amber-200 text-amber-600',
+  PROCUREMENT_IN_PROGRESS: 'bg-purple-50 border-purple-200 text-purple-600',
+  MATERIAL_PURCHASE_IN_PROGRESS: 'bg-orange-50 border-orange-200 text-orange-600',
+  MATERIAL_READY: 'bg-cyan-50 border-cyan-200 text-cyan-600',
+  IN_PRODUCTION: 'bg-red-50 border-red-200 text-red-600',
+  PRODUCTION_COMPLETED: 'bg-lime-50 border-lime-200 text-lime-600',
+}
+
+const MaterialInputTable = ({ materials = [], onAdd, onDelete }) => {
+  const [newMat, setNewMat] = useState({ material_name: '', qty: '', uom: 'Kg' })
+
+  return (
+    <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+      <table className="w-full text-[10px]">
+        <thead className="bg-slate-50 text-slate-500 uppercase font-bold">
+          <tr>
+            <th className="px-4 py-2 text-left">Material Name</th>
+            <th className="px-4 py-2 text-right w-20">Qty</th>
+            <th className="px-4 py-2 text-left w-20">UOM</th>
+            <th className="px-4 py-2 text-right w-16">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {materials.map((mat, i) => (
+            <tr key={i}>
+              <td className="px-4 py-2 text-slate-900 font-medium">{mat.material_name}</td>
+              <td className="px-4 py-2 text-right font-bold">{mat.qty}</td>
+              <td className="px-4 py-2 text-slate-500">{mat.uom}</td>
+              <td className="px-4 py-2 text-right">
+                <button onClick={() => onDelete(i)} className="text-rose-500 hover:text-rose-700">Delete</button>
+              </td>
+            </tr>
+          ))}
+          <tr className="bg-slate-50/50">
+            <td className="px-4 py-2">
+              <input 
+                className="w-full bg-transparent border-none focus:ring-0 p-0 text-[10px]"
+                placeholder="New Material..."
+                value={newMat.material_name}
+                onChange={e => setNewMat({...newMat, material_name: e.target.value})}
+              />
+            </td>
+            <td className="px-4 py-2 text-right">
+              <input 
+                className="w-full bg-transparent border-none focus:ring-0 p-0 text-[10px] text-right"
+                placeholder="0"
+                value={newMat.qty}
+                onChange={e => setNewMat({...newMat, qty: e.target.value})}
+              />
+            </td>
+            <td className="px-4 py-2">
+              <select 
+                className="w-full bg-transparent border-none focus:ring-0 p-0 text-[10px]"
+                value={newMat.uom}
+                onChange={e => setNewMat({...newMat, uom: e.target.value})}
+              >
+                <option value="Kg">Kg</option>
+                <option value="Nos">Nos</option>
+                <option value="Mtr">Mtr</option>
+              </select>
+            </td>
+            <td className="px-4 py-2 text-right">
+              <button 
+                onClick={() => {
+                  if (newMat.material_name && newMat.qty) {
+                    onAdd(newMat)
+                    setNewMat({ material_name: '', qty: '', uom: 'Kg' })
+                  }
+                }}
+                className="text-indigo-600 font-bold"
+              >
+                Add
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 const SalesOrders = ({ 
   orders, 
   loading, 
@@ -22,6 +138,7 @@ const SalesOrders = ({
   poItemsLoading,
   fieldInputClass
 }) => {
+  const [expandedItems, setExpandedItems] = useState({})
   const list = Array.isArray(orders) ? orders : []
   const hasOrders = list.length > 0
 
