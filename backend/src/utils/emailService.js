@@ -1,23 +1,40 @@
 const nodemailer = require('nodemailer');
+const puppeteer = require('puppeteer');
 
 const createTransporter = () => {
-  return nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || 'gmail',
+  const config = {
+    service: process.env.EMAIL_SERVICE,
+    host: process.env.MAIL_HOST,
+    port: Number(process.env.MAIL_PORT || 587),
+    secure: process.env.MAIL_SECURE === 'true',
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
+      user: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS,
+      pass: process.env.EMAIL_PASSWORD || process.env.MAIL_PASSWORD
     }
-  });
+  };
+
+  // If service is provided (e.g. 'gmail'), nodemailer handles host/port
+  if (config.service) {
+    delete config.host;
+    delete config.port;
+  }
+
+  return nodemailer.createTransport(config);
 };
 
 const generateQuotationHTML = (clientName, items, totalAmount, notes) => {
   const itemsHTML = (items || [])
     .map((item, idx) => `
-      <tr style="border-bottom: 1px solid #e5e7eb;">
-        <td style="padding: 12px; text-align: left;">SO-${String(item.orderId).padStart(4, '0')}</td>
-        <td style="padding: 12px; text-align: left;">Item ${idx + 1}</td>
-        <td style="padding: 12px; text-align: center;">1</td>
-        <td style="padding: 12px; text-align: right; font-weight: bold;">₹${(item.quotedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${idx + 1}</td>
+        <td style="padding: 10px; border: 1px solid #000;">
+          <div style="font-weight: bold;">${item.drawing_no || '—'}</div>
+          ${item.description ? `<div style="font-size: 11px; color: #333; margin-top: 4px;">${item.description}</div>` : ''}
+        </td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${item.quantity || 1}</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${item.unit || 'Nos'}</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: right;">₹${(item.quotedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: right; font-weight: bold;">₹${((item.quantity || 1) * (item.quotedPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
       </tr>
     `)
     .join('');
@@ -27,96 +44,116 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes) => {
     <html lang="en">
     <head>
       <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Quotation Request</title>
+      <title>Quotation - SP TECHPIONEER</title>
       <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background-color: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
-        .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; }
-        .header h1 { margin: 0 0 5px 0; font-size: 28px; }
-        .header p { margin: 0; font-size: 14px; opacity: 0.9; }
-        .content { padding: 30px; }
-        .client-info { background-color: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
-        .client-info h3 { margin: 0 0 15px 0; color: #1f2937; font-size: 16px; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .info-item { font-size: 14px; }
-        .info-label { color: #6b7280; font-size: 12px; margin-bottom: 3px; }
-        .info-value { color: #1f2937; font-weight: 500; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th { background-color: #f3f4f6; padding: 12px; text-align: left; font-weight: 600; color: #374151; font-size: 13px; }
-        .totals { margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb; }
-        .total-row { display: flex; justify-content: flex-end; margin-bottom: 10px; font-size: 14px; }
-        .total-label { margin-right: 40px; color: #6b7280; }
-        .total-amount { font-weight: 600; color: #1f2937; min-width: 150px; text-align: right; }
-        .grand-total { font-size: 18px; font-weight: bold; color: #10b981; }
-        .notes-section { background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0; }
-        .notes-section h3 { margin: 0 0 10px 0; color: #1f2937; font-size: 14px; }
-        .notes-section p { margin: 0; color: #6b7280; font-size: 13px; line-height: 1.5; }
-        .footer { background-color: #f3f4f6; padding: 20px; text-align: center; color: #6b7280; font-size: 12px; }
-        .btn { display: inline-block; background-color: #10b981; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 20px; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #000; line-height: 1.4; padding: 20px; }
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .header-table td { padding: 10px; border: 1px solid #000; }
+        .title { font-size: 24px; font-weight: bold; color: #f26522; text-align: center; }
+        .company-name { font-size: 18px; font-weight: bold; text-align: center; margin-top: 5px; }
+        .company-info { font-size: 11px; text-align: center; margin-top: 5px; }
+        .quote-info { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .quote-info td { padding: 8px; border: 1px solid #000; width: 50%; }
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .items-table th { background-color: #f2f2f2; padding: 10px; border: 1px solid #000; text-align: center; font-weight: bold; }
+        .totals-table { width: 40%; margin-left: auto; border-collapse: collapse; }
+        .totals-table td { padding: 10px; border: 1px solid #000; }
+        .footer { margin-top: 40px; font-size: 11px; }
+        .signature-table { width: 100%; margin-top: 60px; border-collapse: collapse; }
+        .signature-table td { text-align: center; border: none; font-weight: bold; }
       </style>
     </head>
     <body>
-      <div class="container">
-        <div class="header">
-          <h1>Quotation Request</h1>
-          <p>Professional quotation for your approved drawings</p>
-        </div>
-        
-        <div class="content">
-          <div class="client-info">
-            <h3>Client Information</h3>
-            <div class="info-grid">
-              <div class="info-item">
-                <div class="info-label">CLIENT NAME</div>
-                <div class="info-value">${clientName}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">DATE</div>
-                <div class="info-value">${new Date().toLocaleDateString('en-IN')}</div>
-              </div>
+      <table class="header-table">
+        <tr>
+          <td style="text-align: center; width: 100%;">
+            <div class="title">QUOTATION</div>
+            <div class="company-name">SP TECHPIONEER PVT. LTD.</div>
+            <div class="company-info">
+              Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026<br>
+              Email: sales@sptechpioneer.com | Mobile: +91 9876543210
             </div>
-          </div>
+          </td>
+        </tr>
+      </table>
 
-          <h3 style="color: #1f2937; margin-bottom: 15px;">Quotation Items</h3>
-          <table>
-            <thead>
-              <tr style="border-bottom: 2px solid #e5e7eb;">
-                <th style="text-align: left;">Order ID</th>
-                <th style="text-align: left;">Description</th>
-                <th style="text-align: center;">Items</th>
-                <th style="text-align: right;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHTML}
-            </tbody>
-          </table>
+      <table class="quote-info">
+        <tr>
+          <td>
+            <strong>Quotation For:</strong><br>
+            <span style="font-size: 14px; font-weight: bold;">${clientName}</span><br>
+            Client ID: ${items[0]?.clientId || 'N/A'}
+          </td>
+          <td>
+            <strong>Quotation Details:</strong><br>
+            Date: ${new Date().toLocaleDateString('en-IN')}<br>
+            Quote No: QT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}
+          </td>
+        </tr>
+      </table>
 
-          <div class="totals">
-            <div class="total-row">
-              <span class="total-label">Total Quotation Value:</span>
-              <span class="total-amount grand-total">₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-            </div>
-          </div>
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th style="width: 5%;">Sr. No</th>
+            <th style="width: 45%;">Description / Drawing No</th>
+            <th style="width: 10%;">Qty</th>
+            <th style="width: 10%;">Unit</th>
+            <th style="width: 15%;">Unit Price</th>
+            <th style="width: 15%;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
 
-          ${notes ? `
-            <div class="notes-section">
-              <h3>Additional Notes</h3>
-              <p>${notes.replace(/\n/g, '<br>')}</p>
-            </div>
-          ` : ''}
+      <table class="totals-table">
+        <tr>
+          <td style="font-weight: bold;">Sub Total</td>
+          <td style="text-align: right; font-weight: bold;">₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        </tr>
+        <tr>
+          <td>Tax (GST 18%)</td>
+          <td style="text-align: right;">₹${(totalAmount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        </tr>
+        <tr style="background-color: #f2f2f2;">
+          <td style="font-weight: bold; font-size: 14px;">Grand Total</td>
+          <td style="text-align: right; font-weight: bold; font-size: 14px; color: #10b981;">₹${(totalAmount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        </tr>
+      </table>
 
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-            <p style="color: #6b7280; font-size: 13px; margin: 0 0 15px 0;">Please review this quotation and let us know if you have any questions or require modifications. Reply to this email or contact our sales team to discuss further.</p>
-            <a href="mailto:sales@sptechpioneer.com" class="btn">Contact Sales</a>
-          </div>
+      ${notes ? `
+        <div style="margin-top: 20px; border: 1px solid #000; padding: 10px;">
+          <strong>Terms & Conditions:</strong><br>
+          <p style="white-space: pre-wrap; margin: 5px 0 0 0;">${notes}</p>
         </div>
-
-        <div class="footer">
-          <p style="margin: 0;">This is an automated quotation. Please do not reply to this email address.</p>
-          <p style="margin: 5px 0 0 0;">© ${new Date().getFullYear()} SP Tech Pioneer. All rights reserved.</p>
+      ` : `
+        <div style="margin-top: 20px; border: 1px solid #000; padding: 10px;">
+          <strong>Terms & Conditions:</strong><br>
+          <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+            <li>Validity: 30 Days</li>
+            <li>Payment: 50% Advance, 50% Against Delivery</li>
+            <li>Delivery: Within 2-3 weeks from the date of PO</li>
+          </ul>
         </div>
+      `}
+
+      <table class="signature-table">
+        <tr>
+          <td>
+            <div style="border-top: 1px solid #000; width: 150px; margin: 0 auto; margin-bottom: 5px;"></div>
+            Prepared By
+          </td>
+          <td>
+            <div style="border-top: 1px solid #000; width: 150px; margin: 0 auto; margin-bottom: 5px;"></div>
+            Authorized Signatory
+          </td>
+        </tr>
+      </table>
+
+      <div class="footer" style="text-align: center; margin-top: 50px; color: #666; border-top: 1px solid #eee; padding-top: 10px;">
+        This is a computer generated quotation and does not require a physical signature.
       </div>
     </body>
     </html>
@@ -128,17 +165,52 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes) => {
 const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes) => {
   try {
     const transporter = createTransporter();
+    const html = generateQuotationHTML(clientName, items, totalAmount, notes);
+    
+    // Generate PDF buffer
+    let pdfBuffer;
+    try {
+      const browser = await puppeteer.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+      await browser.close();
+    } catch (pdfError) {
+      console.error('[Email Service] PDF generation failed:', pdfError.message);
+      // Fallback to sending without PDF if generation fails
+    }
     
     const mailOptions = {
-      from: process.env.EMAIL_USER || 'noreply@sptechpioneer.com',
+      from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
       to: clientEmail,
-      subject: `Quotation Request from SP Tech Pioneer - ${clientName}`,
-      html: generateQuotationHTML(clientName, items, totalAmount, notes),
-      replyTo: process.env.REPLY_TO_EMAIL || 'sales@sptechpioneer.com'
+      subject: `Quotation Request from SP TECHPIONEER - ${clientName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+          <h2 style="color: #f26522;">Dear ${clientName},</h2>
+          <p>Please find the attached quotation for your approved drawings from <strong>SP TECHPIONEER PVT. LTD.</strong></p>
+          <p><strong>Total Quotation Value (Incl. GST):</strong> ₹${(totalAmount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+          <p>The detailed breakdown of items, quantities, and pricing is provided in the attached PDF.</p>
+          <p>We look forward to your feedback and approval.</p>
+          <br/>
+          <p>Best regards,</p>
+          <p><strong>Sales Team</strong><br/>SP TECHPIONEER PVT. LTD.</p>
+          <p style="font-size: 11px; color: #666; margin-top: 20px;">Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026</p>
+        </div>
+      `,
+      replyTo: process.env.REPLY_TO_EMAIL || 'sales@sptechpioneer.com',
+      attachments: pdfBuffer ? [
+        {
+          filename: `Quotation_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
+          content: pdfBuffer
+        }
+      ] : []
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('[Email Service] Quotation sent successfully:', info.messageId);
+    console.log('[Email Service] Quotation sent successfully with PDF:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('[Email Service] Failed to send quotation email:', error.message);

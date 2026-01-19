@@ -41,8 +41,8 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form']
-const DEFAULT_MODULE = 'company-master'
+const MODULE_IDS = ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form']
+const DEFAULT_MODULE = 'customer-drawing'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -189,7 +189,7 @@ const getContactStatusActionLabel = status => {
 }
 
 const DEPARTMENT_MODULES = {
-  SALES: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
+  SALES: ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
   DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form'],
   PRODUCTION: ['incoming-orders'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
@@ -197,7 +197,7 @@ const DEPARTMENT_MODULES = {
   ACCOUNTS: [],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
-  ADMIN: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form']
+  ADMIN: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form']
 }
 
 function App() {
@@ -239,6 +239,11 @@ function App() {
       return null
     }
   })
+
+  const allowedModules = useMemo(() => {
+    return user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
+  }, [user?.department_code])
+
   const [authMode, setAuthMode] = useState('login')
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -288,6 +293,9 @@ function App() {
   const [editingPoId, setEditingPoId] = useState(null)
   const [customerPos, setCustomerPos] = useState([])
   const [customerPosLoading, setCustomerPosLoading] = useState(false)
+  const [quotationRequests, setQuotationRequests] = useState([])
+  const [quotationRequestsLoading, setQuotationRequestsLoading] = useState(false)
+  const [poQuotePrices, setPoQuotePrices] = useState({})
   const [salesOrders, setSalesOrders] = useState([])
   const [salesOrdersLoading, setSalesOrdersLoading] = useState(false)
   const [poDetailDrawerOpen, setPoDetailDrawerOpen] = useState(false)
@@ -514,6 +522,12 @@ function App() {
       setLoginEmail('')
       setLoginPassword('')
       showToast(`Welcome, ${data.user.first_name || data.user.username}!`)
+      
+      // Redirect to first allowed module based on department
+      const userAllowed = DEPARTMENT_MODULES[data.user.department_code] || []
+      if (userAllowed.length > 0) {
+        navigate(`/${userAllowed[0]}`)
+      }
     } catch (error) {
       showToast(error.message)
     } finally {
@@ -642,6 +656,22 @@ function App() {
     }
   }, [apiRequest, showToast])
 
+  const loadQuotationRequests = useCallback(async () => {
+    setQuotationRequestsLoading(true)
+    try {
+      const data = await apiRequest('/quotation-requests')
+      setQuotationRequests(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error loading quotation requests:', error)
+    } finally {
+      setQuotationRequestsLoading(false)
+    }
+  }, [apiRequest])
+
+  const handlePoQuotePriceChange = (itemId, price) => {
+    setPoQuotePrices(prev => ({ ...prev, [itemId]: price }))
+  }
+
   const getPoPdfUrl = useCallback(path => {
     if (!path) {
       return null
@@ -667,6 +697,20 @@ function App() {
       loadCustomerPos().catch(() => null)
     }
   }, [loadCustomerPos, token, user])
+
+  useEffect(() => {
+    if (activeModule === 'customer-po') {
+      loadQuotationRequests().catch(() => null)
+    }
+  }, [activeModule, poForm.companyId, showPoForm, loadQuotationRequests])
+
+  useEffect(() => {
+    if (token && user && allowedModules.length > 0) {
+      if (!allowedModules.includes(activeModule)) {
+        navigate(`/${allowedModules[0]}`)
+      }
+    }
+  }, [token, user, allowedModules, activeModule, navigate])
 
   const handleSendOrderToDesign = useCallback(async (orderId) => {
     try {
@@ -1227,58 +1271,51 @@ function App() {
     }
   }, [apiRequest, showToast])
 
-  const handleEditCustomerPo = po => {
-    setEditingPoId(po.id)
-    setPoForm({
-      companyId: po.company_id?.toString() || '',
-      poNumber: po.po_number || '',
-      poDate: po.po_date ? po.po_date.slice(0, 10) : '',
-      paymentTerms: po.payment_terms || '',
-      creditDays: po.credit_days || '',
-      freightTerms: po.freight_terms || '',
-      packingForwarding: po.packing_forwarding || '',
-      insuranceTerms: po.insurance_terms || '',
-      currency: po.currency || 'INR',
-      deliveryTerms: po.delivery_terms || '',
-      remarks: po.remarks || ''
-    })
-    if (Array.isArray(po.items)) {
-      setPoItems(po.items.map(item => ({
-        drawingNo: item.drawing_no || '',
-        description: item.description || '',
-        quantity: parseIndianNumber(item.quantity),
-        unit: item.unit || 'NOS',
-        rate: parseIndianNumber(item.rate),
-        cgstPercent: parseIndianNumber(item.cgst_percent),
-        sgstPercent: parseIndianNumber(item.sgst_percent),
-        igstPercent: parseIndianNumber(item.igst_percent),
-        hsnCode: item.hsn_code || '',
-        discount: parseIndianNumber(item.discount)
-      })))
+  const handleUpdateQuotationRates = async (items) => {
+    try {
+      const updatePayload = items.map(item => ({
+        id: item.id,
+        qty: item.item_qty || 1,
+        rate: poQuotePrices[`q-${item.id}`] || 0
+      }))
+
+      await apiRequest('/quotation-requests/batch-update-rates', {
+        method: 'PUT',
+        body: { items: updatePayload }
+      })
+
+      showToast('Quotation rates updated successfully')
+      loadQuotationRequests() // Refresh the list
+    } catch (error) {
+      showToast(error.message)
     }
-    setShowPoForm(true)
-    setPoCompanyLocked(true)
   }
 
-  const handleDeleteCustomerPo = async poId => {
-    const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: "You won't be able to revert this!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete it!'
-    })
+  const handleApproveQuotationGroup = async (quotes) => {
+    try {
+      const ids = quotes.map(q => q.id)
+      await apiRequest('/quotation-requests/batch-approve', {
+        method: 'POST',
+        body: { ids }
+      })
+      showToast('Quotations sent for approval')
+      loadQuotationRequests()
+    } catch (error) {
+      showToast(error.message)
+    }
+  }
 
-    if (result.isConfirmed) {
-      try {
-        await apiRequest(`/customer-pos/${poId}`, { method: 'DELETE' })
-        showToast('PO deleted successfully')
-        await loadCustomerPos()
-      } catch (error) {
-        showToast(error.message)
-      }
+  const handleSendToDesignGroup = async (quotes) => {
+    try {
+      const ids = quotes.map(q => q.id)
+      await apiRequest('/quotation-requests/batch-send-to-design', {
+        method: 'POST',
+        body: { ids }
+      })
+      showToast('Quotations sent to Design department')
+      loadQuotationRequests()
+    } catch (error) {
+      showToast(error.message)
     }
   }
 
@@ -1310,8 +1347,6 @@ function App() {
 
   const allNavigationItems = [
     { label: 'Customer Drawing', moduleId: 'customer-drawing', icon: '📋' },
-    { label: 'Company / Customer Master', moduleId: 'company-master', icon: '🏢' },
-    { label: 'Client Contacts', moduleId: 'client-contacts', icon: '👥' },
     { label: 'Customer PO', moduleId: 'customer-po', icon: '📄' },
     { label: 'Sales Order', moduleId: 'sales-order', icon: '📦' },
     { label: 'Design Orders', moduleId: 'design-orders', icon: '🎨' },
@@ -1342,8 +1377,6 @@ function App() {
     { label: 'Rejections', moduleId: 'quality-rejections', icon: '❌', indent: true },
     { label: 'Quality Reports', moduleId: 'quality-reports', icon: '📑', indent: true }
   ]
-
-  const allowedModules = user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
 
   const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
     if (item.isGroup) {
@@ -1877,9 +1910,6 @@ function App() {
     )
   }
 
-  if (activeModule === 'bom-form') {
-    return <BOMFormPage />;
-  }
 
   return (
     <>
@@ -1910,7 +1940,7 @@ function App() {
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
             {navigationItems.map((item) => {
-              const isActive = item.moduleId ? activeModule === item.moduleId : Boolean(item.active)
+              const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
               const isDisabled = item.isGroup || !item.moduleId
               
               if (item.isGroup) {
@@ -2074,14 +2104,16 @@ function App() {
                     parseIndianNumber={parseIndianNumber}
                     onPushToSalesOrder={handlePushToSalesOrder}
                     poSaving={poSaving}
-                    customerPos={customerPos}
-                    customerPosLoading={customerPosLoading}
-                    onEditPo={handleEditCustomerPo}
-                    onDeletePo={handleDeleteCustomerPo}
-                    onViewPo={handleViewPoDetail}
                     editingPoId={editingPoId}
                     onResetForm={resetPoWorkflow}
                     showPoForm={showPoForm}
+                    poQuotePrices={poQuotePrices}
+                    onQuotePriceChange={handlePoQuotePriceChange}
+                    onApproveQuotation={handleApproveQuotationGroup}
+                    onSendToDesign={handleSendToDesignGroup}
+                    onUpdateQuotationRates={handleUpdateQuotationRates}
+                    quotationRequests={quotationRequests}
+                    quotationRequestsLoading={quotationRequestsLoading}
                   />
                 )}
 
@@ -2217,6 +2249,10 @@ function App() {
 
                 {activeModule === 'bom-approval' && (
                   <BOMApproval />
+                )}
+
+                {activeModule === 'bom-form' && (
+                  <BOMFormPage />
                 )}
               </>
             )}

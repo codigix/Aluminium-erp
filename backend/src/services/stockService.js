@@ -432,6 +432,54 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
   }
 };
 
+const createItem = async (itemData) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [existing] = await connection.query(
+      'SELECT id FROM stock_balance WHERE item_code = ?',
+      [itemData.itemCode]
+    );
+
+    if (existing.length > 0) {
+      const error = new Error('Item code already exists');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    await connection.execute(`
+      INSERT INTO stock_balance (
+        item_code, material_name, material_type, unit, 
+        valuation_rate, selling_rate, no_of_cavity, 
+        weight_per_unit, weight_uom, drawing_no, 
+        revision, material_grade
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      itemData.itemCode,
+      itemData.itemName,
+      itemData.itemGroup,
+      itemData.defaultUom || 'Nos',
+      itemData.valuationRate || 0,
+      itemData.sellingRate || 0,
+      itemData.noOfCavity || 1,
+      itemData.weightPerUnit || 0,
+      itemData.weightUom || null,
+      itemData.drawingNo || null,
+      itemData.revision || null,
+      itemData.materialGrade || null
+    ]);
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getStockLedger,
   getStockBalance,
@@ -440,5 +488,6 @@ module.exports = {
   updateStockBalance,
   createQCStockLedgerEntry,
   deleteStockLedgerEntry,
-  deleteStockBalance
+  deleteStockBalance,
+  createItem
 };

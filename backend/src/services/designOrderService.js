@@ -9,6 +9,7 @@ const listDesignOrders = async () => {
       so.target_dispatch_date,
       c.company_name,
       cp.po_number,
+      (SELECT drawing_no FROM sales_order_items WHERE sales_order_id = so.id LIMIT 1) as drawing_no,
       (SELECT SUM(quantity) FROM sales_order_items WHERE sales_order_id = so.id) as total_quantity
     FROM design_orders do
     JOIN sales_orders so ON do.sales_order_id = so.id

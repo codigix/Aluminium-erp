@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const DesignOrders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [incomingOrders, setIncomingOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [incomingLoading, setIncomingLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Details Modal State
   const [showDetails, setShowDetails] = useState(false);
@@ -35,9 +38,31 @@ const DesignOrders = () => {
   const [selectedIncomingOrders, setSelectedIncomingOrders] = useState(new Set());
   const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
   const [expandedIncomingPo, setExpandedIncomingPo] = useState({});
+  const [expandedActivePo, setExpandedActivePo] = useState({});
+
+  const [showAddMaterialModal, setShowAddMaterialModal] = useState(false);
+  const [materialFormData, setMaterialFormData] = useState({
+    itemCode: '',
+    itemName: '',
+    itemGroup: '',
+    defaultUom: 'Nos',
+    valuationRate: 0,
+    sellingRate: 0,
+    noOfCavity: 1,
+    weightPerUnit: 0,
+    weightUom: '',
+    drawingNo: '',
+    revision: '',
+    materialGrade: ''
+  });
+  const [isSubmittingMaterial, setIsSubmittingMaterial] = useState(false);
 
   const toggleIncomingPo = (po) => {
     setExpandedIncomingPo(prev => ({ ...prev, [po]: !prev[po] }));
+  };
+
+  const toggleActivePo = (po) => {
+    setExpandedActivePo(prev => ({ ...prev, [po]: !prev[po] }));
   };
 
   const groupedIncoming = incomingOrders.reduce((acc, order) => {
@@ -234,6 +259,43 @@ const DesignOrders = () => {
     }
   };
 
+  const handleAcceptAll = async (orderIds) => {
+    if (!orderIds || orderIds.length === 0) return;
+
+    const result = await Swal.fire({
+      title: 'Accept & Send to Quotation',
+      text: `Are you sure you want to accept all ${orderIds.length} items and send them to the Client Quotation page?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      confirmButtonText: 'Yes, Accept All'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setBulkOperationLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/sales-orders/bulk/approve-designs`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ orderIds })
+        });
+
+        if (!response.ok) throw new Error('Failed to accept orders');
+
+        await Swal.fire('Success', 'Orders accepted and sent to Quotation page', 'success');
+        navigate('/client-quotations');
+      } catch (error) {
+        Swal.fire('Error', error.message, 'error');
+      } finally {
+        setBulkOperationLoading(false);
+      }
+    }
+  };
+
   const handleBulkApprove = async () => {
     if (selectedIncomingOrders.size === 0) {
       Swal.fire('Info', 'Please select at least one order to approve', 'info');
@@ -349,6 +411,88 @@ const DesignOrders = () => {
     });
   };
 
+  const handleMaterialSubmit = async (e) => {
+    e.preventDefault();
+    if (!materialFormData.itemCode || !materialFormData.itemName || !materialFormData.itemGroup) {
+      Swal.fire('Error', 'Please fill all required fields', 'error');
+      return;
+    }
+    
+    setIsSubmittingMaterial(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/stock/items`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(materialFormData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create material');
+      }
+      
+      Swal.fire('Success', 'Material created successfully', 'success');
+      setShowAddMaterialModal(false);
+      setMaterialFormData({
+        itemCode: '',
+        itemName: '',
+        itemGroup: '',
+        defaultUom: 'Nos',
+        valuationRate: 0,
+        sellingRate: 0,
+        noOfCavity: 1,
+        weightPerUnit: 0,
+        weightUom: '',
+        drawingNo: '',
+        revision: '',
+        materialGrade: ''
+      });
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
+    } finally {
+      setIsSubmittingMaterial(false);
+    }
+  };
+
+  const openAddMaterialModal = (item = null) => {
+    if (item) {
+      setMaterialFormData({
+        itemCode: item.item_code || '',
+        itemName: item.description || item.itemName || '',
+        itemGroup: '',
+        defaultUom: item.unit || 'Nos',
+        valuationRate: 0,
+        sellingRate: 0,
+        noOfCavity: 1,
+        weightPerUnit: 0,
+        weightUom: '',
+        drawingNo: item.drawing_no || '',
+        revision: item.revision_no || '',
+        materialGrade: ''
+      });
+    } else {
+      setMaterialFormData({
+        itemCode: '',
+        itemName: '',
+        itemGroup: '',
+        defaultUom: 'Nos',
+        valuationRate: 0,
+        sellingRate: 0,
+        noOfCavity: 1,
+        weightPerUnit: 0,
+        weightUom: '',
+        drawingNo: '',
+        revision: '',
+        materialGrade: ''
+      });
+    }
+    setShowAddMaterialModal(true);
+  };
+
   const handleSaveItem = async (itemId) => {
     try {
       setItemSaveLoading(true);
@@ -413,6 +557,31 @@ const DesignOrders = () => {
     }
   };
 
+  const filteredOrders = orders.filter(order => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      order.design_order_number?.toLowerCase().includes(searchLower) ||
+      order.po_number?.toLowerCase().includes(searchLower) ||
+      order.company_name?.toLowerCase().includes(searchLower) ||
+      order.project_name?.toLowerCase().includes(searchLower) ||
+      order.drawing_no?.toLowerCase().includes(searchLower) ||
+      `SO-${String(order.sales_order_id).padStart(4, '0')}`.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const groupedActive = filteredOrders.reduce((acc, order) => {
+    const key = order.po_number || 'NO-PO';
+    if (!acc[key]) {
+      acc[key] = {
+        po_number: key,
+        company_name: order.company_name,
+        orders: []
+      };
+    }
+    acc[key].orders.push(order);
+    return acc;
+  }, {});
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'DRAFT': return 'bg-gray-100 text-gray-800';
@@ -432,13 +601,15 @@ const DesignOrders = () => {
               <h1 className="text-2xl font-bold text-slate-900">Design Engineering Hub</h1>
               <p className="text-xs text-slate-600">Review customer drawings and create technical specifications</p>
             </div>
-            <button 
-              onClick={() => { fetchOrders(); fetchIncomingOrders(); }}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-1"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-              Refresh
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { fetchOrders(); fetchIncomingOrders(); }}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                Refresh
+              </button>
+            </div>
           </div>
 
           {/* INFO BANNER */}
@@ -584,7 +755,16 @@ const DesignOrders = () => {
                           <td className="px-4 py-3 text-center">
                             <span className="text-slate-400 text-[10px]">Total: {group.orders.reduce((sum, o) => sum + (Number(o.item_qty) || 1), 0)}</span>
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-3 text-right flex gap-2 justify-end">
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 handleAcceptAll(group.orders.map(o => o.id));
+                               }}
+                               className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                             >
+                               Accept All
+                             </button>
                              <button
                                onClick={(e) => {
                                  e.stopPropagation();
@@ -607,7 +787,7 @@ const DesignOrders = () => {
                                 className="w-3.5 h-3.5 rounded"
                               />
                             </td>
-                            <td className="px-4 py-2.5 text-slate-400">{group.company_name}</td>
+                            <td className="px-4 py-2.5 text-slate-400"></td>
                             <td className="px-4 py-2.5 font-bold text-indigo-600">{order.drawing_no || '—'}</td>
                             <td className="px-4 py-2.5 text-slate-600 italic">
                               {order.item_description || 'No description'}
@@ -615,7 +795,14 @@ const DesignOrders = () => {
                             <td className="px-4 py-2.5 text-center font-bold text-slate-900">
                               {order.item_qty || 1}
                             </td>
-                            <td className="px-4 py-2.5 whitespace-nowrap text-right flex gap-2 justify-end">
+                            <td className="px-4 py-2.5 whitespace-nowrap text-right flex gap-1 justify-end">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); openAddMaterialModal(order); }}
+                                className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors shadow-sm"
+                                title="Add Material"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                              </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleViewOrder(order); }}
                                 className="p-1 bg-slate-100 text-slate-500 rounded hover:bg-slate-200 transition-colors"
@@ -625,12 +812,6 @@ const DesignOrders = () => {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                 </svg>
-                              </button>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleAcceptOrder(order.id); }}
-                                className="px-2.5 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold hover:bg-indigo-700 transition-colors shadow-sm"
-                              >
-                                Accept
                               </button>
                             </td>
                           </tr>
@@ -648,16 +829,28 @@ const DesignOrders = () => {
         <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200">
           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 border-b border-purple-700">
             <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                  🎨 Design Tasks in Progress
-                </h2>
-                <p className="text-purple-100 text-xs">Manage active design orders and technical specifications</p>
+              <div className="flex items-center gap-4">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    🎨 Design Tasks in Progress
+                  </h2>
+                  <p className="text-purple-100 text-xs">Manage active design orders and technical specifications</p>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-white/10 border border-white/20 text-white placeholder-purple-200 text-xs rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
+                  />
+                  <svg className="w-3.5 h-3.5 text-purple-200 absolute right-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
               </div>
               {orders.length > 0 && (
                 <span className="px-3 py-1 bg-white text-purple-600 rounded-full text-xs font-bold">
-                  {orders.length}
+                  {filteredOrders.length} {filteredOrders.length !== orders.length ? `of ${orders.length}` : ''}
                 </span>
               )}
             </div>
@@ -667,12 +860,9 @@ const DesignOrders = () => {
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Design Order</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">PO / Sales Order</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Customer</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Project</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
                   <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Target Date</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Status</th>
                   <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Actions</th>
                 </tr>
@@ -680,67 +870,113 @@ const DesignOrders = () => {
               <tbody className="bg-white divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="8" className="px-4 py-8 text-center">
+                    <td colSpan="5" className="px-4 py-8 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-xs text-slate-600 font-semibold">Loading design orders...</span>
                       </div>
                     </td>
                   </tr>
-                ) : orders.length === 0 ? (
+                ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-4 py-8 text-center">
+                    <td colSpan="5" className="px-4 py-8 text-center">
                       <div className="flex flex-col items-center gap-1">
-                        <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6v12m6-6H6"/></svg>
-                        <p className="text-xs text-slate-500 font-semibold">No active design tasks</p>
+                        <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <p className="text-xs text-slate-500 font-semibold">No tasks match your search</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  orders.map((order) => (
-                    <tr key={order.id} className="hover:bg-purple-50/30 transition-colors text-xs">
-                      <td className="px-4 py-3 whitespace-nowrap font-bold text-slate-900">{order.design_order_number}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="font-semibold text-slate-900 text-xs">PO: {order.po_number}</div>
-                        <div className="text-slate-500">SO-{String(order.sales_order_id).padStart(4, '0')}</div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">{order.company_name}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">{order.project_name}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-indigo-600">{order.total_quantity || 0}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">
-                        {order.target_dispatch_date ? new Date(order.target_dispatch_date).toLocaleDateString('en-IN') : '—'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <select
-                          value={order.status}
-                          onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                          className={`text-xs font-semibold rounded px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${getStatusColor(order.status)}`}
+                  Object.entries(groupedActive).map(([poNumber, group]) => {
+                    const isExpanded = expandedActivePo[poNumber];
+                    return (
+                      <React.Fragment key={poNumber}>
+                        {/* Group Header */}
+                        <tr 
+                          className={`bg-slate-50/80 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-all ${isExpanded ? 'sticky top-0 z-10' : ''}`} 
+                          onClick={() => toggleActivePo(poNumber)}
                         >
-                          <option value="DRAFT">DRAFT</option>
-                          <option value="IN_DESIGN">IN_DESIGN</option>
-                          <option value="COMPLETED">COMPLETED</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right">
-                        <div className="flex justify-end gap-1">
-                          <button 
-                            onClick={() => handleViewDetails(order)}
-                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100 rounded transition-all"
-                            title="View Details"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(order.id)}
-                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-all"
-                            title="Delete"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                <span className="font-bold text-slate-900 text-xs">PO: {poNumber}</span>
+                              </div>
+                              <span className="font-bold text-indigo-600 text-[10px] ml-5">{group.company_name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold">
+                              {group.orders.length} Drawing Tasks
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-slate-600 font-bold text-xs">{group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-slate-400 text-[10px] font-medium">
+                              {group.orders.some(o => o.status === 'IN_DESIGN') ? 'Work In Progress' : 'Pending Start'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 toggleActivePo(poNumber);
+                               }}
+                               className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-50 transition-colors"
+                             >
+                               {isExpanded ? 'Hide' : 'Show'}
+                             </button>
+                          </td>
+                        </tr>
+                        {/* Group Items */}
+                        {isExpanded && group.orders.map((order) => (
+                          <tr key={order.id} className="hover:bg-purple-50/30 transition-colors text-xs border-b border-slate-50">
+                            <td className="px-4 py-3 whitespace-nowrap text-slate-600 pl-8 font-medium">{order.company_name}</td>
+                            <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">{order.drawing_no || '—'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center font-bold text-slate-900">{order.total_quantity || 0}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <select
+                                value={order.status}
+                                onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                                className={`text-xs font-semibold rounded px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${getStatusColor(order.status)}`}
+                              >
+                                <option value="DRAFT">DRAFT</option>
+                                <option value="IN_DESIGN">IN_DESIGN</option>
+                                <option value="COMPLETED">COMPLETED</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                              <div className="flex justify-end gap-1">
+                                <button 
+                                  onClick={() => openAddMaterialModal(order)}
+                                  className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors shadow-sm"
+                                  title="Add Material"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                                </button>
+                                <button 
+                                  onClick={() => handleViewDetails(order)}
+                                  className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100 rounded transition-all"
+                                  title="View Details"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </button>
+                                <button 
+                                  onClick={() => handleDelete(order.id)}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-all"
+                                  title="Delete"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -852,7 +1088,14 @@ const DesignOrders = () => {
                                   </div>
                                 </div>
                               ) : (
-                                <div className="flex items-center justify-end gap-2">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button 
+                                    onClick={() => openAddMaterialModal(item)}
+                                    className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100 rounded transition-all"
+                                    title="Add Material"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                                  </button>
                                   {item.drawing_pdf ? (
                                     <button 
                                       onClick={() => window.open(`${API_BASE.replace('/api', '')}/${item.drawing_pdf}`, '_blank')}
@@ -981,6 +1224,204 @@ const DesignOrders = () => {
                   ✓ Approve & Send
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Material Modal */}
+      {showAddMaterialModal && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 py-8">
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowAddMaterialModal(false)}></div>
+            <div className="relative bg-white rounded-2xl shadow-2xl max-w-5xl w-full overflow-hidden transform transition-all border border-slate-200">
+              <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg text-xs">📦</span>
+                  Add New Material / Item
+                </h3>
+                <button 
+                  onClick={() => setShowAddMaterialModal(false)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleMaterialSubmit} className="p-8 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Row 1 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Code *</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      placeholder="Auto-generated or enter to fetch"
+                      value={materialFormData.itemCode}
+                      onChange={(e) => setMaterialFormData({...materialFormData, itemCode: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Name *</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      placeholder="Enter item name"
+                      value={materialFormData.itemName}
+                      onChange={(e) => setMaterialFormData({...materialFormData, itemName: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Group *</label>
+                    <select 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      value={materialFormData.itemGroup}
+                      onChange={(e) => setMaterialFormData({...materialFormData, itemGroup: e.target.value})}
+                      required
+                    >
+                      <option value="">Select item group</option>
+                      <option value="Raw Material">Raw Material</option>
+                      <option value="SFG">SFG</option>
+                      <option value="FG">FG</option>
+                      <option value="Consumable">Consumable</option>
+                    </select>
+                  </div>
+
+                  {/* Row 2 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Default UOM *</label>
+                    <select 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      value={materialFormData.defaultUom}
+                      onChange={(e) => setMaterialFormData({...materialFormData, defaultUom: e.target.value})}
+                      required
+                    >
+                      <option value="Nos">Nos</option>
+                      <option value="Kg">Kg</option>
+                      <option value="Mtr">Mtr</option>
+                      <option value="Set">Set</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Valuation Rate</label>
+                    <input 
+                      type="number" 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      value={materialFormData.valuationRate}
+                      onChange={(e) => setMaterialFormData({...materialFormData, valuationRate: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Selling Rate</label>
+                    <input 
+                      type="number" 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      value={materialFormData.sellingRate}
+                      onChange={(e) => setMaterialFormData({...materialFormData, sellingRate: e.target.value})}
+                    />
+                  </div>
+
+                  {/* Row 3 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">No. of Cavity (for mould items)</label>
+                    <input 
+                      type="number" 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      value={materialFormData.noOfCavity}
+                      onChange={(e) => setMaterialFormData({...materialFormData, noOfCavity: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Weight per Unit</label>
+                    <input 
+                      type="number" 
+                      step="0.001"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      placeholder="0.00"
+                      value={materialFormData.weightPerUnit}
+                      onChange={(e) => setMaterialFormData({...materialFormData, weightPerUnit: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Weight UOM</label>
+                    <select 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      value={materialFormData.weightUom}
+                      onChange={(e) => setMaterialFormData({...materialFormData, weightUom: e.target.value})}
+                    >
+                      <option value="">Select weight UOM</option>
+                      <option value="Kg">Kg</option>
+                      <option value="Gm">Gm</option>
+                    </select>
+                  </div>
+
+                  {/* Row 4 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Drawing No (Optional)</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      placeholder="Enter drawing number"
+                      value={materialFormData.drawingNo}
+                      onChange={(e) => setMaterialFormData({...materialFormData, drawingNo: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Revision (Optional)</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      placeholder="Enter revision"
+                      value={materialFormData.revision}
+                      onChange={(e) => setMaterialFormData({...materialFormData, revision: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Material Grade (Optional)</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      placeholder="Enter material grade"
+                      value={materialFormData.materialGrade}
+                      onChange={(e) => setMaterialFormData({...materialFormData, materialGrade: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6 border-t border-slate-100">
+                  <button 
+                    type="button"
+                    className="w-full md:w-auto px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
+                  >
+                    Generate EAN Barcode
+                  </button>
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <button 
+                      type="button"
+                      onClick={() => setShowAddMaterialModal(false)}
+                      className="flex-1 md:flex-none px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isSubmittingMaterial}
+                      className="flex-1 md:flex-none px-10 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+                    >
+                      {isSubmittingMaterial ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Saving...
+                        </>
+                      ) : 'Save Material'}
+                    </button>
+                  </div>
+                </div>
+              </form>
             </div>
           </div>
         </div>

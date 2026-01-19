@@ -290,7 +290,16 @@ const ensureStockColumns = async () => {
     const existingLedgerCols = new Set(ledgerCols.map(c => c.Field));
     const requiredStockCols = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
-      { name: 'material_type', definition: 'VARCHAR(100) NULL' }
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'valuation_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'selling_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'no_of_cavity', definition: 'INT DEFAULT 1' },
+      { name: 'weight_per_unit', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'weight_uom', definition: 'VARCHAR(20) NULL' },
+      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
+      { name: 'revision', definition: 'VARCHAR(50) NULL' },
+      { name: 'material_grade', definition: 'VARCHAR(100) NULL' },
+      { name: 'unit', definition: 'VARCHAR(20) DEFAULT "Nos"' }
     ];
     
     const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));
@@ -492,14 +501,16 @@ const ensureQuotationRequestTables = async () => {
       CREATE TABLE IF NOT EXISTS quotation_requests (
         id INT PRIMARY KEY AUTO_INCREMENT,
         sales_order_id INT NOT NULL,
+        sales_order_item_id INT NULL,
         company_id INT NOT NULL,
-        status ENUM('PENDING', 'APPROVED', 'REJECTED', 'COMPLETED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED') DEFAULT 'PENDING',
         total_amount DECIMAL(14, 2) DEFAULT 0,
         notes TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE
       )
     `);
     console.log('Quotation Request table synchronized');
@@ -508,7 +519,8 @@ const ensureQuotationRequestTables = async () => {
     const existing = new Set(quotationCols.map(c => c.Field));
     const requiredColumns = [
       { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
-      { name: 'notes', definition: 'TEXT NULL' }
+      { name: 'notes', definition: 'TEXT NULL' },
+      { name: 'sales_order_item_id', definition: 'INT NULL' }
     ];
     
     const missing = requiredColumns.filter(c => !existing.has(c.name));
@@ -533,6 +545,30 @@ const ensureQuotationRequestTables = async () => {
 
   } catch (error) {
     console.error('Quotation Request/Design Rejection tables sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureQuotationRequestStatus = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query("SHOW COLUMNS FROM quotation_requests LIKE 'status'");
+    if (columns.length > 0) {
+      const type = columns[0].Type;
+      if (!type.includes('APPROVAL')) {
+        await connection.query(`
+          ALTER TABLE quotation_requests 
+          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED') DEFAULT 'PENDING'
+        `);
+        console.log('Quotation Request status updated with APPROVAL');
+      }
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Quotation Request status sync failed', error.message);
+    }
   } finally {
     if (connection) connection.release();
   }
@@ -579,17 +615,17 @@ const ensureSalesOrderStatuses = async () => {
     const [columns] = await connection.query("SHOW COLUMNS FROM sales_orders LIKE 'status'");
     if (columns.length > 0) {
       const type = columns[0].Type;
-      if (!type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED')) {
+      if (!type.includes('QUOTATION_SENT') || !type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED')) {
         await connection.query(`
           ALTER TABLE sales_orders 
           MODIFY COLUMN status ENUM(
-            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY', 
+            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY', 'QUOTATION_SENT',
             'BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 
             'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 
             'PRODUCTION_COMPLETED', 'CLOSED'
           ) DEFAULT 'CREATED'
         `);
-        console.log('Sales order statuses updated');
+        console.log('Sales order statuses updated with QUOTATION_SENT');
       }
     }
   } catch (error) {
@@ -737,6 +773,7 @@ const bootstrapDatabase = async () => {
   await ensureWarehouseAllocationTables();
   await ensureDesignOrderTables();
   await ensureQuotationRequestTables();
+  await ensureQuotationRequestStatus();
   await ensureSalesOrderItemColumns();
   await ensureSalesOrderStatuses();
   await ensureCustomerDrawingTable();
