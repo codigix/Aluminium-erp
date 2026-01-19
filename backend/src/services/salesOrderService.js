@@ -29,11 +29,17 @@ const getIncomingOrders = async (departmentCode) => {
   }
   
   const query = `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
-            d.name as current_dept_name
+            d.name as current_dept_name,
+            soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
+     LEFT JOIN (
+       SELECT sales_order_id, drawing_no, description, quantity, unit,
+              ROW_NUMBER() OVER (PARTITION BY sales_order_id ORDER BY id ASC) as rn
+       FROM sales_order_items
+     ) soi ON soi.sales_order_id = so.id AND soi.rn = 1
      WHERE (${whereClause}) AND so.request_accepted = 0
      ORDER BY so.created_at DESC`;
   

@@ -34,6 +34,24 @@ const DesignOrders = () => {
   // Bulk Operations State
   const [selectedIncomingOrders, setSelectedIncomingOrders] = useState(new Set());
   const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
+  const [expandedIncomingPo, setExpandedIncomingPo] = useState({});
+
+  const toggleIncomingPo = (po) => {
+    setExpandedIncomingPo(prev => ({ ...prev, [po]: !prev[po] }));
+  };
+
+  const groupedIncoming = incomingOrders.reduce((acc, order) => {
+    const key = order.po_number || 'NO-PO';
+    if (!acc[key]) {
+      acc[key] = {
+        po_number: key,
+        company_name: order.company_name,
+        orders: []
+      };
+    }
+    acc[key].orders.push(order);
+    return acc;
+  }, {});
 
   const fetchOrders = async () => {
     try {
@@ -491,10 +509,10 @@ const DesignOrders = () => {
                       disabled={incomingOrders.length === 0}
                     />
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">PO Number</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Customer / Project</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Sales Order</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Target Date</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Client Name</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
+                  <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
                   <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Action</th>
                 </tr>
               </thead>
@@ -518,45 +536,108 @@ const DesignOrders = () => {
                     </td>
                   </tr>
                 ) : (
-                  incomingOrders.map((order) => (
-                    <tr key={order.id} className={`transition-colors text-xs ${selectedIncomingOrders.has(order.id) ? 'bg-blue-100' : 'hover:bg-blue-50/30'}`}>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={selectedIncomingOrders.has(order.id)}
-                          onChange={() => toggleSelectOrder(order.id)}
-                          className="w-4 h-4 rounded"
-                        />
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap font-bold text-slate-900">{order.po_number || '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="font-semibold text-slate-900 text-xs">{order.company_name}</div>
-                        <div className="text-slate-500">{order.project_name}</div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">SO-{String(order.id).padStart(4, '0')}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">
-                        {order.target_dispatch_date ? new Date(order.target_dispatch_date).toLocaleDateString('en-IN') : '—'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right flex gap-2 justify-end">
-                        <button 
-                          onClick={() => handleViewOrder(order)}
-                          className="p-1.5 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors"
-                          title="View details"
+                  Object.entries(groupedIncoming).map(([poNumber, group]) => {
+                    const isExpanded = expandedIncomingPo[poNumber];
+                    const allSelected = group.orders.every(o => selectedIncomingOrders.has(o.id));
+                    const someSelected = group.orders.some(o => selectedIncomingOrders.has(o.id));
+
+                    return (
+                      <React.Fragment key={poNumber}>
+                        {/* Group Header */}
+                        <tr 
+                          className={`bg-slate-50/80 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-all ${isExpanded ? 'sticky top-0 z-10' : ''}`} 
+                          onClick={() => toggleIncomingPo(poNumber)}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={() => handleAcceptOrder(order.id)}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 transition-colors"
-                        >
-                          ✓ Accept & Start
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={allSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                const newSelected = new Set(selectedIncomingOrders);
+                                group.orders.forEach(o => {
+                                  if (e.target.checked) newSelected.add(o.id);
+                                  else newSelected.delete(o.id);
+                                });
+                                setSelectedIncomingOrders(newSelected);
+                              }}
+                              className="w-4 h-4 rounded"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-900 text-xs">{group.company_name}</span>
+                              <span className="text-[10px] text-slate-500 font-medium">PO: {poNumber}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-bold text-slate-900">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg text-[10px]">
+                                {group.orders.length} Drawings
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-slate-400 text-[10px]">Multiple Drawings Review</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-slate-400 text-[10px]">Total: {group.orders.reduce((sum, o) => sum + (Number(o.item_qty) || 1), 0)}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 toggleIncomingPo(poNumber);
+                               }}
+                               className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-50 transition-colors"
+                             >
+                               {isExpanded ? 'Hide' : 'Show'}
+                             </button>
+                          </td>
+                        </tr>
+                        {/* Group Items */}
+                        {isExpanded && group.orders.map((order) => (
+                          <tr key={order.id} className={`transition-colors text-[11px] border-b border-slate-50 bg-white/50 ${selectedIncomingOrders.has(order.id) ? 'bg-blue-50' : 'hover:bg-blue-50/20'}`}>
+                            <td className="px-4 py-2.5 pl-8">
+                              <input
+                                type="checkbox"
+                                checked={selectedIncomingOrders.has(order.id)}
+                                onChange={() => toggleSelectOrder(order.id)}
+                                className="w-3.5 h-3.5 rounded"
+                              />
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-400">{group.company_name}</td>
+                            <td className="px-4 py-2.5 font-bold text-indigo-600">{order.drawing_no || '—'}</td>
+                            <td className="px-4 py-2.5 text-slate-600 italic">
+                              {order.item_description || 'No description'}
+                            </td>
+                            <td className="px-4 py-2.5 text-center font-bold text-slate-900">
+                              {order.item_qty || 1}
+                            </td>
+                            <td className="px-4 py-2.5 whitespace-nowrap text-right flex gap-2 justify-end">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleViewOrder(order); }}
+                                className="p-1 bg-slate-100 text-slate-500 rounded hover:bg-slate-200 transition-colors"
+                                title="View details"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleAcceptOrder(order.id); }}
+                                className="px-2.5 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                              >
+                                Accept
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
