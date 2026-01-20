@@ -1,7 +1,111 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+
+const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef(null);
+
+  const filteredOptions = options.filter(opt => 
+    opt[labelField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    opt[valueField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (subLabelField && opt[subLabelField]?.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const selectedOption = options.find(opt => opt[valueField] === value);
+
+  // Check if an exact match exists for manual entry logic
+  const exactMatch = options.some(opt => opt[labelField]?.toLowerCase() === searchTerm.toLowerCase() || opt[valueField]?.toLowerCase() === searchTerm.toLowerCase());
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div 
+        className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white cursor-pointer flex justify-between items-center"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className={!selectedOption && !value ? 'text-slate-400' : 'text-slate-900 font-medium'}>
+          {selectedOption ? selectedOption[labelField] : (value || placeholder)}
+        </span>
+        <span className="text-[10px] text-slate-400">{isOpen ? '▲' : '▼'}</span>
+      </div>
+      
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 flex flex-col overflow-hidden">
+          <div className="p-2 border-b border-slate-100 bg-slate-50">
+            <input
+              autoFocus
+              type="text"
+              className="w-full px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Search or type custom..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchTerm && allowCustom && !exactMatch) {
+                  onChange({ target: { value: searchTerm } });
+                  setIsOpen(false);
+                  setSearchTerm('');
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {allowCustom && searchTerm && !exactMatch && (
+              <div
+                className="px-3 py-2 text-xs cursor-pointer hover:bg-amber-50 text-amber-600 border-b border-amber-100 italic flex justify-between items-center"
+                onClick={() => {
+                  onChange({ target: { value: searchTerm } });
+                  setIsOpen(false);
+                  setSearchTerm('');
+                }}
+              >
+                <span>Use custom: "{searchTerm}"</span>
+                <span className="text-[9px] bg-amber-100 px-1 rounded">Manual Add</span>
+              </div>
+            )}
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, idx) => (
+                <div
+                  key={idx}
+                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${opt[valueField] === value ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
+                  onClick={() => {
+                    onChange({ target: { value: opt[valueField] } });
+                    setIsOpen(false);
+                    setSearchTerm('');
+                  }}
+                >
+                  <div className="flex flex-col">
+                    <span>{opt[labelField]}</span>
+                    {subLabelField && opt[subLabelField] && (
+                      <span className="text-[9px] text-slate-400 font-normal">{opt[subLabelField]}</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              !allowCustom && <div className="px-3 py-4 text-xs text-center text-slate-400">No results found</div>
+            )}
+            {searchTerm && filteredOptions.length === 0 && allowCustom && !exactMatch ? null : filteredOptions.length === 0 && !searchTerm && (
+              <div className="px-3 py-4 text-xs text-center text-slate-400">Type to search...</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -49,9 +153,9 @@ const BOMFormPage = () => {
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const token = localStorage.getItem('authToken');
       
       // Fetch Item Details
@@ -108,7 +212,7 @@ const BOMFormPage = () => {
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [itemId]);
 
@@ -196,12 +300,9 @@ const BOMFormPage = () => {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to add ${section}`);
       }
-      const result = await response.json();
+      await response.json();
       
-      setBomData(prev => ({
-        ...prev,
-        [section]: [...prev[section], { ...payload, id: result.id }]
-      }));
+      await fetchData(false);
       setFormState(initialForm);
       Swal.fire('Success', `${section} added`, 'success');
     } catch (error) {
@@ -218,10 +319,7 @@ const BOMFormPage = () => {
       });
       if (!response.ok) throw new Error(`Failed to delete ${section}`);
       
-      setBomData(prev => ({
-        ...prev,
-        [section]: prev[section].filter(item => item.id !== id)
-      }));
+      await fetchData(false);
       Swal.fire('Deleted', `${section} removed`, 'success');
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
@@ -294,7 +392,7 @@ const BOMFormPage = () => {
   }, 0);
   
   const rawMaterialsCost = bomData.materials.reduce((sum, m) => 
-    sum + (parseFloat(m.qty_per_pc || 0) * batchQty * parseFloat(m.rate || 0)), 0);
+    sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(m.rate || 0)), 0);
 
   const scrapLoss = bomData.scrap.reduce((sum, s) => {
     const input = parseFloat(s.input_qty || 0);
@@ -309,11 +407,11 @@ const BOMFormPage = () => {
     const cycle = parseFloat(o.cycle_time_min || 0);
     const setup = parseFloat(o.setup_time_min || 0);
     const rate = parseFloat(o.hourly_rate || 0);
-    return sum + (((cycle * batchQty) + setup) / 60 * rate);
+    return sum + ((cycle + (setup / batchQty)) / 60 * rate);
   }, 0);
 
   const totalBOMCost = materialCostAfterScrap + operationsCost;
-  const costPerUnit = totalBOMCost / batchQty;
+  const costPerUnit = totalBOMCost;
   const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100)), 0);
 
   if (loading) return <div className="p-8 text-center text-slate-500">Loading Item Details...</div>;
@@ -437,8 +535,15 @@ const BOMFormPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Component Code *</label>
-                    <select 
-                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                    <SearchableSelect
+                      placeholder="Select Component"
+                      options={stockItems
+                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .map(item => ({
+                          label: `${item.item_code} - ${item.material_name}`,
+                          value: item.item_code,
+                          subLabel: item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}` : ''
+                        }))}
                       value={componentForm.componentCode}
                       onChange={(e) => {
                         const item = stockItems.find(i => i.item_code === e.target.value);
@@ -449,16 +554,8 @@ const BOMFormPage = () => {
                           uom: item ? (item.unit || 'Kg') : componentForm.uom
                         });
                       }}
-                    >
-                      <option value="">Select Component</option>
-                      {stockItems
-                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
-                        .map(item => (
-                        <option key={item.id} value={item.item_code}>
-                          {item.item_code} - {item.material_name} {item.drawing_no && item.drawing_no !== 'N/A' ? `(${item.drawing_no})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      subLabelField="subLabel"
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Qty *</label>
@@ -555,8 +652,15 @@ const BOMFormPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Item Name *</label>
-                    <select 
-                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                    <SearchableSelect
+                      placeholder="Select Material"
+                      options={stockItems
+                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .map(item => ({
+                          label: item.material_name,
+                          value: item.material_name,
+                          subLabel: `${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
+                        }))}
                       value={materialForm.materialName}
                       onChange={(e) => {
                         const item = stockItems.find(i => i.material_name === e.target.value);
@@ -567,16 +671,8 @@ const BOMFormPage = () => {
                           uom: item ? (item.unit || 'Kg') : materialForm.uom
                         });
                       }}
-                    >
-                      <option value="">Select Material</option>
-                      {stockItems
-                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
-                        .map(item => (
-                        <option key={item.id} value={item.material_name}>
-                          {item.material_name} ({item.item_code}) {item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      subLabelField="subLabel"
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Qty *</label>
@@ -609,18 +705,17 @@ const BOMFormPage = () => {
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Operation</label>
                     <div className="flex gap-2">
-                      <select 
-                        className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                        value={materialForm.operation} 
-                        onChange={(e) => setMaterialForm({...materialForm, operation: e.target.value})}
-                      >
-                        <option value="">Select Operation</option>
-                        {operationsList.map(op => (
-                          <option key={op.id} value={op.operation_name}>
-                            {op.operation_name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex-1">
+                        <SearchableSelect
+                          placeholder="Select Operation"
+                          options={operationsList.map(op => ({
+                            label: op.operation_name,
+                            value: op.operation_name
+                          }))}
+                          value={materialForm.operation}
+                          onChange={(e) => setMaterialForm({...materialForm, operation: e.target.value})}
+                        />
+                      </div>
                       <button onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '' })} className="px-4 py-2 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 shadow-lg shadow-red-100">+ Add</button>
                     </div>
                   </div>
@@ -632,10 +727,9 @@ const BOMFormPage = () => {
                     <thead className="bg-slate-50/50">
                       <tr>
                         <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Item</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Qty/pc</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Total Qty</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Qty / FG</th>
                         <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Rate</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Total Amount</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Amount (Per FG)</th>
                         <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Action</th>
                       </tr>
                     </thead>
@@ -643,9 +737,8 @@ const BOMFormPage = () => {
                       {bomData.materials.map((m) => {
                         const stockItem = stockItems.find(i => i.material_name === m.material_name);
                         const qtyPerPc = parseFloat(m.qty_per_pc || 0);
-                        const totalQty = qtyPerPc * batchQty;
                         const rate = parseFloat(m.rate || 0);
-                        const amount = totalQty * rate;
+                        const amount = qtyPerPc * rate;
                         return (
                           <tr key={m.id} className="hover:bg-slate-50/50">
                             <td className="px-4 py-2 text-xs font-medium text-slate-700">
@@ -654,8 +747,7 @@ const BOMFormPage = () => {
                                 <div className="text-[9px] text-blue-500 font-bold">Drg: {stockItem.drawing_no}</div>
                               )}
                             </td>
-                            <td className="px-4 py-2 text-xs text-center">{qtyPerPc.toFixed(4)}</td>
-                            <td className="px-4 py-2 text-xs text-center font-medium text-slate-900">{totalQty.toFixed(2)} {m.uom || 'Kg'}</td>
+                            <td className="px-4 py-2 text-xs text-center font-medium text-slate-900">{qtyPerPc.toFixed(4)} {m.uom || 'Kg'}</td>
                             <td className="px-4 py-2 text-xs text-center">₹{rate.toFixed(2)}</td>
                             <td className="px-4 py-2 text-xs text-center font-bold text-emerald-600">₹{amount.toFixed(2)}</td>
                             <td className="px-4 py-2 text-right">
@@ -694,8 +786,13 @@ const BOMFormPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Operation *</label>
-                    <select 
-                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                    <SearchableSelect
+                      placeholder="Select Operation"
+                      options={operationsList.map(op => ({
+                        label: op.operation_name,
+                        value: op.operation_name,
+                        subLabel: `Code: ${op.operation_code}`
+                      }))}
                       value={operationForm.operationName}
                       onChange={(e) => {
                         const op = operationsList.find(o => o.operation_name === e.target.value);
@@ -711,14 +808,8 @@ const BOMFormPage = () => {
                           setOperationForm({ ...operationForm, operationName: e.target.value });
                         }
                       }}
-                    >
-                      <option value="">Select Operation</option>
-                      {operationsList.map(op => (
-                        <option key={op.id} value={op.operation_name}>
-                          {op.operation_name} ({op.operation_code})
-                        </option>
-                      ))}
-                    </select>
+                      subLabelField="subLabel"
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Operation Resource</label>
@@ -789,8 +880,8 @@ const BOMFormPage = () => {
                         <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Cycle</th>
                         <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Setup</th>
                         <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Rate/hr</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Total Time</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Total Cost</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Time / FG</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Cost / FG</th>
                         <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Action</th>
                       </tr>
                     </thead>
@@ -799,9 +890,9 @@ const BOMFormPage = () => {
                         const cycleTime = parseFloat(o.cycle_time_min || 0);
                         const setupTime = parseFloat(o.setup_time_min || 0);
                         const hourlyRate = parseFloat(o.hourly_rate || 0);
-                        const totalTimeMin = (cycleTime * batchQty) + setupTime;
-                        const totalTimeHrs = totalTimeMin / 60;
-                        const operationCost = totalTimeHrs * hourlyRate;
+                        const perUnitTimeMin = cycleTime + (setupTime / batchQty);
+                        const perUnitTimeHrs = perUnitTimeMin / 60;
+                        const operationCost = perUnitTimeHrs * hourlyRate;
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/50">
                             <td className="px-4 py-2 text-xs font-medium text-slate-700">
@@ -811,7 +902,7 @@ const BOMFormPage = () => {
                             <td className="px-4 py-2 text-xs text-center">{cycleTime}m</td>
                             <td className="px-4 py-2 text-xs text-center">{setupTime}m</td>
                             <td className="px-4 py-2 text-xs text-center">₹{hourlyRate.toFixed(2)}</td>
-                            <td className="px-4 py-2 text-xs text-center">{totalTimeHrs.toFixed(2)}h</td>
+                            <td className="px-4 py-2 text-xs text-center">{perUnitTimeHrs.toFixed(4)}h</td>
                             <td className="px-4 py-2 text-xs text-center font-bold text-purple-600">₹{operationCost.toFixed(2)}</td>
                             <td className="px-4 py-2 text-right">
                               <button onClick={() => handleDeleteSectionItem('operations', o.id)} className="text-red-400 hover:text-red-600">🗑️</button>
@@ -853,8 +944,15 @@ const BOMFormPage = () => {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Name</label>
-                    <select 
-                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                    <SearchableSelect
+                      placeholder="Select Item"
+                      options={stockItems
+                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .map(item => ({
+                          label: item.material_name,
+                          value: item.material_name,
+                          subLabel: `${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
+                        }))}
                       value={scrapForm.itemName}
                       onChange={(e) => {
                         const item = stockItems.find(i => i.material_name === e.target.value);
@@ -865,16 +963,8 @@ const BOMFormPage = () => {
                           rate: item ? (item.valuation_rate || 0) : scrapForm.rate
                         });
                       }}
-                    >
-                      <option value="">Select Item</option>
-                      {stockItems
-                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
-                        .map(item => (
-                        <option key={item.id} value={item.material_name}>
-                          {item.material_name} ({item.item_code}) {item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      subLabelField="subLabel"
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Input Qty *</label>
@@ -954,7 +1044,7 @@ const BOMFormPage = () => {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm">₹</div>
               <div>
                 <h4 className="text-sm font-bold text-slate-800">BOM Costing</h4>
-                <p className="text-[10px] text-slate-400 font-medium uppercase">₹{totalBOMCost.toFixed(2)} Analysis for {batchQty} {productForm.uom}</p>
+                <p className="text-[10px] text-slate-400 font-medium uppercase">₹{totalBOMCost.toFixed(2)} Analysis Per Unit</p>
               </div>
             </div>
             <div className="text-slate-400">{collapsedSections.costing ? '▼' : '▲'}</div>
@@ -963,47 +1053,51 @@ const BOMFormPage = () => {
             <div className="p-6 pt-0 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                  <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">Material Cost</p>
+                  <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">Material Cost / FG</p>
                   <p className="text-2xl font-black text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</p>
                   <p className="text-[10px] text-blue-400 font-medium mt-1">(Components - Scrap)</p>
                 </div>
                 <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
-                  <p className="text-[10px] font-bold text-purple-600 uppercase mb-1">Labour Cost</p>
+                  <p className="text-[10px] font-bold text-purple-600 uppercase mb-1">Labour Cost / FG</p>
                   <p className="text-2xl font-black text-purple-900">₹{operationsCost.toFixed(2)}</p>
                   <p className="text-[10px] text-purple-400 font-medium mt-1">Operations</p>
                 </div>
                 <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                  <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">Total BOM Cost</p>
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">Total Cost / FG</p>
                   <p className="text-2xl font-black text-emerald-900">₹{totalBOMCost.toFixed(2)}</p>
-                  <p className="text-[10px] text-emerald-400 font-medium mt-1">Per Unit Cost: ₹{costPerUnit.toFixed(2)}</p>
+                  <p className="text-[10px] text-emerald-400 font-medium mt-1">Base Quantity: {batchQty}</p>
                 </div>
               </div>
 
               <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
                 <div className="divide-y divide-slate-50">
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
-                    <span className="text-xs font-medium text-slate-600">Components Cost:</span>
+                    <span className="text-xs font-medium text-slate-600">Components Cost / FG:</span>
                     <span className="text-xs font-bold text-slate-900">₹{componentsCost.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
-                    <span className="text-xs font-medium text-slate-600">Raw Materials Cost:</span>
+                    <span className="text-xs font-medium text-slate-600">Raw Materials Cost / FG:</span>
                     <span className="text-xs font-bold text-slate-900">₹{rawMaterialsCost.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors text-red-600">
-                    <span className="text-xs font-medium">Scrap Loss (Deduction):</span>
+                    <span className="text-xs font-medium">Scrap Loss / FG (Deduction):</span>
                     <span className="text-xs font-bold">-₹{scrapLoss.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center bg-blue-50/50">
-                    <span className="text-xs font-bold text-blue-700">Material Cost (after Scrap):</span>
+                    <span className="text-xs font-bold text-blue-700">Material Cost / FG (after Scrap):</span>
                     <span className="text-xs font-black text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
-                    <span className="text-xs font-medium text-slate-600">Operations Cost:</span>
+                    <span className="text-xs font-medium text-slate-600">Operations Cost / FG:</span>
                     <span className="text-xs font-bold text-slate-900">₹{operationsCost.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center bg-amber-50/50">
-                    <span className="text-xs font-bold text-amber-700">Total Scrap Qty:</span>
+                    <span className="text-xs font-bold text-amber-700">Total Scrap Qty / FG:</span>
                     <span className="text-xs font-black text-amber-900">{totalScrapQty.toFixed(2)} Kg</span>
+                  </div>
+                  <div className="px-4 py-3 flex justify-between items-center bg-slate-50 font-bold border-t border-slate-200">
+                    <span className="text-xs text-slate-700">ORDER TOTAL ({batchQty} {productForm.uom}):</span>
+                    <span className="text-sm text-slate-900">₹{(totalBOMCost * batchQty).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
