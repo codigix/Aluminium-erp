@@ -127,6 +127,17 @@ const BOMFormPage = () => {
         if (!payload.materialName || !payload.qty) {
           throw new Error('Material Name and Quantity are required');
         }
+        // Drawing Validation
+        const stockItem = stockItems.find(i => i.material_name === payload.materialName);
+        if (stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && selectedItem?.drawing_no && stockItem.drawing_no !== selectedItem.drawing_no) {
+          const confirm = await Swal.fire({
+            title: 'Drawing Mismatch',
+            text: `This material is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem.drawing_no}. Continue?`,
+            icon: 'warning',
+            showCancelButton: true
+          });
+          if (!confirm.isConfirmed) return;
+        }
         payload.qtyPerPc = parseFloat(formData.qty) || 0;
         payload.materialType = 'Raw Material';
         payload.rate = parseFloat(payload.rate) || 0;
@@ -134,6 +145,17 @@ const BOMFormPage = () => {
       } else if (section === 'components') {
         if (!payload.componentCode || !payload.quantity) {
           throw new Error('Component Code and Quantity are required');
+        }
+        // Drawing Validation
+        const stockItem = stockItems.find(i => i.item_code === payload.componentCode);
+        if (stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && selectedItem?.drawing_no && stockItem.drawing_no !== selectedItem.drawing_no) {
+          const confirm = await Swal.fire({
+            title: 'Drawing Mismatch',
+            text: `This component is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem.drawing_no}. Continue?`,
+            icon: 'warning',
+            showCancelButton: true
+          });
+          if (!confirm.isConfirmed) return;
         }
         payload.quantity = parseFloat(payload.quantity) || 0;
         payload.rate = parseFloat(payload.rate) || 0;
@@ -148,6 +170,17 @@ const BOMFormPage = () => {
       } else if (section === 'scrap') {
         if (!payload.itemCode || payload.inputQty === '' || payload.rate === '') {
           throw new Error('Item Code, Input Qty, and Rate are required');
+        }
+        // Drawing Validation
+        const stockItem = stockItems.find(i => i.item_code === payload.itemCode);
+        if (stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && selectedItem?.drawing_no && stockItem.drawing_no !== selectedItem.drawing_no) {
+          const confirm = await Swal.fire({
+            title: 'Drawing Mismatch',
+            text: `This scrap item is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem.drawing_no}. Continue?`,
+            icon: 'warning',
+            showCancelButton: true
+          });
+          if (!confirm.isConfirmed) return;
         }
         payload.inputQty = parseFloat(payload.inputQty) || 0;
         payload.lossPercent = parseFloat(payload.lossPercent) || 0;
@@ -327,13 +360,13 @@ const BOMFormPage = () => {
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-500 uppercase">Product Name *</label>
                   <select className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                    <option>{selectedItem.description}</option>
+                    <option>{selectedItem.description} {selectedItem.drawing_no ? `(${selectedItem.drawing_no})` : ''}</option>
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-500 uppercase">Item Code *</label>
                   <select className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                    <option>{selectedItem.item_code || selectedItem.drawing_no}</option>
+                    <option>{selectedItem.item_code} {selectedItem.drawing_no && selectedItem.drawing_no !== selectedItem.item_code ? `[Drg: ${selectedItem.drawing_no}]` : ''}</option>
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -341,6 +374,7 @@ const BOMFormPage = () => {
                   <select className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" value={productForm.itemGroup} onChange={(e) => setProductForm({...productForm, itemGroup: e.target.value})}>
                     <option value="FG">FG</option>
                     <option value="SFG">SFG</option>
+                    <option value="Sub Assembly">Sub Assembly</option>
                     <option value="Assembly">Assembly</option>
                   </select>
                 </div>
@@ -417,9 +451,11 @@ const BOMFormPage = () => {
                       }}
                     >
                       <option value="">Select Component</option>
-                      {stockItems.map(item => (
+                      {stockItems
+                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .map(item => (
                         <option key={item.id} value={item.item_code}>
-                          {item.item_code} - {item.material_name}
+                          {item.item_code} - {item.material_name} {item.drawing_no && item.drawing_no !== 'N/A' ? `(${item.drawing_no})` : ''}
                         </option>
                       ))}
                     </select>
@@ -467,12 +503,18 @@ const BOMFormPage = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {bomData.components.map((c) => {
+                        const stockItem = stockItems.find(i => i.item_code === c.component_code);
                         const baseCost = parseFloat(c.quantity) * parseFloat(c.rate);
                         const lossPercent = parseFloat(c.loss_percent || 0) / 100;
                         const netCost = baseCost * (1 - lossPercent);
                         return (
                           <tr key={c.id} className="hover:bg-slate-50/50">
-                            <td className="px-4 py-2 text-xs font-medium text-slate-700">{c.component_code}</td>
+                            <td className="px-4 py-2 text-xs font-medium text-slate-700">
+                              <div>{c.component_code}</div>
+                              {stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (
+                                <div className="text-[9px] text-blue-500 font-bold">Drg: {stockItem.drawing_no}</div>
+                              )}
+                            </td>
                             <td className="px-4 py-2 text-xs text-center">{c.quantity} {c.uom}</td>
                             <td className="px-4 py-2 text-xs text-center">₹{parseFloat(c.rate).toFixed(2)}</td>
                             <td className="px-4 py-2 text-xs text-center">{parseFloat(c.loss_percent || 0).toFixed(2)}%</td>
@@ -527,9 +569,11 @@ const BOMFormPage = () => {
                       }}
                     >
                       <option value="">Select Material</option>
-                      {stockItems.map(item => (
+                      {stockItems
+                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .map(item => (
                         <option key={item.id} value={item.material_name}>
-                          {item.material_name} ({item.item_code})
+                          {item.material_name} ({item.item_code}) {item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}
                         </option>
                       ))}
                     </select>
@@ -548,6 +592,7 @@ const BOMFormPage = () => {
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Item Group</label>
                     <select className="px-3 py-2 border border-slate-200 rounded-lg text-xs" value={materialForm.itemGroup} onChange={(e) => setMaterialForm({...materialForm, itemGroup: e.target.value})}>
                       <option value="Raw Material">Raw Material</option>
+                      <option value="Sub Assembly">Sub Assembly</option>
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">
@@ -596,13 +641,19 @@ const BOMFormPage = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {bomData.materials.map((m) => {
+                        const stockItem = stockItems.find(i => i.material_name === m.material_name);
                         const qtyPerPc = parseFloat(m.qty_per_pc || 0);
                         const totalQty = qtyPerPc * batchQty;
                         const rate = parseFloat(m.rate || 0);
                         const amount = totalQty * rate;
                         return (
                           <tr key={m.id} className="hover:bg-slate-50/50">
-                            <td className="px-4 py-2 text-xs font-medium text-slate-700">{m.material_name || 'N/A'}</td>
+                            <td className="px-4 py-2 text-xs font-medium text-slate-700">
+                              <div>{m.material_name || 'N/A'}</div>
+                              {stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (
+                                <div className="text-[9px] text-blue-500 font-bold">Drg: {stockItem.drawing_no}</div>
+                              )}
+                            </td>
                             <td className="px-4 py-2 text-xs text-center">{qtyPerPc.toFixed(4)}</td>
                             <td className="px-4 py-2 text-xs text-center font-medium text-slate-900">{totalQty.toFixed(2)} {m.uom || 'Kg'}</td>
                             <td className="px-4 py-2 text-xs text-center">₹{rate.toFixed(2)}</td>
@@ -816,9 +867,11 @@ const BOMFormPage = () => {
                       }}
                     >
                       <option value="">Select Item</option>
-                      {stockItems.map(item => (
+                      {stockItems
+                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .map(item => (
                         <option key={item.id} value={item.material_name}>
-                          {item.material_name} ({item.item_code})
+                          {item.material_name} ({item.item_code}) {item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}
                         </option>
                       ))}
                     </select>
@@ -857,6 +910,7 @@ const BOMFormPage = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {bomData.scrap.map((s) => {
+                        const stockItem = stockItems.find(i => i.item_code === s.item_code);
                         const inputQty = parseFloat(s.input_qty || 0);
                         const lossPercent = parseFloat(s.loss_percent || 0);
                         const rate = parseFloat(s.rate || 0);
@@ -864,7 +918,12 @@ const BOMFormPage = () => {
                         const scrapAmount = scrapQty * rate;
                         return (
                           <tr key={s.id} className="hover:bg-slate-50/50">
-                            <td className="px-4 py-2 text-xs font-medium text-slate-700">{s.item_code || 'N/A'}</td>
+                            <td className="px-4 py-2 text-xs font-medium text-slate-700">
+                              <div>{s.item_code || 'N/A'}</div>
+                              {stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (
+                                <div className="text-[9px] text-blue-500 font-bold">Drg: {stockItem.drawing_no}</div>
+                              )}
+                            </td>
                             <td className="px-4 py-2 text-xs font-medium text-slate-700">{s.item_name || 'N/A'}</td>
                             <td className="px-4 py-2 text-xs text-center">{inputQty.toFixed(2)}</td>
                             <td className="px-4 py-2 text-xs text-center">{lossPercent.toFixed(2)}%</td>

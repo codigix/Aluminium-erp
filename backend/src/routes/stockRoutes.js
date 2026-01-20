@@ -53,7 +53,8 @@ router.get('/ledger', async (req, res) => {
 
 router.get('/balance', async (req, res) => {
   try {
-    const balances = await stockService.getStockBalance();
+    const { drawingNo } = req.query;
+    const balances = await stockService.getStockBalance(drawingNo);
     res.json(balances);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });

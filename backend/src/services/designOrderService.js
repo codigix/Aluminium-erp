@@ -3,18 +3,24 @@ const pool = require('../config/db');
 const listDesignOrders = async () => {
   const [rows] = await pool.query(`
     SELECT 
-      do.*, 
+      do.id,
+      do.design_order_number,
+      do.status,
+      do.start_date,
+      do.completion_date,
+      do.created_at,
       so.id as sales_order_id,
       so.project_name,
       so.target_dispatch_date,
       c.company_name,
       cp.po_number,
-      (SELECT item_code FROM sales_order_items WHERE sales_order_id = so.id LIMIT 1) as item_code,
-      (SELECT id FROM sales_order_items WHERE sales_order_id = so.id LIMIT 1) as item_id,
-      (SELECT drawing_no FROM sales_order_items WHERE sales_order_id = so.id LIMIT 1) as drawing_no,
-      (SELECT SUM(quantity) FROM sales_order_items WHERE sales_order_id = so.id) as total_quantity
+      soi.item_code,
+      soi.id as item_id,
+      soi.drawing_no,
+      soi.quantity as total_quantity
     FROM design_orders do
     JOIN sales_orders so ON do.sales_order_id = so.id
+    JOIN sales_order_items soi ON soi.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
     JOIN customer_pos cp ON so.customer_po_id = cp.id
     ORDER BY do.created_at DESC
