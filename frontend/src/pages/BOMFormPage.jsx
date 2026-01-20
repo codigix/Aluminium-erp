@@ -9,6 +9,7 @@ const BOMFormPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [workstations, setWorkstations] = useState([]);
   const [bomData, setBomData] = useState({
     materials: [],
     components: [],
@@ -75,6 +76,15 @@ const BOMFormPage = () => {
       if (!bomResponse.ok) throw new Error('Failed to fetch BOM details');
       const bomData = await bomResponse.json();
       setBomData(bomData);
+
+      // Fetch Workstations
+      const wsResponse = await fetch(`${API_BASE}/workstations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (wsResponse.ok) {
+        const wsData = await wsResponse.json();
+        setWorkstations(wsData);
+      }
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     } finally {
@@ -562,10 +572,25 @@ const BOMFormPage = () => {
                     <input type="text" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="Enter operation name" value={operationForm.operationName} onChange={(e) => setOperationForm({...operationForm, operationName: e.target.value})} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Workstation</label>
-                    <select className="px-3 py-2 border border-slate-200 rounded-lg text-xs" value={operationForm.workstation} onChange={(e) => setOperationForm({...operationForm, workstation: e.target.value})}>
-                      <option value="">Select</option>
-                      <option value="MC-01">MC-01</option>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Operation Resource</label>
+                    <select 
+                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                      value={operationForm.workstation} 
+                      onChange={(e) => {
+                        const ws = workstations.find(w => w.workstation_code === e.target.value);
+                        setOperationForm({
+                          ...operationForm, 
+                          workstation: e.target.value,
+                          hourlyRate: ws ? ws.hourly_rate : operationForm.hourlyRate
+                        });
+                      }}
+                    >
+                      <option value="">Select Resource</option>
+                      {workstations.map(ws => (
+                        <option key={ws.id} value={ws.workstation_code}>
+                          {ws.workstation_code} - {ws.workstation_name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">

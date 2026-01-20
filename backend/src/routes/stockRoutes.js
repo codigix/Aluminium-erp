@@ -3,7 +3,43 @@ const router = express.Router();
 const stockService = require('../services/stockService');
 const { authorizeByDepartment } = require('../middleware/authMiddleware');
 
-router.use(authorizeByDepartment([8]));
+router.get('/items/next-code', async (req, res) => {
+  try {
+    const itemCode = await stockService.generateItemCode();
+    res.json({ itemCode });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.use(authorizeByDepartment([8, 2, 9]));
+
+router.post('/items', async (req, res) => {
+  try {
+    const result = await stockService.createItem(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.put('/items/:id', async (req, res) => {
+  try {
+    const result = await stockService.updateItem(req.params.id, req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.delete('/items/:id', async (req, res) => {
+  try {
+    const result = await stockService.deleteStockBalance(req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
 
 router.get('/ledger', async (req, res) => {
   try {

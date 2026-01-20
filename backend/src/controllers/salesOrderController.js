@@ -193,6 +193,16 @@ const deleteSalesOrder = async (req, res, next) => {
   }
 };
 
+const updateSalesOrderItem = async (req, res, next) => {
+  try {
+    const { itemId } = req.params;
+    await salesOrderService.updateSalesOrderItem(itemId, req.body);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listSalesOrders,
   getIncomingOrders,
@@ -209,6 +219,7 @@ module.exports = {
   getApprovedDrawings,
   getOrderTimeline,
   getSalesOrderItem,
+  updateSalesOrderItem,
   generateSalesOrderPDF,
   deleteSalesOrder
 };

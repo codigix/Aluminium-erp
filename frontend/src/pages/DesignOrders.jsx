@@ -56,6 +56,29 @@ const DesignOrders = () => {
     materialGrade: ''
   });
   const [isSubmittingMaterial, setIsSubmittingMaterial] = useState(false);
+  const [targetOrderItemId, setTargetOrderItemId] = useState(null);
+  const [itemsList, setItemsList] = useState([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const [isEditingMaterial, setIsEditingMaterial] = useState(false);
+  const [editingMaterialId, setEditingMaterialId] = useState(null);
+
+  const fetchItemsList = async () => {
+    try {
+      setItemsLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/stock/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setItemsList(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch items list:', error);
+    } finally {
+      setItemsLoading(false);
+    }
+  };
 
   const toggleIncomingPo = (po) => {
     setExpandedIncomingPo(prev => ({ ...prev, [po]: !prev[po] }));
@@ -421,8 +444,11 @@ const DesignOrders = () => {
     setIsSubmittingMaterial(true);
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/stock/items`, {
-        method: 'POST',
+      const url = isEditingMaterial ? `${API_BASE}/stock/items/${editingMaterialId}` : `${API_BASE}/stock/items`;
+      const method = isEditingMaterial ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -432,13 +458,34 @@ const DesignOrders = () => {
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create material');
+        throw new Error(errorData.message || `Failed to ${isEditingMaterial ? 'update' : 'create'} material`);
+      }
+
+      // If we have a target order item, update its item_code (only for creation usually, but good to have)
+      if (targetOrderItemId && !isEditingMaterial) {
+        await fetch(`${API_BASE}/sales-orders/items/${targetOrderItemId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ item_code: materialFormData.itemCode })
+        });
       }
       
-      Swal.fire('Success', 'Material created successfully', 'success');
-      setShowAddMaterialModal(false);
+      Swal.fire('Success', `Material ${isEditingMaterial ? 'updated' : 'created'} successfully`, 'success');
+      fetchItemsList();
+      const nextCode = !isEditingMaterial ? await fetchNextItemCode() : '';
+      setTargetOrderItemId(null);
+      setIsEditingMaterial(false);
+      setEditingMaterialId(null);
+      fetchOrders();
+      fetchIncomingOrders();
+      if (showDetails && selectedOrder) {
+        handleViewDetails(selectedOrder);
+      }
       setMaterialFormData({
-        itemCode: '',
+        itemCode: isEditingMaterial ? materialFormData.itemCode : (nextCode || ''),
         itemName: '',
         itemGroup: '',
         defaultUom: 'Nos',
@@ -458,10 +505,32 @@ const DesignOrders = () => {
     }
   };
 
-  const openAddMaterialModal = (item = null) => {
+  const fetchNextItemCode = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/stock/items/next-code`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.itemCode;
+      }
+    } catch (error) {
+      console.error('Failed to fetch next item code:', error);
+    }
+    return '';
+  };
+
+  const openAddMaterialModal = async (item = null) => {
+    let nextCode = '';
+    if (!item || !item.item_code) {
+      nextCode = await fetchNextItemCode();
+    }
+
     if (item) {
+      setTargetOrderItemId(item.item_id || item.id || null);
       setMaterialFormData({
-        itemCode: item.item_code || '',
+        itemCode: item.item_code || nextCode || '',
         itemName: item.description || item.itemName || '',
         itemGroup: '',
         defaultUom: item.unit || 'Nos',
@@ -475,8 +544,9 @@ const DesignOrders = () => {
         materialGrade: ''
       });
     } else {
+      setTargetOrderItemId(null);
       setMaterialFormData({
-        itemCode: '',
+        itemCode: nextCode,
         itemName: '',
         itemGroup: '',
         defaultUom: 'Nos',
@@ -491,6 +561,57 @@ const DesignOrders = () => {
       });
     }
     setShowAddMaterialModal(true);
+    setIsEditingMaterial(false);
+    setEditingMaterialId(null);
+    fetchItemsList();
+  };
+
+  const handleEditMaterialInModal = (item) => {
+    setIsEditingMaterial(true);
+    setEditingMaterialId(item.id);
+    setMaterialFormData({
+      itemCode: item.item_code || '',
+      itemName: item.material_name || '',
+      itemGroup: item.material_type || '',
+      defaultUom: item.unit || 'Nos',
+      valuationRate: item.valuation_rate || 0,
+      sellingRate: item.selling_rate || 0,
+      noOfCavity: item.no_of_cavity || 1,
+      weightPerUnit: item.weight_per_unit || 0,
+      weightUom: item.weight_uom || '',
+      drawingNo: item.drawing_no || '',
+      revision: item.revision || '',
+      materialGrade: item.material_grade || ''
+    });
+  };
+
+  const handleDeleteMaterialInModal = async (id) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/stock/items/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to delete material');
+
+        Swal.fire('Deleted!', 'Material has been deleted.', 'success');
+        fetchItemsList();
+      } catch (error) {
+        Swal.fire('Error', error.message, 'error');
+      }
+    }
   };
 
   const handleSaveItem = async (itemId) => {
@@ -681,6 +802,7 @@ const DesignOrders = () => {
                     />
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Client Name</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
                   <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
@@ -788,6 +910,15 @@ const DesignOrders = () => {
                               />
                             </td>
                             <td className="px-4 py-2.5 text-slate-400"></td>
+                            <td className="px-4 py-2.5">
+                              {order.item_code ? (
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
+                                  {order.item_code}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic">Pending</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 font-bold text-indigo-600">{order.drawing_no || '—'}</td>
                             <td className="px-4 py-2.5 text-slate-600 italic">
                               {order.item_description || 'No description'}
@@ -861,6 +992,7 @@ const DesignOrders = () => {
               <thead className="bg-slate-100">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Customer</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
                   <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Status</th>
@@ -934,6 +1066,15 @@ const DesignOrders = () => {
                         {isExpanded && group.orders.map((order) => (
                           <tr key={order.id} className="hover:bg-purple-50/30 transition-colors text-xs border-b border-slate-50">
                             <td className="px-4 py-3 whitespace-nowrap text-slate-600 pl-8 font-medium">{order.company_name}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {order.item_code ? (
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
+                                  {order.item_code}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic">Pending</span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">{order.drawing_no || '—'}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-center font-bold text-slate-900">{order.total_quantity || 0}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
@@ -1238,7 +1379,7 @@ const DesignOrders = () => {
               <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                   <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg text-xs">📦</span>
-                  Add New Material / Item
+                  {isEditingMaterial ? 'Edit Material / Item' : 'Add New Material / Item'}
                 </h3>
                 <button 
                   onClick={() => setShowAddMaterialModal(false)}
@@ -1255,14 +1396,27 @@ const DesignOrders = () => {
                   {/* Row 1 */}
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Code *</label>
-                    <input 
-                      type="text" 
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                      placeholder="Auto-generated or enter to fetch"
-                      value={materialFormData.itemCode}
-                      onChange={(e) => setMaterialFormData({...materialFormData, itemCode: e.target.value})}
-                      required
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                        placeholder="ITM-0001"
+                        value={materialFormData.itemCode}
+                        onChange={(e) => setMaterialFormData({...materialFormData, itemCode: e.target.value})}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const code = await fetchNextItemCode();
+                          if (code) setMaterialFormData(prev => ({ ...prev, itemCode: code }));
+                        }}
+                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-bold transition-all border border-slate-200"
+                        title="Generate Next Code"
+                      >
+                        🔄
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Name *</label>
@@ -1415,13 +1569,93 @@ const DesignOrders = () => {
                       {isSubmittingMaterial ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Saving...
+                          {isEditingMaterial ? 'Updating...' : 'Saving...'}
                         </>
-                      ) : 'Save Material'}
+                      ) : (isEditingMaterial ? 'Update Material' : 'Save Material')}
                     </button>
                   </div>
                 </div>
               </form>
+
+              {/* Items List Section */}
+              <div className="px-8 pb-8">
+                <div className="border-t border-slate-100 pt-6">
+                  <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                    Recently Added Materials
+                  </h4>
+                  
+                  <div className="overflow-hidden border border-slate-200 rounded-xl">
+                    <div className="overflow-x-auto max-h-[300px]">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 sticky top-0 z-10">
+                          <tr>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Item Code</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Material Name</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Group</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">UOM</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Selling Rate</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Weight/Unit</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Drawing No</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {itemsLoading ? (
+                            <tr>
+                              <td colSpan="5" className="px-4 py-8 text-center text-slate-400 text-xs italic">
+                                Loading materials...
+                              </td>
+                            </tr>
+                          ) : itemsList.length === 0 ? (
+                            <tr>
+                              <td colSpan="5" className="px-4 py-8 text-center text-slate-400 text-xs italic">
+                                No materials found
+                              </td>
+                            </tr>
+                          ) : (
+                            [...itemsList].sort((a, b) => b.id - a.id).map((item) => (
+                              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-4 py-3 text-xs font-medium text-slate-700">{item.item_code}</td>
+                                <td className="px-4 py-3 text-xs text-slate-600">{item.material_name}</td>
+                                <td className="px-4 py-3 text-xs text-slate-600">
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px]">
+                                    {item.material_type}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-xs text-slate-600">{item.unit}</td>
+                                <td className="px-4 py-3 text-xs text-slate-600">₹{item.selling_rate || 0}</td>
+                                <td className="px-4 py-3 text-xs text-slate-600">{item.weight_per_unit || 0} {item.weight_uom}</td>
+                                <td className="px-4 py-3 text-xs text-slate-600">{item.drawing_no || '-'}</td>
+                                <td className="px-4 py-3 text-xs text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditMaterialInModal(item)}
+                                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                      title="Edit"
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteMaterialInModal(item.id)}
+                                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                      title="Delete"
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

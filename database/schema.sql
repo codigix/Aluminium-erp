@@ -405,6 +405,19 @@ CREATE TABLE IF NOT EXISTS stock_balance (
   INDEX idx_item_code (item_code)
 );
 
+CREATE TABLE IF NOT EXISTS workstations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  workstation_code VARCHAR(50) UNIQUE NOT NULL,
+  workstation_name VARCHAR(100) NOT NULL,
+  workstation_type VARCHAR(50),
+  department VARCHAR(50),
+  capacity_type VARCHAR(50),
+  hourly_rate DECIMAL(10, 2) DEFAULT 0.00,
+  status VARCHAR(20) DEFAULT 'Active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS po_receipts (
   id INT AUTO_INCREMENT PRIMARY KEY,
   po_number VARCHAR(100),

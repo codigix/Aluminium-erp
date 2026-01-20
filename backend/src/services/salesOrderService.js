@@ -30,13 +30,13 @@ const getIncomingOrders = async (departmentCode) => {
   
   const query = `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
-            soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit
+            soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
      LEFT JOIN (
-       SELECT sales_order_id, drawing_no, description, quantity, unit,
+       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit,
               ROW_NUMBER() OVER (PARTITION BY sales_order_id ORDER BY id ASC) as rn
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id AND soi.rn = 1
@@ -625,6 +625,32 @@ const bulkUpdateStatus = async (orderIds, status) => {
   }
 };
 
+const updateSalesOrderItem = async (itemId, data) => {
+  const fields = [];
+  const params = [];
+  
+  if (data.item_code !== undefined) {
+    fields.push('item_code = ?');
+    params.push(data.item_code);
+  }
+  if (data.drawing_no !== undefined) {
+    fields.push('drawing_no = ?');
+    params.push(data.drawing_no);
+  }
+  if (data.revision_no !== undefined) {
+    fields.push('revision_no = ?');
+    params.push(data.revision_no);
+  }
+
+  if (fields.length === 0) return;
+
+  params.push(itemId);
+  await pool.execute(
+    `UPDATE sales_order_items SET ${fields.join(', ')} WHERE id = ?`,
+    params
+  );
+};
+
 module.exports = {
   listSalesOrders,
   getIncomingOrders,
@@ -642,6 +668,7 @@ module.exports = {
   getApprovedDrawings,
   getOrderTimeline,
   getSalesOrderItem,
+  updateSalesOrderItem,
   generateSalesOrderPDF,
   deleteSalesOrder
 };

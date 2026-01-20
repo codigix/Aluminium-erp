@@ -121,9 +121,17 @@ const getStockBalance = async () => {
       material_name,
       material_type,
       unit,
+      valuation_rate,
+      selling_rate,
+      no_of_cavity,
+      weight_per_unit,
+      weight_uom,
+      drawing_no,
+      revision,
+      material_grade,
       last_updated
     FROM stock_balance
-    ORDER BY item_code ASC
+    ORDER BY id DESC
   `);
 
   const result = [];
@@ -148,6 +156,14 @@ const getStockBalance = async () => {
       issued_qty: details.issued_qty,
       current_balance: details.current_balance,
       unit: balance.unit || 'NOS',
+      valuation_rate: balance.valuation_rate,
+      selling_rate: balance.selling_rate,
+      no_of_cavity: balance.no_of_cavity,
+      weight_per_unit: balance.weight_per_unit,
+      weight_uom: balance.weight_uom,
+      drawing_no: balance.drawing_no,
+      revision: balance.revision,
+      material_grade: balance.material_grade,
       last_updated: balance.last_updated
     });
   }
@@ -432,14 +448,34 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
   }
 };
 
+const generateItemCode = async () => {
+  const [result] = await pool.query(
+    'SELECT item_code FROM stock_balance WHERE item_code LIKE "ITM-%" ORDER BY item_code DESC LIMIT 1'
+  );
+  
+  if (result.length === 0) {
+    return 'ITM-0001';
+  }
+
+  const lastCode = result[0].item_code;
+  const currentNumber = parseInt(lastCode.split('-')[1]);
+  const nextNumber = currentNumber + 1;
+  return `ITM-${String(nextNumber).padStart(4, '0')}`;
+};
+
 const createItem = async (itemData) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
+    let itemCode = itemData.itemCode;
+    if (!itemCode || itemCode.toLowerCase() === 'auto-generated') {
+      itemCode = await generateItemCode();
+    }
+
     const [existing] = await connection.query(
       'SELECT id FROM stock_balance WHERE item_code = ?',
-      [itemData.itemCode]
+      [itemCode]
     );
 
     if (existing.length > 0) {
@@ -456,7 +492,7 @@ const createItem = async (itemData) => {
         revision, material_grade
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      itemData.itemCode,
+      itemCode,
       itemData.itemName,
       itemData.itemGroup,
       itemData.defaultUom || 'Nos',
@@ -471,6 +507,44 @@ const createItem = async (itemData) => {
     ]);
 
     await connection.commit();
+    return { success: true, itemCode };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const updateItem = async (id, itemData) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    await connection.execute(`
+      UPDATE stock_balance SET
+        item_code = ?, material_name = ?, material_type = ?, unit = ?, 
+        valuation_rate = ?, selling_rate = ?, no_of_cavity = ?, 
+        weight_per_unit = ?, weight_uom = ?, drawing_no = ?, 
+        revision = ?, material_grade = ?, last_updated = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [
+      itemData.itemCode,
+      itemData.itemName,
+      itemData.itemGroup,
+      itemData.defaultUom || 'Nos',
+      itemData.valuationRate || 0,
+      itemData.sellingRate || 0,
+      itemData.noOfCavity || 1,
+      itemData.weightPerUnit || 0,
+      itemData.weightUom || null,
+      itemData.drawingNo || null,
+      itemData.revision || null,
+      itemData.materialGrade || null,
+      id
+    ]);
+
+    await connection.commit();
     return { success: true };
   } catch (error) {
     await connection.rollback();
@@ -478,6 +552,16 @@ const createItem = async (itemData) => {
   } finally {
     connection.release();
   }
+};
+
+const deleteItem = async (id) => {
+  const [result] = await pool.execute('DELETE FROM stock_balance WHERE id = ?', [id]);
+  if (result.affectedRows === 0) {
+    const error = new Error('Item not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  return { success: true };
 };
 
 module.exports = {
@@ -489,5 +573,7 @@ module.exports = {
   createQCStockLedgerEntry,
   deleteStockLedgerEntry,
   deleteStockBalance,
-  createItem
+  createItem,
+  updateItem,
+  generateItemCode
 };
