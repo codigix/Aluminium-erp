@@ -745,11 +745,14 @@ const DesignOrders = () => {
   });
 
   const groupedActive = filteredOrders.reduce((acc, order) => {
-    const key = order.po_number || 'NO-PO';
+    const poKey = order.po_number || 'NO-PO';
+    const companyKey = order.company_name || 'Unknown';
+    const key = `${companyKey}_${poKey}`;
+
     if (!acc[key]) {
       acc[key] = {
-        po_number: key,
-        company_name: order.company_name,
+        po_number: poKey,
+        company_name: companyKey,
         orders: []
       };
     }

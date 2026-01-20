@@ -15,29 +15,36 @@ const BOMCreation = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders`, {
+      // Fetch from design-orders to sync with DesignOrders.jsx Active section
+      const response = await fetch(`${API_BASE}/design-orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!response.ok) throw new Error('Failed to fetch orders');
+      if (!response.ok) throw new Error('Failed to fetch design orders');
       const data = await response.json();
-      const designPhaseOrders = data.filter(order => 
-        ['DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY'].includes(order.status)
-      );
       
-      // Group by PO Number
-      const grouped = designPhaseOrders.reduce((acc, order) => {
-        const key = order.po_number || 'N/A';
+      // Filter out completed ones if needed, or show all that need BOM
+      // Based on App workflow, BOM is created while in design phase
+      const activeOrders = data.filter(order => order.status !== 'COMPLETED');
+      
+      // Group by PO Number + Company to prevent cross-customer grouping
+      const grouped = activeOrders.reduce((acc, order) => {
+        const poKey = order.po_number || 'N/A';
+        const companyKey = order.company_name || 'Unknown';
+        const key = `${companyKey}_${poKey}`;
+        
         if (!acc[key]) {
           acc[key] = {
             id: key, 
-            po_number: key,
-            company_name: order.company_name,
+            po_number: poKey,
+            company_name: companyKey,
             project_name: order.project_name,
-            orderIds: [order.id],
+            orderIds: [order.sales_order_id],
             statuses: [order.status]
           };
         } else {
-          acc[key].orderIds.push(order.id);
+          if (!acc[key].orderIds.includes(order.sales_order_id)) {
+            acc[key].orderIds.push(order.sales_order_id);
+          }
           if (!acc[key].statuses.includes(order.status)) {
             acc[key].statuses.push(order.status);
           }
