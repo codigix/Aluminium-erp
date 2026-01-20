@@ -265,7 +265,7 @@ const Vendors = () => {
             <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-blue-50 border-b border-blue-200 p-2 flex justify-between items-center">
                 <div>
-                  <h2 className="text-base font-semibold text-slate-900 text-xs">Add New Vendor</h2>
+                  <h2 className="text-base text-slate-900 text-xs">Add New Vendor</h2>
                   <p className="text-xs text-blue-600">Fill in the vendor details below</p>
                 </div>
                 <button
@@ -278,10 +278,10 @@ const Vendors = () => {
 
               <form onSubmit={handleAddVendor} className="p-6 space-y-6">
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4">Basic Information</h3>
+                  <h3 className="text-xs text-slate-900 uppercase tracking-wider mb-4">Basic Information</h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Vendor Name <span className="text-red-500">*</span></label>
+                      <label className="block text-xs text-slate-900 text-xs mb-2">Vendor Name <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         placeholder="Enter vendor name"
@@ -293,7 +293,7 @@ const Vendors = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Contact Person</label>
+                      <label className="block text-xs text-slate-900 text-xs mb-2">Contact Person</label>
                       <input
                         type="text"
                         placeholder="Contact person name"
@@ -305,7 +305,7 @@ const Vendors = () => {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Category</label>
+                        <label className="block text-xs text-slate-900 text-xs mb-2">Category</label>
                         <input
                           type="text"
                           placeholder="e.g., Electronics"
@@ -316,7 +316,7 @@ const Vendors = () => {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Vendor Type <span className="text-red-500">*</span></label>
+                        <label className="block text-xs text-slate-900 text-xs mb-2">Vendor Type <span className="text-red-500">*</span></label>
                         <select
                           value={formData.vendorType}
                           onChange={(e) => setFormData({...formData, vendorType: e.target.value})}
@@ -330,7 +330,7 @@ const Vendors = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Status</label>
+                      <label className="block text-xs text-slate-900 text-xs mb-2">Status</label>
                       <select
                         value={formData.status}
                         onChange={(e) => setFormData({...formData, status: e.target.value})}
@@ -345,11 +345,11 @@ const Vendors = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4">Contact Information</h3>
+                  <h3 className="text-xs text-slate-900 uppercase tracking-wider mb-4">Contact Information</h3>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Email</label>
+                        <label className="block text-xs text-slate-900 text-xs mb-2">Email</label>
                         <input
                           type="email"
                           placeholder="vendor@example.com"
@@ -360,7 +360,7 @@ const Vendors = () => {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Phone</label>
+                        <label className="block text-xs text-slate-900 text-xs mb-2">Phone</label>
                         <input
                           type="tel"
                           placeholder="+91 XXXXXXXXXX"
@@ -372,7 +372,7 @@ const Vendors = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Address</label>
+                      <label className="block text-xs text-slate-900 text-xs mb-2">Address</label>
                       <textarea
                         placeholder="Enter vendor address"
                         value={formData.address}
@@ -385,9 +385,9 @@ const Vendors = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4">Performance</h3>
+                  <h3 className="text-xs text-slate-900 uppercase tracking-wider mb-4">Performance</h3>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Initial Rating (0-5)</label>
+                    <label className="block text-xs text-slate-900 text-xs mb-2">Initial Rating (0-5)</label>
                     <div className="flex items-center gap-3">
                       <input
                         type="number"
@@ -413,7 +413,7 @@ const Vendors = () => {
                   <button
                     type="button"
                     onClick={() => setShowForm(false)}
-                    className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-semibold text-slate-900 text-xs hover:bg-slate-50"
+                    className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 text-xs hover:bg-slate-50"
                   >
                     Cancel
                   </button>
@@ -453,7 +453,7 @@ const Vendors = () => {
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-slate-900 text-xs text-sm">{vendor.vendor_name}</h3>
+                    <h3 className="text-slate-900 text-xs text-sm">{vendor.vendor_name}</h3>
                     <div className="flex gap-2 mt-2 flex-wrap">
                       {vendor.category && (
                         <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700">
@@ -491,15 +491,15 @@ const Vendors = () => {
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="text-center p-2 bg-slate-50 rounded">
                     <p className="text-xs text-slate-500 mb-1">Orders</p>
-                    <p className="font-semibold text-slate-900 text-xs">{vendor.total_orders || 0}</p>
+                    <p className="text-slate-900 text-xs">{vendor.total_orders || 0}</p>
                   </div>
                   <div className="text-center p-2 bg-slate-50 rounded">
                     <p className="text-xs text-slate-500 mb-1">Value</p>
-                    <p className="font-semibold text-slate-900 text-xs">₹{(vendor.total_value || 0).toLocaleString('en-IN')}</p>
+                    <p className="text-slate-900 text-xs">₹{(vendor.total_value || 0).toLocaleString('en-IN')}</p>
                   </div>
                   <div className="text-center p-2 bg-slate-50 rounded">
                     <p className="text-xs text-slate-500 mb-1">Last Order</p>
-                    <p className="font-semibold text-slate-900 text-xs">{vendor.last_order_date ? new Date(vendor.last_order_date).toLocaleDateString('en-IN', {day: '2-digit', month: 'short'}) : 'N/A'}</p>
+                    <p className="text-slate-900 text-xs">{vendor.last_order_date ? new Date(vendor.last_order_date).toLocaleDateString('en-IN', {day: '2-digit', month: 'short'}) : 'N/A'}</p>
                   </div>
                 </div>
 

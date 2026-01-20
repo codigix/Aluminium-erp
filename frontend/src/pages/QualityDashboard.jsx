@@ -51,7 +51,7 @@ const QualityDashboard = () => {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider mb-1">{title}</p>
-          <p className="text-2xl font-bold text-slate-900">{count}</p>
+          <p className="text-2xl text-slate-900">{count}</p>
         </div>
         <div className="text-2xl">{icon}</div>
       </div>

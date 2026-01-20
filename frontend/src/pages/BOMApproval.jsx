@@ -103,7 +103,7 @@ const BOMApproval = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">BOM Approval</h1>
+          <h1 className="text-2xl text-slate-900">BOM Approval</h1>
           <p className="text-sm text-slate-500">Review and approve finalized Bill of Materials</p>
         </div>
         <button 
@@ -149,7 +149,7 @@ const BOMApproval = () => {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm font-bold text-slate-900">{order.po_number || 'N/A'}</div>
+                      <div className="text-sm text-slate-900">{order.po_number || 'N/A'}</div>
                       <div className="text-[10px] text-slate-500">SO-{String(order.id).padStart(4, '0')}</div>
                     </td>
                     <td className="p-2 whitespace-nowrap">
@@ -194,7 +194,7 @@ const BOMApproval = () => {
             <div className="relative bg-white rounded-2xl shadow-xl max-w-5xl w-full overflow-hidden">
               <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">BOM Details: PO {selectedOrder?.po_number}</h3>
+                  <h3 className="text-lg text-slate-900">BOM Details: PO {selectedOrder?.po_number}</h3>
                   <p className="text-xs text-slate-500">{selectedOrder?.company_name} - {selectedOrder?.project_name}</p>
                 </div>
                 <button onClick={() => setShowDetails(false)} className="text-slate-400 hover:text-slate-600">
@@ -213,7 +213,7 @@ const BOMApproval = () => {
                       <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden">
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
                           <div>
-                            <span className="text-sm font-bold text-slate-900">{item.item_code}</span>
+                            <span className="text-sm text-slate-900">{item.item_code}</span>
                             <span className="mx-2 text-slate-300">|</span>
                             <span className="text-xs text-slate-600">{item.description}</span>
                           </div>

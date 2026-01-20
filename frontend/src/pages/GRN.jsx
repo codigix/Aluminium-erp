@@ -266,7 +266,7 @@ const GRN = () => {
                     <td className="px-4 py-4 font-medium text-slate-900">GRN-{String(grn.id).padStart(4, '0')}</td>
                     <td className="px-4 py-4 text-slate-600">{grn.poNumber}</td>
                     <td className="px-4 py-4 text-slate-600">{formatDate(grn.grnDate)}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-slate-900 text-xs">{grn.receivedQuantity}</td>
+                    <td className="px-4 py-4 text-right text-slate-900 text-xs">{grn.receivedQuantity}</td>
                     <td className="px-4 py-4">
                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${grnStatusColors[grn.status]?.badge}`}>
                         {grnStatusColors[grn.status]?.label || grn.status}
@@ -314,7 +314,7 @@ const GRN = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create GRN (Goods Received Note)</h3>
+              <h3 className="text-lg text-slate-900 text-xs">Create GRN (Goods Received Note)</h3>
               <button onClick={() => setShowModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -390,26 +390,26 @@ const GRN = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">GRN Details</h3>
+              <h3 className="text-lg text-slate-900 text-xs">GRN Details</h3>
               <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-slate-50 p-3 rounded">
                 <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">GRN Number</p>
-                <p className="text-lg font-bold text-slate-900">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
+                <p className="text-lg text-slate-900">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
               </div>
               <div className="bg-slate-50 p-3 rounded">
                 <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">PO Number</p>
-                <p className="text-lg font-bold text-slate-900">{selectedGRN.poNumber}</p>
+                <p className="text-lg text-slate-900">{selectedGRN.poNumber}</p>
               </div>
               <div className="bg-slate-50 p-3 rounded">
                 <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">GRN Date</p>
-                <p className="text-lg font-bold text-slate-900">{formatDate(selectedGRN.grnDate)}</p>
+                <p className="text-lg text-slate-900">{formatDate(selectedGRN.grnDate)}</p>
               </div>
               <div className="bg-slate-50 p-3 rounded">
                 <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">Received Qty</p>
-                <p className="text-lg font-bold text-slate-900">{selectedGRN.receivedQuantity}</p>
+                <p className="text-lg text-slate-900">{selectedGRN.receivedQuantity}</p>
               </div>
               <div className="bg-slate-50 p-3 rounded col-span-2">
                 <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">Status</p>
@@ -442,7 +442,7 @@ const GRN = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Edit GRN</h3>
+              <h3 className="text-lg text-slate-900 text-xs">Edit GRN</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 

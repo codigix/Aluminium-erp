@@ -719,7 +719,7 @@ const DesignOrders = () => {
         <div className="mb-4">
           <div className="flex justify-between items-center mb-3 gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Design Engineering Hub</h1>
+              <h1 className="text-2xl text-slate-900">Design Engineering Hub</h1>
               <p className="text-xs text-slate-600">Review customer drawings and create technical specifications</p>
             </div>
             <div className="flex gap-2">
@@ -859,11 +859,11 @@ const DesignOrders = () => {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-col">
-                              <span className="font-bold text-slate-900 text-xs">{group.company_name}</span>
+                              <span className="text-slate-900 text-xs">{group.company_name}</span>
                               <span className="text-[10px] text-slate-500 font-medium">PO: {poNumber}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 font-bold text-slate-900">
+                          <td className="px-4 py-3 text-slate-900">
                             <div className="flex items-center gap-2">
                               <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
                               <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg text-[10px]">
@@ -923,7 +923,7 @@ const DesignOrders = () => {
                             <td className="px-4 py-2.5 text-slate-600 italic">
                               {order.item_description || 'No description'}
                             </td>
-                            <td className="px-4 py-2.5 text-center font-bold text-slate-900">
+                            <td className="px-4 py-2.5 text-center text-slate-900">
                               {order.item_qty || 1}
                             </td>
                             <td className="px-4 py-2.5 whitespace-nowrap text-right flex gap-1 justify-end">
@@ -1032,7 +1032,7 @@ const DesignOrders = () => {
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
                                 <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                                <span className="font-bold text-slate-900 text-xs">PO: {poNumber}</span>
+                                <span className="text-slate-900 text-xs">PO: {poNumber}</span>
                               </div>
                               <span className="font-bold text-indigo-600 text-[10px] ml-5">{group.company_name}</span>
                             </div>
@@ -1076,7 +1076,7 @@ const DesignOrders = () => {
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">{order.drawing_no || '—'}</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center font-bold text-slate-900">{order.total_quantity || 0}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center text-slate-900">{order.total_quantity || 0}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <select
                                 value={order.status}
@@ -1186,7 +1186,7 @@ const DesignOrders = () => {
                                   onChange={(e) => setEditItemData({...editItemData, drawing_no: e.target.value})}
                                 />
                               ) : (
-                                <span className="font-bold text-slate-900">{item.drawing_no || '—'}</span>
+                                <span className="text-slate-900">{item.drawing_no || '—'}</span>
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
@@ -1294,19 +1294,19 @@ const DesignOrders = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase">Customer</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.company_name}</p>
+                  <p className="text-sm text-slate-900 text-xs mt-1">{reviewOrder.company_name}</p>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase">PO Number</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.po_number || '—'}</p>
+                  <p className="text-sm text-slate-900 text-xs mt-1">{reviewOrder.po_number || '—'}</p>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase">Project</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.project_name}</p>
+                  <p className="text-sm text-slate-900 text-xs mt-1">{reviewOrder.project_name}</p>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase">Sales Order</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">SO-{String(reviewOrder.id).padStart(4, '0')}</p>
+                  <p className="text-sm text-slate-900 text-xs mt-1">SO-{String(reviewOrder.id).padStart(4, '0')}</p>
                 </div>
               </div>
 
@@ -1323,15 +1323,15 @@ const DesignOrders = () => {
                         <div className="grid grid-cols-3 gap-3 text-sm">
                           <div>
                             <span className="text-xs text-slate-500">Drawing No</span>
-                            <p className="font-semibold text-slate-900 text-xs">{item.drawing_no || '—'}</p>
+                            <p className="text-slate-900 text-xs">{item.drawing_no || '—'}</p>
                           </div>
                           <div>
                             <span className="text-xs text-slate-500">Revision</span>
-                            <p className="font-semibold text-slate-900 text-xs">{item.revision_no || '—'}</p>
+                            <p className="text-slate-900 text-xs">{item.revision_no || '—'}</p>
                           </div>
                           <div>
                             <span className="text-xs text-slate-500">Quantity</span>
-                            <p className="font-semibold text-slate-900 text-xs">{item.quantity || 1} {item.unit || 'NOS'}</p>
+                            <p className="text-slate-900 text-xs">{item.quantity || 1} {item.unit || 'NOS'}</p>
                           </div>
                         </div>
                         <p className="text-xs text-slate-600 mt-2">{item.description}</p>

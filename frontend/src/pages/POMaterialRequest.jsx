@@ -179,7 +179,7 @@ const POMaterialRequest = () => {
                   onClick={() => togglePo(group.po_id)}
                 >
                   <div className="flex items-center gap-6">
-                    <div className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <div className="text-lg text-slate-900 flex items-center gap-2">
                       <span className="text-slate-400 text-xs">{expandedPos.has(group.po_id) ? '▼' : '▶'}</span>
                       {group.po_number}
                     </div>
@@ -249,7 +249,7 @@ const POMaterialRequest = () => {
                         {group.items.map((item, idx) => (
                           <tr key={`${item.po_item_id}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
                             <td className="p-2">
-                              <div className="font-semibold text-slate-900 text-xs">{item.material_name || '—'}</div>
+                              <div className="text-slate-900 text-xs">{item.material_name || '—'}</div>
                               <div className="text-xs text-slate-500 line-clamp-1 max-w-xl">{item.description}</div>
                             </td>
                             <td className="p-2 text-slate-600">{item.material_type || '—'}</td>

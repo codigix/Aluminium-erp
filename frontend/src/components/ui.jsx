@@ -1,15 +1,15 @@
 export const Card = ({ id, title, subtitle, action, children }) => (
-  <div id={id} className="bg-white border border-slate-200/80 rounded-[32px] shadow-lg">
+  <div id={id} >
     {(title || subtitle || action) && (
-      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between px-8 py-6 border-b border-slate-100/80 rounded-t-[32px]">
+      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between p-2 border-b border-slate-100/80 rounded-t-[32px]">
         <div>
-          {subtitle && <p className="text-[0.65rem] font-semibold tracking-[0.35em] text-slate-400 uppercase">{subtitle}</p>}
-          {title && <h2 className="text-2xl font-semibold text-slate-900 text-xs">{title}</h2>}
+          {subtitle && <p className="text-sm text-slate-400 ">{subtitle}</p>}
+          {title && <h2 className="text-2xl text-slate-900 text-xs">{title}</h2>}
         </div>
         {action}
       </div>
     )}
-    <div className="px-8 py-8 space-y-6">{children}</div>
+    <div className="p-2">{children}</div>
   </div>
 )
 

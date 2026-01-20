@@ -36,7 +36,7 @@ const CompanyMaster = ({
         <div className="px-8 py-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-slate-100/80">
           <div>
             <p className="text-[0.6rem] font-semibold tracking-[0.35em] text-slate-400 uppercase">New Entry</p>
-            <h2 className="text-2xl font-semibold text-slate-900 text-xs">Register Company</h2>
+            <h2 className="text-2xl text-slate-900 text-xs">Register Company</h2>
             <p className="text-sm text-slate-500">Create a reusable master for downstream ERP flows.</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -53,7 +53,7 @@ const CompanyMaster = ({
             <div className="rounded-2xl border border-slate-200/70 p-5 space-y-5">
               <div>
                 <p className="text-[0.6rem] font-semibold tracking-[0.35em] text-slate-400 uppercase">General</p>
-                <h3 className="text-lg font-semibold text-slate-900 text-xs">Company Profile</h3>
+                <h3 className="text-lg text-slate-900 text-xs">Company Profile</h3>
               </div>
               <div className="space-y-4">
                 <FormControl label="Company Name">
@@ -80,7 +80,7 @@ const CompanyMaster = ({
             <div className="rounded-2xl border border-slate-200/70 p-5 space-y-5">
               <div>
                 <p className="text-[0.6rem] font-semibold tracking-[0.35em] text-slate-400 uppercase">Compliance</p>
-                <h3 className="text-lg font-semibold text-slate-900 text-xs">Registration Numbers</h3>
+                <h3 className="text-lg text-slate-900 text-xs">Registration Numbers</h3>
               </div>
               <div className="space-y-4">
                 <FormControl label="GSTIN">
@@ -100,7 +100,7 @@ const CompanyMaster = ({
           <div className="rounded-2xl border border-slate-200/70 p-5 space-y-5">
             <div>
               <p className="text-[0.6rem] font-semibold tracking-[0.35em] text-slate-400 uppercase">Commercial</p>
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Terms & Policies</h3>
+              <h3 className="text-lg text-slate-900 text-xs">Terms & Policies</h3>
             </div>
             <div className="grid gap-4 lg:grid-cols-5">
               <div className="lg:col-span-2">
@@ -171,15 +171,15 @@ const CompanyMaster = ({
             <tbody className="divide-y divide-slate-100">
               {companies.map(company => (
                 <tr key={company.id} className="hover:bg-slate-50/70">
-                  <td className="px-5 py-5 align-middle">
-                    <p className="font-semibold text-slate-900 text-xs">{company.company_name}</p>
+                  <td className="p-2 align-middle">
+                    <p className="text-slate-900 text-xs">{company.company_name}</p>
                     <p className="text-xs text-slate-400">{company.company_code}</p>
                   </td>
-                  <td className="px-5 py-5 text-slate-600 uppercase align-middle">{company.gstin || '—'}</td>
-                  <td className="px-5 py-5 text-slate-600 align-middle">{formatCustomerType(company.customer_type)}</td>
-                  <td className="px-5 py-5 text-slate-600 align-middle">{getCompanyCity(company)}</td>
-                  <td className="px-5 py-5 align-middle"><StatusBadge status={company.status} /></td>
-                  <td className="px-5 py-5 align-middle">
+                  <td className="p-2 text-slate-600 uppercase align-middle">{company.gstin || '—'}</td>
+                  <td className="p-2 text-slate-600 align-middle text-xs">{formatCustomerType(company.customer_type)}</td>
+                  <td className="p-2 text-slate-600 align-middle text-xs">{getCompanyCity(company)}</td>
+                  <td className="p-2 align-middle"><StatusBadge status={company.status} /></td>
+                  <td className="p-2 align-middle">
                     <div className="flex justify-end gap-2 flex-wrap">
                       <button
                         type="button"
@@ -225,7 +225,7 @@ const CompanyMaster = ({
         </div>
       ) : (
         <div className="p-12 text-center space-y-3">
-          <p className="text-base font-semibold text-slate-900 text-xs">No companies found</p>
+          <p className="text-base text-slate-900 text-xs">No companies found</p>
           <p className="text-sm text-slate-500">Use “+ New Company” to create your first company master record.</p>
         </div>
       )}

@@ -297,7 +297,7 @@ const ClientQuotations = () => {
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex justify-between items-end">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 mb-1">Client Quotations</h1>
+            <h1 className="text-xl text-slate-900 mb-1">Client Quotations</h1>
             <p className="text-slate-600 text-xs">Create and track quotations from design-approved drawings</p>
           </div>
           <div className="flex bg-slate-200 p-1 rounded-xl">
@@ -319,7 +319,7 @@ const ClientQuotations = () => {
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           <div className={`bg-gradient-to-r ${activeTab === 'pending' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'} p-2`}>
             <div className="flex justify-between items-center">
-              <h2 className="text-md font-bold text-white flex items-center gap-2">
+              <h2 className="text-xs font-bold text-white flex items-center gap-2">
                 {activeTab === 'pending' ? (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -383,7 +383,7 @@ const ClientQuotations = () => {
                         <React.Fragment key={clientName}>
                           <tr className="hover:bg-slate-50 transition-colors">
                             <td className="p-2">
-                              <div className="font-semibold text-slate-900 text-xs">{clientData.company_name}</div>
+                              <div className="text-slate-900 text-xs">{clientData.company_name}</div>
                               {clientData.contact_person && (
                                 <div className="text-xs text-slate-600 mt-0.5">{clientData.contact_person}</div>
                               )}
@@ -428,7 +428,7 @@ const ClientQuotations = () => {
                                 <div className="bg-slate-50 border-t border-b border-slate-200">
                                   <div className="bg-white border border-slate-200 overflow-hidden">
                                     <div className="bg-slate-100 p-2 border-b border-slate-200">
-                                      <h3 className="font-bold text-slate-900 text-xs">Approved Drawings & Pricing</h3>
+                                      <h3 className="text-slate-900 text-xs">Approved Drawings & Pricing</h3>
                                     </div>
                                     <table className="w-full divide-y divide-slate-100">
                                       <thead className="bg-white">
@@ -449,10 +449,10 @@ const ClientQuotations = () => {
                                                 {clientData.orders.slice(0, orderIdx).reduce((sum, o) => sum + (o.items?.length || 0), 0) + itemIdx + 1}
                                               </td>
                                               <td className="p-2">
-                                                <div className="font-semibold text-slate-900 text-xs">{item.drawing_no || 'N/A'}</div>
+                                                <div className="text-slate-900 text-xs">{item.drawing_no || 'N/A'}</div>
                                               </td>
                                               <td className="p-2 text-xs text-slate-600">{item.description || '—'}</td>
-                                              <td className="p-2 text-left text-sm font-semibold text-slate-900 text-xs">{item.quantity}</td>
+                                              <td className="p-2 text-left text-sm text-slate-900 text-xs">{item.quantity}</td>
                                               <td className="p-2 text-xs text-slate-600">{item.unit || 'Pcs'}</td>
                                               <td className="p-2 text-right">
                                                 <input
@@ -532,7 +532,7 @@ const ClientQuotations = () => {
                           <tr className="hover:bg-slate-50 transition-colors">
                             <td className="p-2 text-xs font-bold text-indigo-600">QRT-{String(group.id).padStart(4, '0')}</td>
                             <td className="p-2">
-                              <div className="font-semibold text-slate-900 text-xs">{group.company_name}</div>
+                              <div className="text-slate-900 text-xs">{group.company_name}</div>
                             </td>
                             <td className="p-2 text-xs text-slate-600">
                               {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : group.quotes[0]?.project_name}
@@ -600,11 +600,11 @@ const ClientQuotations = () => {
                                       <tfoot className="bg-slate-50">
                                         <tr>
                                           <td colSpan="5" className="p-2 text-right text-[11px] font-bold text-slate-700">Sub Total:</td>
-                                          <td className="p-2 text-right text-[11px] font-bold text-slate-900">₹{group.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td className="p-2 text-right text-[11px] text-slate-900">₹{group.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                         <tr>
                                           <td colSpan="5" className="p-2 text-right text-[11px] font-bold text-slate-700">GST (18%):</td>
-                                          <td className="p-2 text-right text-[11px] font-bold text-slate-900">₹{(group.total_amount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td className="p-2 text-right text-[11px] text-slate-900">₹{(group.total_amount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                         <tr className="bg-emerald-50">
                                           <td colSpan="5" className="p-2 text-right text-[11px] font-bold text-emerald-700 uppercase">Grand Total (Incl. GST):</td>

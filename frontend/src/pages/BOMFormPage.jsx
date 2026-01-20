@@ -924,11 +924,11 @@ const BOMFormPage = () => {
                 <div className="divide-y divide-slate-50">
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
                     <span className="text-xs font-medium text-slate-600">Components Cost:</span>
-                    <span className="text-xs font-bold text-slate-900">₹{componentsCost.toFixed(2)}</span>
+                    <span className="text-xs text-slate-900">₹{componentsCost.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
                     <span className="text-xs font-medium text-slate-600">Raw Materials Cost:</span>
-                    <span className="text-xs font-bold text-slate-900">₹{rawMaterialsCost.toFixed(2)}</span>
+                    <span className="text-xs text-slate-900">₹{rawMaterialsCost.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors text-red-600">
                     <span className="text-xs font-medium">Scrap Loss (Deduction):</span>
@@ -940,7 +940,7 @@ const BOMFormPage = () => {
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
                     <span className="text-xs font-medium text-slate-600">Operations Cost:</span>
-                    <span className="text-xs font-bold text-slate-900">₹{operationsCost.toFixed(2)}</span>
+                    <span className="text-xs text-slate-900">₹{operationsCost.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center bg-amber-50/50">
                     <span className="text-xs font-bold text-amber-700">Total Scrap Qty:</span>

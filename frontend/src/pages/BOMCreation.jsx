@@ -147,7 +147,7 @@ const BOMCreation = () => {
     <div className="p-4 bg-slate-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-2xl text-slate-900 flex items-center gap-2">
             <span className="p-2 bg-amber-100 rounded-lg text-amber-600">📋</span>
             BOM Creation
           </h1>
@@ -178,7 +178,7 @@ const BOMCreation = () => {
                     onClick={() => handleSelectOrder(order)}
                   >
                     <div className="flex justify-between items-start mb-1">
-                      <span className="text-xs font-bold text-slate-900">PO: {order.po_number || 'N/A'}</span>
+                      <span className="text-xs text-slate-900">PO: {order.po_number || 'N/A'}</span>
                       <StatusBadge status={order.status} />
                     </div>
                     <div className="text-sm font-semibold text-slate-700 truncate">{order.company_name}</div>
@@ -201,7 +201,7 @@ const BOMCreation = () => {
             <Card className="border-slate-200 shadow-sm overflow-hidden">
               <div className="bg-white p-6 border-b border-slate-100 flex justify-between items-center">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Order Items: {selectedOrder.po_number}</h2>
+                  <h2 className="text-lg text-slate-900">Order Items: {selectedOrder.po_number}</h2>
                   <p className="text-sm text-slate-500">{selectedOrder.company_name} • {selectedOrder.project_name}</p>
                 </div>
                 <div className="flex gap-4">
@@ -225,7 +225,7 @@ const BOMCreation = () => {
               <div className="grid grid-cols-4 border-b border-slate-100 bg-slate-50/30">
                 <div className="p-4 border-r border-slate-100">
                   <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">Total Drawings</div>
-                  <div className="text-xl font-bold text-slate-900">{orderItems.length}</div>
+                  <div className="text-xl text-slate-900">{orderItems.length}</div>
                 </div>
                 <div className="p-4 border-r border-slate-100">
                   <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">BOMs Completed</div>
@@ -257,14 +257,14 @@ const BOMCreation = () => {
                     {orderItems.map((item) => (
                       <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4">
-                          <div className="text-sm font-bold text-slate-900">{item.item_code}</div>
+                          <div className="text-sm text-slate-900">{item.item_code}</div>
                           <div className="text-xs text-indigo-600 font-medium">DWG: {item.drawing_no || 'N/A'}</div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-xs text-slate-600 max-w-sm line-clamp-1">{item.description}</div>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <div className="text-sm font-bold text-slate-900">{item.quantity}</div>
+                          <div className="text-sm text-slate-900">{item.quantity}</div>
                           <div className="text-[10px] text-slate-400 font-bold uppercase">{item.unit}</div>
                         </td>
                         <td className="px-6 py-4 text-center">
@@ -275,7 +275,7 @@ const BOMCreation = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <div className="text-sm font-bold text-slate-900">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</div>
+                          <div className="text-sm text-slate-900">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <Link 

@@ -128,7 +128,7 @@ const POReceiptDetails = () => {
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-slate-900">PO Receipt Details</h1>
+          <h1 className="text-3xl text-slate-900">PO Receipt Details</h1>
           <button
             onClick={() => window.close()}
             className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
@@ -143,15 +143,15 @@ const POReceiptDetails = () => {
             <div className="grid grid-cols-2 gap-6 mb-8">
               <div className="bg-slate-50 p-4 rounded">
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">PO Number</p>
-                <p className="text-2xl font-bold text-slate-900">{receipt.po_number || '—'}</p>
+                <p className="text-2xl text-slate-900">{receipt.po_number || '—'}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Vendor</p>
-                <p className="text-2xl font-bold text-slate-900">{receipt.vendor_name || '—'}</p>
+                <p className="text-2xl text-slate-900">{receipt.vendor_name || '—'}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Receipt Date</p>
-                <p className="text-2xl font-bold text-slate-900">{formatDate(receipt.receipt_date)}</p>
+                <p className="text-2xl text-slate-900">{formatDate(receipt.receipt_date)}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Status</p>
@@ -165,7 +165,7 @@ const POReceiptDetails = () => {
               </div>
               <div className="bg-slate-50 p-4 rounded">
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Created</p>
-                <p className="text-2xl font-bold text-slate-900">{formatDate(receipt.created_at)}</p>
+                <p className="text-2xl text-slate-900">{formatDate(receipt.created_at)}</p>
               </div>
             </div>
 
@@ -178,7 +178,7 @@ const POReceiptDetails = () => {
             {/* Items Table */}
             {poItems.length > 0 && (
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-slate-900 text-xs mb-4">PO Items</h3>
+                <h3 className="text-lg text-slate-900 text-xs mb-4">PO Items</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-100 text-slate-600 uppercase">

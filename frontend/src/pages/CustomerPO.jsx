@@ -91,10 +91,10 @@ const CustomerPO = ({
 
           {poParseResult && (
             <div className="grid gap-3 md:grid-cols-2 text-sm text-slate-600 mt-4">
-              <p><span className="font-semibold text-slate-900 text-xs">Detected Company:</span> {poParseResult.companyName || '—'}</p>
-              <p><span className="font-semibold text-slate-900 text-xs">GSTIN:</span> {poParseResult.customerGstin || '—'}</p>
-              <p><span className="font-semibold text-slate-900 text-xs">PO Number:</span> {poParseResult.poNumber || '—'}</p>
-              <p><span className="font-semibold text-slate-900 text-xs">PO Date:</span> {poParseResult.poDate || '—'}</p>
+              <p><span className="text-slate-900 text-xs">Detected Company:</span> {poParseResult.companyName || '—'}</p>
+              <p><span className="text-slate-900 text-xs">GSTIN:</span> {poParseResult.customerGstin || '—'}</p>
+              <p><span className="text-slate-900 text-xs">PO Number:</span> {poParseResult.poNumber || '—'}</p>
+              <p><span className="text-slate-900 text-xs">PO Date:</span> {poParseResult.poDate || '—'}</p>
             </div>
           )}
         </Card>
@@ -207,7 +207,7 @@ const CustomerPO = ({
                     <td className="p-2">
                       <input type="number" className={`${fieldInputClass} py-2`} value={item.igstPercent} onChange={e => onItemChange(index, 'igstPercent', e.target.value)} min="0" />
                     </td>
-                    <td className="p-2 text-right font-semibold text-slate-900 text-xs">
+                    <td className="p-2 text-right text-slate-900 text-xs">
                       {formatCurrency((parseIndianNumber(item.quantity) || 0) * (parseIndianNumber(item.rate) || 0))}
                     </td>
                     <td className="p-2">
@@ -237,24 +237,24 @@ const CustomerPO = ({
             <div className="rounded-2xl bg-slate-50 p-4 space-y-2 text-sm">
               <div className="flex items-center justify-between text-slate-600">
                 <span>Subtotal</span>
-                <span className="font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.subtotal)}</span>
+                <span className="text-slate-900 text-xs">{formatCurrency(poSummary.subtotal)}</span>
               </div>
               <div className="flex items-center justify-between text-slate-600">
                 <span>CGST</span>
-                <span className="font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.cgst)}</span>
+                <span className="text-slate-900 text-xs">{formatCurrency(poSummary.cgst)}</span>
               </div>
               <div className="flex items-center justify-between text-slate-600">
                 <span>SGST</span>
-                <span className="font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.sgst)}</span>
+                <span className="text-slate-900 text-xs">{formatCurrency(poSummary.sgst)}</span>
               </div>
               <div className="flex items-center justify-between text-slate-600">
                 <span>IGST</span>
-                <span className="font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.igst)}</span>
+                <span className="text-slate-900 text-xs">{formatCurrency(poSummary.igst)}</span>
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
               <p className="text-sm text-slate-500">Net Value</p>
-              <p className="text-3xl font-semibold text-slate-900 text-xs">{formatCurrency(poSummary.net)}</p>
+              <p className="text-3xl text-slate-900 text-xs">{formatCurrency(poSummary.net)}</p>
               <p className="text-xs text-slate-500">Totals auto-update as you tweak line items.</p>
             </div>
           </div>
@@ -279,7 +279,7 @@ const CustomerPO = ({
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 mb-1">Customer Purchase Orders</h1>
+            <h1 className="text-xl text-slate-900 mb-1">Customer Purchase Orders</h1>
             <p className="text-slate-600 text-xs">Manage and track purchase orders received from customers</p>
           </div>
         </div>
@@ -287,7 +287,7 @@ const CustomerPO = ({
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-2">
             <div className="flex justify-between items-center">
-              <h2 className="text-md font-bold text-white flex items-center gap-2">
+              <h2 className="text-xs font-bold text-white flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
@@ -400,7 +400,7 @@ const CustomerPO = ({
                                         const amount = (parseFloat(item.item_qty) || 0) * (parseFloat(rate) || 0);
                                         return (
                                           <tr key={`quote-item-${item.id}`} className="hover:bg-slate-50">
-                                            <td className="p-2 font-bold text-slate-900">{item.drawing_no}</td>
+                                            <td className="p-2 text-slate-900">{item.drawing_no}</td>
                                             <td className="p-2 text-slate-600">{item.item_description || '—'}</td>
                                             <td className="p-2 text-center font-semibold">
                                               {item.item_qty !== null ? Number(item.item_qty).toFixed(0) : '0'} {item.item_unit || 'NOS'}
@@ -409,12 +409,12 @@ const CustomerPO = ({
                                               <input
                                                 type="number"
                                                 placeholder="₹ 0.00"
-                                                className="w-24 p-1 border border-slate-200 rounded text-right text-[0.65rem] font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                className="w-24 p-1 border border-slate-200 rounded text-right text-[0.65rem] text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
                                                 value={rate}
                                                 onChange={(e) => onQuotePriceChange(`q-${item.id}`, e.target.value)}
                                               />
                                             </td>
-                                            <td className="p-2 text-right font-bold text-slate-900">
+                                            <td className="p-2 text-right text-slate-900">
                                               {formatCurrency(amount)}
                                             </td>
                                           </tr>

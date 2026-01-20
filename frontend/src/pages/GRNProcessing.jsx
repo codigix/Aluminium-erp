@@ -511,7 +511,7 @@ const GRNProcessing = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
           <div className="bg-white rounded-lg max-w-4xl w-full m-4 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-slate-900">Create GRN (Goods Received Note)</h2>
+              <h2 className="text-xl text-slate-900">Create GRN (Goods Received Note)</h2>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-slate-400 hover:text-slate-600 text-2xl"
@@ -593,19 +593,19 @@ const GRNProcessing = () => {
                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 grid grid-cols-4 gap-4 text-sm">
                   <div>
                     <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">Vendor</p>
-                    <p className="font-bold text-slate-900">
+                    <p className="text-slate-900">
                       {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.vendor_name || 'N/A'}
                     </p>
                   </div>
                   <div>
                     <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">PO Total</p>
-                    <p className="font-bold text-slate-900">
+                    <p className="text-slate-900">
                       ₹{purchaseOrders.find(p => String(p.id) === String(formData.poId))?.total_amount?.toLocaleString('en-IN') || '0'}
                     </p>
                   </div>
                   <div>
                     <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">Expected Delivery</p>
-                    <p className="font-bold text-slate-900">
+                    <p className="text-slate-900">
                       {new Date(purchaseOrders.find(p => String(p.id) === String(formData.poId))?.expected_delivery_date).toLocaleDateString('en-IN') || 'N/A'}
                     </p>
                   </div>
@@ -621,7 +621,7 @@ const GRNProcessing = () => {
               {poItems.length > 0 && (
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-                    <h3 className="font-semibold text-slate-900 text-xs">PO Items - Enter Accepted Quantities</h3>
+                    <h3 className="text-slate-900 text-xs">PO Items - Enter Accepted Quantities</h3>
                     <p className="text-xs text-slate-500 mt-1">Enter how much you accepted. Status shows: APPROVED (match), SHORTAGE (less), OVERAGE (more)</p>
                   </div>
 
@@ -728,7 +728,7 @@ const GRNProcessing = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
           <div className="bg-white rounded-lg max-w-5xl w-full m-4 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-slate-900">GRN Items</h2>
+              <h2 className="text-xl text-slate-900">GRN Items</h2>
               <button
                 onClick={() => setShowItemsModal(false)}
                 className="text-slate-400 hover:text-slate-600 text-2xl"

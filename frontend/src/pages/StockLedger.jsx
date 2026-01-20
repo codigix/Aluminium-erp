@@ -236,7 +236,7 @@ const StockLedger = () => {
                         {entry.transaction_type}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right font-semibold text-slate-900 text-xs">{parseFloat(entry.quantity).toFixed(3)}</td>
+                    <td className="px-4 py-4 text-right text-slate-900 text-xs">{parseFloat(entry.quantity).toFixed(3)}</td>
                     <td className="px-4 py-4 text-right font-semibold text-emerald-600">{parseFloat(entry.balance_after || 0).toFixed(3)}</td>
                     <td className="px-4 py-4 text-slate-600">
                       {entry.reference_doc_type && entry.reference_doc_number 
@@ -266,7 +266,7 @@ const StockLedger = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Add Stock Ledger Entry</h3>
+              <h3 className="text-lg text-slate-900 text-xs">Add Stock Ledger Entry</h3>
               <button onClick={() => setShowModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 

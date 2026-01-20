@@ -25,7 +25,7 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
                 return (
                   <tr key={`contact-row-${company.id}`} className="border-t border-slate-100">
                     <td className="px-4 py-4">
-                      <p className="font-semibold text-slate-900 text-xs">{company.company_name}</p>
+                      <p className="text-slate-900 text-xs">{company.company_name}</p>
                       <p className="text-xs text-slate-400">{company.company_code}</p>
                     </td>
                     <td className="px-4 py-4 text-slate-900 font-medium">
@@ -56,7 +56,7 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
       </div>
     ) : (
       <div className="p-10 text-center space-y-2">
-        <p className="text-base font-semibold text-slate-900 text-xs">No companies available</p>
+        <p className="text-base text-slate-900 text-xs">No companies available</p>
         <p className="text-sm text-slate-500">Create a company first to begin adding client contacts.</p>
       </div>
     )}

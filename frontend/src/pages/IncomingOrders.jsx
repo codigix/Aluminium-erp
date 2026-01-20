@@ -49,9 +49,9 @@ const SalesOrderRow = ({ order, userDepartment, onAction, actionLoading }) => {
   return (
     <>
       <tr className="hover:bg-slate-50 transition-colors border-b border-slate-100">
-        <td className="px-5 py-4 font-bold text-slate-900 whitespace-nowrap">{formatOrderCode(order.id)}</td>
+        <td className="px-5 py-4 text-slate-900 whitespace-nowrap">{formatOrderCode(order.id)}</td>
         <td className="px-5 py-4">
-          <p className="font-semibold text-slate-900 text-xs">{order.company_name}</p>
+          <p className="text-slate-900 text-xs">{order.company_name}</p>
           <p className="text-xs text-slate-400">{order.project_name || '—'}</p>
         </td>
         <td className="px-5 py-4 text-slate-600 whitespace-nowrap">{order.po_number || '—'}</td>

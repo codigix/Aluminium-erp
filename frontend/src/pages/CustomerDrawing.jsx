@@ -740,7 +740,7 @@ const CustomerDrawing = () => {
         <div className="mb-4">
           <div className="flex justify-between items-center mb-3 gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Customer Drawing Master</h1>
+              <h1 className="text-2xl text-slate-900">Customer Drawing Master</h1>
               <p className="text-xs text-slate-600">Manage customer reference drawings and technical documentation</p>
             </div>
             <div className="flex gap-2">
@@ -784,13 +784,13 @@ const CustomerDrawing = () => {
           </div>
 
           {/* INFO BANNER */}
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+          <div className="bg-gradient-to-r mt-3 from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
             <div className="flex-shrink-0 mt-0.5">
               <svg className="h-4 w-4 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
             </div>
-            <p className="text-xs text-amber-900 font-medium">
+            <p className="text-xs text-amber-900 font-medium ">
               Customer drawings are reference only. Production drawings created by Engineering.
             </p>
           </div>
@@ -827,7 +827,7 @@ const CustomerDrawing = () => {
           <form onSubmit={handleAddDrawing} className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="relative lg:col-span-1">
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Client <span className="text-red-500">*</span></label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">Client <span className="text-red-500">*</span></label>
                 <div className="flex gap-1">
                   <div className="relative flex-1 client-input-container">
                     <input 
@@ -849,7 +849,7 @@ const CustomerDrawing = () => {
                             onClick={() => handleSelectClient(company)}
                             className="w-full text-left px-3 py-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
                           >
-                            <div className="font-semibold text-slate-900 text-xs">{company.company_name}</div>
+                            <div className="text-slate-900 text-xs">{company.company_name}</div>
                             {company.contact_email && <div className="text-slate-500 text-xs">{company.contact_email}</div>}
                             {company.contact_mobile && <div className="text-slate-500 text-xs">{company.contact_mobile}</div>}
                           </button>
@@ -871,7 +871,7 @@ const CustomerDrawing = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Contact Person</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">Contact Person</label>
                 <input 
                   type="text"
                   placeholder="Contact person name"
@@ -881,7 +881,7 @@ const CustomerDrawing = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Phone</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">Phone</label>
                 <input 
                   type="text"
                   placeholder="Phone number"
@@ -891,7 +891,7 @@ const CustomerDrawing = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Email</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">Email</label>
                 <input 
                   type="email"
                   placeholder="Email address"
@@ -901,7 +901,7 @@ const CustomerDrawing = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Type</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">Type</label>
                 <input 
                   type="text"
                   placeholder="Customer type"
@@ -911,7 +911,7 @@ const CustomerDrawing = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">GSTIN</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">GSTIN</label>
                 <input 
                   type="text"
                   placeholder="GST number"
@@ -921,7 +921,7 @@ const CustomerDrawing = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">City</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">City</label>
                 <input 
                   type="text"
                   placeholder="City"
@@ -931,7 +931,7 @@ const CustomerDrawing = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">State</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">State</label>
                 <input 
                   type="text"
                   placeholder="State"
@@ -941,7 +941,7 @@ const CustomerDrawing = () => {
                 />
               </div>
               <div className="lg:col-span-2">
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Billing Address</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">Billing Address</label>
                 <input 
                   type="text"
                   placeholder="Billing address"
@@ -951,7 +951,7 @@ const CustomerDrawing = () => {
                 />
               </div>
               <div className="lg:col-span-2">
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Shipping Address</label>
+                <label className=" flex items-center gap-2 text-xs text-slate-600">Shipping Address</label>
                 <input 
                   type="text"
                   placeholder="Shipping address"
@@ -966,7 +966,7 @@ const CustomerDrawing = () => {
               {uploadMode === 'manual' ? (
                 <>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Drawing # <span className="text-red-500">*</span></label>
+                    <label className=" flex items-center gap-2 text-xs text-slate-600">Drawing # <span className="text-red-500">*</span></label>
                     <input 
                       type="text" 
                       required
@@ -977,7 +977,7 @@ const CustomerDrawing = () => {
                     />
                   </div>
                   <div className="lg:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                    <label className=" flex items-center gap-2 text-xs text-slate-600">Description</label>
                     <input 
                       type="text" 
                       placeholder="Aluminum Frame"
@@ -987,7 +987,7 @@ const CustomerDrawing = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Rev</label>
+                    <label className=" flex items-center gap-2 text-xs text-slate-600">Rev</label>
                     <input 
                       type="text" 
                       placeholder="A"
@@ -997,7 +997,7 @@ const CustomerDrawing = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Qty</label>
+                    <label className=" flex items-center gap-2 text-xs text-slate-600">Qty</label>
                     <input 
                       type="number" 
                       min="1"
@@ -1007,7 +1007,7 @@ const CustomerDrawing = () => {
                     />
                   </div>
                   <div className="lg:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">File <span className="text-red-500">*</span></label>
+                    <label className=" flex items-center gap-2 text-xs text-slate-600">File <span className="text-red-500">*</span></label>
                     <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-3 hover:border-indigo-400 transition-colors bg-slate-50/50 cursor-pointer">
                       <input 
                         type="file" 
@@ -1025,7 +1025,7 @@ const CustomerDrawing = () => {
                     </div>
                   </div>
                   <div className="lg:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Notes</label>
+                    <label className=" flex items-center gap-2 text-xs text-slate-600">Notes</label>
                     <textarea 
                       rows="1"
                       placeholder="Special notes..."
@@ -1038,8 +1038,8 @@ const CustomerDrawing = () => {
               ) : (
                 /* BULK MODE */
                 <>
-                  <div className="lg:col-span-4">
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Excel File <span className="text-red-500">*</span></label>
+                  <div className="lg:col-span-4 mt-2">
+                    <label className=" flex items-center gap-2 text-xs text-slate-600">Excel File <span className="text-red-500">*</span></label>
                     <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-4 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
                       <input 
                         type="file" 
@@ -1123,7 +1123,7 @@ const CustomerDrawing = () => {
         <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200">
           <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
             <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-0.5">
+              <h2 className="text-base text-slate-900 flex items-center gap-2 mb-0.5">
                 <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Drawings Database
               </h2>
@@ -1194,7 +1194,7 @@ const CustomerDrawing = () => {
                           </svg>
                         </div>
                         <div className="flex flex-col flex-1">
-                          <span className="text-sm font-bold text-slate-900">{clientName}</span>
+                          <span className="text-sm text-slate-900">{clientName}</span>
                         </div>
                         <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold">
                           {clientDrawings.length}
@@ -1245,7 +1245,7 @@ const CustomerDrawing = () => {
                             {clientDrawings.map((drawing, idx) => (
                               <tr key={drawing.id || `${drawing.drawing_no}-${idx}`} className="hover:bg-indigo-50/30 transition-colors text-xs">
                                 <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-semibold">{idx + 1}</td>
-                                <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-900">{drawing.drawing_no}</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-slate-900">{drawing.drawing_no}</td>
                                 <td className="px-3 py-2 whitespace-nowrap text-slate-600">
                                   {drawing.description || <span className="text-slate-400 italic">—</span>}
                                 </td>
@@ -1345,7 +1345,7 @@ const CustomerDrawing = () => {
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowEditModal(false)}></div>
             <div className="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-5 transform transition-all">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-lg font-bold text-slate-900">Edit Drawing</h3>
+                <h3 className="text-lg text-slate-900">Edit Drawing</h3>
                 <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">
                   ✕
                 </button>
@@ -1354,7 +1354,7 @@ const CustomerDrawing = () => {
               
               <form onSubmit={handleSave} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Revision</label>
+                  <label className=" flex items-center gap-2 text-xs text-slate-600">Revision</label>
                   <input 
                     type="text" 
                     className="w-full px-3 py-1.5 border border-slate-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors text-xs"
@@ -1363,7 +1363,7 @@ const CustomerDrawing = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Description</label>
+                  <label className=" flex items-center gap-2 text-xs text-slate-600">Description</label>
                   <textarea 
                     className="w-full px-3 py-1.5 border border-slate-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none text-xs"
                     value={editData.description}
@@ -1371,7 +1371,7 @@ const CustomerDrawing = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">PDF File</label>
+                  <label className=" flex items-center gap-2 text-xs text-slate-600">PDF File</label>
                   <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
                     <input 
                       type="file" 
@@ -1417,7 +1417,7 @@ const CustomerDrawing = () => {
             <div className="relative bg-white rounded-lg shadow-2xl max-w-3xl w-full p-5">
               <div className="flex justify-between items-center mb-3">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Revision History</h3>
+                  <h3 className="text-lg text-slate-900">Revision History</h3>
                   <p className="text-slate-600 text-xs mt-0.5">Drawing: <span className="font-semibold text-indigo-600">{selectedDrawing?.drawing_no}</span></p>
                 </div>
                 <button onClick={() => setShowRevisions(false)} className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-light">
@@ -1479,7 +1479,7 @@ const CustomerDrawing = () => {
                               )}
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap text-right">
-                              <div className="font-semibold text-slate-900 text-xs text-xs">{rev.po_number || '—'}</div>
+                              <div className="text-slate-900 text-xs text-xs">{rev.po_number || '—'}</div>
                               <div className="text-xs text-slate-500">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
                             </td>
                           </tr>
@@ -1502,7 +1502,7 @@ const CustomerDrawing = () => {
             <div className="relative bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-5">
               <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pb-3 border-b border-slate-200">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Approved Drawings</h3>
+                  <h3 className="text-lg text-slate-900">Approved Drawings</h3>
                   <p className="text-slate-600 text-xs mt-0.5">Design-approved drawings ready for quotation</p>
                 </div>
                 <button onClick={() => setShowApprovedDrawings(false)} className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-light">
@@ -1536,7 +1536,7 @@ const CustomerDrawing = () => {
                         >
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
-                              <p className="font-bold text-slate-900 text-xs group-hover:text-emerald-700">{clientName}</p>
+                              <p className="text-slate-900 text-xs group-hover:text-emerald-700">{clientName}</p>
                               {clientData.email && <p className="text-xs text-slate-500">{clientData.email}</p>}
                               {clientData.phone && <p className="text-xs text-slate-500">{clientData.phone}</p>}
                             </div>
@@ -1551,7 +1551,7 @@ const CustomerDrawing = () => {
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
                         <div>
-                          <p className="text-sm font-bold text-slate-900">{selectedApprovedClient}</p>
+                          <p className="text-sm text-slate-900">{selectedApprovedClient}</p>
                           <p className="text-xs text-slate-500">{selectedApprovedItems.length} items selected</p>
                         </div>
                         <button
@@ -1580,7 +1580,7 @@ const CustomerDrawing = () => {
                           <tbody className="divide-y divide-slate-100">
                             {selectedApprovedItems.map((item) => (
                               <tr key={item.id} className="hover:bg-emerald-50/30 transition-colors">
-                                <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-900">{item.drawing_no}</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-slate-900">{item.drawing_no}</td>
                                 <td className="px-3 py-2 text-slate-600">{item.description || '—'}</td>
                                 <td className="px-3 py-2 text-center text-slate-900 font-semibold">{item.quantity}</td>
                                 <td className="px-3 py-2 text-slate-600">{item.unit}</td>

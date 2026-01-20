@@ -483,7 +483,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
                       </span>
                     </td>
                     <td className="px-8 py-5">
-                      <div className="text-sm font-bold text-slate-900">{ws.workstation_name}</div>
+                      <div className="text-sm text-slate-900">{ws.workstation_name}</div>
                       <div className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
                         <span>📍</span> {ws.location || 'N/A'}
                       </div>

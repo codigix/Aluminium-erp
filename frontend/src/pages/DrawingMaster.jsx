@@ -127,7 +127,7 @@ const DrawingMaster = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Drawing Master</h1>
+          <h1 className="text-2xl text-slate-900">Drawing Master</h1>
           <p className="text-sm text-slate-500">Central repository for all engineering drawings and revisions</p>
         </div>
         <form onSubmit={handleSearch} className="flex gap-2">
@@ -176,12 +176,12 @@ const DrawingMaster = () => {
               ) : (
                 drawings.map((drawing, idx) => (
                   <tr key={`${drawing.drawing_no}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-2 whitespace-nowrap text-sm font-bold text-slate-900">{drawing.drawing_no}</td>
+                    <td className="p-2 whitespace-nowrap text-sm text-slate-900">{drawing.drawing_no}</td>
                     <td className="p-2 whitespace-nowrap text-sm text-slate-600">
                       <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-mono">{drawing.revision_no || '0'}</span>
                     </td>
                     <td className="p-2 whitespace-nowrap">
-                      <div className="text-xs font-bold text-slate-900">{drawing.po_number || 'N/A'}</div>
+                      <div className="text-xs text-slate-900">{drawing.po_number || 'N/A'}</div>
                       <div className="text-[10px] text-slate-500">SO-{String(drawing.sales_order_id).padStart(4, '0')}</div>
                     </td>
                     <td className="p-2 text-sm text-slate-500 max-w-xs truncate">{drawing.description}</td>
@@ -230,7 +230,7 @@ const DrawingMaster = () => {
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-slate-900 opacity-75" onClick={() => setShowEditModal(false)}></div>
             <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-              <h3 className="text-xl font-bold text-slate-900 mb-4">Edit Drawing: {editData.drawing_no}</h3>
+              <h3 className="text-xl text-slate-900 mb-4">Edit Drawing: {editData.drawing_no}</h3>
               <form onSubmit={handleSave} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Revision No</label>
@@ -294,7 +294,7 @@ const DrawingMaster = () => {
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900">
+                    <h3 className="text-xl text-slate-900">
                       Revision History: {selectedDrawing?.drawing_no}
                     </h3>
                   </div>

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Swal from 'sweetalert2'
-import sptechLogo from './assets/sptechpioneer logo.png'
+import { 
+  Building2, ClipboardList, FileText, Package, Palette, PencilLine, Factory, 
+  Settings, BarChart3, CheckCircle, Handshake, MessageSquare, ShoppingCart, 
+  Inbox, Book, Scale, TrendingUp, Search, Check, XCircle, Files, RotateCw 
+} from 'lucide-react'
 import CompanyMaster from './pages/CompanyMaster'
 import ClientContacts from './pages/ClientContacts'
 import CustomerPO from './pages/CustomerPO'
@@ -251,6 +255,7 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState({})
   const [signupForm, setSignupForm] = useState({
     username: '',
     email: '',
@@ -1349,39 +1354,63 @@ function App() {
   const primaryButtonLabel = drawerMode === 'edit' ? 'Update Company' : 'Save Company'
   const isReadOnly = drawerMode === 'view'
 
+  const iconMap = {
+    'clipboard': ClipboardList,
+    'document': FileText,
+    'package': Package,
+    'palette': Palette,
+    'pencil': PencilLine,
+    'factory': Factory,
+    'settings': Settings,
+    'chart': BarChart3,
+    'check': CheckCircle,
+    'handshake': Handshake,
+    'message': MessageSquare,
+    'cart': ShoppingCart,
+    'inbox': Inbox,
+    'book': Book,
+    'scale': Scale,
+    'trending': TrendingUp,
+    'search': Search,
+    'checkmark': Check,
+    'close': XCircle,
+    'files': Files,
+    'refresh': RotateCw
+  }
+
   const allNavigationItems = [
-    { label: 'Customer Drawing', moduleId: 'customer-drawing', icon: '📋' },
-    { label: 'Customer PO', moduleId: 'customer-po', icon: '📄' },
-    { label: 'Sales Order', moduleId: 'sales-order', icon: '📦' },
-    { label: 'Design Orders', moduleId: 'design-orders', icon: '🎨' },
-    { label: 'Client Quotations', moduleId: 'client-quotations', icon: '📋' },
-    { label: 'Drawing Master', moduleId: 'drawing-master', icon: '✏️', indent: true },
-    { label: 'BOM Creation', moduleId: 'bom-creation', icon: '📝', indent: true },
-    { label: 'Workstation Master', moduleId: 'workstation-master', icon: '🏭', indent: true },
-    { label: 'Operation Master', moduleId: 'operation-master', icon: '⚙️', indent: true },
-    { label: 'Routing / Operations', moduleId: 'routing-operations', icon: '⚙️', indent: true },
-    { label: 'Process Sheet', moduleId: 'process-sheet', icon: '📊', indent: true },
-    { label: 'BOM Approval', moduleId: 'bom-approval', icon: '✅', indent: true },
+    { label: 'Customer Drawing', moduleId: 'customer-drawing', icon: 'clipboard' },
+    { label: 'Customer PO', moduleId: 'customer-po', icon: 'document' },
+    { label: 'Sales Order', moduleId: 'sales-order', icon: 'package' },
+    { label: 'Design Orders', moduleId: 'design-orders', icon: 'palette' },
+    { label: 'Client Quotations', moduleId: 'client-quotations', icon: 'clipboard' },
+    { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'pencil', indent: true },
+    { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'clipboard', indent: true },
+    { label: 'Workstation Master', moduleId: 'workstation-master', icon: 'factory', indent: true },
+    { label: 'Operation Master', moduleId: 'operation-master', icon: 'settings', indent: true },
+    { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings', indent: true },
+    { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'chart', indent: true },
+    { label: 'BOM Approval', moduleId: 'bom-approval', icon: 'check', indent: true },
     { label: 'Vendor Management', isGroup: true, isDisabled: true, groupId: 'vendor-group' },
-    { label: 'Vendors', moduleId: 'vendors', icon: '🤝', indent: true },
-    { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: '💬', indent: true },
-    { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: '🛒', indent: true },
-    { label: 'PO Receipts', moduleId: 'po-receipts', icon: '📥', indent: true },
+    { label: 'Vendors', moduleId: 'vendors', icon: 'handshake', indent: true },
+    { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: 'message', indent: true },
+    { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'cart', indent: true },
+    { label: 'PO Receipts', moduleId: 'po-receipts', icon: 'inbox', indent: true },
     { label: 'Inventory Management', isGroup: true, isDisabled: true, groupId: 'inventory-group' },
-    { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', icon: '📊', indent: true },
-    { label: 'PO Material Request', moduleId: 'po-material-request', icon: '📋', indent: true },
-    { label: 'GRN Processing', moduleId: 'grn', icon: '🔄', indent: true },
-    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: '📖', indent: true },
-    { label: 'Stock Balance', moduleId: 'stock-balance', icon: '⚖️', indent: true },
-    { label: 'Warehouse Allocation', moduleId: 'warehouse-allocation', icon: '🏭', indent: true },
+    { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', icon: 'chart', indent: true },
+    { label: 'PO Material Request', moduleId: 'po-material-request', icon: 'clipboard', indent: true },
+    { label: 'GRN Processing', moduleId: 'grn', icon: 'refresh', indent: true },
+    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book', indent: true },
+    { label: 'Stock Balance', moduleId: 'stock-balance', icon: 'scale', indent: true },
+    { label: 'Warehouse Allocation', moduleId: 'warehouse-allocation', icon: 'factory', indent: true },
     { label: 'Quality Assurance', isGroup: true, isDisabled: true, groupId: 'quality-group' },
-    { label: 'Quality Dashboard', moduleId: 'quality-dashboard', icon: '📈', indent: true },
-    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: '📥', indent: true },
-    { label: 'In-Process QC', moduleId: 'in-process-qc', icon: '🔍', indent: true },
-    { label: 'Final QC', moduleId: 'final-qc', icon: '✓', indent: true },
-    { label: 'QC Inspections', moduleId: 'qc-inspections', icon: '🔎', indent: true },
-    { label: 'Rejections', moduleId: 'quality-rejections', icon: '❌', indent: true },
-    { label: 'Quality Reports', moduleId: 'quality-reports', icon: '📑', indent: true }
+    { label: 'Quality Dashboard', moduleId: 'quality-dashboard', icon: 'trending', indent: true },
+    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
+    { label: 'In-Process QC', moduleId: 'in-process-qc', icon: 'search', indent: true },
+    { label: 'Final QC', moduleId: 'final-qc', icon: 'checkmark', indent: true },
+    { label: 'QC Inspections', moduleId: 'qc-inspections', icon: 'search', indent: true },
+    { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
+    { label: 'Quality Reports', moduleId: 'quality-reports', icon: 'files', indent: true }
   ]
 
   const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
@@ -1703,9 +1732,9 @@ function App() {
           <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
             <div className="text-center space-y-2">
               <div className="h-16 w-16 rounded-2xl bg-slate-900 flex items-center justify-center mx-auto p-2">
-                <img src={sptechLogo} alt="SPTECHPIONEER Logo" className="h-full w-full object-contain" />
+                <Building2 className="h-8 w-8 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-slate-900">SPTECHPIONEER</h1>
+              <h1 className="text-2xl text-slate-900">SPTECHPIONEER</h1>
               <p className="text-sm text-slate-500">Sales & Operations ERP</p>
             </div>
 
@@ -1966,41 +1995,65 @@ function App() {
   return (
     <>
       <input ref={poUploadInputRef} type="file" accept=".pdf,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={handlePoPdfUpload} />
-      <div className="flex min-h-screen bg-slate-50 text-slate-900">
-        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-gradient-to-b from-slate-950 to-slate-900 text-white flex-col transition-transform lg:transition-none z-50 ${
+      <div className="flex min-h-screen bg-gray-50 text-slate-900">
+        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
           mobileMenuOpen ? 'flex' : 'hidden'
         } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="px-5 py-5 border-b border-slate-700/50 flex items-center justify-between">
-            <div className="flex items-center gap-2.5 flex-1">
+          <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
+            <div className="flex items-center gap-3 flex-1">
               <div className="h-10 w-10 rounded-lg bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
-                <img src={sptechLogo} alt="SPTECHPIONEER Logo" className="h-full w-full object-contain" />
+                <Building2 className="h-6 w-6 text-slate-900" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-bold leading-tight text-white">SPTECHPIONEER</p>
-                <p className="text-xs text-slate-400 truncate">{user?.department_code || 'ERP'}</p>
+                <p className="text-sm font-bold leading-tight">SPTECHPIONEER</p>
+                <p className="text-xs text-slate-300 truncate">{user?.department_code || 'ERP'}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden p-1 hover:bg-slate-700/50 rounded transition text-slate-300"
+              className="lg:hidden p-1 hover:bg-white/20 rounded transition text-white"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-            {navigationItems.map((item) => {
+          <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
+            {navigationItems.map((item, index) => {
               const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
               const isDisabled = item.isGroup || !item.moduleId
+              const isGroupExpanded = expandedGroups[item.groupId]
               
               if (item.isGroup) {
+                const nextGroupIndex = navigationItems.findIndex((it, i) => i > index && it.isGroup)
+                const groupItems = navigationItems.slice(index + 1, nextGroupIndex === -1 ? undefined : nextGroupIndex)
+                const hasVisibleItems = groupItems.length > 0
+                
                 return (
-                  <div key={item.label} className="pt-3 first:pt-0">
-                    <p className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">{item.label}</p>
+                  <div key={item.label} className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedGroups(prev => ({ ...prev, [item.groupId]: !prev[item.groupId] }))}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-slate-700 transition-colors"
+                    >
+                      <span>{item.label}</span>
+                      {hasVisibleItems && (
+                        <svg className={`w-4 h-4 transition-transform ${isGroupExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 )
+              }
+              
+              if (item.indent) {
+                const prevGroupIndex = navigationItems.slice(0, index).findIndex(it => it.isGroup)
+                const groupId = navigationItems[prevGroupIndex]?.groupId
+                if (groupId && !expandedGroups[groupId]) {
+                  return null
+                }
               }
               
               return (
@@ -2013,33 +2066,33 @@ function App() {
                       setMobileMenuOpen(false)
                     }
                   }}
-                  className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${item.indent ? 'ml-2' : ''} ${
+                  className={`flex items-center gap-3 w-full p-2  text-sm font-medium transition-all duration-150 group ${item.indent ? 'ml-2' : ''} ${
                     isActive 
-                      ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/30' 
+                      ? 'bg-indigo-50 text-indigo-700 ' 
                       : isDisabled 
-                      ? 'text-slate-500 cursor-not-allowed' 
-                      : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                      ? 'text-slate-400 cursor-not-allowed' 
+                      : 'text-slate-700 hover:bg-slate-100'
                   }`}
                   disabled={isDisabled}
                 >
-                  <span className="text-base flex-shrink-0">{item.icon}</span>
+                  {iconMap[item.icon] && (() => {
+                    const IconComponent = iconMap[item.icon]
+                    return <IconComponent className="w-4 h-4 flex-shrink-0" />
+                  })()}
                   <span className="flex-1 text-left truncate">{item.label}</span>
-                  {isActive && <span className="text-indigo-300 text-xs font-bold">●</span>}
+                  {isActive && <span className="text-indigo-600 text-xs font-bold">●</span>}
                 </button>
               )
             })}
           </div>
-          <div className="px-3 py-4 border-t border-slate-700/50 space-y-3">
-            <div className="bg-slate-800/50 rounded-xl px-4 py-3 space-y-3 backdrop-blur-sm">
-              
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full px-3 py-2 rounded-lg bg-slate-700/60 hover:bg-slate-600/60 text-white text-xs font-semibold transition-colors"
-              >
-                Logout
-              </button>
-            </div>
+          <div className="px-3 py-4 border-t border-slate-200 space-y-3">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors"
+            >
+              Logout
+            </button>
           </div>
         </aside>
 
@@ -2052,12 +2105,12 @@ function App() {
 
         <div className="flex-1 lg:ml-64 flex flex-col bg-slate-50">
           <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
-            <div className="px-4 sm:px-6 lg:px-10 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="p-2 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition"
+                  className="lg:hidden p-2 rounded-sm hover:bg-slate-100 transition"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
@@ -2067,23 +2120,19 @@ function App() {
                   <input
                     type="text"
                     placeholder="Search modules"
-                    className="pl-10 pr-4 py-2.5 rounded-2xl bg-slate-100 border border-slate-200 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                    className="pl-10 p-2 rounded-sm bg-slate-100 border border-slate-200 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
                     disabled
                   />
                   <span className="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
                 </div>
-                <div className="hidden md:flex items-center gap-2 text-sm text-slate-500">
-                  <span>EN</span>
-                  <span className="text-slate-300">|</span>
-                  <span>Admin</span>
-                </div>
+                
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                  <p className="text-sm text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
                   <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-semibold text-lg">
+                <div className="h-5 w-5 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white font-semibold text-lg">
                   {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
                 </div>
               </div>
@@ -2104,7 +2153,7 @@ function App() {
                 {/* <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">{activeModuleMeta.badge}</p>
-                    <h1 className="text-3xl font-semibold text-slate-900 text-xs mt-2">{activeModuleMeta.title}</h1>
+                    <h1 className="text-3xl text-slate-900 text-xs mt-2">{activeModuleMeta.title}</h1>
                     <p className="text-sm text-slate-500 mt-1">{activeModuleMeta.description}</p>
                   </div>
                   <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -2326,7 +2375,7 @@ function App() {
             <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">{drawerMode === 'view' ? 'Overview' : 'Workflow'}</p>
-                <h3 className="text-2xl font-semibold text-slate-900 text-xs">{drawerTitle}</h3>
+                <h3 className="text-2xl text-slate-900 text-xs">{drawerTitle}</h3>
               </div>
               <button type="button" onClick={closeDrawer} className="h-10 w-10 rounded-full border border-slate-200 text-slate-500 hover:text-slate-900">
                 ✕
@@ -2441,7 +2490,7 @@ function App() {
             <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">Client Contacts</p>
-                <h3 className="text-2xl font-semibold text-slate-900 text-xs">{contactCompany.company_name}</h3>
+                <h3 className="text-2xl text-slate-900 text-xs">{contactCompany.company_name}</h3>
                 <p className="text-sm text-slate-500">{contactCompany.company_code}</p>
               </div>
               <div className="flex items-center gap-3">
@@ -2460,7 +2509,7 @@ function App() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">Directory</p>
-                    <h4 className="text-lg font-semibold text-slate-900 text-xs">Existing Contacts</h4>
+                    <h4 className="text-lg text-slate-900 text-xs">Existing Contacts</h4>
                   </div>
                   <button
                     type="button"
@@ -2479,7 +2528,7 @@ function App() {
                       <div key={contact.id} className="border border-slate-200 rounded-2xl bg-white p-4 space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-base font-semibold text-slate-900 text-xs">{contact.name || 'Untitled Contact'}</p>
+                            <p className="text-base text-slate-900 text-xs">{contact.name || 'Untitled Contact'}</p>
                             <p className="text-sm text-slate-500">{contact.designation || '—'}</p>
                             <p className="text-[0.6rem] font-semibold tracking-[0.35em] uppercase text-slate-400 mt-2">
                               {contact.contact_type || contact.contactType || 'PRIMARY'}
@@ -2529,7 +2578,7 @@ function App() {
               <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 space-y-5">
                 <div>
                   <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">{editingContactId ? 'Update Contact' : 'Add Contact'}</p>
-                  <h4 className="text-xl font-semibold text-slate-900 text-xs">{editingContactId ? 'Edit Existing Contact' : 'Create New Contact'}</h4>
+                  <h4 className="text-xl text-slate-900 text-xs">{editingContactId ? 'Edit Existing Contact' : 'Create New Contact'}</h4>
                 </div>
                 {!isCompanyActive(contactCompany) && (
                   <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-2xl text-sm">
@@ -2632,7 +2681,7 @@ function App() {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-xs font-semibold tracking-[0.35em] text-slate-400 uppercase">Purchase Order</p>
-                  <h2 className="text-3xl font-bold text-slate-900 mt-1">{poDetail?.po_number || 'PO'}</h2>
+                  <h2 className="text-3xl text-slate-900 mt-1">{poDetail?.po_number || 'PO'}</h2>
                 </div>
                 <div className="flex items-center gap-3">
                   {poDetailPdfUrl && (
@@ -2645,7 +2694,7 @@ function App() {
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-2">
                 <p className="text-[0.65rem] font-bold tracking-[0.35em] text-slate-500 uppercase mb-2">Bill To</p>
-                <p className="text-lg font-semibold text-slate-900 text-xs">{poDetail?.company_name || '—'}</p>
+                <p className="text-lg text-slate-900 text-xs">{poDetail?.company_name || '—'}</p>
               </div>
             </div>
 
@@ -2659,15 +2708,15 @@ function App() {
                   <div className="grid md:grid-cols-3 gap-6">
                     <div className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-[0.65rem] font-bold tracking-[0.35em] text-slate-500 uppercase mb-2">PO Date</p>
-                      <p className="text-lg font-semibold text-slate-900 text-xs">{formatDisplayDate(poDetail.po_date)}</p>
+                      <p className="text-lg text-slate-900 text-xs">{formatDisplayDate(poDetail.po_date)}</p>
                     </div>
                     <div className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-[0.65rem] font-bold tracking-[0.35em] text-slate-500 uppercase mb-2">Status</p>
-                      <p className="text-lg font-semibold text-slate-900 text-xs">{(poDetail.status || 'DRAFT').split('_').map(chunk => chunk.charAt(0) + chunk.slice(1).toLowerCase()).join(' ')}</p>
+                      <p className="text-lg text-slate-900 text-xs">{(poDetail.status || 'DRAFT').split('_').map(chunk => chunk.charAt(0) + chunk.slice(1).toLowerCase()).join(' ')}</p>
                     </div>
                     <div className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-[0.65rem] font-bold tracking-[0.35em] text-slate-500 uppercase mb-2">Currency</p>
-                      <p className="text-lg font-semibold text-slate-900 text-xs">{poDetail.currency || 'INR'}</p>
+                      <p className="text-lg text-slate-900 text-xs">{poDetail.currency || 'INR'}</p>
                     </div>
                   </div>
 
@@ -2693,7 +2742,7 @@ function App() {
                   </div>
 
                   <div className="border-t border-slate-200 pt-8">
-                    <p className="text-base font-bold text-slate-900 mb-4">Line Items</p>
+                    <p className="text-base text-slate-900 mb-4">Line Items</p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead className="bg-slate-50 border-y border-slate-200">
@@ -2713,12 +2762,12 @@ function App() {
                           ) : (
                             poDetailItems.map((item, index) => (
                               <tr key={`po-detail-item-${item.id ?? index}`} className="border-b border-slate-100 hover:bg-slate-50">
-                                <td className="px-4 py-3 font-semibold text-slate-900 text-xs">{index + 1}</td>
-                                <td className="px-4 py-3"><div className="font-semibold text-slate-900 text-xs">{item.description}</div><div className="text-xs text-slate-500">Drw No: {item.drawing_no || item.item_code || 'N/A'}</div></td>
+                                <td className="px-4 py-3 text-slate-900 text-xs">{index + 1}</td>
+                                <td className="px-4 py-3"><div className="text-slate-900 text-xs">{item.description}</div><div className="text-xs text-slate-500">Drw No: {item.drawing_no || item.item_code || 'N/A'}</div></td>
                                 <td className="px-4 py-3 text-right font-medium text-slate-900">{item.quantity ?? '—'}</td>
                                 <td className="px-4 py-3 text-slate-600">{item.unit || '—'}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatCurrencyByCode(item.rate, poDetail.currency)}</td>
-                                <td className="px-4 py-3 text-right font-semibold text-slate-900 text-xs">{formatCurrencyByCode(item.basic_amount, poDetail.currency)}</td>
+                                <td className="px-4 py-3 text-right text-slate-900 text-xs">{formatCurrencyByCode(item.basic_amount, poDetail.currency)}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatPercent(item.cgst_percent || item.sgst_percent || item.igst_percent)}</td>
                               </tr>
                             ))

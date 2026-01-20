@@ -57,7 +57,7 @@ const CompanyMaster = ({
             <div className="sticky top-0 bg-gradient-to-r from-slate-50 to-slate-100 px-8 py-6 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase" style={{ fontFamily: 'var(--font-display)' }}>New Entry</p>
-                <h2 className="text-3xl font-bold text-slate-900 mt-2" style={{ fontFamily: 'var(--font-display)' }}>Register Company</h2>
+                <h2 className="text-3xl text-slate-900 mt-2" style={{ fontFamily: 'var(--font-display)' }}>Register Company</h2>
               </div>
               <button
                 onClick={onToggleCreatePanel}

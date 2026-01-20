@@ -383,7 +383,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
                       <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-[10px] font-bold">{op.operation_code}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-slate-900">{op.operation_name}</div>
+                      <div className="text-sm text-slate-900">{op.operation_name}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-slate-600 font-medium">{op.workstation_name || 'N/A'}</div>

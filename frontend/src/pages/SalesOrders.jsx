@@ -321,11 +321,11 @@ const SalesOrders = ({
                         {(soItems || []).map((item, idx) => (
                           <React.Fragment key={`so-item-wrapper-${idx}`}>
                             <tr className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-5 py-4">
-                                <p className="font-semibold text-slate-900 text-xs">{item.description}</p>
+                              <td className="p-2">
+                                <p className="text-slate-900 text-xs">{item.description}</p>
                                 {item.item_code && <p className="text-[10px] text-slate-400 mt-0.5">{item.item_code}</p>}
                               </td>
-                              <td className="px-5 py-4">
+                              <td className="p-2">
                                 <input 
                                   className="w-full p-1.5 border border-slate-200 rounded text-[11px] font-mono focus:ring-1 focus:ring-slate-900 focus:outline-none"
                                   value={item.drawing_no || ''}
@@ -337,15 +337,15 @@ const SalesOrders = ({
                                   placeholder="Enter Drawing #"
                                 />
                               </td>
-                              <td className="px-5 py-4 text-right text-slate-900 font-bold">{item.quantity}</td>
-                              <td className="px-5 py-4 text-slate-500 font-medium">{item.unit}</td>
-                              <td className="px-5 py-4 text-right text-slate-600 font-medium">
+                              <td className="p-2 text-right text-slate-900 font-bold">{item.quantity}</td>
+                              <td className="p-2 text-slate-500 font-medium">{item.unit}</td>
+                              <td className="p-2 text-right text-slate-600 font-medium">
                                 {formatCurrency(item.rate, selectedPoForSo.currency)}
                               </td>
-                              <td className="px-5 py-4 text-right text-slate-900 font-bold">
+                              <td className="p-2 text-right text-slate-900 font-bold">
                                 {formatCurrency(item.basic_amount || (item.quantity * item.rate), selectedPoForSo.currency)}
                               </td>
-                              <td className="px-5 py-4 text-right">
+                              <td className="p-2 text-right">
                                 <button 
                                   type="button"
                                   onClick={() => setExpandedItems(prev => ({...prev, [idx]: !prev[idx]}))}
@@ -387,7 +387,7 @@ const SalesOrders = ({
                       </tbody>
                     </table>
                   </div>
-                  <div className="px-5 py-4 bg-slate-900 flex justify-between items-center">
+                  <div className="p-2 bg-slate-900 flex justify-between items-center">
                     <div className="flex gap-6">
                       <div className="space-y-0.5">
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Subtotal</p>
@@ -452,17 +452,17 @@ const SalesOrders = ({
 
       {!loading && hasOrders ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-100 text-slate-500 uppercase tracking-[0.2em] text-[0.65rem]">
+          <table className="w-full text-sm bg-white">
+            <thead className="bg-slate-100 text-slate-500  text-xs">
               <tr>
-                <th className="px-5 py-4 text-left font-semibold">Order Code</th>
-                <th className="px-5 py-4 text-left font-semibold">Customer / Project</th>
-                <th className="px-5 py-4 text-left font-semibold">PO Number</th>
-                <th className="px-5 py-4 text-left font-semibold">PO Date</th>
-                <th className="px-5 py-4 text-left font-semibold">Net Value</th>
-                <th className="px-5 py-4 text-left font-semibold">Priority</th>
-                <th className="px-5 py-4 text-left font-semibold">Status</th>
-                <th className="px-5 py-4 text-right font-semibold">Actions</th>
+                <th className="p-2 text-left text-thin">Order Code</th>
+                <th className="p-2 text-left text-thin">Customer / Project</th>
+                <th className="p-2 text-left text-thin">PO Number</th>
+                <th className="p-2 text-left text-thin">PO Date</th>
+                <th className="p-2 text-left text-thin">Net Value</th>
+                <th className="p-2 text-left text-thin">Priority</th>
+                <th className="p-2 text-left text-thin">Status</th>
+                <th className="p-2 text-right text-thin">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -477,38 +477,38 @@ const SalesOrders = ({
 
                 return (
                   <tr key={`so-row-${order.id}`} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="px-5 py-5 align-middle">
-                      <p className="font-bold text-slate-900">{formatOrderCode(order.id)}</p>
+                    <td className="p-2 align-middle">
+                      <p className="text-slate-900">{formatOrderCode(order.id)}</p>
                     </td>
-                    <td className="px-5 py-5 align-middle">
-                      <p className="font-semibold text-slate-900 text-xs">{order.company_name || '—'}</p>
+                    <td className="p-2 align-middle">
+                      <p className="text-slate-900 text-xs">{order.company_name || '—'}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{order.project_name || '—'}</p>
                     </td>
-                    <td className="px-5 py-5 text-slate-600 align-middle">
+                    <td className="p-2 text-slate-600 align-middle text-xs">
                       {order.po_number || '—'}
                     </td>
-                    <td className="px-5 py-5 text-slate-600 align-middle">
+                    <td className="p-2 text-slate-600 align-middle text-xs">
                       {formatDate(order.po_date)}
                     </td>
-                    <td className="px-5 py-5 text-slate-900 font-semibold align-middle">
+                    <td className="p-2 text-slate-900 font-semibold align-middle">
                       {hasNetValue ? formatCurrency(netValue, order.po_currency) : '—'}
                     </td>
-                    <td className="px-5 py-5 align-middle">
-                      <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">
+                    <td className="p-2 align-middle">
+                      <span className="text-xs text-slate-600 tracking-tight">
                         {formatPriority(order.production_priority)}
                       </span>
                     </td>
-                    <td className="px-5 py-5 align-middle">
+                    <td className="p-2 align-middle">
                       <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeClasses}`}>
                         {formatStatus(order.status)}
                       </span>
                     </td>
-                    <td className="px-5 py-5 align-middle">
+                    <td className="p-2 align-middle">
                       <div className="flex justify-end gap-2">
                         {canViewPo && (
                           <button
                             type="button"
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                            className="p-2 rounded-xl border border-slate-200 text-xs text-slate-700 hover:bg-slate-50 transition"
                             onClick={() => onViewPo(order.customer_po_id)}
                           >
                             Details
@@ -566,7 +566,7 @@ const SalesOrders = ({
               </svg>
             </div>
             <div>
-              <p className="text-base font-bold text-slate-900">No Sales Orders Found</p>
+              <p className="text-base text-slate-900">No Sales Orders Found</p>
               <p className="text-sm text-slate-500 max-w-xs mx-auto mt-1">Push a Customer PO to start the workflow or refresh the list.</p>
             </div>
             <button
