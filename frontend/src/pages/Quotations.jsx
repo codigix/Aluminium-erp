@@ -46,7 +46,6 @@ const Quotations = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All Quotations');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showRecordModal, setShowRecordModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState(null);
@@ -626,12 +625,8 @@ const Quotations = () => {
     return vendors.find(v => v.id === vendorId)?.vendor_name || 'Unknown Vendor';
   };
 
-  const getSalesOrderRef = (soId) => {
-    return salesOrders.find(s => s.id === soId)?.project_name || '';
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card title="Vendor Quotations" subtitle="Manage and compare vendor quotes">
         <div className="flex gap-4 justify-between items-center mb-6">
           <div className="flex-1">
@@ -659,14 +654,20 @@ const Quotations = () => {
           <div className="flex gap-2">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm  hover:bg-blue-700 transition-colors"
             >
-              📋 {activeTab === 'sent' ? 'Request Quote' : 'Record Quote'}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              {activeTab === 'sent' ? 'Request Quote' : 'Record Quote'}
             </button>
             <button
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm  hover:bg-blue-700 transition-colors"
             >
-              ⬇ Export Report
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export
             </button>
           </div>
         </div>
@@ -674,7 +675,7 @@ const Quotations = () => {
         <div className="flex gap-4 border-b border-slate-200 mb-6">
           <button
             onClick={() => setActiveTab('sent')}
-            className={`pb-3 px-1 text-sm font-semibold transition ${
+            className={`pb-3 px-1 text-sm  transition ${
               activeTab === 'sent'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-slate-600 hover:text-slate-900'
@@ -684,7 +685,7 @@ const Quotations = () => {
           </button>
           <button
             onClick={() => setActiveTab('received')}
-            className={`pb-3 px-1 text-sm font-semibold transition ${
+            className={`pb-3 px-1 text-sm  transition ${
               activeTab === 'received'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-slate-600 hover:text-slate-900'
@@ -703,13 +704,13 @@ const Quotations = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Quote No.</th>
-                  <th className="px-4 py-3 text-left font-semibold">Vendor</th>
-                  <th className="px-4 py-3 text-left font-semibold">{activeTab === 'sent' ? 'Valid Till' : 'Total Amount'}</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="px-4 py-3 text-left ">Quote No.</th>
+                  <th className="px-4 py-3 text-left ">Vendor</th>
+                  <th className="px-4 py-3 text-left ">{activeTab === 'sent' ? 'Valid Till' : 'Total Amount'}</th>
+                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="px-4 py-3 text-right ">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -733,55 +734,69 @@ const Quotations = () => {
                           )}
                         </div>
                       ) : (
-                        <div className="font-semibold">{formatCurrency(q.total_amount)}</div>
+                        <div className="">{formatCurrency(q.total_amount)}</div>
                       )}
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${rfqStatusColors[q.status]?.badge}`}>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs  ${rfqStatusColors[q.status]?.badge}`}>
                         {rfqStatusColors[q.status]?.label}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button
-                        onClick={() => handleViewPDF(q.id)}
-                        className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition"
-                        title="View Quotation PDF"
-                      >
-                        👁 View
-                      </button>
-                      {activeTab === 'sent' && (
-                        <>
-                          <button
-                            onClick={() => openEmailModal(q)}
-                            className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium transition"
-                            title={q.status === 'SENT' ? 'Resend RFQ to vendor' : 'Send RFQ to vendor via email'}
-                          >
-                            📧 {q.status === 'SENT' ? 'Resend' : 'Send'}
-                          </button>
-                          <button
-                            onClick={() => openEditModal(q)}
-                            className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition"
-                            title="Edit quotation details"
-                          >
-                            ✎ Edit
-                          </button>
-                        </>
-                      )}
-                      {activeTab === 'received' && q.status === 'RECEIVED' && (
+                    <td className="px-4 py-4 text-right">
+                      <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => handleApproveQuote(q.id)}
-                          className="px-3 py-1 text-xs rounded border border-green-200 text-green-600 hover:bg-green-50 font-medium"
-                          title="Approve and enable PO creation"
+                          onClick={() => handleViewPDF(q.id)}
+                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
+                          title="View Quotation PDF"
                         >
-                          ✓ Approve
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
                         </button>
-                      )}
-                      <button
-                        onClick={() => handleDeleteQuotation(q.id)}
-                        className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium"
-                      >
-                        🗑
-                      </button>
+                        {activeTab === 'sent' && (
+                          <>
+                            <button
+                              onClick={() => openEmailModal(q)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                              title={q.status === 'SENT' ? 'Resend RFQ' : 'Send RFQ'}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => openEditModal(q)}
+                              className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
+                              title="Edit quotation"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
+                        {activeTab === 'received' && q.status === 'RECEIVED' && (
+                          <button
+                            onClick={() => handleApproveQuote(q.id)}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200"
+                            title="Approve Quote"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteQuotation(q.id)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -794,20 +809,20 @@ const Quotations = () => {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">Total Quotations</p>
-            <p className="text-2xl font-bold text-blue-900">{stats.total_quotations || 0}</p>
+            <p className="text-xs text-blue-600   tracking-wider mb-1">Total Quotations</p>
+            <p className="text-2xl  text-blue-900">{stats.total_quotations || 0}</p>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">Pending Quotes</p>
-            <p className="text-2xl font-bold text-yellow-900">{stats.pending_quotations || 0}</p>
+            <p className="text-xs text-yellow-600   tracking-wider mb-1">Pending Quotes</p>
+            <p className="text-2xl  text-yellow-900">{stats.pending_quotations || 0}</p>
           </div>
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Approved Quotes</p>
-            <p className="text-2xl font-bold text-emerald-900">{stats.approved_quotations || 0}</p>
+            <p className="text-xs text-emerald-600   tracking-wider mb-1">Approved Quotes</p>
+            <p className="text-2xl  text-emerald-900">{stats.approved_quotations || 0}</p>
           </div>
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <p className="text-xs text-purple-600 font-semibold uppercase tracking-wider mb-1">Total Value</p>
-            <p className="text-2xl font-bold text-purple-900">{formatCurrency(stats.total_value)}</p>
+            <p className="text-xs text-purple-600   tracking-wider mb-1">Total Value</p>
+            <p className="text-2xl  text-purple-900">{formatCurrency(stats.total_value)}</p>
           </div>
         </div>
       )}
@@ -817,7 +832,7 @@ const Quotations = () => {
           <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-lg text-slate-900 text-xs">
+                <h3 className="text-md text-slate-900 text-xs">
                   {activeTab === 'sent' ? 'Create Quote Request (RFQ)' : 'Record Vendor Quote'}
                 </h3>
                 {activeTab !== 'sent' && (
@@ -884,12 +899,12 @@ const Quotations = () => {
                     </div>
 
                     {formData.items.length === 0 ? (
-                      <p className="text-sm text-slate-500 p-4 text-center border border-dashed border-slate-200 rounded">
+                      <p className="text-xs text-slate-500 p-4 text-center border border-dashed border-slate-200 rounded">
                         No items added yet. Click "Add Item" to include line items in this quotation.
                       </p>
                     ) : (
                       <div className="space-y-2">
-                        <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wider">
                           <div className="col-span-2">Drawing No</div>
                           <div className="col-span-3">Description</div>
                           <div className="col-span-3">Material Name</div>
@@ -997,7 +1012,7 @@ const Quotations = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Amount (₹)</label>
+                      <label className="block text-xs  text-slate-500  tracking-wider mb-1">Total Amount (₹)</label>
                       <div className="text-xl text-slate-900">{formatCurrency(recordData.amount)}</div>
                     </div>
                     <div>
@@ -1027,12 +1042,12 @@ const Quotations = () => {
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
-                            <th className="px-3 py-2 font-semibold text-slate-600">DESCRIPTION</th>
-                            <th className="px-3 py-2 font-semibold text-slate-600">MATERIAL NAME</th>
-                            <th className="px-3 py-2 font-semibold text-slate-600" style={{ width: '100px' }}>TYPE</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600" style={{ width: '70px' }}>QTY</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600" style={{ width: '100px' }}>PRICE</th>
-                            <th className="px-3 py-2 text-right font-semibold text-slate-600" style={{ width: '100px' }}>TOTAL</th>
+                            <th className="px-3 py-2  text-slate-600">DESCRIPTION</th>
+                            <th className="px-3 py-2  text-slate-600">MATERIAL NAME</th>
+                            <th className="px-3 py-2  text-slate-600" style={{ width: '100px' }}>TYPE</th>
+                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '70px' }}>QTY</th>
+                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '100px' }}>PRICE</th>
+                            <th className="px-3 py-2 text-right  text-slate-600" style={{ width: '100px' }}>TOTAL</th>
                             <th className="px-3 py-2 text-center" style={{ width: '40px' }}></th>
                           </tr>
                         </thead>
@@ -1116,8 +1131,8 @@ const Quotations = () => {
 
                     {recordData.items.length > 0 && (
                       <div className="mt-4 p-4 bg-blue-50 rounded-lg flex justify-between items-center border border-blue-100">
-                        <span className="text-sm font-semibold text-blue-700">Quotation Total</span>
-                        <span className="text-xl font-bold text-blue-900">{formatCurrency(recordData.amount)}</span>
+                        <span className="text-sm  text-blue-700">Quotation Total</span>
+                        <span className="text-xl  text-blue-900">{formatCurrency(recordData.amount)}</span>
                       </div>
                     )}
                   </div>
@@ -1159,7 +1174,7 @@ const Quotations = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg text-slate-900 text-xs">Send Quotation via Email</h3>
+              <h3 className="text-md text-slate-900 text-xs">Send Quotation via Email</h3>
               <button onClick={() => setShowEmailModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -1231,7 +1246,7 @@ const Quotations = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg text-slate-900 text-xs">Edit Quotation</h3>
+              <h3 className="text-md text-slate-900 text-xs">Edit Quotation</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -1279,12 +1294,12 @@ const Quotations = () => {
                 </div>
 
                 {editFormData.items.length === 0 ? (
-                  <p className="text-sm text-slate-500 p-4 text-center border border-dashed border-slate-200 rounded">
+                  <p className="text-xs text-slate-500 p-4 text-center border border-dashed border-slate-200 rounded">
                     No items added yet.
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wider">
                       <div className="col-span-2">Drawing No</div>
                       <div className="col-span-3">Description</div>
                       <div className="col-span-3">Material Name</div>

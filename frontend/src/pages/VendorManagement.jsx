@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -41,14 +41,8 @@ const formatCurrency = (value, currency = 'INR') => {
 };
 
 const Vendors = ({ onAddVendor }) => {
-  const [vendors, setVendors] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    setVendors([]);
-    setLoading(false);
-  }, []);
+  const [vendors] = useState([]);
+  const [loading] = useState(false);
 
   return (
     <Card title="Vendors" subtitle="Manage supplier and vendor information">
@@ -59,7 +53,7 @@ const Vendors = ({ onAddVendor }) => {
           <button
             type="button"
             onClick={onAddVendor}
-            className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+            className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm  hover:bg-slate-800"
           >
             + Add Vendor
           </button>
@@ -68,13 +62,13 @@ const Vendors = ({ onAddVendor }) => {
       {vendors.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold">Vendor Name</th>
-                <th className="px-4 py-3 text-left font-semibold">Contact</th>
-                <th className="px-4 py-3 text-left font-semibold">Email</th>
-                <th className="px-4 py-3 text-left font-semibold">Status</th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                <th className="px-4 py-3 text-left ">Vendor Name</th>
+                <th className="px-4 py-3 text-left ">Contact</th>
+                <th className="px-4 py-3 text-left ">Email</th>
+                <th className="px-4 py-3 text-left ">Status</th>
+                <th className="px-4 py-3 text-right ">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -84,12 +78,20 @@ const Vendors = ({ onAddVendor }) => {
                   <td className="px-4 py-4 text-slate-600">{vendor.contact}</td>
                   <td className="px-4 py-4 text-slate-600">{vendor.email}</td>
                   <td className="px-4 py-4">
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${vendorStatusColors[vendor.status]?.bg} ${vendorStatusColors[vendor.status]?.text} ${vendorStatusColors[vendor.status]?.border}`}>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs  border ${vendorStatusColors[vendor.status]?.bg} ${vendorStatusColors[vendor.status]?.text} ${vendorStatusColors[vendor.status]?.border}`}>
                       {vendorStatusColors[vendor.status]?.label || vendor.status}
                     </span>
                   </td>
                   <td className="px-4 py-4 text-right space-x-2">
-                    <button className="px-3 py-1 text-xs rounded border border-slate-200 hover:bg-slate-50">View</button>
+                    <button 
+                      className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                      title="View Details"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                      </svg>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -102,14 +104,8 @@ const Vendors = ({ onAddVendor }) => {
 };
 
 const Quotations = ({ onCreateRFQ }) => {
-  const [rfqs, setRfqs] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    setRfqs([]);
-    setLoading(false);
-  }, []);
+  const [rfqs] = useState([]);
+  const [loading] = useState(false);
 
   return (
     <Card title="Quotations / RFQs" subtitle="Request for Quotation from vendors">
@@ -120,7 +116,7 @@ const Quotations = ({ onCreateRFQ }) => {
           <button
             type="button"
             onClick={onCreateRFQ}
-            className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+            className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm  hover:bg-slate-800"
           >
             + Create RFQ
           </button>
@@ -129,14 +125,14 @@ const Quotations = ({ onCreateRFQ }) => {
       {rfqs.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold">RFQ #</th>
-                <th className="px-4 py-3 text-left font-semibold">Vendor</th>
-                <th className="px-4 py-3 text-left font-semibold">Items</th>
-                <th className="px-4 py-3 text-left font-semibold">Status</th>
-                <th className="px-4 py-3 text-left font-semibold">Sent Date</th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                <th className="px-4 py-3 text-left ">RFQ #</th>
+                <th className="px-4 py-3 text-left ">Vendor</th>
+                <th className="px-4 py-3 text-left ">Items</th>
+                <th className="px-4 py-3 text-left ">Status</th>
+                <th className="px-4 py-3 text-left ">Sent Date</th>
+                <th className="px-4 py-3 text-right ">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -146,13 +142,21 @@ const Quotations = ({ onCreateRFQ }) => {
                   <td className="px-4 py-4 text-slate-600">{rfq.vendor_name}</td>
                   <td className="px-4 py-4 text-slate-600">{rfq.items_count} items</td>
                   <td className="px-4 py-4">
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${rfqStatusColors[rfq.status]?.bg} ${rfqStatusColors[rfq.status]?.text} ${rfqStatusColors[rfq.status]?.border}`}>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs  border ${rfqStatusColors[rfq.status]?.bg} ${rfqStatusColors[rfq.status]?.text} ${rfqStatusColors[rfq.status]?.border}`}>
                       {rfqStatusColors[rfq.status]?.label || rfq.status}
                     </span>
                   </td>
                   <td className="px-4 py-4 text-slate-600">{formatDate(rfq.sent_date)}</td>
                   <td className="px-4 py-4 text-right space-x-2">
-                    <button className="px-3 py-1 text-xs rounded border border-slate-200 hover:bg-slate-50">View</button>
+                    <button 
+                      className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                      title="View Details"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                      </svg>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -165,14 +169,8 @@ const Quotations = ({ onCreateRFQ }) => {
 };
 
 const PurchaseOrders = ({ onCreatePO }) => {
-  const [pos, setPos] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    setPos([]);
-    setLoading(false);
-  }, []);
+  const [pos] = useState([]);
+  const [loading] = useState(false);
 
   return (
     <Card title="Purchase Orders" subtitle="Vendor purchase orders from quotations">
@@ -183,7 +181,7 @@ const PurchaseOrders = ({ onCreatePO }) => {
           <button
             type="button"
             onClick={onCreatePO}
-            className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+            className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm  hover:bg-slate-800"
           >
             + Create PO
           </button>
@@ -192,14 +190,14 @@ const PurchaseOrders = ({ onCreatePO }) => {
       {pos.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold">PO #</th>
-                <th className="px-4 py-3 text-left font-semibold">Vendor</th>
-                <th className="px-4 py-3 text-left font-semibold">Amount</th>
-                <th className="px-4 py-3 text-left font-semibold">Status</th>
-                <th className="px-4 py-3 text-left font-semibold">Created</th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                <th className="px-4 py-3 text-left ">PO #</th>
+                <th className="px-4 py-3 text-left ">Vendor</th>
+                <th className="px-4 py-3 text-left ">Amount</th>
+                <th className="px-4 py-3 text-left ">Status</th>
+                <th className="px-4 py-3 text-left ">Created</th>
+                <th className="px-4 py-3 text-right ">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -209,13 +207,21 @@ const PurchaseOrders = ({ onCreatePO }) => {
                   <td className="px-4 py-4 text-slate-600">{po.vendor_name}</td>
                   <td className="px-4 py-4 text-slate-900 text-xs">{formatCurrency(po.total_amount)}</td>
                   <td className="px-4 py-4">
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${poStatusColors[po.status]?.bg} ${poStatusColors[po.status]?.text} ${poStatusColors[po.status]?.border}`}>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs  border ${poStatusColors[po.status]?.bg} ${poStatusColors[po.status]?.text} ${poStatusColors[po.status]?.border}`}>
                       {poStatusColors[po.status]?.label || po.status}
                     </span>
                   </td>
                   <td className="px-4 py-4 text-slate-600">{formatDate(po.created_at)}</td>
                   <td className="px-4 py-4 text-right space-x-2">
-                    <button className="px-3 py-1 text-xs rounded border border-slate-200 hover:bg-slate-50">View</button>
+                    <button 
+                      className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                      title="View Details"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                      </svg>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -243,23 +249,23 @@ const VendorManagement = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex gap-2 border-b border-slate-200">
         <button
           onClick={() => setActiveTab('vendors')}
-          className={`px-4 py-3 text-sm font-semibold transition ${activeTab === 'vendors' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`px-4 py-3 text-sm  transition ${activeTab === 'vendors' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
         >
           Vendors
         </button>
         <button
           onClick={() => setActiveTab('quotations')}
-          className={`px-4 py-3 text-sm font-semibold transition ${activeTab === 'quotations' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`px-4 py-3 text-sm  transition ${activeTab === 'quotations' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
         >
           Quotations (RFQ)
         </button>
         <button
           onClick={() => setActiveTab('purchase-orders')}
-          className={`px-4 py-3 text-sm font-semibold transition ${activeTab === 'purchase-orders' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`px-4 py-3 text-sm  transition ${activeTab === 'purchase-orders' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}
         >
           Purchase Orders
         </button>

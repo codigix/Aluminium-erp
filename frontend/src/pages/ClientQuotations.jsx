@@ -303,13 +303,13 @@ const ClientQuotations = () => {
           <div className="flex bg-slate-200 p-1 rounded-xl">
             <button
               onClick={() => setActiveTab('pending')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'pending' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'pending' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
             >
               Pending Approval
             </button>
             <button
               onClick={() => setActiveTab('sent')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'sent' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'sent' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
             >
               Sent Quotations
             </button>
@@ -319,7 +319,7 @@ const ClientQuotations = () => {
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           <div className={`bg-gradient-to-r ${activeTab === 'pending' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'} p-2`}>
             <div className="flex justify-between items-center">
-              <h2 className="text-xs font-bold text-white flex items-center gap-2">
+              <h2 className="text-xs  text-white flex items-center gap-2">
                 {activeTab === 'pending' ? (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -339,7 +339,7 @@ const ClientQuotations = () => {
               <button
                 onClick={activeTab === 'pending' ? fetchApprovedOrders : fetchSentQuotations}
                 disabled={loading}
-                className="px-3 py-1.5 bg-white rounded text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 bg-white rounded text-xs  shadow-sm transition-colors disabled:opacity-50"
                 style={{ color: activeTab === 'pending' ? '#059669' : '#4f46e5' }}
               >
                 ↻ Refresh
@@ -352,7 +352,7 @@ const ClientQuotations = () => {
               <div className="flex justify-center mb-3">
                 <div className={`w-6 h-6 border-2 ${activeTab === 'pending' ? 'border-emerald-600' : 'border-indigo-600'} border-t-transparent rounded-full animate-spin`}></div>
               </div>
-              <p className="text-slate-600 font-semibold text-sm">Loading data...</p>
+              <p className="text-slate-600  text-sm">Loading data...</p>
             </div>
           ) : activeTab === 'pending' ? (
             Object.keys(groupedByClient).length === 0 ? (
@@ -360,7 +360,7 @@ const ClientQuotations = () => {
                 <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
-                <p className="text-slate-500 font-semibold">No design-approved orders found</p>
+                <p className="text-slate-500 ">No design-approved orders found</p>
                 <p className="text-slate-400 text-sm mt-1">Orders must be approved by Design Engineer first</p>
               </div>
             ) : (
@@ -368,12 +368,12 @@ const ClientQuotations = () => {
                 <table className="w-full divide-y divide-slate-100">
                   <thead className="bg-slate-100">
                     <tr>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Client Name</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Email</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Phone</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Date</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Items</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Action</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Client Name</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Email</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Phone</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Date</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Items</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Action</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-100">
@@ -400,7 +400,7 @@ const ClientQuotations = () => {
                               </div>
                             </td>
                             <td className="p-2 text-left">
-                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
+                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs ">
                                 {totalItems}
                               </span>
                             </td>
@@ -408,13 +408,13 @@ const ClientQuotations = () => {
                               <div className="flex gap-2 justify-left">
                                 <button
                                   onClick={() => toggleExpandClient(clientName)}
-                                  className="px-4 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-colors inline-flex items-center gap-1"
+                                  className="px-4 py-1.5 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-colors inline-flex items-center gap-1"
                                 >
                                   {expandedClientName === clientName ? 'Hide' : 'View'}
                                 </button>
                                 <button
                                   onClick={() => handleDeleteApprovedOrders(clientName)}
-                                  className="px-4 py-1.5 bg-red-600 text-white rounded text-xs font-semibold hover:bg-red-700 transition-colors inline-flex items-center gap-1"
+                                  className="px-4 py-1.5 bg-red-600 text-white rounded text-xs  hover:bg-red-700 transition-colors inline-flex items-center gap-1"
                                 >
                                   Delete
                                 </button>
@@ -433,19 +433,19 @@ const ClientQuotations = () => {
                                     <table className="w-full divide-y divide-slate-100">
                                       <thead className="bg-white">
                                         <tr className="border-b border-slate-200">
-                                          <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">#</th>
-                                          <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Drawing</th>
-                                          <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Description</th>
-                                          <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Qty</th>
-                                          <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Unit</th>
-                                          <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Quote Price</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 ">#</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 ">Drawing</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 ">Description</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 ">Qty</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 ">Unit</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 ">Quote Price</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-slate-100">
                                         {clientData.orders.flatMap((order, orderIdx) => 
                                           (order.items || []).map((item, itemIdx) => (
                                             <tr key={`${order.id}-${item.id}`} className="hover:bg-slate-50">
-                                              <td className="p-2 text-xs text-slate-600 font-semibold">
+                                              <td className="p-2 text-xs text-slate-600 ">
                                                 {clientData.orders.slice(0, orderIdx).reduce((sum, o) => sum + (o.items?.length || 0), 0) + itemIdx + 1}
                                               </td>
                                               <td className="p-2">
@@ -476,15 +476,15 @@ const ClientQuotations = () => {
                                     </table>
                                     <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-between items-center">
                                       <div>
-                                        <p className="text-xs text-slate-600 font-semibold">Total Quotation Value</p>
-                                        <p className="text-2xl font-bold text-emerald-600">
+                                        <p className="text-xs text-slate-600 ">Total Quotation Value</p>
+                                        <p className="text-2xl  text-emerald-600">
                                           ₹{calculateClientTotal(clientName).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                         </p>
                                       </div>
                                       <button
                                         onClick={() => handleSendQuote(clientName)}
                                         disabled={sendingClientName === clientName || calculateClientTotal(clientName) === 0}
-                                        className="px-6 py-2 bg-emerald-600 text-white rounded font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2 text-sm"
+                                        className="px-6 py-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2 text-sm"
                                       >
                                         {sendingClientName === clientName ? 'Sending...' : 'Send Quote to Client'}
                                       </button>
@@ -507,7 +507,7 @@ const ClientQuotations = () => {
                 <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
-                <p className="text-slate-500 font-semibold">No sent quotations found</p>
+                <p className="text-slate-500 ">No sent quotations found</p>
                 <p className="text-slate-400 text-sm mt-1">Quotations you send will appear here</p>
               </div>
             ) : (
@@ -515,13 +515,13 @@ const ClientQuotations = () => {
                 <table className="w-full divide-y divide-slate-100">
                   <thead className="bg-slate-100">
                     <tr>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Quote ID</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Client</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Project / Details</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Total Amount</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Date</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Status</th>
-                      <th className="p-2 text-left text-xs font-bold text-slate-700 uppercase">Action</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Quote ID</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Client</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Project / Details</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Total Amount</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Date</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Status</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Action</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-100">
@@ -530,14 +530,14 @@ const ClientQuotations = () => {
                       return (
                         <React.Fragment key={key}>
                           <tr className="hover:bg-slate-50 transition-colors">
-                            <td className="p-2 text-xs font-bold text-indigo-600">QRT-{String(group.id).padStart(4, '0')}</td>
+                            <td className="p-2 text-xs  text-indigo-600">QRT-{String(group.id).padStart(4, '0')}</td>
                             <td className="p-2">
                               <div className="text-slate-900 text-xs">{group.company_name}</div>
                             </td>
                             <td className="p-2 text-xs text-slate-600">
                               {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : group.quotes[0]?.project_name}
                             </td>
-                            <td className="p-2 text-xs font-bold text-emerald-600">
+                            <td className="p-2 text-xs  text-emerald-600">
                               <div className="flex flex-col">
                                 <span className="text-slate-400 text-[10px] font-normal">Incl. GST (18%)</span>
                                 <span>₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
@@ -545,7 +545,7 @@ const ClientQuotations = () => {
                             </td>
                             <td className="p-2 text-xs text-slate-500">{new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                             <td className="p-2">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              <span className={`px-2 py-0.5 rounded-full text-[10px]  ${
                                 group.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 
                                 group.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 
                                 'bg-slate-100 text-slate-700'
@@ -556,7 +556,7 @@ const ClientQuotations = () => {
                             <td className="p-2">
                               <button
                                 onClick={() => setExpandedSentKey(expandedSentKey === key ? null : key)}
-                                className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px] font-semibold hover:bg-indigo-700 transition-colors"
+                                className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors"
                               >
                                 {expandedSentKey === key ? 'Hide' : 'View'}
                               </button>
@@ -568,47 +568,47 @@ const ClientQuotations = () => {
                                 <div className="bg-slate-50 p-3 border-t border-b border-slate-200">
                                   <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                                     <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
-                                      <h4 className="text-[10px] font-bold text-slate-700 uppercase">Quotation Breakdown</h4>
+                                      <h4 className="text-[10px]  text-slate-700 ">Quotation Breakdown</h4>
                                     </div>
                                     <table className="w-full divide-y divide-slate-100">
                                       <thead className="bg-white">
                                         <tr className="border-b border-slate-200">
-                                          <th className="p-2 text-left text-[10px] font-bold text-slate-700 uppercase">#</th>
-                                          <th className="p-2 text-left text-[10px] font-bold text-slate-700 uppercase">Drawing</th>
-                                          <th className="p-2 text-left text-[10px] font-bold text-slate-700 uppercase">Description</th>
-                                          <th className="p-2 text-left text-[10px] font-bold text-slate-700 uppercase">Qty</th>
-                                          <th className="p-2 text-left text-[10px] font-bold text-slate-700 uppercase">Unit</th>
-                                          <th className="p-2 text-right text-[10px] font-bold text-slate-700 uppercase">Quote Price</th>
+                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">#</th>
+                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Drawing</th>
+                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Description</th>
+                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Qty</th>
+                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Unit</th>
+                                          <th className="p-2 text-right text-[10px]  text-slate-700 ">Quote Price</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-slate-100">
                                         {group.quotes.map((q, idx) => (
                                           <tr key={q.id} className="hover:bg-slate-50">
-                                            <td className="p-2 text-[10px] text-slate-600 font-semibold">{idx + 1}</td>
+                                            <td className="p-2 text-[10px] text-slate-600 ">{idx + 1}</td>
                                             <td className="p-2">
-                                              <div className="font-semibold text-slate-900 text-[11px]">{q.drawing_no || '—'}</div>
+                                              <div className=" text-slate-900 text-[11px]">{q.drawing_no || '—'}</div>
                                             </td>
                                             <td className="p-2 text-[11px] text-slate-600">{q.item_description}</td>
-                                            <td className="p-2 text-left text-[11px] font-semibold text-slate-900">
+                                            <td className="p-2 text-left text-[11px]  text-slate-900">
                                               {q.item_qty !== null ? Number(q.item_qty).toFixed(3) : '—'}
                                             </td>
                                             <td className="p-2 text-[11px] text-slate-600">{q.item_unit || 'NOS'}</td>
-                                            <td className="p-2 text-right text-[11px] font-bold text-emerald-600">₹{(q.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                            <td className="p-2 text-right text-[11px]  text-emerald-600">₹{(q.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                           </tr>
                                         ))}
                                       </tbody>
                                       <tfoot className="bg-slate-50">
                                         <tr>
-                                          <td colSpan="5" className="p-2 text-right text-[11px] font-bold text-slate-700">Sub Total:</td>
+                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-slate-700">Sub Total:</td>
                                           <td className="p-2 text-right text-[11px] text-slate-900">₹{group.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                         <tr>
-                                          <td colSpan="5" className="p-2 text-right text-[11px] font-bold text-slate-700">GST (18%):</td>
+                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-slate-700">GST (18%):</td>
                                           <td className="p-2 text-right text-[11px] text-slate-900">₹{(group.total_amount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                         <tr className="bg-emerald-50">
-                                          <td colSpan="5" className="p-2 text-right text-[11px] font-bold text-emerald-700 uppercase">Grand Total (Incl. GST):</td>
-                                          <td className="p-2 text-right text-[11px] font-bold text-emerald-600 text-sm">₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-emerald-700 ">Grand Total (Incl. GST):</td>
+                                          <td className="p-2 text-right text-[11px]  text-emerald-600 text-sm">₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                       </tfoot>
                                     </table>

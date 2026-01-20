@@ -17,7 +17,6 @@ const GRNProcessing = () => {
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showItemsModal, setShowItemsModal] = useState(false);
-  const [selectedGrnId, setSelectedGrnId] = useState(null);
   const [grnItems, setGrnItems] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(false);
 
@@ -110,7 +109,6 @@ const GRNProcessing = () => {
   };
 
   const handleViewItems = (grnId) => {
-    setSelectedGrnId(grnId);
     setShowItemsModal(true);
     fetchGrnItems(grnId);
   };
@@ -417,7 +415,7 @@ const GRNProcessing = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card title="GRN Processing" subtitle="Create GRN with Item-wise Shortage, Overage & Rejection Handling">
         <div className="flex gap-4 justify-between items-center mb-6">
           <div className="flex-1">
@@ -431,7 +429,7 @@ const GRNProcessing = () => {
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm  hover:bg-emerald-700"
           >
             + Create GRN
           </button>
@@ -445,7 +443,7 @@ const GRNProcessing = () => {
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm  hover:bg-slate-800"
             >
               + Create Your First GRN
             </button>
@@ -453,15 +451,15 @@ const GRNProcessing = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">GRN ID</th>
-                  <th className="px-4 py-3 text-left font-semibold">PO Number</th>
-                  <th className="px-4 py-3 text-left font-semibold">Receipt Ref</th>
-                  <th className="px-4 py-3 text-left font-semibold">GRN Date</th>
-                  <th className="px-4 py-3 text-right font-semibold">Received Qty</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="px-4 py-3 text-left ">GRN ID</th>
+                  <th className="px-4 py-3 text-left ">PO Number</th>
+                  <th className="px-4 py-3 text-left ">Receipt Ref</th>
+                  <th className="px-4 py-3 text-left ">GRN Date</th>
+                  <th className="px-4 py-3 text-right ">Received Qty</th>
+                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="px-4 py-3 text-right ">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -481,7 +479,7 @@ const GRNProcessing = () => {
                     </td>
                     <td className="px-4 py-4 text-right font-medium">{grn.receivedQuantity || 0}</td>
                     <td className="px-4 py-4">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${itemStatusColors[grn.status] || itemStatusColors.PENDING}`}>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs  ${itemStatusColors[grn.status] || itemStatusColors.PENDING}`}>
                         {grn.status || 'Pending'}
                       </span>
                     </td>
@@ -520,7 +518,7 @@ const GRNProcessing = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateGRN} className="space-y-6">
+            <form onSubmit={handleCreateGRN} className="space-y-3">
               <div className="grid grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -592,26 +590,26 @@ const GRNProcessing = () => {
               {formData.poId && (
                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 grid grid-cols-4 gap-4 text-sm">
                   <div>
-                    <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">Vendor</p>
+                    <p className="text-slate-500 font-medium  text-[10px] tracking-wider">Vendor</p>
                     <p className="text-slate-900">
                       {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.vendor_name || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">PO Total</p>
+                    <p className="text-slate-500 font-medium  text-[10px] tracking-wider">PO Total</p>
                     <p className="text-slate-900">
                       ₹{purchaseOrders.find(p => String(p.id) === String(formData.poId))?.total_amount?.toLocaleString('en-IN') || '0'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">Expected Delivery</p>
+                    <p className="text-slate-500 font-medium  text-[10px] tracking-wider">Expected Delivery</p>
                     <p className="text-slate-900">
                       {new Date(purchaseOrders.find(p => String(p.id) === String(formData.poId))?.expected_delivery_date).toLocaleDateString('en-IN') || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-slate-500 font-medium uppercase text-[10px] tracking-wider">Status</p>
-                    <p className="font-bold text-emerald-600">
+                    <p className="text-slate-500 font-medium  text-[10px] tracking-wider">Status</p>
+                    <p className=" text-emerald-600">
                       {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.status || 'N/A'}
                     </p>
                   </div>
@@ -629,12 +627,12 @@ const GRNProcessing = () => {
                     <table className="w-full text-sm border-collapse">
                       <thead className="bg-slate-100">
                         <tr>
-                          <th className="px-4 py-2 text-left font-semibold min-w-[150px]">Material</th>
-                          <th className="px-4 py-2 text-left font-semibold min-w-[120px]">Type</th>
-                          <th className="px-4 py-2 text-center font-semibold min-w-[70px]">PO Qty</th>
-                          <th className="px-4 py-2 text-center font-semibold min-w-[70px]">Accepted *</th>
-                          <th className="px-4 py-2 text-center font-semibold min-w-[120px]">Status</th>
-                          <th className="px-4 py-2 text-center font-semibold min-w-[100px]">Remarks</th>
+                          <th className="px-4 py-2 text-left  min-w-[150px]">Material</th>
+                          <th className="px-4 py-2 text-left  min-w-[120px]">Type</th>
+                          <th className="px-4 py-2 text-center  min-w-[70px]">PO Qty</th>
+                          <th className="px-4 py-2 text-center  min-w-[70px]">Accepted *</th>
+                          <th className="px-4 py-2 text-center  min-w-[120px]">Status</th>
+                          <th className="px-4 py-2 text-center  min-w-[100px]">Remarks</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -668,7 +666,7 @@ const GRNProcessing = () => {
                                 />
                               </td>
                               <td className="px-4 py-3 text-center">
-                                <span className={`inline-block text-xs font-semibold px-3 py-1 rounded ${itemStatusColors[status] || itemStatusColors.PENDING}`}>
+                                <span className={`inline-block text-xs  px-3 py-1 rounded ${itemStatusColors[status] || itemStatusColors.PENDING}`}>
                                   {status === 'PENDING' ? '—' : status}
                                 </span>
                               </td>
@@ -690,7 +688,7 @@ const GRNProcessing = () => {
 
                   {Object.keys(validationErrors).length > 0 && (
                     <div className="bg-red-50 px-4 py-3 border-t border-red-200">
-                      <p className="text-sm font-semibold text-red-900 mb-2">Validation Errors:</p>
+                      <p className="text-sm  text-red-900 mb-2">Validation Errors:</p>
                       <ul className="text-sm text-red-700 space-y-1">
                         {Object.entries(validationErrors).map(([itemId, errors]) => (
                           <li key={itemId}>
@@ -744,16 +742,16 @@ const GRNProcessing = () => {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+                  <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                     <tr>
-                      <th className="px-4 py-3 text-left font-semibold">Material</th>
-                      <th className="px-4 py-3 text-left font-semibold">Type</th>
-                      <th className="px-4 py-3 text-center font-semibold">PO Qty</th>
-                      <th className="px-4 py-3 text-center font-semibold">Received</th>
-                      <th className="px-4 py-3 text-center font-semibold">Accepted</th>
-                      <th className="px-4 py-3 text-center font-semibold">Rejected</th>
-                      <th className="px-4 py-3 text-left font-semibold">Status</th>
-                      <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                      <th className="px-4 py-3 text-left ">Material</th>
+                      <th className="px-4 py-3 text-left ">Type</th>
+                      <th className="px-4 py-3 text-center ">PO Qty</th>
+                      <th className="px-4 py-3 text-center ">Received</th>
+                      <th className="px-4 py-3 text-center ">Accepted</th>
+                      <th className="px-4 py-3 text-center ">Rejected</th>
+                      <th className="px-4 py-3 text-left ">Status</th>
+                      <th className="px-4 py-3 text-right ">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -766,7 +764,7 @@ const GRNProcessing = () => {
                         <td className="px-4 py-4 text-center font-medium">{item.accepted_qty || 0}</td>
                         <td className="px-4 py-4 text-center">{item.rejected_qty || 0}</td>
                         <td className="px-4 py-4">
-                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${itemStatusColors[item.status] || itemStatusColors.PENDING}`}>
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs  ${itemStatusColors[item.status] || itemStatusColors.PENDING}`}>
                             {item.status || 'Pending'}
                           </span>
                         </td>

@@ -109,64 +109,82 @@ const WarehouseAllocation = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center py-24">
+        <div className="text-center space-y-4">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 font-medium">Loading pending allocations...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Warehouse Allocation</h1>
-        <p className="text-gray-600">Assign accepted material from GRN to warehouse locations</p>
+    <div className="space-y-3">
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-4 mb-1">
+          <div className="p-2 bg-indigo-50 rounded-lg">
+            <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Warehouse Allocation</h1>
+            <p className="text-sm text-slate-500 font-medium">Assign accepted material from GRN to warehouse locations</p>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold uppercase">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GRN / PO</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Details</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QC Accepted</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Allocated</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pending</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target Warehouse</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Allocate Qty</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                <th className="p-2 text-left">Source (GRN/PO)</th>
+                <th className="p-2 text-left">Item Details</th>
+                <th className="p-2 text-right">Accepted</th>
+                <th className="p-2 text-right">Allocated</th>
+                <th className="p-2 text-right">Pending</th>
+                <th className="p-2 text-left">Target Warehouse</th>
+                <th className="p-2 text-left">Allocate Qty</th>
+                <th className="p-2 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200 text-sm">
+            <tbody className="divide-y divide-slate-100">
               {pendingItems.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
-                    No items pending allocation found
+                  <td colSpan="8" className="px-6 py-16 text-center">
+                    <div className="p-3 bg-slate-50 rounded-full shadow-sm w-fit mx-auto mb-4">
+                      <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    </div>
+                    <p className="text-slate-500 font-medium">No items pending allocation</p>
+                    <p className="text-xs text-slate-400 mt-1">All received materials have been distributed</p>
                   </td>
                 </tr>
               ) : (
                 pendingItems.map((item) => (
-                  <tr key={item.grn_item_id} className="hover:bg-gray-50">
-                    <td className="px-4 py-4">
-                      <div className="font-medium text-blue-600">{item.grn_number}</div>
-                      <div className="text-xs text-gray-500">PO: {item.po_number}</div>
+                  <tr key={item.grn_item_id} className="group hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-5">
+                      <div className="font-bold text-indigo-600">#{item.grn_number}</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">PO: {item.po_number}</div>
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="font-medium text-gray-900">{item.item_code}</div>
-                      <div className="text-xs text-gray-500">{item.material_name}</div>
+                    <td className="px-6 py-5">
+                      <div className="font-semibold text-slate-900">{item.item_code}</div>
+                      <div className="text-xs text-slate-500 max-w-[200px] truncate">{item.material_name}</div>
                     </td>
-                    <td className="px-4 py-4 font-semibold text-green-600">
-                      {item.accepted_qty}
+                    <td className="px-6 py-5 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30">
+                      {parseFloat(item.accepted_qty).toFixed(3)}
                     </td>
-                    <td className="px-4 py-4 text-gray-600">
-                      {item.allocated_qty}
+                    <td className="px-6 py-5 text-right font-mono font-bold text-slate-400">
+                      {parseFloat(item.allocated_qty || 0).toFixed(3)}
                     </td>
-                    <td className="px-4 py-4 font-bold text-orange-600">
-                      {item.pending_allocation_qty}
+                    <td className="px-6 py-5 text-right font-mono font-bold text-rose-600 bg-rose-50/30">
+                      {parseFloat(item.pending_allocation_qty).toFixed(3)}
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-6 py-5">
                       <select
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white transition-all"
                         value={allocationData[item.grn_item_id]?.target_warehouse || ''}
                         onChange={(e) => handleInputChange(item.grn_item_id, 'target_warehouse', e.target.value)}
                       >
@@ -176,27 +194,40 @@ const WarehouseAllocation = () => {
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-6 py-5">
                       <input
                         type="number"
-                        className="block w-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                         value={allocationData[item.grn_item_id]?.allocate_qty || ''}
                         onChange={(e) => handleInputChange(item.grn_item_id, 'allocate_qty', e.target.value)}
                         max={item.pending_allocation_qty}
                         min="0"
+                        step="0.001"
                       />
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-6 py-5 text-right">
                       <button
                         onClick={() => handleAllocate(item)}
                         disabled={allocatingId === item.grn_item_id}
-                        className={`px-4 py-2 rounded text-white font-medium text-sm ${
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-bold text-xs transition-all shadow-sm ${
                           allocatingId === item.grn_item_id 
-                            ? 'bg-gray-400 cursor-not-allowed' 
-                            : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+                            ? 'bg-slate-300 cursor-not-allowed' 
+                            : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-indigo-100'
                         }`}
                       >
-                        {allocatingId === item.grn_item_id ? 'Wait...' : 'Allocate'}
+                        {allocatingId === item.grn_item_id ? (
+                          <>
+                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Wait...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Allocate
+                          </>
+                        )}
                       </button>
                     </td>
                   </tr>

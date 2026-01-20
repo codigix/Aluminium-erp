@@ -89,6 +89,42 @@ const BOMCreation = () => {
     return () => window.removeEventListener('focus', handleFocus);
   }, [selectedOrder]);
 
+  const handleDeleteItem = async (itemId, itemCode) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Delete Item?',
+        text: `Are you sure you want to delete item ${itemCode}? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel'
+      });
+
+      if (!result.isConfirmed) return;
+
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      
+      const response = await fetch(`${API_BASE}/sales-orders-timeline/${itemId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete item');
+      }
+
+      Swal.fire('Deleted!', 'Item has been deleted successfully', 'success');
+      setOrderItems(orderItems.filter(item => item.id !== itemId));
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmitFinalBOM = async () => {
     try {
       const incompleteItems = orderItems.filter(item => !item.has_bom);
@@ -144,26 +180,38 @@ const BOMCreation = () => {
   };
 
   return (
-    <div className="p-4 bg-slate-50 min-h-screen">
+    <div className="bg-slate-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl text-slate-900 flex items-center gap-2">
-            <span className="p-2 bg-amber-100 rounded-lg text-amber-600">📋</span>
+          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <span className="p-2 bg-amber-100 rounded-lg text-amber-600">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </span>
             BOM Creation
           </h1>
-          <p className="text-sm text-slate-500 ml-10">Define comprehensive Bill of Materials for production</p>
+          <p className="text-xs text-slate-500 ml-11">Define comprehensive Bill of Materials for production</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={fetchOrders} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 shadow-sm transition-all">Refresh</button>
+          <button 
+            onClick={fetchOrders} 
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 shadow-sm transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
         {/* Orders Sidebar */}
         <div className="lg:col-span-1">
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <div className="bg-slate-50 p-4 border-b border-slate-200">
-              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Active Design Orders</h2>
+              <h2 className="text-sm  text-slate-700  tracking-wider">Active Design Orders</h2>
             </div>
             <div className="divide-y divide-slate-100 max-h-[calc(100vh-250px)] overflow-y-auto">
               {loading ? (
@@ -181,7 +229,7 @@ const BOMCreation = () => {
                       <span className="text-xs text-slate-900">PO: {order.po_number || 'N/A'}</span>
                       <StatusBadge status={order.status} />
                     </div>
-                    <div className="text-sm font-semibold text-slate-700 truncate">{order.company_name}</div>
+                    <div className="text-sm  text-slate-700 truncate">{order.company_name}</div>
                     <div className="text-[11px] text-slate-500 mt-1">SO-{String(order.id).padStart(4, '0')} | {order.project_name}</div>
                   </div>
                 ))
@@ -193,97 +241,119 @@ const BOMCreation = () => {
         {/* Items Main View */}
         <div className="lg:col-span-3">
           {!selectedOrder ? (
-            <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-20 text-center text-slate-400 flex flex-col items-center">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 text-2xl">👈</div>
-              <p className="font-medium text-lg">Select an order from the sidebar to start building BOM</p>
+            <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-20 text-center text-slate-400 flex flex-col items-center shadow-sm">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+              </div>
+              <p className="font-semibold text-lg text-slate-600">Select an Order</p>
+              <p className="text-sm mt-1">Choose an order from the sidebar to start building its BOM</p>
             </div>
           ) : (
             <Card className="border-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-white p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="bg-white p-2 border-b border-slate-100 flex justify-between items-center">
                 <div>
-                  <h2 className="text-lg text-slate-900">Order Items: {selectedOrder.po_number}</h2>
-                  <p className="text-sm text-slate-500">{selectedOrder.company_name} • {selectedOrder.project_name}</p>
+                  <h2 className="text-xs text-slate-900">Order Items: {selectedOrder.po_number}</h2>
+                  <p className="text-xs text-slate-500">{selectedOrder.company_name} • {selectedOrder.project_name}</p>
                 </div>
                 <div className="flex gap-4">
                   <div className="text-right">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">BOM Coverage</p>
-                    <p className="text-sm font-bold text-slate-700">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">BOM Coverage</p>
+                    <p className="text-xs text-slate-700">
                       {orderItems.filter(i => i.has_bom).length} / {orderItems.length} Drawings
                     </p>
                   </div>
                   <button 
                     onClick={handleSubmitFinalBOM}
-                    className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all flex items-center gap-2"
+                    className="p-2 bg-indigo-600 text-white rounded-md text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center gap-2"
                   >
-                    <span>Submit Final BOM</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                    Submit Final BOM
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                    </svg>
                   </button>
                 </div>
               </div>
 
               {/* Summary Stats */}
-              <div className="grid grid-cols-4 border-b border-slate-100 bg-slate-50/30">
-                <div className="p-4 border-r border-slate-100">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">Total Drawings</div>
+              <div className="grid grid-cols-4 border-b border-slate-100 bg-slate-200 my-3">
+                <div className="p-2 border-r border-slate-100">
+                  <div className="text-[10px] text-slate-400   mb-1 tracking-wider">Total Drawings</div>
                   <div className="text-xl text-slate-900">{orderItems.length}</div>
                 </div>
-                <div className="p-4 border-r border-slate-100">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">BOMs Completed</div>
-                  <div className="text-xl font-bold text-emerald-600">{orderItems.filter(i => i.has_bom).length}</div>
+                <div className="p-2 border-r border-slate-100">
+                  <div className="text-[10px] text-slate-400   mb-1 tracking-wider">BOMs Completed</div>
+                  <div className="text-xl  text-emerald-600">{orderItems.filter(i => i.has_bom).length}</div>
                 </div>
-                <div className="p-4 border-r border-slate-100">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">BOMs Pending</div>
-                  <div className="text-xl font-bold text-amber-600">{orderItems.filter(i => !i.has_bom).length}</div>
+                <div className="p-2 border-r border-slate-100">
+                  <div className="text-[10px] text-slate-400   mb-1 tracking-wider">BOMs Pending</div>
+                  <div className="text-xl  text-amber-600">{orderItems.filter(i => !i.has_bom).length}</div>
                 </div>
-                <div className="p-4">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 tracking-wider">Total Est. Cost</div>
-                  <div className="text-xl font-bold text-indigo-600">₹{orderItems.reduce((sum, item) => sum + (parseFloat(item.bom_cost || 0) * parseFloat(item.quantity || 0)), 0).toFixed(2)}</div>
+                <div className="p-2">
+                  <div className="text-[10px] text-slate-400   mb-1 tracking-wider">Total Est. Cost</div>
+                  <div className="text-xl  text-indigo-600">₹{orderItems.reduce((sum, item) => sum + (parseFloat(item.bom_cost || 0) * parseFloat(item.quantity || 0)), 0).toFixed(2)}</div>
                 </div>
               </div>
 
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 bg-white">
                   <thead className="bg-slate-50/50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Independent BOM / Drawing</th>
-                      <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                      <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Order Qty</th>
-                      <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">BOM Status</th>
-                      <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cost / Unit</th>
-                      <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
+                      <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Independent BOM / Drawing</th>
+                      <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Description</th>
+                      <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Order Qty</th>
+                      <th className="p-2 text-left text-xs text-slate-500  tracking-wider">BOM Status</th>
+                      <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Cost / Unit</th>
+                      <th className="p-2 text-right text-[11px]  text-slate-500  tracking-wider">Action</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
                     {orderItems.map((item) => (
                       <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-slate-900">{item.item_code}</div>
+                        <td className="p-2">
+                          <div className="text-xs text-slate-900">{item.item_code}</div>
                           <div className="text-xs text-indigo-600 font-medium">DWG: {item.drawing_no || 'N/A'}</div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="p-2">
                           <div className="text-xs text-slate-600 max-w-sm line-clamp-1">{item.description}</div>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="text-sm text-slate-900">{item.quantity}</div>
-                          <div className="text-[10px] text-slate-400 font-bold uppercase">{item.unit}</div>
+                        <td className="p-2 text-center">
+                          <div className="text-xs text-slate-900">{item.quantity}</div>
+                          <div className="text-[10px] text-slate-400  ">{item.unit}</div>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="p-2 text-center">
                           {item.has_bom ? (
-                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">COMPLETED</span>
+                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] ">COMPLETED</span>
                           ) : (
-                            <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded text-[10px] font-bold">NOT STARTED</span>
+                            <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded text-[10px] ">NOT STARTED</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="text-sm text-slate-900">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</div>
+                        <td className="p-2 text-center">
+                          <div className="text-xs text-slate-900">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</div>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <Link 
-                            to={`/bom-form/${item.id}`}
-                            className="inline-block px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all border border-indigo-100"
-                          >
-                            Manage BOM
-                          </Link>
+                        <td className="p-2 text-right">
+                          <div className="flex justify-end gap-2">
+                            <Link 
+                              to={`/bom-form/${item.id}`}
+                              className="p-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-600 hover:text-white transition-all border border-indigo-100 inline-flex items-center justify-center"
+                              title="Manage BOM"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                              </svg>
+                            </Link>
+                            <button 
+                              onClick={() => handleDeleteItem(item.id, item.item_code)}
+                              className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-600 hover:text-white transition-all border border-rose-100 inline-flex items-center justify-center"
+                              title="Delete Item"
+                              disabled={loading}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

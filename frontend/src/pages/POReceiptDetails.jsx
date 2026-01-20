@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card } from '../components/ui.jsx';
 
@@ -25,11 +25,25 @@ const POReceiptDetails = () => {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
-    fetchReceiptDetails();
-  }, [receiptId]);
+  const fetchPOItems = useCallback(async (poId, token) => {
+    try {
+      const response = await fetch(`${API_BASE}/purchase-orders/${poId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-  const fetchReceiptDetails = async () => {
+      if (response.ok) {
+        const poData = await response.json();
+        setPoItems(poData.items || []);
+      }
+    } catch (error) {
+      console.error('Error fetching PO items:', error);
+    }
+  }, []);
+
+  const fetchReceiptDetails = useCallback(async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
@@ -52,25 +66,11 @@ const POReceiptDetails = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [receiptId, fetchPOItems]);
 
-  const fetchPOItems = async (poId, token) => {
-    try {
-      const response = await fetch(`${API_BASE}/purchase-orders/${poId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const poData = await response.json();
-        setPoItems(poData.items || []);
-      }
-    } catch (error) {
-      console.error('Error fetching PO items:', error);
-    }
-  };
+  useEffect(() => {
+    fetchReceiptDetails();
+  }, [receiptId, fetchReceiptDetails]);
 
   const handleExportPDF = async () => {
     try {
@@ -142,51 +142,51 @@ const POReceiptDetails = () => {
             {/* Header Info */}
             <div className="grid grid-cols-2 gap-6 mb-8">
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">PO Number</p>
-                <p className="text-2xl text-slate-900">{receipt.po_number || '—'}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">PO Number</p>
+                <p className="text-xl text-slate-900">{receipt.po_number || '—'}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Vendor</p>
-                <p className="text-2xl text-slate-900">{receipt.vendor_name || '—'}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Vendor</p>
+                <p className="text-xl text-slate-900">{receipt.vendor_name || '—'}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Receipt Date</p>
-                <p className="text-2xl text-slate-900">{formatDate(receipt.receipt_date)}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Receipt Date</p>
+                <p className="text-xl text-slate-900">{formatDate(receipt.receipt_date)}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Status</p>
-                <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${receiptStatusColors[receipt.status]?.badge}`}>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Status</p>
+                <span className={`inline-block px-3 py-1 rounded-full text-sm  ${receiptStatusColors[receipt.status]?.badge}`}>
                   {receiptStatusColors[receipt.status]?.label || receipt.status}
                 </span>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Received Quantity</p>
-                <p className="text-2xl font-bold text-emerald-600">{receipt.received_quantity || 0}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Received Quantity</p>
+                <p className="text-2xl  text-emerald-600">{receipt.received_quantity || 0}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Created</p>
-                <p className="text-2xl text-slate-900">{formatDate(receipt.created_at)}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Created</p>
+                <p className="text-xl text-slate-900">{formatDate(receipt.created_at)}</p>
               </div>
             </div>
 
             {/* Total Amount */}
             <div className="bg-emerald-50 border border-emerald-200 p-6 rounded mb-8">
-              <p className="text-xs text-emerald-600 uppercase tracking-wider font-semibold mb-2">Total Amount</p>
-              <p className="text-4xl font-bold text-emerald-700">₹{receipt.total_amount?.toLocaleString('en-IN') || '0'}</p>
+              <p className="text-xs text-emerald-600  tracking-wider  mb-2">Total Amount</p>
+              <p className="text-4xl  text-emerald-700">₹{receipt.total_amount?.toLocaleString('en-IN') || '0'}</p>
             </div>
 
             {/* Items Table */}
             {poItems.length > 0 && (
               <div className="mb-8">
-                <h3 className="text-lg text-slate-900 text-xs mb-4">PO Items</h3>
+                <h3 className="text-md text-slate-900 text-xs mb-4">PO Items</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-100 text-slate-600 uppercase">
+                    <thead className="bg-slate-100 text-slate-600 ">
                       <tr>
-                        <th className="px-4 py-3 text-left font-semibold">Description</th>
-                        <th className="px-4 py-3 text-center font-semibold">Qty</th>
-                        <th className="px-4 py-3 text-right font-semibold">Rate</th>
-                        <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                        <th className="px-4 py-3 text-left ">Description</th>
+                        <th className="px-4 py-3 text-center ">Qty</th>
+                        <th className="px-4 py-3 text-right ">Rate</th>
+                        <th className="px-4 py-3 text-right ">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -195,7 +195,7 @@ const POReceiptDetails = () => {
                           <td className="px-4 py-3 text-slate-600">{item.description || '—'}</td>
                           <td className="px-4 py-3 text-center font-medium text-slate-900">{item.quantity}</td>
                           <td className="px-4 py-3 text-right text-slate-600">₹{parseFloat(item.unit_rate || 0).toLocaleString('en-IN')}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-emerald-600">₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
+                          <td className="px-4 py-3 text-right  text-emerald-600">₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -207,7 +207,7 @@ const POReceiptDetails = () => {
             {/* Notes */}
             {receipt.notes && (
               <div className="mb-8 bg-blue-50 border border-blue-200 p-6 rounded">
-                <p className="text-xs text-blue-600 uppercase tracking-wider font-semibold mb-2">Notes</p>
+                <p className="text-xs text-blue-600  tracking-wider  mb-2">Notes</p>
                 <p className="text-slate-700 text-sm leading-relaxed">{receipt.notes}</p>
               </div>
             )}
@@ -217,7 +217,7 @@ const POReceiptDetails = () => {
               <button
                 onClick={handleExportPDF}
                 disabled={exporting}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:bg-blue-400"
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg text-sm  hover:bg-blue-700 disabled:bg-blue-400"
               >
                 {exporting ? 'Exporting...' : '📄 Export Report'}
               </button>

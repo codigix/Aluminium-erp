@@ -201,25 +201,6 @@ const POReceipts = () => {
     }
   };
 
-  const handleViewReceipt = async (receiptId) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/po-receipts/${receiptId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch receipt details');
-      const data = await response.json();
-      setSelectedReceipt(data);
-      setShowViewModal(true);
-    } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to load receipt details', 'error');
-    }
-  };
-
   const handleEditReceipt = async (receiptId) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -333,7 +314,7 @@ const POReceipts = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card title="PO Receipts" subtitle="Track and manage purchase order receipts from vendors">
         <div className="flex gap-4 justify-between items-center mb-6">
           <div className="flex-1">
@@ -347,9 +328,12 @@ const POReceipts = () => {
           <div className="flex gap-2">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
             >
-              + Create Receipt
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Create Receipt
             </button>
             <button
               onClick={async () => {
@@ -382,9 +366,13 @@ const POReceipts = () => {
                   Swal.fire('Error', 'Failed to download PDF', 'error');
                 }
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+              title="Export Report"
             >
-              ⬇ Export Report
+              <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export
             </button>
           </div>
         </div>
@@ -393,26 +381,34 @@ const POReceipts = () => {
           <p className="text-sm text-slate-400">Loading PO receipts...</p>
         ) : receipts.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-slate-500 mb-3">No receipts yet</p>
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-slate-500 mb-4">No receipts found</p>
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
             >
-              + Create Receipt
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Create Your First Receipt
             </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">PO Number</th>
-                  <th className="px-4 py-3 text-left font-semibold">Vendor</th>
-                  <th className="px-4 py-3 text-left font-semibold">Receipt Date</th>
-                  <th className="px-4 py-3 text-right font-semibold">Received Qty</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="px-4 py-3 text-left ">PO Number</th>
+                  <th className="px-4 py-3 text-left ">Vendor</th>
+                  <th className="px-4 py-3 text-left ">Receipt Date</th>
+                  <th className="px-4 py-3 text-right ">Received Qty</th>
+                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="px-4 py-3 text-right ">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -423,14 +419,39 @@ const POReceipts = () => {
                     <td className="px-4 py-4 text-slate-600">{formatDate(receipt.receipt_date)}</td>
                     <td className="px-4 py-4 text-right font-medium text-slate-900">{receipt.received_quantity || 0}</td>
                     <td className="px-4 py-4">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${receiptStatusColors[receipt.status]?.badge}`}>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs  ${receiptStatusColors[receipt.status]?.badge}`}>
                         {receiptStatusColors[receipt.status]?.label || receipt.status}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right space-x-2">
-                      <button onClick={() => handleOpenPdfInNewTab(receipt)} className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium">👁 View</button>
-                      <button onClick={() => handleEditReceipt(receipt.id)} className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium">✎ Edit</button>
-                      <button onClick={() => handleDeleteReceipt(receipt.id)} className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium">🗑</button>
+                      <button 
+                        onClick={() => handleOpenPdfInNewTab(receipt)} 
+                        className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors inline-flex items-center justify-center"
+                        title="View PDF"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </button>
+                      <button 
+                        onClick={() => handleEditReceipt(receipt.id)} 
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-flex items-center justify-center"
+                        title="Edit Receipt"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteReceipt(receipt.id)} 
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-flex items-center justify-center"
+                        title="Delete Receipt"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -443,20 +464,20 @@ const POReceipts = () => {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">Total Receipts</p>
-            <p className="text-2xl font-bold text-blue-900">{stats.total_receipts || 0}</p>
+            <p className="text-xs text-blue-600   tracking-wider mb-1">Total Receipts</p>
+            <p className="text-2xl  text-blue-900">{stats.total_receipts || 0}</p>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">Draft</p>
-            <p className="text-2xl font-bold text-yellow-900">{stats.draft_receipts || 0}</p>
+            <p className="text-xs text-yellow-600   tracking-wider mb-1">Draft</p>
+            <p className="text-2xl  text-yellow-900">{stats.draft_receipts || 0}</p>
           </div>
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Received</p>
-            <p className="text-2xl font-bold text-emerald-900">{stats.received_receipts || 0}</p>
+            <p className="text-xs text-emerald-600   tracking-wider mb-1">Received</p>
+            <p className="text-2xl  text-emerald-900">{stats.received_receipts || 0}</p>
           </div>
           <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
-            <p className="text-xs text-cyan-600 font-semibold uppercase tracking-wider mb-1">Acknowledged</p>
-            <p className="text-2xl font-bold text-cyan-900">{stats.acknowledged_receipts || 0}</p>
+            <p className="text-xs text-cyan-600   tracking-wider mb-1">Acknowledged</p>
+            <p className="text-2xl  text-cyan-900">{stats.acknowledged_receipts || 0}</p>
           </div>
         </div>
       )}
@@ -465,8 +486,12 @@ const POReceipts = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg text-slate-900 text-xs">Create PO Receipt</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl">✕</button>
+              <h3 className="text-lg  text-slate-900">Create PO Receipt</h3>
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
             <form onSubmit={handleCreateReceipt} className="space-y-4">
@@ -507,10 +532,10 @@ const POReceipts = () => {
                     <table className="w-full text-xs text-left">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="px-3 py-2 font-semibold text-slate-600">Material / Description</th>
-                          <th className="px-3 py-2 text-center font-semibold text-slate-600">Expected</th>
-                          <th className="px-3 py-2 text-center font-semibold text-slate-600">Received Qty</th>
-                          <th className="px-3 py-2 text-center font-semibold text-slate-600">Unit</th>
+                          <th className="px-3 py-2  text-slate-600">Material / Description</th>
+                          <th className="px-3 py-2 text-center  text-slate-600">Expected</th>
+                          <th className="px-3 py-2 text-center  text-slate-600">Received Qty</th>
+                          <th className="px-3 py-2 text-center  text-slate-600">Unit</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -554,7 +579,7 @@ const POReceipts = () => {
                     type="number"
                     value={formData.receivedQuantity}
                     onChange={(e) => setFormData({...formData, receivedQuantity: e.target.value})}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none cursor-not-allowed font-bold text-blue-600"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none cursor-not-allowed  text-blue-600"
                     placeholder="Total quantity"
                     required
                     readOnly
@@ -597,42 +622,46 @@ const POReceipts = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg text-slate-900 text-xs">PO Receipt Details</h3>
-              <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
+              <h3 className="text-lg  text-slate-900">PO Receipt Details</h3>
+              <button onClick={() => setShowViewModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-6 mb-6">
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">PO Number</p>
-                <p className="text-lg text-slate-900">{selectedReceipt.po_number}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">PO Number</p>
+                <p className="text-md text-slate-900">{selectedReceipt.po_number}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Vendor</p>
-                <p className="text-lg text-slate-900">{selectedReceipt.vendor_name || '—'}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Vendor</p>
+                <p className="text-md text-slate-900">{selectedReceipt.vendor_name || '—'}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Receipt Date</p>
-                <p className="text-lg text-slate-900">{formatDate(selectedReceipt.receipt_date)}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Receipt Date</p>
+                <p className="text-md text-slate-900">{formatDate(selectedReceipt.receipt_date)}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Status</p>
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${receiptStatusColors[selectedReceipt.status]?.badge}`}>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Status</p>
+                <span className={`inline-block px-3 py-1 rounded-full text-xs  ${receiptStatusColors[selectedReceipt.status]?.badge}`}>
                   {receiptStatusColors[selectedReceipt.status]?.label || selectedReceipt.status}
                 </span>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Received Quantity</p>
-                <p className="text-lg font-bold text-emerald-600">{selectedReceipt.received_quantity || 0}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Received Quantity</p>
+                <p className="text-lg  text-emerald-600">{selectedReceipt.received_quantity || 0}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Created</p>
-                <p className="text-lg text-slate-900">{formatDate(selectedReceipt.created_at)}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Created</p>
+                <p className="text-md text-slate-900">{formatDate(selectedReceipt.created_at)}</p>
               </div>
             </div>
 
             {selectedReceipt.notes && (
               <div className="mb-6 bg-blue-50 border border-blue-200 p-4 rounded">
-                <p className="text-xs text-blue-600 uppercase tracking-wider font-semibold mb-2">Notes</p>
+                <p className="text-xs text-blue-600  tracking-wider  mb-2">Notes</p>
                 <p className="text-slate-700">{selectedReceipt.notes}</p>
               </div>
             )}
@@ -644,10 +673,10 @@ const POReceipts = () => {
                   <table className="w-full text-xs text-left">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th className="px-3 py-2 font-semibold text-slate-600">Material / Description</th>
-                        <th className="px-3 py-2 text-center font-semibold text-slate-600">Expected</th>
-                        <th className="px-3 py-2 text-center font-semibold text-slate-600">Received</th>
-                        <th className="px-3 py-2 text-center font-semibold text-slate-600">Unit</th>
+                        <th className="px-3 py-2  text-slate-600">Material / Description</th>
+                        <th className="px-3 py-2 text-center  text-slate-600">Expected</th>
+                        <th className="px-3 py-2 text-center  text-slate-600">Received</th>
+                        <th className="px-3 py-2 text-center  text-slate-600">Unit</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -658,7 +687,7 @@ const POReceipts = () => {
                             {item.material_type && <p className="text-[10px] text-slate-500">{item.material_type}</p>}
                           </td>
                           <td className="px-3 py-2 text-center text-slate-600">{item.expected_quantity}</td>
-                          <td className="px-3 py-2 text-center font-bold text-blue-600">{item.received_quantity}</td>
+                          <td className="px-3 py-2 text-center  text-blue-600">{item.received_quantity}</td>
                           <td className="px-3 py-2 text-center text-slate-600">{item.unit || 'NOS'}</td>
                         </tr>
                       ))}
@@ -696,13 +725,16 @@ const POReceipts = () => {
                     Swal.fire('Error', 'Failed to download PDF', 'error');
                   }
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
               >
-                📄 Export Report
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export PDF
               </button>
               <button
                 onClick={() => setShowViewModal(false)}
-                className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Close
               </button>
@@ -715,8 +747,12 @@ const POReceipts = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg text-slate-900 text-xs">Edit PO Receipt</h3>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
+              <h3 className="text-lg  text-slate-900">Edit PO Receipt</h3>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
             <form onSubmit={handleUpdateReceipt} className="space-y-4">

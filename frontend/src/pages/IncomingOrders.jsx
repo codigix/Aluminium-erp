@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -19,7 +19,7 @@ const statusColors = {
 const priorityColors = {
   LOW: 'text-slate-500',
   NORMAL: 'text-slate-600',
-  HIGH: 'text-red-600 font-bold',
+  HIGH: 'text-red-600 ',
 };
 
 const formatDate = (date) => {
@@ -27,22 +27,11 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const formatCurrency = (value, currency = 'INR') => {
-  if (!value || isNaN(value)) return '—';
-  const validCurrency = currency && ['USD', 'EUR', 'INR', 'GBP'].includes(currency.toUpperCase()) ? currency.toUpperCase() : 'INR';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: validCurrency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-};
-
 const formatOrderCode = (id) => {
   return `SO-${String(id).padStart(4, '0')}`;
 };
 
-const SalesOrderRow = ({ order, userDepartment, onAction, actionLoading }) => {
+const SalesOrderRow = ({ order, onAction, actionLoading }) => {
   const currentStatus = statusColors[order.status] || statusColors.CREATED;
   const isProcessing = actionLoading === order.id;
 
@@ -57,12 +46,12 @@ const SalesOrderRow = ({ order, userDepartment, onAction, actionLoading }) => {
         <td className="px-5 py-4 text-slate-600 whitespace-nowrap">{order.po_number || '—'}</td>
         <td className="px-5 py-4 text-slate-600 whitespace-nowrap">{formatDate(order.target_dispatch_date)}</td>
         <td className="px-5 py-4">
-          <span className={`text-[10px] font-bold ${priorityColors[order.production_priority]}`}>
+          <span className={`text-[10px]  ${priorityColors[order.production_priority]}`}>
             {order.production_priority || 'NORMAL'}
           </span>
         </td>
         <td className="px-5 py-4">
-          <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${currentStatus.bg} ${currentStatus.border} ${currentStatus.text} uppercase whitespace-nowrap`}>
+          <span className={`px-2 py-1 rounded-full text-[10px]  border ${currentStatus.bg} ${currentStatus.border} ${currentStatus.text}  whitespace-nowrap`}>
             {currentStatus.label}
           </span>
         </td>
@@ -70,21 +59,21 @@ const SalesOrderRow = ({ order, userDepartment, onAction, actionLoading }) => {
           <div className="flex justify-end gap-2">
             <button
               onClick={() => window.open(`${API_BASE}/sales-orders/${order.id}/pdf`, '_blank')}
-              className="px-3 py-1.5 border border-indigo-200 text-indigo-600 text-xs font-bold rounded-lg hover:bg-indigo-50 transition-all"
+              className="px-3 py-1.5 border border-indigo-200 text-indigo-600 text-xs  rounded-lg hover:bg-indigo-50 transition-all"
             >
               View PDF
             </button>
             <button
               onClick={() => onAction(order.id, 'accept')}
               disabled={isProcessing}
-              className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              className="px-3 py-1.5 bg-emerald-600 text-white text-xs  rounded-lg hover:bg-emerald-700 disabled:opacity-50"
             >
               {isProcessing ? '...' : 'Accept'}
             </button>
             <button
               onClick={() => onAction(order.id, 'reject')}
               disabled={isProcessing}
-              className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50"
+              className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs  rounded-lg hover:bg-slate-50 disabled:opacity-50"
             >
               Reject
             </button>
@@ -100,7 +89,7 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
   const [actionLoading, setActionLoading] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('authToken');
@@ -117,11 +106,11 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userDepartment]);
 
   useEffect(() => {
     if (userDepartment) fetchOrders();
-  }, [userDepartment]);
+  }, [userDepartment, fetchOrders]);
 
   const handleAction = async (orderId, type) => {
     if (type === 'reject' && !confirm('Reject this order?')) return;
@@ -156,15 +145,15 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-100 text-slate-500 uppercase tracking-[0.2em] text-[0.65rem]">
+            <thead className="bg-slate-100 text-slate-500  tracking-[0.2em] text-[0.65rem]">
               <tr>
-                <th className="px-5 py-4 text-left font-semibold">SO Code</th>
-                <th className="px-5 py-4 text-left font-semibold">Customer / Project</th>
-                <th className="px-5 py-4 text-left font-semibold">PO Number</th>
-                <th className="px-5 py-4 text-left font-semibold">Dispatch Target</th>
-                <th className="px-5 py-4 text-left font-semibold">Priority</th>
-                <th className="px-5 py-4 text-left font-semibold">Status</th>
-                <th className="px-5 py-4 text-right font-semibold">Actions</th>
+                <th className="px-5 py-4 text-left ">SO Code</th>
+                <th className="px-5 py-4 text-left ">Customer / Project</th>
+                <th className="px-5 py-4 text-left ">PO Number</th>
+                <th className="px-5 py-4 text-left ">Dispatch Target</th>
+                <th className="px-5 py-4 text-left ">Priority</th>
+                <th className="px-5 py-4 text-left ">Status</th>
+                <th className="px-5 py-4 text-right ">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -172,7 +161,6 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
                 <SalesOrderRow 
                   key={order.id} 
                   order={order} 
-                  userDepartment={userDepartment}
                   onAction={handleAction}
                   actionLoading={actionLoading}
                 />

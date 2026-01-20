@@ -6,16 +6,18 @@ const getQuotationRequests = async (req, res, next) => {
   try {
     const { status } = req.query;
     let query = `
-      SELECT qr.*, so.id as sales_order_id, so.project_name, c.company_name, cp.po_number,
+      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.notes, qr.created_at,
+             so.project_name, c.company_name, cp.po_number,
              COALESCE(soi.drawing_no, '—') as drawing_no,
              COALESCE(soi.description, so.project_name) as item_description,
              COALESCE(soi.quantity, 0) as item_qty,
-             COALESCE(soi.unit, 'NOS') as item_unit
+             COALESCE(soi.unit, 'NOS') as item_unit,
+             qr.id as id
       FROM quotation_requests qr
       JOIN sales_orders so ON so.id = qr.sales_order_id
       JOIN companies c ON c.id = qr.company_id
       LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-      LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+      LEFT JOIN sales_order_items soi ON (soi.id = qr.sales_order_item_id OR (qr.sales_order_item_id IS NULL AND soi.sales_order_id = qr.sales_order_id))
       WHERE 1=1
     `;
     const params = [];

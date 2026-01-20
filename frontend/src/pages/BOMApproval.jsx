@@ -100,16 +100,19 @@ const BOMApproval = () => {
   };
 
   return (
-    <div className="p-6">
+    <div className="">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl text-slate-900">BOM Approval</h1>
-          <p className="text-sm text-slate-500">Review and approve finalized Bill of Materials</p>
+          <h1 className="text-xl font-bold text-slate-900">BOM Approval</h1>
+          <p className="text-xs text-slate-500">Review and approve finalized Bill of Materials</p>
         </div>
         <button 
           onClick={fetchOrders}
-          className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 shadow-sm transition-all"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
           Refresh
         </button>
       </div>
@@ -117,34 +120,40 @@ const BOMApproval = () => {
       <div className="flex gap-4 mb-6">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'pending' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+          className={`flex items-center gap-2 p-2 rounded-md text-xs font-medium transition-all ${activeTab === 'pending' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
           Pending Approval
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+          className={`flex items-center gap-2 p-2 rounded-md text-xs font-medium transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
           Approval History
         </button>
       </div>
 
       <Card>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
+          <table className="min-w-full divide-y divide-slate-200 bg-white">
             <thead className="bg-slate-50">
               <tr>
-                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">PO / SO Ref</th>
-                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">Customer / Project</th>
-                <th className="p-2text-center text-xs font-semibold text-slate-500 uppercase">Status</th>
-                <th className="p-2 text-right text-xs font-semibold text-slate-500 uppercase">Actions</th>
+                <th className="p-2 text-left text-xs  text-slate-500 ">PO / SO Ref</th>
+                <th className="p-2 text-left text-xs  text-slate-500 ">Customer / Project</th>
+                <th className="p-2text-center text-xs  text-slate-500 ">Status</th>
+                <th className="p-2 text-right text-xs  text-slate-500 ">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
               {loading ? (
                 <tr><td colSpan="4" className="px-6 py-10 text-center text-slate-500">Loading BOMs...</td></tr>
               ) : orders.length === 0 ? (
-                <tr><td colSpan="4" className="px-6 py-10 text-center text-slate-400 italic">No {activeTab === 'pending' ? 'pending' : 'approved'} BOMs found</td></tr>
+                <tr><td colSpan="4" className="p-6 text-center text-slate-400">No {activeTab === 'pending' ? 'pending' : 'approved'} BOMs found</td></tr>
               ) : (
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50 transition-colors">
@@ -157,25 +166,34 @@ const BOMApproval = () => {
                       <div className="text-xs text-slate-500">{order.project_name}</div>
                     </td>
                     <td className="p-2 whitespace-nowrap text-center">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${order.status === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <span className={`px-2 py-1 rounded-full text-[10px]   tracking-wider ${order.status === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                         {order.status.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="p-2 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                      <button 
-                        onClick={() => handleViewBOM(order)}
-                        className="text-indigo-600 hover:text-indigo-900 font-bold"
-                      >
-                        View Details
-                      </button>
-                      {activeTab === 'pending' && (
+                    <td className="p-2 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end gap-2">
                         <button 
-                          onClick={() => handleApproveBOM(order.id)}
-                          className="text-emerald-600 hover:text-emerald-900 font-bold"
+                          onClick={() => handleViewBOM(order)}
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                          title="View Details"
                         >
-                          Approve
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                          </svg>
                         </button>
-                      )}
+                        {activeTab === 'pending' && (
+                          <button 
+                            onClick={() => handleApproveBOM(order.id)}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            title="Approve"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -192,12 +210,12 @@ const BOMApproval = () => {
             <div className="fixed inset-0 bg-slate-900/75 transition-opacity" onClick={() => setShowDetails(false)}></div>
             
             <div className="relative bg-white rounded-2xl shadow-xl max-w-5xl w-full overflow-hidden">
-              <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div>
-                  <h3 className="text-lg text-slate-900">BOM Details: PO {selectedOrder?.po_number}</h3>
-                  <p className="text-xs text-slate-500">{selectedOrder?.company_name} - {selectedOrder?.project_name}</p>
+                  <h3 className="text-sm text-slate-900">BOM Details: PO {selectedOrder?.po_number}</h3>
+                  <p className="text-xs text-slate-500">{selectedOrder?.company_name} • {selectedOrder?.project_name}</p>
                 </div>
-                <button onClick={() => setShowDetails(false)} className="text-slate-400 hover:text-slate-600">
+                <button onClick={() => setShowDetails(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -208,7 +226,7 @@ const BOMApproval = () => {
                 {detailsLoading ? (
                   <div className="py-12 text-center text-slate-500">Loading details...</div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-3">
                     {orderItems.map((item) => (
                       <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden">
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
@@ -217,24 +235,24 @@ const BOMApproval = () => {
                             <span className="mx-2 text-slate-300">|</span>
                             <span className="text-xs text-slate-600">{item.description}</span>
                           </div>
-                          <div className="text-xs font-bold text-slate-500">
+                          <div className="text-xs  text-slate-500">
                             QTY: {item.quantity} {item.unit}
                           </div>
                         </div>
                         
                         {/* Materials Section */}
                         <div className="px-4 py-2 bg-slate-50 border-y border-slate-200 flex justify-between items-center">
-                          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Raw Materials</h4>
-                          <span className="text-[10px] font-bold text-slate-400">Total: ₹{item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0).toFixed(2)}</span>
+                          <h4 className="text-[10px]  text-slate-500  tracking-wider">Raw Materials</h4>
+                          <span className="text-[10px]  text-slate-400">Total: ₹{item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0).toFixed(2)}</span>
                         </div>
                         <table className="min-w-full divide-y divide-slate-100">
                           <thead className="bg-white">
                             <tr>
-                              <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Material</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Qty/pc</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Total Qty</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Rate</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Amount</th>
+                              <th className="px-4 py-2 text-left text-[10px]  text-slate-400 ">Material</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Qty/pc</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Total Qty</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Rate</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Amount</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -251,7 +269,7 @@ const BOMApproval = () => {
                                     <td className="px-4 py-2 text-xs text-right text-slate-500">{parseFloat(mat.qty_per_pc).toFixed(4)}</td>
                                     <td className="px-4 py-2 text-xs text-right text-slate-900 font-medium">{totalQty.toFixed(2)} {mat.uom}</td>
                                     <td className="px-4 py-2 text-xs text-right text-slate-500">₹{parseFloat(mat.rate || 0).toFixed(2)}</td>
-                                    <td className="px-4 py-2 text-xs text-right font-bold text-indigo-600">₹{amount.toFixed(2)}</td>
+                                    <td className="px-4 py-2 text-xs text-right  text-indigo-600">₹{amount.toFixed(2)}</td>
                                   </tr>
                                 );
                               })
@@ -263,16 +281,16 @@ const BOMApproval = () => {
 
                         {/* Components Section */}
                         <div className="px-4 py-2 bg-slate-50 border-y border-slate-200 flex justify-between items-center">
-                          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Components</h4>
-                          <span className="text-[10px] font-bold text-slate-400">Total: ₹{item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0).toFixed(2)}</span>
+                          <h4 className="text-[10px]  text-slate-500  tracking-wider">Components</h4>
+                          <span className="text-[10px]  text-slate-400">Total: ₹{item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0).toFixed(2)}</span>
                         </div>
                         <table className="min-w-full divide-y divide-slate-100">
                           <thead className="bg-white">
                             <tr>
-                              <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Component</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Qty</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Rate</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Amount</th>
+                              <th className="px-4 py-2 text-left text-[10px]  text-slate-400 ">Component</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Qty</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Rate</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Amount</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -287,7 +305,7 @@ const BOMApproval = () => {
                                     </td>
                                     <td className="px-4 py-2 text-xs text-right text-slate-900 font-medium">{comp.quantity} {comp.uom}</td>
                                     <td className="px-4 py-2 text-xs text-right text-slate-500">₹{parseFloat(comp.rate || 0).toFixed(2)}</td>
-                                    <td className="px-4 py-2 text-xs text-right font-bold text-indigo-600">₹{amount.toFixed(2)}</td>
+                                    <td className="px-4 py-2 text-xs text-right  text-indigo-600">₹{amount.toFixed(2)}</td>
                                   </tr>
                                 );
                               })
@@ -299,8 +317,8 @@ const BOMApproval = () => {
 
                         {/* Operations Section */}
                         <div className="px-4 py-2 bg-slate-50 border-y border-slate-200 flex justify-between items-center">
-                          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operations</h4>
-                          <span className="text-[10px] font-bold text-slate-400">Total: ₹{item.operations?.reduce((sum, o) => {
+                          <h4 className="text-[10px]  text-slate-500  tracking-wider">Operations</h4>
+                          <span className="text-[10px]  text-slate-400">Total: ₹{item.operations?.reduce((sum, o) => {
                             const cycle = parseFloat(o.cycle_time_min || 0);
                             const setup = parseFloat(o.setup_time_min || 0);
                             const rate = parseFloat(o.hourly_rate || 0);
@@ -310,11 +328,11 @@ const BOMApproval = () => {
                         <table className="min-w-full divide-y divide-slate-100">
                           <thead className="bg-white">
                             <tr>
-                              <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Operation</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Cycle (m)</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Rate/hr</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Time (h)</th>
-                              <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Cost</th>
+                              <th className="px-4 py-2 text-left text-[10px]  text-slate-400 ">Operation</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Cycle (m)</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Rate/hr</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Time (h)</th>
+                              <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Cost</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -332,7 +350,7 @@ const BOMApproval = () => {
                                     <td className="px-4 py-2 text-xs text-right text-slate-500">{op.cycle_time_min}</td>
                                     <td className="px-4 py-2 text-xs text-right text-slate-500">₹{parseFloat(op.hourly_rate || 0).toFixed(2)}</td>
                                     <td className="px-4 py-2 text-xs text-right text-slate-500">{totalTimeHrs.toFixed(2)} hrs</td>
-                                    <td className="px-4 py-2 text-xs text-right font-bold text-indigo-600">₹{cost.toFixed(2)}</td>
+                                    <td className="px-4 py-2 text-xs text-right  text-indigo-600">₹{cost.toFixed(2)}</td>
                                   </tr>
                                 );
                               })
@@ -346,16 +364,16 @@ const BOMApproval = () => {
                         {item.scrap?.length > 0 && (
                           <>
                             <div className="px-4 py-2 bg-slate-50 border-y border-slate-200 flex justify-between items-center">
-                              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Scrap Recovery</h4>
-                              <span className="text-[10px] font-bold text-rose-400">Recovery: ₹{item.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0).toFixed(2)}</span>
+                              <h4 className="text-[10px]  text-slate-500  tracking-wider">Scrap Recovery</h4>
+                              <span className="text-[10px]  text-rose-400">Recovery: ₹{item.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0).toFixed(2)}</span>
                             </div>
                             <table className="min-w-full divide-y divide-slate-100">
                               <thead className="bg-white">
                                 <tr>
-                                  <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Scrap Item</th>
-                                  <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Input</th>
-                                  <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Loss %</th>
-                                  <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Value</th>
+                                  <th className="px-4 py-2 text-left text-[10px]  text-slate-400 ">Scrap Item</th>
+                                  <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Input</th>
+                                  <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Loss %</th>
+                                  <th className="px-4 py-2 text-right text-[10px]  text-slate-400 ">Value</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
@@ -366,7 +384,7 @@ const BOMApproval = () => {
                                       <td className="px-4 py-2 text-xs text-slate-700">{s.item_name}</td>
                                       <td className="px-4 py-2 text-xs text-right text-slate-500">{s.input_qty}</td>
                                       <td className="px-4 py-2 text-xs text-right text-rose-500 font-medium">{s.loss_percent}%</td>
-                                      <td className="px-4 py-2 text-xs text-right font-bold text-rose-600">₹{value.toFixed(2)}</td>
+                                      <td className="px-4 py-2 text-xs text-right  text-rose-600">₹{value.toFixed(2)}</td>
                                     </tr>
                                   );
                                 })}
@@ -377,11 +395,11 @@ const BOMApproval = () => {
                         
                         {/* Item Total Breakdown */}
                         <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
-                           <div className="text-xs font-bold uppercase tracking-widest opacity-60">Item Cost Summary</div>
+                           <div className="text-xs   tracking-widest opacity-60">Item Cost Summary</div>
                            <div className="flex gap-8">
                               <div className="text-right">
-                                 <div className="text-[9px] uppercase opacity-50 font-bold">Total Item Cost</div>
-                                 <div className="text-lg font-bold">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                                 <div className="text-[9px]  opacity-50 ">Total Item Cost</div>
+                                 <div className="text-lg ">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
                                      item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
                                      item.operations?.reduce((sum, o) => {
                                        const cycle = parseFloat(o.cycle_time_min || 0);
@@ -392,8 +410,8 @@ const BOMApproval = () => {
                                      item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0).toFixed(2)}</div>
                               </div>
                               <div className="text-right border-l border-white/10 pl-8">
-                                 <div className="text-[9px] uppercase opacity-50 font-bold">Cost Per Unit</div>
-                                 <div className="text-lg font-bold text-amber-400">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                                 <div className="text-[9px]  opacity-50 ">Cost Per Unit</div>
+                                 <div className="text-lg  text-amber-400">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
                                      item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
                                      item.operations?.reduce((sum, o) => {
                                        const cycle = parseFloat(o.cycle_time_min || 0);
@@ -412,7 +430,7 @@ const BOMApproval = () => {
                     <div className="mt-8 flex justify-end">
                       <div className="w-80 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Overall Cost Breakdown</h4>
+                          <h4 className="text-xs  text-slate-700  tracking-wider">Overall Cost Breakdown</h4>
                         </div>
                         <div className="p-4 space-y-3">
                           {(() => {
@@ -435,14 +453,14 @@ const BOMApproval = () => {
                               <>
                                 <div className="flex justify-between text-sm">
                                   <span className="text-slate-500 font-medium">BOM Subtotal:</span>
-                                  <span className="text-slate-900 font-bold">₹{subtotal.toFixed(2)}</span>
+                                  <span className="text-slate-900 ">₹{subtotal.toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                   <span className="text-slate-500 font-medium">GST (18.0%):</span>
-                                  <span className="text-slate-900 font-bold">₹{gst.toFixed(2)}</span>
+                                  <span className="text-slate-900 ">₹{gst.toFixed(2)}</span>
                                 </div>
                                 <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-                                  <span className="text-sm font-bold text-slate-700">Sales Order Price:</span>
+                                  <span className="text-sm  text-slate-700">Sales Order Price:</span>
                                   <span className="text-xl font-extrabold text-emerald-600">₹{total.toFixed(2)}</span>
                                 </div>
                               </>
@@ -457,7 +475,7 @@ const BOMApproval = () => {
               <div className="p-2 bg-slate-50 border-t border-slate-100 flex justify-end">
                 <button 
                   onClick={() => setShowDetails(false)}
-                  className="px-6 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50"
+                  className="px-6 py-2 bg-white border border-slate-200 rounded-lg text-sm  text-slate-600 hover:bg-slate-50"
                 >
                   Close
                 </button>

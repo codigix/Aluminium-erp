@@ -129,7 +129,7 @@ const POMaterialRequest = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card title="PO Material Request" subtitle="Inventory Department - Review and Accept Purchase Orders">
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="flex-1">
@@ -179,22 +179,22 @@ const POMaterialRequest = () => {
                   onClick={() => togglePo(group.po_id)}
                 >
                   <div className="flex items-center gap-6">
-                    <div className="text-lg text-slate-900 flex items-center gap-2">
+                    <div className="text-md text-slate-900 flex items-center gap-2">
                       <span className="text-slate-400 text-xs">{expandedPos.has(group.po_id) ? '▼' : '▶'}</span>
                       {group.po_number}
                     </div>
                     <div className="h-4 w-[1px] bg-slate-200"></div>
                     <div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">PO Date</p>
-                      <p className="text-sm font-semibold text-slate-700">{formatDate(group.po_date)}</p>
+                      <p className="text-[10px] text-slate-400   tracking-wider">PO Date</p>
+                      <p className="text-sm  text-slate-700">{formatDate(group.po_date)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Vendor</p>
-                      <p className="text-sm font-semibold text-slate-700">{group.vendor_name}</p>
+                      <p className="text-[10px] text-slate-400   tracking-wider">Vendor</p>
+                      <p className="text-sm  text-slate-700">{group.vendor_name}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Status</p>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      <p className="text-[10px] text-slate-400   tracking-wider">Status</p>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px]   tracking-wider ${
                         group.store_acceptance_status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 
                         group.store_acceptance_status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-700' : 
                         'bg-rose-100 text-rose-700'
@@ -209,13 +209,13 @@ const POMaterialRequest = () => {
                       <>
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleAcceptReject(group.po_id, 'ACCEPTED'); }}
-                          className="px-4 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all shadow-sm active:scale-95"
+                          className="px-4 py-1.5 bg-emerald-500 text-white rounded-xl text-xs  hover:bg-emerald-600 transition-all shadow-sm active:scale-95"
                         >
                           Accept
                         </button>
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleAcceptReject(group.po_id, 'REJECTED'); }}
-                          className="px-4 py-1.5 bg-rose-500 text-white rounded-xl text-xs font-bold hover:bg-rose-600 transition-all shadow-sm active:scale-95"
+                          className="px-4 py-1.5 bg-rose-500 text-white rounded-xl text-xs  hover:bg-rose-600 transition-all shadow-sm active:scale-95"
                         >
                           Reject
                         </button>
@@ -223,7 +223,7 @@ const POMaterialRequest = () => {
                     ) : group.store_acceptance_status === 'ACCEPTED' ? (
                       <button 
                         onClick={(e) => { e.stopPropagation(); navigate('/grn', { state: { poNumber: group.po_number } }); }}
-                        className="px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+                        className="px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs  hover:bg-blue-700 transition-all shadow-sm active:scale-95"
                       >
                         Create GRN
                       </button>
@@ -235,7 +235,7 @@ const POMaterialRequest = () => {
                 {expandedPos.has(group.po_id) && (
                   <div className="p-0 bg-white">
                     <table className="w-full text-sm text-left border-collapse">
-                      <thead className="bg-slate-50/50 text-slate-400 uppercase tracking-widest text-[10px] font-bold">
+                      <thead className="bg-slate-50/50 text-slate-400  tracking-widest text-[10px] ">
                         <tr>
                           <th className="p-2">Material / Item</th>
                           <th className="p-2">Type</th>
@@ -258,7 +258,7 @@ const POMaterialRequest = () => {
                               {parseFloat(item.po_qty || 0).toFixed(2)} <span className="text-[10px] text-slate-400">{item.unit}</span>
                             </td>
                             <td className="p-2 text-right">
-                              <span className="font-bold text-blue-600">
+                              <span className=" text-blue-600">
                                 {parseFloat(item.pending_grn_qty || 0).toFixed(2)}
                               </span>
                             </td>

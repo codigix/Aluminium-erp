@@ -5,11 +5,29 @@ import Swal from 'sweetalert2';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const grnStatusColors = {
-  PENDING: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
+  PENDING: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', badge: 'bg-amber-100 text-amber-700', label: 'Pending' },
   RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
-  INSPECTED: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'Inspected' },
+  INSPECTED: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Inspected' },
   APPROVED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', label: 'Approved' },
-  REJECTED: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600', badge: 'bg-red-100 text-red-700', label: 'Rejected' }
+  REJECTED: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-600', badge: 'bg-rose-100 text-rose-700', label: 'Rejected' }
+};
+
+const StatMiniCard = ({ title, count, color, icon }) => {
+  const colorMap = {
+    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    amber: 'bg-amber-50 text-amber-600 border-amber-100',
+    cyan: 'bg-cyan-50 text-cyan-600 border-cyan-100',
+    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    rose: 'bg-rose-50 text-rose-600 border-rose-100'
+  };
+  
+  return (
+    <div className={`p-4 rounded-2xl border ${colorMap[color]} shadow-sm flex flex-col items-center text-center`}>
+      <div className="p-2 bg-white rounded-lg shadow-sm mb-2">{icon}</div>
+      <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-0.5">{title}</p>
+      <p className="text-xl font-black">{count || 0}</p>
+    </div>
+  );
 };
 
 const formatDate = (date) => {
@@ -214,68 +232,145 @@ const GRN = () => {
   );
 
   return (
-    <div className="space-y-6">
-      <Card title="GRN Processing" subtitle="Manage Goods Received Notes">
-        <div className="flex gap-4 justify-between items-center mb-6">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search PO number..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
+    <div className="space-y-3">
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-2 bg-indigo-50 rounded-lg">
+              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">GRN Records</h1>
+              <p className="text-sm text-slate-500 font-medium">History of all Goods Received Notes</p>
+            </div>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"
+            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
           >
-            + Create GRN
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            Create GRN
           </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+          <div className="relative max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Search by PO number..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
+            />
+          </div>
         </div>
 
         {loading ? (
-          <p className="text-sm text-slate-400">Loading GRNs...</p>
+          <div className="flex items-center justify-center py-24">
+            <div className="text-center space-y-4">
+              <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-slate-500 font-medium">Fetching GRN records...</p>
+            </div>
+          </div>
         ) : filteredGRNs.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500 mb-3">No GRNs {searchTerm ? 'found' : 'created yet'}</p>
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
-            >
-              + Create GRN
-            </button>
+          <div className="text-center py-24">
+            <div className="p-4 bg-slate-50 rounded-full shadow-sm w-fit mx-auto mb-4">
+              <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-slate-500 font-bold">No GRNs {searchTerm ? 'found matching your search' : 'available'}</p>
+            <p className="text-xs text-slate-400 mt-1 mb-6">Create a new Goods Received Note to get started</p>
+            {!searchTerm && (
+              <button
+                type="button"
+                onClick={() => setShowModal(true)}
+                className="inline-flex items-center gap-2 px-6 py-2 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-all shadow-lg"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                </svg>
+                Create First GRN
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold uppercase">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">GRN #</th>
-                  <th className="px-4 py-3 text-left font-semibold">PO Number</th>
-                  <th className="px-4 py-3 text-left font-semibold">GRN Date</th>
-                  <th className="px-4 py-3 text-right font-semibold">Received Qty</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="p-2 text-left ">GRN #</th>
+                  <th className="p-2 text-left ">PO Number</th>
+                  <th className="p-2 text-left ">GRN Date</th>
+                  <th className="p-2 text-right ">Received Qty</th>
+                  <th className="p-2 text-left ">Status</th>
+                  <th className="p-2 text-right ">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {filteredGRNs.map((grn) => (
-                  <tr key={`grn-${grn.id}`} className="border-t border-slate-100">
-                    <td className="px-4 py-4 font-medium text-slate-900">GRN-{String(grn.id).padStart(4, '0')}</td>
-                    <td className="px-4 py-4 text-slate-600">{grn.poNumber}</td>
-                    <td className="px-4 py-4 text-slate-600">{formatDate(grn.grnDate)}</td>
-                    <td className="px-4 py-4 text-right text-slate-900 text-xs">{grn.receivedQuantity}</td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${grnStatusColors[grn.status]?.badge}`}>
+                  <tr key={`grn-${grn.id}`} className="group hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-5">
+                      <div className="font-bold text-slate-900 tracking-tight">GRN-{String(grn.id).padStart(4, '0')}</div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="inline-flex px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-bold uppercase tracking-wider border border-indigo-100">
+                        {grn.poNumber}
+                      </div>
+                    </td>
+                    <td className="px-6 py-5 text-slate-500 font-medium">
+                      {formatDate(grn.grnDate)}
+                    </td>
+                    <td className="px-6 py-5 text-right font-mono font-bold text-slate-900">
+                      {grn.receivedQuantity}
+                    </td>
+                    <td className="px-6 py-5">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${grnStatusColors[grn.status]?.badge}`}>
                         {grnStatusColors[grn.status]?.label || grn.status}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button onClick={() => handleViewGRN(grn)} className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium">👁 View</button>
-                      <button onClick={() => handleEditGRN(grn)} className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium">✎ Edit</button>
-                      <button onClick={() => handleDeleteGRN(grn.id)} className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium">🗑</button>
+                    <td className="px-6 py-5 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button 
+                          onClick={() => handleViewGRN(grn)} 
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                          title="View Details"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                        <button 
+                          onClick={() => handleEditGRN(grn)} 
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                          title="Edit GRN"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteGRN(grn.id)} 
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                          title="Delete GRN"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -283,100 +378,97 @@ const GRN = () => {
             </table>
           </div>
         )}
-      </Card>
+      </div>
 
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">Total GRNs</p>
-            <p className="text-2xl font-bold text-blue-900">{stats.totalGrns || 0}</p>
-          </div>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">Pending</p>
-            <p className="text-2xl font-bold text-yellow-900">{stats.pendingGrns || 0}</p>
-          </div>
-          <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
-            <p className="text-xs text-cyan-600 font-semibold uppercase tracking-wider mb-1">Received</p>
-            <p className="text-2xl font-bold text-cyan-900">{stats.receivedGrns || 0}</p>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Approved</p>
-            <p className="text-2xl font-bold text-emerald-900">{stats.approvedGrns || 0}</p>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-xs text-red-600 font-semibold uppercase tracking-wider mb-1">Rejected</p>
-            <p className="text-2xl font-bold text-red-900">{stats.rejectedGrns || 0}</p>
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <StatMiniCard title="Total GRNs" count={stats.totalGrns} color="indigo" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
+          <StatMiniCard title="Pending" count={stats.pendingGrns} color="amber" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
+          <StatMiniCard title="Received" count={stats.receivedGrns} color="cyan" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>} />
+          <StatMiniCard title="Approved" count={stats.approvedGrns} color="emerald" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
+          <StatMiniCard title="Rejected" count={stats.rejectedGrns} color="rose" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>} />
         </div>
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg text-slate-900 text-xs">Create GRN (Goods Received Note)</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-500 text-2xl">✕</button>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Create Goods Received Note</h3>
+                <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-0.5">Record incoming material from vendor</p>
+              </div>
+              <button 
+                onClick={() => setShowModal(false)} 
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-full transition-all border border-transparent hover:border-slate-200"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
-            <form onSubmit={handleCreateGRN} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">PO Number *</label>
-                <input
-                  type="text"
-                  value={formData.poNumber}
-                  onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
-                  placeholder="Enter PO number"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
+            <form onSubmit={handleCreateGRN} className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">PO Number *</label>
+                  <input
+                    type="text"
+                    value={formData.poNumber}
+                    onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
+                    placeholder="Enter PO number"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">GRN Date *</label>
+                  <input
+                    type="date"
+                    value={formData.grnDate}
+                    onChange={(e) => setFormData({...formData, grnDate: e.target.value})}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">GRN Date *</label>
-                <input
-                  type="date"
-                  value={formData.grnDate}
-                  onChange={(e) => setFormData({...formData, grnDate: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Received Quantity *</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Received Quantity *</label>
                 <input
                   type="number"
                   value={formData.receivedQuantity}
                   onChange={(e) => setFormData({...formData, receivedQuantity: e.target.value})}
                   placeholder="0"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
                   required
                   min="1"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Optional)</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Notes (Optional)</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   placeholder="Add any notes about the receipt"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
                   rows="3"
                 />
               </div>
 
-              <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
+              <div className="flex gap-3 justify-end pt-6 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="px-6 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
                 >
                   Create GRN
                 </button>
@@ -387,78 +479,109 @@ const GRN = () => {
       )}
 
       {showViewModal && selectedGRN && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg text-slate-900 text-xs">GRN Details</h3>
-              <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-slate-50 p-3 rounded">
-                <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">GRN Number</p>
-                <p className="text-lg text-slate-900">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">GRN Details</h3>
+                <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-0.5">Goods Received Note Information</p>
               </div>
-              <div className="bg-slate-50 p-3 rounded">
-                <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">PO Number</p>
-                <p className="text-lg text-slate-900">{selectedGRN.poNumber}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded">
-                <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">GRN Date</p>
-                <p className="text-lg text-slate-900">{formatDate(selectedGRN.grnDate)}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded">
-                <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">Received Qty</p>
-                <p className="text-lg text-slate-900">{selectedGRN.receivedQuantity}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded col-span-2">
-                <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">Status</p>
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${grnStatusColors[selectedGRN.status]?.badge}`}>
-                  {grnStatusColors[selectedGRN.status]?.label || selectedGRN.status}
-                </span>
-              </div>
-            </div>
-
-            {selectedGRN.notes && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 p-4 rounded">
-                <p className="text-xs text-blue-600 uppercase tracking-wider font-semibold mb-2">Notes</p>
-                <p className="text-slate-700">{selectedGRN.notes}</p>
-              </div>
-            )}
-
-            <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+              <button 
+                onClick={() => setShowViewModal(false)} 
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-full transition-all border border-transparent hover:border-slate-200"
               >
-                Close
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">GRN Number</p>
+                  <p className="text-sm font-bold text-slate-900">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PO Number</p>
+                  <p className="text-sm font-bold text-indigo-600">{selectedGRN.poNumber}</p>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">GRN Date</p>
+                  <p className="text-sm font-bold text-slate-900">{formatDate(selectedGRN.grnDate)}</p>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Received Qty</p>
+                  <p className="text-sm font-bold text-slate-900">{selectedGRN.receivedQuantity}</p>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 col-span-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Current Status</p>
+                  <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${grnStatusColors[selectedGRN.status]?.badge}`}>
+                    {grnStatusColors[selectedGRN.status]?.label || selectedGRN.status}
+                  </span>
+                </div>
+              </div>
+
+              {selectedGRN.notes && (
+                <div className="mb-6 bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
+                  <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-2">Notes</p>
+                  <p className="text-sm text-slate-700 font-medium leading-relaxed">{selectedGRN.notes}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-4">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-8 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {showEditModal && selectedGRN && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg text-slate-900 text-xs">Edit GRN</h3>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Update GRN Status</h3>
+                <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-0.5">Modify progress of Goods Received Note</p>
+              </div>
+              <button 
+                onClick={() => setShowEditModal(false)} 
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-full transition-all border border-transparent hover:border-slate-200"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
-            <form onSubmit={handleUpdateGRN} className="space-y-4">
-              <div className="bg-slate-50 p-3 rounded text-sm">
-                <p className="text-slate-600"><span className="font-medium">GRN Number:</span> GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
-                <p className="text-slate-600"><span className="font-medium">PO Number:</span> {selectedGRN.poNumber}</p>
-                <p className="text-slate-600"><span className="font-medium">Received Qty:</span> {selectedGRN.receivedQuantity}</p>
+            <form onSubmit={handleUpdateGRN} className="p-6 space-y-3">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">GRN ID</p>
+                  <p className="text-xs font-bold text-slate-700">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PO Number</p>
+                  <p className="text-xs font-bold text-indigo-600">{selectedGRN.poNumber}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Received Qty</p>
+                  <p className="text-xs font-bold text-slate-700">{selectedGRN.receivedQuantity}</p>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Update Status *</label>
                 <select
                   value={editFormData.status}
                   onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
                   required
                 >
                   <option value="">-- Select Status --</option>
@@ -470,17 +593,17 @@ const GRN = () => {
                 </select>
               </div>
 
-              <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
+              <div className="flex gap-3 justify-end pt-6 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="px-6 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
                 >
                   Update GRN
                 </button>

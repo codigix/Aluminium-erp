@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui.jsx';
+import { 
+  ClipboardList, 
+  Clock, 
+  RotateCcw, 
+  CheckCircle, 
+  XCircle,
+  Beaker
+} from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -46,90 +54,103 @@ const QualityDashboard = () => {
     }
   };
 
-  const StatCard = ({ title, count, color, icon }) => (
-    <div className={`${color} rounded-lg p-4 border border-slate-200`}>
+  const StatCard = ({ title, count, icon: Icon, colorClass }) => (
+    <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider mb-1">{title}</p>
-          <p className="text-2xl text-slate-900">{count}</p>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{title}</p>
+          <p className="text-2xl font-bold text-slate-900">{count}</p>
         </div>
-        <div className="text-2xl">{icon}</div>
+        <div className={`p-3 rounded-lg ${colorClass}`}>
+          <Icon className="w-6 h-6" />
+        </div>
       </div>
     </div>
   );
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center space-y-3">
-          <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-slate-500">Loading quality data...</p>
+      <div className="flex flex-col items-center justify-center py-24 bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="relative">
+          <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+          <Beaker className="w-6 h-6 text-indigo-600 absolute inset-0 m-auto animate-pulse" />
         </div>
+        <p className="mt-4 text-sm font-medium text-slate-600 tracking-wide">Loading Quality Metrics...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard 
           title="Total Inspections" 
           count={stats.totalQc || 0} 
-          color="bg-blue-50"
-          icon="📊"
+          icon={ClipboardList}
+          colorClass="bg-indigo-50 text-indigo-600"
         />
         <StatCard 
           title="QC Pending" 
           count={stats.pendingQc || 0} 
-          color="bg-amber-50"
-          icon="⏳"
+          icon={Clock}
+          colorClass="bg-amber-50 text-amber-600"
         />
         <StatCard 
           title="In Progress" 
           count={stats.inProgressQc || 0} 
-          color="bg-indigo-50"
-          icon="🔄"
+          icon={RotateCcw}
+          colorClass="bg-blue-50 text-blue-600"
         />
         <StatCard 
           title="Passed" 
           count={stats.passedQc || 0} 
-          color="bg-emerald-50"
-          icon="✅"
+          icon={CheckCircle}
+          colorClass="bg-emerald-50 text-emerald-600"
         />
         <StatCard 
           title="Failed" 
           count={stats.failedQc || 0} 
-          color="bg-red-50"
-          icon="❌"
+          icon={XCircle}
+          colorClass="bg-red-50 text-red-600"
         />
       </div>
 
       <Card title="Items Awaiting Inspection" subtitle="Goods received requiring quality verification">
         {stats.qcPendingItems.length === 0 ? (
-          <div className="text-center py-8 text-slate-500">
-            <p className="text-sm">No pending items for inspection</p>
+          <div className="text-center py-12 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 mb-3">
+              <CheckCircle className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-medium text-slate-600">All clear! No pending inspections</p>
+            <p className="text-xs text-slate-400 mt-1">New items from GRN will appear here</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden rounded-lg border border-slate-200">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">GRN ID</th>
-                  <th className="px-4 py-3 text-left font-semibold">Item Code</th>
-                  <th className="px-4 py-3 text-right font-semibold">Qty Pending</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN ID</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider text-[10px]">Item Code</th>
+                  <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Qty Pending</th>
+                  <th className="px-4 py-3 text-center font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {stats.qcPendingItems.map((item, idx) => (
-                  <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-4 font-medium text-slate-900">GRN-{String(item.grn_id).padStart(4, '0')}</td>
-                    <td className="px-4 py-4 text-slate-600">{item.item_code}</td>
-                    <td className="px-4 py-4 text-right text-slate-600">
-                      {parseFloat(item.quantity || 0).toFixed(3)}
+                  <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
+                    <td className="px-4 py-4 font-mono font-bold text-indigo-600">
+                      GRN-{String(item.grn_id).padStart(4, '0')}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                      <div className="font-medium text-slate-900">{item.item_code}</div>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <span className="font-mono font-bold text-slate-700">
+                        {parseFloat(item.quantity || 0).toFixed(3)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700">
                         {item.status}
                       </span>
                     </td>

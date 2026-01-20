@@ -17,3 +17,7 @@ body {
 #root {
   min-height: 100vh;
 }
+
+th{
+  font-weight: 100;
+}

@@ -337,11 +337,11 @@ const generateQuotationPDF = async (quotationId) => {
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
         .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
         .quote-title { text-align: right; }
-        .quote-title h2 { margin: 0; color: #64748b; font-size: 18px; text-transform: uppercase; }
+        .quote-title h2 { margin: 0; color: #64748b; font-size: 18px; text-transform: ; }
         .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-        .section-label { font-weight: bold; color: #64748b; font-size: 12px; text-transform: uppercase; margin-bottom: 8px; }
+        .section-label { font-weight: bold; color: #64748b; font-size: 12px; text-transform: ; margin-bottom: 8px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-        th { background: #f8fafc; color: #64748b; text-align: left; padding: 12px 8px; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; color: #64748b; text-align: left; padding: 12px 8px; font-size: 11px; text-transform: ; border-bottom: 1px solid #e2e8f0; }
         td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
         .notes-section { background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #cbd5e1; }
         .footer { margin-top: 50px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
