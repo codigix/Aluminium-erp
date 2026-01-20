@@ -24,7 +24,7 @@ const StatMiniCard = ({ title, count, color, icon }) => {
   return (
     <div className={`p-4 rounded-2xl border ${colorMap[color]} shadow-sm flex flex-col items-center text-center`}>
       <div className="p-2 bg-white rounded-lg shadow-sm mb-2">{icon}</div>
-      <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-0.5">{title}</p>
+      <p className="text-[10px] font-bold  tracking-widest opacity-80 mb-0.5">{title}</p>
       <p className="text-xl font-black">{count || 0}</p>
     </div>
   );
@@ -308,7 +308,7 @@ const GRN = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold uppercase">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold ">
                 <tr>
                   <th className="p-2 text-left ">GRN #</th>
                   <th className="p-2 text-left ">PO Number</th>
@@ -325,7 +325,7 @@ const GRN = () => {
                       <div className="font-bold text-slate-900 tracking-tight">GRN-{String(grn.id).padStart(4, '0')}</div>
                     </td>
                     <td className="px-6 py-5">
-                      <div className="inline-flex px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-bold uppercase tracking-wider border border-indigo-100">
+                      <div className="inline-flex px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-bold  tracking-wider border border-indigo-100">
                         {grn.poNumber}
                       </div>
                     </td>
@@ -336,7 +336,7 @@ const GRN = () => {
                       {grn.receivedQuantity}
                     </td>
                     <td className="px-6 py-5">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${grnStatusColors[grn.status]?.badge}`}>
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider  ${grnStatusColors[grn.status]?.badge}`}>
                         {grnStatusColors[grn.status]?.label || grn.status}
                       </span>
                     </td>
@@ -395,7 +395,7 @@ const GRN = () => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Create Goods Received Note</h3>
+                <h3 className="text-sm font-bold text-slate-900  tracking-wider">Create Goods Received Note</h3>
                 <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-0.5">Record incoming material from vendor</p>
               </div>
               <button 
@@ -411,7 +411,7 @@ const GRN = () => {
             <form onSubmit={handleCreateGRN} className="p-6 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">PO Number *</label>
+                  <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">PO Number *</label>
                   <input
                     type="text"
                     value={formData.poNumber}
@@ -423,7 +423,7 @@ const GRN = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">GRN Date *</label>
+                  <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">GRN Date *</label>
                   <input
                     type="date"
                     value={formData.grnDate}
@@ -435,7 +435,7 @@ const GRN = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Received Quantity *</label>
+                <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Received Quantity *</label>
                 <input
                   type="number"
                   value={formData.receivedQuantity}
@@ -448,7 +448,7 @@ const GRN = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Notes (Optional)</label>
+                <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Notes (Optional)</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
@@ -483,7 +483,7 @@ const GRN = () => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">GRN Details</h3>
+                <h3 className="text-sm font-bold text-slate-900  tracking-wider">GRN Details</h3>
                 <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-0.5">Goods Received Note Information</p>
               </div>
               <button 
@@ -499,24 +499,24 @@ const GRN = () => {
             <div className="p-6">
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">GRN Number</p>
+                  <p className="text-[10px] font-bold text-slate-400  tracking-widest mb-1">GRN Number</p>
                   <p className="text-sm font-bold text-slate-900">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PO Number</p>
+                  <p className="text-[10px] font-bold text-slate-400  tracking-widest mb-1">PO Number</p>
                   <p className="text-sm font-bold text-indigo-600">{selectedGRN.poNumber}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">GRN Date</p>
+                  <p className="text-[10px] font-bold text-slate-400  tracking-widest mb-1">GRN Date</p>
                   <p className="text-sm font-bold text-slate-900">{formatDate(selectedGRN.grnDate)}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Received Qty</p>
+                  <p className="text-[10px] font-bold text-slate-400  tracking-widest mb-1">Received Qty</p>
                   <p className="text-sm font-bold text-slate-900">{selectedGRN.receivedQuantity}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 col-span-2">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Current Status</p>
-                  <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${grnStatusColors[selectedGRN.status]?.badge}`}>
+                  <p className="text-[10px] font-bold text-slate-400  tracking-widest mb-2">Current Status</p>
+                  <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-bold tracking-wider  ${grnStatusColors[selectedGRN.status]?.badge}`}>
                     {grnStatusColors[selectedGRN.status]?.label || selectedGRN.status}
                   </span>
                 </div>
@@ -524,7 +524,7 @@ const GRN = () => {
 
               {selectedGRN.notes && (
                 <div className="mb-6 bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
-                  <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-2">Notes</p>
+                  <p className="text-[10px] font-bold text-indigo-600  tracking-widest mb-2">Notes</p>
                   <p className="text-sm text-slate-700 font-medium leading-relaxed">{selectedGRN.notes}</p>
                 </div>
               )}
@@ -547,7 +547,7 @@ const GRN = () => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Update GRN Status</h3>
+                <h3 className="text-sm font-bold text-slate-900  tracking-wider">Update GRN Status</h3>
                 <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-0.5">Modify progress of Goods Received Note</p>
               </div>
               <button 
@@ -563,21 +563,21 @@ const GRN = () => {
             <form onSubmit={handleUpdateGRN} className="p-6 space-y-3">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">GRN ID</p>
+                  <p className="text-[10px] font-bold text-slate-400  tracking-widest mb-1">GRN ID</p>
                   <p className="text-xs font-bold text-slate-700">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PO Number</p>
+                  <p className="text-[10px] font-bold text-slate-400  tracking-widest mb-1">PO Number</p>
                   <p className="text-xs font-bold text-indigo-600">{selectedGRN.poNumber}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Received Qty</p>
+                  <p className="text-[10px] font-bold text-slate-400  tracking-widest mb-1">Received Qty</p>
                   <p className="text-xs font-bold text-slate-700">{selectedGRN.receivedQuantity}</p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Update Status *</label>
+                <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Update Status *</label>
                 <select
                   value={editFormData.status}
                   onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}

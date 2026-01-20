@@ -137,7 +137,7 @@ const WarehouseAllocation = () => {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold uppercase">
+            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold ">
               <tr>
                 <th className="p-2 text-left">Source (GRN/PO)</th>
                 <th className="p-2 text-left">Item Details</th>
@@ -167,7 +167,7 @@ const WarehouseAllocation = () => {
                   <tr key={item.grn_item_id} className="group hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-5">
                       <div className="font-bold text-indigo-600">#{item.grn_number}</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">PO: {item.po_number}</div>
+                      <div className="text-[10px] text-slate-400 font-bold  tracking-tight mt-0.5">PO: {item.po_number}</div>
                     </td>
                     <td className="px-6 py-5">
                       <div className="font-semibold text-slate-900">{item.item_code}</div>

@@ -18,7 +18,7 @@ const QualityReports = () => {
           <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
             Advanced quality reporting and performance metrics are currently under development.
           </p>
-          <div className="mt-6 px-4 py-1.5 bg-purple-100 text-purple-700 text-[10px] font-bold uppercase tracking-widest rounded-full border border-purple-200">
+          <div className="mt-6 px-4 py-1.5 bg-purple-100 text-purple-700 text-[10px] font-bold  tracking-widest rounded-full border border-purple-200">
             Feature Coming Soon
           </div>
         </div>

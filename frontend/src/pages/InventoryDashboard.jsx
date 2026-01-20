@@ -64,8 +64,8 @@ const InventoryDashboard = () => {
     <div className={`${color} rounded-lg p-5 border border-slate-200 transition-all hover:shadow-sm`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase mb-1">{title}</p>
-          <p className="text-2xl font-bold text-slate-900">{count}</p>
+          <p className="text-[10px] text-slate-500 font-semibold tracking-widest  mb-1">{title}</p>
+          <p className="text-xl text-slate-900">{count}</p>
         </div>
         <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
           {icon}

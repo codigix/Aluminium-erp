@@ -185,6 +185,36 @@ const OperationMaster = ({ showForm, setShowForm }) => {
     }
   };
 
+  const handleDelete = async (op) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `You want to delete operation: ${op.operation_name}`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/operations/${op.id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to delete operation');
+        Swal.fire('Deleted!', 'Operation has been deleted successfully', 'success');
+        fetchOperations();
+      } catch (error) {
+        Swal.fire('Error', error.message, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const filteredOperations = operations.filter(op => 
     op.operation_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     op.operation_code.toLowerCase().includes(searchTerm.toLowerCase())
@@ -445,6 +475,15 @@ const OperationMaster = ({ showForm, setShowForm }) => {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           )}
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(op)} 
+                          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </button>
                       </div>
                     </td>

@@ -58,8 +58,8 @@ const QualityDashboard = () => {
     <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{title}</p>
-          <p className="text-2xl font-bold text-slate-900">{count}</p>
+          <p className="text-xs font-bold text-slate-500  tracking-wider mb-1">{title}</p>
+          <p className="text-xl text-slate-900">{count}</p>
         </div>
         <div className={`p-3 rounded-lg ${colorClass}`}>
           <Icon className="w-6 h-6" />
@@ -129,10 +129,10 @@ const QualityDashboard = () => {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN ID</th>
-                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider text-[10px]">Item Code</th>
-                  <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Qty Pending</th>
-                  <th className="px-4 py-3 text-center font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600  tracking-wider text-[10px]">GRN ID</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600  tracking-wider text-[10px]">Item Code</th>
+                  <th className="px-4 py-3 text-right font-bold text-slate-600  tracking-wider text-[10px]">Qty Pending</th>
+                  <th className="px-4 py-3 text-center font-bold text-slate-600  tracking-wider text-[10px]">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -150,7 +150,7 @@ const QualityDashboard = () => {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold  tracking-wider bg-purple-100 text-purple-700">
                         {item.status}
                       </span>
                     </td>

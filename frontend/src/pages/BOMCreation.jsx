@@ -266,7 +266,7 @@ const BOMCreation = () => {
                 </div>
                 <div className="flex gap-4">
                   <div className="text-right">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">BOM Coverage</p>
+                    <p className="text-[10px] text-slate-400  tracking-wider font-bold">BOM Coverage</p>
                     <p className="text-xs text-slate-700">
                       {orderItems.filter(i => i.has_bom).length} / {orderItems.length} Drawings
                     </p>
@@ -333,7 +333,7 @@ const BOMCreation = () => {
                           {item.has_bom ? (
                             <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] ">COMPLETED</span>
                           ) : (
-                            <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded text-[10px] ">NOT STARTED</span>
+                            <span className="p-2 bg-slate-100 text-slate-500 rounded text-xs">Not Started</span>
                           )}
                         </td>
                         <td className="p-2 text-center">

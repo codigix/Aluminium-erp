@@ -245,7 +245,7 @@ const QualityControl = () => {
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</p>
+        <p className="text-[10px] font-bold text-slate-500  tracking-wider">{label}</p>
         <p className="text-sm text-slate-900 leading-tight">{value}</p>
       </div>
     </div>
@@ -324,22 +324,22 @@ const QualityControl = () => {
                 <thead className="bg-slate-50 border-b border-slate-200">
                   {activeTab === 'grn' ? (
                     <tr>
-                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN #</th>
-                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">PO Number</th>
-                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN Date</th>
-                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Received Qty</th>
-                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
-                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Actions</th>
+                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">GRN #</th>
+                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">PO Number</th>
+                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">GRN Date</th>
+                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Received Qty</th>
+                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Status</th>
+                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Actions</th>
                     </tr>
                   ) : (
                     <tr>
-                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Inspection #</th>
-                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN #</th>
-                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Inspection Date</th>
-                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Pass Qty</th>
-                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Fail Qty</th>
-                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
-                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Actions</th>
+                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Inspection #</th>
+                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">GRN #</th>
+                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Inspection Date</th>
+                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Pass Qty</th>
+                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Fail Qty</th>
+                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Status</th>
+                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Actions</th>
                     </tr>
                   )}
                 </thead>
@@ -354,7 +354,7 @@ const QualityControl = () => {
                         <td className="p-2 text-slate-500">{formatDate(grn.grnDate)}</td>
                         <td className="p-2 text-right font-mono font-bold text-slate-900">{grn.receivedQuantity}</td>
                         <td className="p-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${grnStatusColors[grn.status]?.badge}`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold  tracking-wider border ${grnStatusColors[grn.status]?.badge}`}>
                             {grnStatusColors[grn.status]?.label || grn.status}
                           </span>
                         </td>
@@ -383,7 +383,7 @@ const QualityControl = () => {
                         <td className="p-2 text-right font-mono font-bold text-emerald-600">{qc.passQuantity}</td>
                         <td className="p-2 text-right font-mono font-bold text-red-600">{qc.failQuantity || 0}</td>
                         <td className="p-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold  tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
                             {qcStatusColors[qc.status]?.label || qc.status}
                           </span>
                         </td>
@@ -447,7 +447,7 @@ const QualityControl = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Create Goods Received Note</h3>
-                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Inventory Inward</p>
+                  <p className="text-[10px] text-slate-500 font-medium  tracking-wider">Inventory Inward</p>
                 </div>
               </div>
               <button 
@@ -461,7 +461,7 @@ const QualityControl = () => {
             <form onSubmit={handleCreateGRN} className="p-6 space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">PO Number *</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">PO Number *</label>
                   <div className="relative">
                     <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -476,7 +476,7 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">GRN Date *</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">GRN Date *</label>
                   <div className="relative">
                     <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -490,7 +490,7 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Received Quantity *</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">Received Quantity *</label>
                   <div className="relative">
                     <ArchiveBoxIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -506,7 +506,7 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Notes (Optional)</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">Notes (Optional)</label>
                   <div className="relative">
                     <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                     <textarea
@@ -550,7 +550,7 @@ const QualityControl = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Create QC Inspection</h3>
-                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Quality Verification</p>
+                  <p className="text-[10px] text-slate-500 font-medium  tracking-wider">Quality Verification</p>
                 </div>
               </div>
               <button 
@@ -564,7 +564,7 @@ const QualityControl = () => {
             <form onSubmit={handleCreateQC} className="p-6 space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Select GRN *</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">Select GRN *</label>
                   <div className="relative">
                     <Inbox className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <select
@@ -584,7 +584,7 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Inspection Date *</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">Inspection Date *</label>
                   <div className="relative">
                     <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -599,7 +599,7 @@ const QualityControl = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Pass Quantity *</label>
+                    <label className="text-xs text-slate-500 tracking-wider ml-1">Pass Quantity *</label>
                     <div className="relative">
                       <CheckCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" />
                       <input
@@ -615,7 +615,7 @@ const QualityControl = () => {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Fail Quantity</label>
+                    <label className="text-xs text-slate-500 tracking-wider ml-1">Fail Quantity</label>
                     <div className="relative">
                       <XCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-red-500" />
                       <input
@@ -631,7 +631,7 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Defects & Issues</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">Defects & Issues</label>
                   <div className="relative">
                     <ArrowUpRight className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                     <textarea
@@ -644,7 +644,7 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Remarks</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">Remarks</label>
                   <div className="relative">
                     <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                     <textarea

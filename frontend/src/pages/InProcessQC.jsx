@@ -18,7 +18,7 @@ const InProcessQC = () => {
           <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
             The real-time production monitoring module is currently under development.
           </p>
-          <div className="mt-6 px-4 py-1.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-widest rounded-full border border-emerald-200">
+          <div className="mt-6 px-4 py-1.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold  tracking-widest rounded-full border border-emerald-200">
             Feature Coming Soon
           </div>
         </div>

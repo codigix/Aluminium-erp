@@ -292,7 +292,7 @@ const QCInspections = () => {
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</p>
+        <p className="text-[10px] font-bold text-slate-500  tracking-wider">{label}</p>
         <p className="text-sm text-slate-900 leading-tight">{value}</p>
       </div>
     </div>
@@ -344,12 +344,12 @@ const QCInspections = () => {
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN #</th>
-                    <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">PO & Vendor</th>
-                    <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Total Qty</th>
-                    <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Pass/Fail</th>
-                    <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
-                    <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Actions</th>
+                    <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">GRN #</th>
+                    <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">PO & Vendor</th>
+                    <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Total Qty</th>
+                    <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Pass/Fail</th>
+                    <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Status</th>
+                    <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -372,7 +372,7 @@ const QCInspections = () => {
                         </div>
                       </td>
                       <td className="p-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold  tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
                           {qcStatusColors[qc.status]?.label || qc.status}
                         </span>
                       </td>
@@ -438,7 +438,7 @@ const QCInspections = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">New QC Inspection</h3>
-                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Quality Assurance</p>
+                  <p className="text-[10px] text-slate-500 font-medium  tracking-wider">Quality Assurance</p>
                 </div>
               </div>
               <button 
@@ -451,7 +451,7 @@ const QCInspections = () => {
 
             <form onSubmit={handleCreateQC} className="p-6 space-y-4">
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Select GRN *</label>
+                <label className="text-xs text-slate-500 tracking-wider ml-1">Select GRN *</label>
                 <div className="relative">
                   <Inbox className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <select
@@ -471,7 +471,7 @@ const QCInspections = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Inspection Date *</label>
+                <label className="text-xs text-slate-500 tracking-wider ml-1">Inspection Date *</label>
                 <div className="relative">
                   <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -486,7 +486,7 @@ const QCInspections = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Pass Qty *</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">Pass Qty *</label>
                   <div className="relative">
                     <CheckCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" />
                     <input
@@ -502,7 +502,7 @@ const QCInspections = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Fail Qty</label>
+                  <label className="text-xs text-slate-500 tracking-wider ml-1">Fail Qty</label>
                   <div className="relative">
                     <XCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-red-500" />
                     <input
@@ -518,7 +518,7 @@ const QCInspections = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Defects Found</label>
+                <label className="text-xs text-slate-500 tracking-wider ml-1">Defects Found</label>
                 <div className="relative">
                   <AlertTriangle className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                   <textarea
@@ -531,7 +531,7 @@ const QCInspections = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Remarks</label>
+                <label className="text-xs text-slate-500 tracking-wider ml-1">Remarks</label>
                 <div className="relative">
                   <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                   <textarea
@@ -574,7 +574,7 @@ const QCInspections = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Inspection Details</h3>
-                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">GRN-{String(selectedQC.grn_id).padStart(4, '0')}</p>
+                  <p className="text-[10px] text-slate-500 font-medium  tracking-wider">GRN-{String(selectedQC.grn_id).padStart(4, '0')}</p>
                 </div>
               </div>
               <button 
@@ -586,13 +586,13 @@ const QCInspections = () => {
             </div>
 
             <div className="p-6 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-slate-100 rounded-xl text-slate-500">
                     <User className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">PO Number</p>
+                    <p className="text-[10px] font-bold text-slate-500  tracking-wider">PO Number</p>
                     <p className="text-sm font-bold text-slate-900">{selectedQC.po_number || '—'}</p>
                   </div>
                 </div>
@@ -601,7 +601,7 @@ const QCInspections = () => {
                     <User className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Vendor</p>
+                    <p className="text-[10px] font-bold text-slate-500  tracking-wider">Vendor</p>
                     <p className="text-sm font-bold text-slate-900">{selectedQC.vendor_name || '—'}</p>
                   </div>
                 </div>
@@ -610,8 +610,8 @@ const QCInspections = () => {
                     <Clock className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</p>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${qcStatusColors[selectedQC.status]?.badge}`}>
+                    <p className="text-[10px] font-bold text-slate-500  tracking-wider">Status</p>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold  tracking-wider border ${qcStatusColors[selectedQC.status]?.badge}`}>
                       {qcStatusColors[selectedQC.status]?.label || selectedQC.status}
                     </span>
                   </div>
@@ -628,15 +628,15 @@ const QCInspections = () => {
 
               {selectedQC.items_detail && selectedQC.items_detail.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-[0.2em]">Items Verification</h4>
+                  <h4 className="text-xs font-bold text-slate-900  tracking-[0.2em]">Items Verification</h4>
                   <div className="overflow-hidden rounded-xl border border-slate-200">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Item Code</th>
-                          <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Ordered</th>
-                          <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Received</th>
-                          <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Shortage</th>
+                          <th className="px-4 py-3 font-bold text-slate-600  tracking-wider text-[10px]">Item Code</th>
+                          <th className="px-4 py-3 text-right font-bold text-slate-600  tracking-wider text-[10px]">Ordered</th>
+                          <th className="px-4 py-3 text-right font-bold text-slate-600  tracking-wider text-[10px]">Received</th>
+                          <th className="px-4 py-3 text-right font-bold text-slate-600  tracking-wider text-[10px]">Shortage</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -644,7 +644,7 @@ const QCInspections = () => {
                           <tr key={item.id}>
                             <td className="px-4 py-3">
                               <p className="font-bold text-slate-900">{item.item_code || 'N/A'}</p>
-                              {item.description && <p className="text-[10px] text-slate-500 uppercase">{item.description}</p>}
+                              {item.description && <p className="text-[10px] text-slate-500 ">{item.description}</p>}
                             </td>
                             <td className="px-4 py-3 text-right font-mono text-slate-600">{item.ordered_qty}</td>
                             <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">{item.received_qty}</td>
@@ -659,13 +659,13 @@ const QCInspections = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
                 <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-2">Defects Identified</p>
+                  <p className="text-[10px] font-bold text-amber-600  tracking-wider mb-2">Defects Identified</p>
                   <p className="text-sm text-slate-700 leading-relaxed font-medium">
                     {selectedQC.defects || "No specific defects reported."}
                   </p>
                 </div>
                 <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2">Final Remarks</p>
+                  <p className="text-[10px] font-bold text-blue-600  tracking-wider mb-2">Final Remarks</p>
                   <p className="text-sm text-slate-700 leading-relaxed font-medium">
                     {selectedQC.remarks || "No additional remarks."}
                   </p>
@@ -696,7 +696,7 @@ const QCInspections = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Update Status</h3>
-                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">QC-{String(selectedQC.id).padStart(4, '0')}</p>
+                  <p className="text-[10px] text-slate-500 font-medium  tracking-wider">QC-{String(selectedQC.id).padStart(4, '0')}</p>
                 </div>
               </div>
               <button 
@@ -710,17 +710,17 @@ const QCInspections = () => {
             <form onSubmit={handleUpdateQC} className="p-6 space-y-3">
               <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200">
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-500 font-bold uppercase tracking-wider">Pass Quantity:</span>
+                  <span className="text-slate-500 font-bold  tracking-wider">Pass Quantity:</span>
                   <span className="text-emerald-600 font-bold">{selectedQC.pass_quantity}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-500 font-bold uppercase tracking-wider">Fail Quantity:</span>
+                  <span className="text-slate-500 font-bold  tracking-wider">Fail Quantity:</span>
                   <span className="text-red-500 font-bold">{selectedQC.fail_quantity || 0}</span>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Update Decision Status *</label>
+                <label className="text-xs text-slate-500 tracking-wider ml-1">Update Decision Status *</label>
                 <div className="relative">
                   <RotateCcw className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <select

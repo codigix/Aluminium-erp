@@ -1433,7 +1433,7 @@ function App() {
               </svg>
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-2">
             {navigationItems.map((item, index) => {
               const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
               const isDisabled = item.isGroup || !item.moduleId

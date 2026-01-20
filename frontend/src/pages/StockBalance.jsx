@@ -113,7 +113,7 @@ const StockBalance = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-indigo-600 font-bold tracking-widest uppercase mb-1">Total Items</p>
+              <p className="text-[10px] text-indigo-600 font-bold tracking-widest  mb-1">Total Items</p>
               <p className="text-2xl font-bold text-indigo-900">{stats.totalItems}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">
@@ -124,7 +124,7 @@ const StockBalance = () => {
           </div>
           <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-emerald-600 font-bold tracking-widest uppercase mb-1">Total Balance</p>
+              <p className="text-[10px] text-emerald-600 font-bold tracking-widest  mb-1">Total Balance</p>
               <p className="text-2xl font-bold text-emerald-900">{parseFloat(stats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">
@@ -135,7 +135,7 @@ const StockBalance = () => {
           </div>
           <div className="bg-rose-50 border border-rose-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-rose-600 font-bold tracking-widest uppercase mb-1">Low Stock Items</p>
+              <p className="text-[10px] text-rose-600 font-bold tracking-widest  mb-1">Low Stock Items</p>
               <p className="text-2xl font-bold text-rose-900">{stats.lowStock}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">
@@ -180,7 +180,7 @@ const StockBalance = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold uppercase">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold ">
                 <tr>
                   <th className="px-4 py-4 text-left ">Item Code</th>
                   <th className="px-4 py-4 text-left ">Material Name</th>

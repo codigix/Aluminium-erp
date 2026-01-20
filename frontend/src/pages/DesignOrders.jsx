@@ -776,7 +776,7 @@ const DesignOrders = () => {
         <div className="mb-4">
           <div className="flex justify-between items-center mb-3 gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Design Engineering Hub</h1>
+              <h1 className="text-xl text-slate-900">Design Engineering Hub</h1>
               <p className="text-xs text-slate-600">Review customer drawings and create technical specifications</p>
             </div>
             <div className="flex gap-2">
@@ -791,28 +791,18 @@ const DesignOrders = () => {
           </div>
 
           {/* INFO BANNER */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-            <div className="flex-shrink-0 mt-0.5">
-              <svg className="h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <p className="text-xs text-blue-900 font-medium">
-              Review incoming drawings, accept design requests, and manage technical specifications for all orders.
-            </p>
-          </div>
+          
         </div>
 
         {/* INCOMING REQUESTS SECTION */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200 mb-4">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 border-b border-blue-700">
-            <div className="flex justify-between items-center mb-3">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-2 border-b border-blue-700">
+            <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+                <h2 className="text-xs  text-white flex items-center gap-2 mb-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                  📥 Incoming Design Requests
+                   Incoming Design Requests
                 </h2>
-                <p className="text-blue-100 text-xs">Customer drawings ready for design engineering review</p>
               </div>
               {incomingOrders.length > 0 && (
                 <span className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs font-bold">
@@ -858,12 +848,12 @@ const DesignOrders = () => {
                       disabled={incomingOrders.length === 0}
                     />
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Client Name</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
-                  <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Action</th>
+                  <th className="px-2 text-left text-xs  text-slate-600 ">Client Name</th>
+                  <th className="px-2 text-left text-xs  text-slate-600 ">Item Code</th>
+                  <th className="px-2 text-left text-xs  text-slate-600 ">Drawing No</th>
+                  <th className="px-2 text-left text-xs  text-slate-600 ">Description</th>
+                  <th className="px-4 py-2 text-center text-xs text-slate-600 ">Qty</th>
+                  <th className="px-4 py-2 text-right text-xs text-slate-600 ">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
@@ -916,14 +906,14 @@ const DesignOrders = () => {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-col">
-                              <span className="font-bold text-slate-900 text-xs">{group.company_name}</span>
+                              <span className=" text-slate-900 text-xs">{group.company_name}</span>
                               <span className="text-[10px] text-slate-500 font-medium">PO: {poNumber}</span>
                             </div>
                           </td>
                           <td className="px-4 py-3 font-bold text-slate-900">
                             <div className="flex items-center gap-2">
                               <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg text-[10px]">
+                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs">
                                 {group.orders.length} Drawings
                               </span>
                             </div>
@@ -931,6 +921,7 @@ const DesignOrders = () => {
                           <td className="px-4 py-3">
                             <span className="text-slate-400 text-[10px]">Multiple Drawings Review</span>
                           </td>
+                          <td></td>
                           <td className="px-4 py-3 text-center">
                             <span className="text-slate-400 text-[10px]">Total: {group.orders.reduce((sum, o) => sum + (Number(o.item_qty) || 1), 0)}</span>
                           </td>
@@ -1019,11 +1010,10 @@ const DesignOrders = () => {
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-4">
                 <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+                  <h2 className="text-xs  text-white flex items-center gap-2 mb-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    🎨 Design Tasks in Progress
+                    Design Tasks in Progress
                   </h2>
-                  <p className="text-purple-100 text-xs">Manage active design orders and technical specifications</p>
                 </div>
                 <div className="relative">
                   <input
@@ -1048,12 +1038,12 @@ const DesignOrders = () => {
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Customer</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
-                  <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Status</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Actions</th>
+                  <th className="px-2 text-left text-xs  text-slate-600 ">Customer</th>
+                  <th className="px-2 text-left text-xs  text-slate-600 ">Item Code</th>
+                  <th className="px-2 text-left text-xs  text-slate-600 ">Drawing No</th>
+                  <th className="px-4 py-2 text-center text-xs text-slate-600 ">Qty</th>
+                  <th className="px-2 text-left text-xs  text-slate-600 ">Status</th>
+                  <th className="px-4 py-2 text-right text-xs text-slate-600 ">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
@@ -1089,18 +1079,19 @@ const DesignOrders = () => {
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
                                 <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                                <span className="font-bold text-slate-900 text-xs">PO: {poNumber}</span>
+                                <span className=" text-slate-900 text-xs">PO: {poNumber}</span>
                               </div>
-                              <span className="font-bold text-indigo-600 text-[10px] ml-5">{group.company_name}</span>
+                              <span className="text-indigo-600 text-xs ml-5">{group.company_name}</span>
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold">
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-lg text-xs ">
                               {group.orders.length} Drawing Tasks
                             </span>
                           </td>
+                          <td></td>
                           <td className="px-4 py-3 text-center">
-                            <span className="text-slate-600 font-bold text-xs">{group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}</span>
+                            <span className="text-slate-600  text-xs">{group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}</span>
                           </td>
                           <td className="px-4 py-3">
                             <span className="text-slate-400 text-[10px] font-medium">
@@ -1132,17 +1123,17 @@ const DesignOrders = () => {
                                 <span className="text-slate-400 italic">Pending</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">{order.drawing_no || '—'}</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center font-bold text-slate-900">{order.total_quantity || 0}</td>
+                            <td className="p-2 whitespace-nowrap  text-indigo-600">{order.drawing_no || '—'}</td>
+                            <td className="p-2 whitespace-nowrap text-center  text-slate-900">{order.total_quantity || 0}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <select
                                 value={order.status}
                                 onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                                className={`text-xs font-semibold rounded px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${getStatusColor(order.status)}`}
+                                className={`text-xs  rounded px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${getStatusColor(order.status)}`}
                               >
-                                <option value="DRAFT">DRAFT</option>
-                                <option value="IN_DESIGN">IN_DESIGN</option>
-                                <option value="COMPLETED">COMPLETED</option>
+                                <option value="DRAFT">Draft</option>
+                                <option value="IN_DESIGN">In progress</option>
+                                <option value="COMPLETED">Completed</option>
                               </select>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-right">
@@ -1222,12 +1213,12 @@ const DesignOrders = () => {
                     <table className="min-w-full divide-y divide-slate-200">
                       <thead className="bg-slate-100">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
-                          <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
-                          <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Rev</th>
-                          <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
-                          <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
-                          <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">PDF / Actions</th>
+                          <th className="px-2 text-left text-xs  text-slate-600 ">Item Code</th>
+                          <th className="px-2 text-left text-xs  text-slate-600 ">Drawing No</th>
+                          <th className="px-2 text-left text-xs  text-slate-600 ">Rev</th>
+                          <th className="px-2 text-left text-xs  text-slate-600 ">Description</th>
+                          <th className="px-4 py-2 text-center text-xs text-slate-600 ">Qty</th>
+                          <th className="px-4 py-2 text-right text-xs text-slate-600 ">PDF / Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
@@ -1350,25 +1341,25 @@ const DesignOrders = () => {
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">Customer</label>
+                  <label className="text-xs font-bold text-slate-600 ">Customer</label>
                   <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.company_name}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">PO Number</label>
+                  <label className="text-xs font-bold text-slate-600 ">PO Number</label>
                   <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.po_number || '—'}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">Project</label>
+                  <label className="text-xs font-bold text-slate-600 ">Project</label>
                   <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.project_name}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">Sales Order</label>
+                  <label className="text-xs font-bold text-slate-600 ">Sales Order</label>
                   <p className="text-sm font-semibold text-slate-900 text-xs mt-1">SO-{String(reviewOrder.id).padStart(4, '0')}</p>
                 </div>
               </div>
 
               <div className="border-t pt-4">
-                <label className="text-xs font-bold text-slate-600 uppercase block mb-3">Drawing Details</label>
+                <label className="text-xs font-bold text-slate-600  block mb-3">Drawing Details</label>
                 {reviewLoading ? (
                   <div className="text-center py-4">
                     <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -1449,10 +1440,10 @@ const DesignOrders = () => {
               </div>
 
               <form onSubmit={handleMaterialSubmit} className="p-8 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {/* Row 1 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Code *</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Item Code *</label>
                     <div className="flex gap-2">
                       <input 
                         type="text" 
@@ -1476,7 +1467,7 @@ const DesignOrders = () => {
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Name *</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Item Name *</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1487,7 +1478,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Group *</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Item Group *</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.itemGroup}
@@ -1505,7 +1496,7 @@ const DesignOrders = () => {
 
                   {/* Row 2 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Default UOM *</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Default UOM *</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.defaultUom}
@@ -1519,7 +1510,7 @@ const DesignOrders = () => {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Valuation Rate</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Valuation Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1528,7 +1519,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Selling Rate</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Selling Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1539,7 +1530,7 @@ const DesignOrders = () => {
 
                   {/* Row 3 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">No. of Cavity (for mould items)</label>
+                    <label className="text-xs text-slate-500 tracking-wider">No. of Cavity (for mould items)</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1548,7 +1539,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Weight per Unit</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Weight per Unit</label>
                     <input 
                       type="number" 
                       step="0.001"
@@ -1559,7 +1550,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Weight UOM</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Weight UOM</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.weightUom}
@@ -1573,7 +1564,7 @@ const DesignOrders = () => {
 
                   {/* Row 4 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Drawing No (Optional)</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Drawing No (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1583,7 +1574,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Revision (Optional)</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Revision (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1593,7 +1584,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Material Grade (Optional)</label>
+                    <label className="text-xs text-slate-500 tracking-wider">Material Grade (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1682,14 +1673,14 @@ const DesignOrders = () => {
                       <table className="w-full text-left border-collapse">
                         <thead className="bg-slate-50 sticky top-0 z-10">
                           <tr>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Item Code</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Material Name</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Group</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">UOM</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">Selling Rate</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">Weight/Unit</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Drawing No</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">Actions</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500  tracking-wider border-b border-slate-200">Item Code</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500  tracking-wider border-b border-slate-200">Material Name</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500  tracking-wider border-b border-slate-200">Group</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500  tracking-wider border-b border-slate-200">UOM</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500  tracking-wider border-b border-slate-200 text-center">Selling Rate</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500  tracking-wider border-b border-slate-200 text-center">Weight/Unit</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500  tracking-wider border-b border-slate-200">Drawing No</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500  tracking-wider border-b border-slate-200 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -1722,7 +1713,7 @@ const DesignOrders = () => {
                                   <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
                                     <td className="px-4 py-3 text-xs font-medium text-slate-700">
                                       {item.item_code}
-                                      {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px] font-bold uppercase">Current Drg</span>}
+                                      {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px] font-bold ">Current Drg</span>}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-slate-600">{item.material_name}</td>
                                     <td className="px-4 py-3 text-xs text-slate-600">

@@ -70,7 +70,7 @@ const CompanyMaster = ({
                   <Building2 className="w-6 h-6 text-indigo-600" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold tracking-[0.2em] text-indigo-600 uppercase">Master Data</p>
+                  <p className="text-[10px] font-bold tracking-[0.2em] text-indigo-600 ">Master Data</p>
                   <h2 className="text-2xl font-semibold text-slate-900">Register Company</h2>
                 </div>
               </div>
@@ -88,7 +88,7 @@ const CompanyMaster = ({
               <div className="space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <Building2 className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">Company Information</h3>
+                  <h3 className="text-sm font-semibold text-slate-800  tracking-wider">Company Information</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-6">
                   <FormControl label="Company Name">
@@ -119,7 +119,7 @@ const CompanyMaster = ({
               <div className="space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <User className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">Tax Information</h3>
+                  <h3 className="text-sm font-semibold text-slate-800  tracking-wider">Tax Information</h3>
                 </div>
                 <div className="grid grid-cols-3 gap-6">
                   <FormControl label="GSTIN">
@@ -128,7 +128,7 @@ const CompanyMaster = ({
                       value={companyForm.gstin}
                       onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value })}
                       placeholder="XXXXXXXXXXXX"
-                      className={`${fieldInputClass} font-mono uppercase`}
+                      className={`${fieldInputClass} font-mono `}
                       required
                     />
                   </FormControl>
@@ -138,7 +138,7 @@ const CompanyMaster = ({
                       value={companyForm.cin}
                       onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value })}
                       placeholder="CIN number"
-                      className={`${fieldInputClass} font-mono uppercase`}
+                      className={`${fieldInputClass} font-mono `}
                     />
                   </FormControl>
                   <FormControl label="PAN">
@@ -147,7 +147,7 @@ const CompanyMaster = ({
                       value={companyForm.pan}
                       onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value })}
                       placeholder="PAN number"
-                      className={`${fieldInputClass} font-mono uppercase`}
+                      className={`${fieldInputClass} font-mono `}
                     />
                   </FormControl>
                 </div>
@@ -157,7 +157,7 @@ const CompanyMaster = ({
               <div className="space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <MapPin className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">Billing Address</h3>
+                  <h3 className="text-sm font-semibold text-slate-800  tracking-wider">Billing Address</h3>
                 </div>
                 <FormControl label="Address Line 1">
                   <input
@@ -210,7 +210,7 @@ const CompanyMaster = ({
               <div className="space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <User className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">Contact Person</h3>
+                  <h3 className="text-sm font-semibold text-slate-800  tracking-wider">Contact Person</h3>
                 </div>
                 <FormControl label="Contact Person Name">
                   <input
@@ -282,7 +282,7 @@ const CompanyMaster = ({
             <div className="p-2 bg-indigo-50 rounded-lg">
               <Building2 className="w-5 h-5 text-indigo-600" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900">Company Master</h2>
+            <h2 className="text-xl text-slate-900">Company Master</h2>
           </div>
           <p className="text-sm text-slate-500 ml-10">Manage customers, vendors, and partner organizations</p>
         </div>
