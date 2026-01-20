@@ -61,12 +61,17 @@ const DesignOrders = () => {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [isEditingMaterial, setIsEditingMaterial] = useState(false);
   const [editingMaterialId, setEditingMaterialId] = useState(null);
+  const [modalSearchTerm, setModalSearchTerm] = useState('');
 
-  const fetchItemsList = async () => {
+  const fetchItemsList = async (drawingNo = null) => {
     try {
       setItemsLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/stock/balance`, {
+      let url = `${API_BASE}/stock/balance`;
+      if (drawingNo) {
+        url += `?drawingNo=${encodeURIComponent(drawingNo)}`;
+      }
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -144,6 +149,12 @@ const DesignOrders = () => {
     fetchOrders();
     fetchIncomingOrders();
   }, []);
+
+  useEffect(() => {
+    if (showAddMaterialModal) {
+      fetchItemsList(materialFormData.drawingNo);
+    }
+  }, [materialFormData.drawingNo, showAddMaterialModal]);
 
   const handleViewOrder = async (order) => {
     try {
@@ -474,7 +485,7 @@ const DesignOrders = () => {
       }
       
       Swal.fire('Success', `Material ${isEditingMaterial ? 'updated' : 'created'} successfully`, 'success');
-      fetchItemsList();
+      fetchItemsList(materialFormData.drawingNo);
       const nextCode = !isEditingMaterial ? await fetchNextItemCode() : '';
       setTargetOrderItemId(null);
       setIsEditingMaterial(false);
@@ -494,8 +505,8 @@ const DesignOrders = () => {
         noOfCavity: 1,
         weightPerUnit: 0,
         weightUom: '',
-        drawingNo: '',
-        revision: '',
+        drawingNo: materialFormData.drawingNo,
+        revision: materialFormData.revision,
         materialGrade: ''
       });
     } catch (error) {
@@ -563,7 +574,6 @@ const DesignOrders = () => {
     setShowAddMaterialModal(true);
     setIsEditingMaterial(false);
     setEditingMaterialId(null);
-    fetchItemsList();
   };
 
   const handleEditMaterialInModal = (item) => {
@@ -583,6 +593,50 @@ const DesignOrders = () => {
       revision: item.revision || '',
       materialGrade: item.material_grade || ''
     });
+  };
+
+  const handleCopyMaterial = (item) => {
+    setMaterialFormData(prev => ({
+      ...prev,
+      itemName: item.material_name || '',
+      itemGroup: item.material_type || '',
+      defaultUom: item.unit || 'Nos',
+      valuationRate: item.valuation_rate || 0,
+      sellingRate: item.selling_rate || 0,
+      noOfCavity: item.no_of_cavity || 1,
+      weightPerUnit: item.weight_per_unit || 0,
+      weightUom: item.weight_uom || '',
+      // drawingNo and revision are usually kept from the current order context
+      materialGrade: item.material_grade || ''
+    }));
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'Material details copied!',
+      showConfirmButton: false,
+      timer: 2000
+    });
+  };
+
+  const handleClearMaterialForm = async () => {
+    const nextCode = await fetchNextItemCode();
+    setMaterialFormData({
+      itemCode: nextCode || '',
+      itemName: '',
+      itemGroup: '',
+      defaultUom: 'Nos',
+      valuationRate: 0,
+      sellingRate: 0,
+      noOfCavity: 1,
+      weightPerUnit: 0,
+      weightUom: '',
+      drawingNo: '',
+      revision: '',
+      materialGrade: ''
+    });
+    setIsEditingMaterial(false);
+    setEditingMaterialId(null);
   };
 
   const handleDeleteMaterialInModal = async (id) => {
@@ -607,7 +661,7 @@ const DesignOrders = () => {
         if (!response.ok) throw new Error('Failed to delete material');
 
         Swal.fire('Deleted!', 'Material has been deleted.', 'success');
-        fetchItemsList();
+        fetchItemsList(materialFormData.drawingNo);
       } catch (error) {
         Swal.fire('Error', error.message, 'error');
       }
@@ -1064,7 +1118,7 @@ const DesignOrders = () => {
                         </tr>
                         {/* Group Items */}
                         {isExpanded && group.orders.map((order) => (
-                          <tr key={order.id} className="hover:bg-purple-50/30 transition-colors text-xs border-b border-slate-50">
+                          <tr key={`${order.id}-${order.item_id}`} className="hover:bg-purple-50/30 transition-colors text-xs border-b border-slate-50">
                             <td className="px-4 py-3 whitespace-nowrap text-slate-600 pl-8 font-medium">{order.company_name}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               {order.item_code ? (
@@ -1441,6 +1495,7 @@ const DesignOrders = () => {
                       <option value="Raw Material">Raw Material</option>
                       <option value="SFG">SFG</option>
                       <option value="FG">FG</option>
+                      <option value="Sub Assembly">Sub Assembly</option>
                       <option value="Consumable">Consumable</option>
                     </select>
                   </div>
@@ -1547,12 +1602,21 @@ const DesignOrders = () => {
                 </div>
 
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6 border-t border-slate-100">
-                  <button 
-                    type="button"
-                    className="w-full md:w-auto px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
-                  >
-                    Generate EAN Barcode
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <button 
+                      type="button"
+                      onClick={handleClearMaterialForm}
+                      className="px-6 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all border border-slate-200"
+                    >
+                      Clear Form
+                    </button>
+                    <button 
+                      type="button"
+                      className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
+                    >
+                      Generate EAN Barcode
+                    </button>
+                  </div>
                   <div className="flex items-center gap-3 w-full md:w-auto">
                     <button 
                       type="button"
@@ -1580,10 +1644,35 @@ const DesignOrders = () => {
               {/* Items List Section */}
               <div className="px-8 pb-8">
                 <div className="border-t border-slate-100 pt-6">
-                  <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                    Recently Added Materials
-                  </h4>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                      {materialFormData.drawingNo ? `Materials for Drawing: ${materialFormData.drawingNo}` : 'Recently Added Materials'}
+                    </h4>
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                      <div className="relative flex-1 md:w-64">
+                        <input
+                          type="text"
+                          placeholder="Search items or drawing..."
+                          className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[11px] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                          value={modalSearchTerm}
+                          onChange={(e) => setModalSearchTerm(e.target.value)}
+                        />
+                        <svg className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      {materialFormData.drawingNo && (
+                        <button
+                          type="button"
+                          onClick={() => setModalSearchTerm(materialFormData.drawingNo)}
+                          className="px-3 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-[10px] font-bold hover:bg-blue-100 transition-all whitespace-nowrap"
+                        >
+                          This Drawing
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   
                   <div className="overflow-hidden border border-slate-200 rounded-xl">
                     <div className="overflow-x-auto max-h-[300px]">
@@ -1594,8 +1683,8 @@ const DesignOrders = () => {
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Material Name</th>
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Group</th>
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">UOM</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Selling Rate</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Weight/Unit</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">Selling Rate</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">Weight/Unit</th>
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Drawing No</th>
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">Actions</th>
                           </tr>
@@ -1603,52 +1692,76 @@ const DesignOrders = () => {
                         <tbody className="divide-y divide-slate-100">
                           {itemsLoading ? (
                             <tr>
-                              <td colSpan="5" className="px-4 py-8 text-center text-slate-400 text-xs italic">
+                              <td colSpan="8" className="px-4 py-8 text-center text-slate-400 text-xs italic">
                                 Loading materials...
                               </td>
                             </tr>
                           ) : itemsList.length === 0 ? (
                             <tr>
-                              <td colSpan="5" className="px-4 py-8 text-center text-slate-400 text-xs italic">
+                              <td colSpan="8" className="px-4 py-8 text-center text-slate-400 text-xs italic">
                                 No materials found
                               </td>
                             </tr>
                           ) : (
-                            [...itemsList].sort((a, b) => b.id - a.id).map((item) => (
-                              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-4 py-3 text-xs font-medium text-slate-700">{item.item_code}</td>
-                                <td className="px-4 py-3 text-xs text-slate-600">{item.material_name}</td>
-                                <td className="px-4 py-3 text-xs text-slate-600">
-                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px]">
-                                    {item.material_type}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-xs text-slate-600">{item.unit}</td>
-                                <td className="px-4 py-3 text-xs text-slate-600">₹{item.selling_rate || 0}</td>
-                                <td className="px-4 py-3 text-xs text-slate-600">{item.weight_per_unit || 0} {item.weight_uom}</td>
-                                <td className="px-4 py-3 text-xs text-slate-600">{item.drawing_no || '-'}</td>
-                                <td className="px-4 py-3 text-xs text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEditMaterialInModal(item)}
-                                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                      title="Edit"
-                                    >
-                                      ✏️
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteMaterialInModal(item.id)}
-                                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                      title="Delete"
-                                    >
-                                      🗑️
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
+                            [...itemsList]
+                              .filter(item => {
+                                const search = modalSearchTerm.toLowerCase();
+                                return (
+                                  item.item_code?.toLowerCase().includes(search) ||
+                                  item.material_name?.toLowerCase().includes(search) ||
+                                  item.drawing_no?.toLowerCase().includes(search)
+                                );
+                              })
+                              .sort((a, b) => b.id - a.id)
+                              .map((item) => {
+                                const isCurrentDrawing = materialFormData.drawingNo && item.drawing_no === materialFormData.drawingNo;
+                                return (
+                                  <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
+                                    <td className="px-4 py-3 text-xs font-medium text-slate-700">
+                                      {item.item_code}
+                                      {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px] font-bold uppercase">Current Drg</span>}
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-slate-600">{item.material_name}</td>
+                                    <td className="px-4 py-3 text-xs text-slate-600">
+                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px]">
+                                        {item.material_type}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-slate-600">{item.unit}</td>
+                                    <td className="px-4 py-3 text-xs text-slate-600 text-center">₹{item.selling_rate || 0}</td>
+                                    <td className="px-4 py-3 text-xs text-slate-600 text-center">{item.weight_per_unit || 0} {item.weight_uom}</td>
+                                    <td className="px-4 py-3 text-xs text-slate-600 font-bold">{item.drawing_no || '-'}</td>
+                                    <td className="px-4 py-3 text-xs text-right">
+                                      <div className="flex justify-end gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyMaterial(item)}
+                                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                          title="Copy Details"
+                                        >
+                                          📋
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEditMaterialInModal(item)}
+                                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                          title="Edit"
+                                        >
+                                          ✏️
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteMaterialInModal(item.id)}
+                                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                          title="Delete"
+                                        >
+                                          🗑️
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
                           )}
                         </tbody>
                       </table>

@@ -112,8 +112,8 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
   return ledger;
 };
 
-const getStockBalance = async () => {
-  const [balances] = await pool.query(`
+const getStockBalance = async (drawingNo = null) => {
+  let query = `
     SELECT 
       id,
       item_code,
@@ -131,8 +131,17 @@ const getStockBalance = async () => {
       material_grade,
       last_updated
     FROM stock_balance
-    ORDER BY id DESC
-  `);
+  `;
+
+  const params = [];
+  if (drawingNo) {
+    query += ` WHERE drawing_no = ? `;
+    params.push(drawingNo);
+  }
+
+  query += ` ORDER BY id DESC `;
+
+  const [balances] = await pool.query(query, params);
 
   const result = [];
   for (const balance of balances) {
