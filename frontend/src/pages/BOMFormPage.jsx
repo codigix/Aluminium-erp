@@ -8,16 +8,19 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
 
+  const selectedOption = options.find(opt => opt[valueField] === value);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm(selectedOption ? selectedOption[labelField] : (value || ''));
+    }
+  }, [value, selectedOption, isOpen]);
+
   const filteredOptions = options.filter(opt => 
     opt[labelField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     opt[valueField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (subLabelField && opt[subLabelField]?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
-
-  const selectedOption = options.find(opt => opt[valueField] === value);
-
-  // Check if an exact match exists for manual entry logic
-  const exactMatch = options.some(opt => opt[labelField]?.toLowerCase() === searchTerm.toLowerCase() || opt[valueField]?.toLowerCase() === searchTerm.toLowerCase());
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -31,50 +34,29 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
 
   return (
     <div className="relative" ref={containerRef}>
-      <div 
-        className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white cursor-pointer flex justify-between items-center"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <span className={!selectedOption && !value ? 'text-slate-400' : 'text-slate-900 font-medium'}>
-          {selectedOption ? selectedOption[labelField] : (value || placeholder)}
-        </span>
-        <span className="text-[10px] text-slate-400">{isOpen ? '▲' : '▼'}</span>
+      <div className="relative">
+        <input
+          type="text"
+          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-900"
+          placeholder={placeholder}
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+            if (allowCustom) {
+              onChange({ target: { value: e.target.value } });
+            }
+          }}
+          onFocus={() => setIsOpen(true)}
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
+          {isOpen ? '▲' : '▼'}
+        </div>
       </div>
       
       {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 flex flex-col overflow-hidden">
-          <div className="p-2 border-b border-slate-100 bg-slate-50">
-            <input
-              autoFocus
-              type="text"
-              className="w-full px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Search or type custom..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchTerm && allowCustom && !exactMatch) {
-                  onChange({ target: { value: searchTerm } });
-                  setIsOpen(false);
-                  setSearchTerm('');
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
           <div className="overflow-y-auto flex-1">
-            {allowCustom && searchTerm && !exactMatch && (
-              <div
-                className="px-3 py-2 text-xs cursor-pointer hover:bg-amber-50 text-amber-600 border-b border-amber-100 italic flex justify-between items-center"
-                onClick={() => {
-                  onChange({ target: { value: searchTerm } });
-                  setIsOpen(false);
-                  setSearchTerm('');
-                }}
-              >
-                <span>Use custom: "{searchTerm}"</span>
-                <span className="text-[9px] bg-amber-100 px-1 rounded">Manual Add</span>
-              </div>
-            )}
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => (
                 <div
@@ -82,8 +64,8 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
                   className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${opt[valueField] === value ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
                   onClick={() => {
                     onChange({ target: { value: opt[valueField] } });
+                    setSearchTerm(opt[labelField]);
                     setIsOpen(false);
-                    setSearchTerm('');
                   }}
                 >
                   <div className="flex flex-col">
@@ -95,10 +77,9 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
                 </div>
               ))
             ) : (
-              !allowCustom && <div className="px-3 py-4 text-xs text-center text-slate-400">No results found</div>
-            )}
-            {searchTerm && filteredOptions.length === 0 && allowCustom && !exactMatch ? null : filteredOptions.length === 0 && !searchTerm && (
-              <div className="px-3 py-4 text-xs text-center text-slate-400">Type to search...</div>
+              <div className="px-3 py-4 text-xs text-center text-slate-400">
+                {allowCustom ? 'Custom value entered' : 'No results found'}
+              </div>
             )}
           </div>
         </div>
@@ -144,7 +125,7 @@ const BOMFormPage = () => {
 
   const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '' });
   const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '' });
-  const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
+  const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: 60, setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
 
   const itemId = window.location.pathname.split('/').filter(Boolean).pop();
@@ -265,10 +246,10 @@ const BOMFormPage = () => {
         payload.rate = parseFloat(payload.rate) || 0;
         payload.lossPercent = parseFloat(payload.lossPercent) || 0;
       } else if (section === 'operations') {
-        if (!payload.operationName || payload.cycleTimeMin === '' || payload.hourlyRate === '') {
-          throw new Error('Operation Name, Cycle Time, and Hourly Rate are required');
+        if (!payload.operationName || payload.hourlyRate === '') {
+          throw new Error('Operation Name and Hourly Rate are required');
         }
-        payload.cycleTimeMin = parseFloat(payload.cycleTimeMin) || 0;
+        payload.cycleTimeMin = parseFloat(payload.cycleTimeMin) || 60;
         payload.setupTimeMin = parseFloat(payload.setupTimeMin) || 0;
         payload.hourlyRate = parseFloat(payload.hourlyRate) || 0;
       } else if (section === 'scrap') {
@@ -404,10 +385,10 @@ const BOMFormPage = () => {
   const materialCostAfterScrap = (componentsCost + rawMaterialsCost) - scrapLoss;
   
   const operationsCost = bomData.operations.reduce((sum, o) => {
-    const cycle = parseFloat(o.cycle_time_min || 0);
-    const setup = parseFloat(o.setup_time_min || 0);
-    const rate = parseFloat(o.hourly_rate || 0);
-    return sum + ((cycle + (setup / batchQty)) / 60 * rate);
+    const hourlyRate = parseFloat(o.hourly_rate || 0);
+    const setupTime = parseFloat(o.setup_time_min || 0);
+    const cycleTime = parseFloat(o.cycle_time_min || 60); // Default to 60 as per user request for 1hr base
+    return sum + (setupTime / (cycleTime || 60) * hourlyRate);
   }, 0);
 
   const totalBOMCost = materialCostAfterScrap + operationsCost;
@@ -801,7 +782,7 @@ const BOMFormPage = () => {
                             ...operationForm,
                             operationName: e.target.value,
                             workstation: op.workstation_code || op.workstation || '',
-                            cycleTimeMin: op.std_time || 0,
+                            cycleTimeMin: op.std_time || 60,
                             hourlyRate: op.hourly_rate || 0
                           });
                         } else {
@@ -834,11 +815,11 @@ const BOMFormPage = () => {
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Cycle Time (min)</label>
-                    <input type="number" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="0" step="0.01" value={operationForm.cycleTimeMin} onChange={(e) => setOperationForm({...operationForm, cycleTimeMin: e.target.value})} />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Standard Cycle Time (min)</label>
+                    <input type="number" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="60" step="0.01" value={operationForm.cycleTimeMin} onChange={(e) => setOperationForm({...operationForm, cycleTimeMin: e.target.value})} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Setup Time (min)</label>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Setup Reference Time (min)</label>
                     <input type="number" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="0" step="0.01" value={operationForm.setupTimeMin} onChange={(e) => setOperationForm({...operationForm, setupTimeMin: e.target.value})} />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -846,8 +827,9 @@ const BOMFormPage = () => {
                     <input type="number" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="0" step="0.01" value={operationForm.hourlyRate} onChange={(e) => setOperationForm({...operationForm, hourlyRate: e.target.value})} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Cost (₹)</label>
-                    <input type="text" readOnly className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" value={((parseFloat(operationForm.cycleTimeMin || 0) / 60) * parseFloat(operationForm.hourlyRate || 0)).toFixed(2)} />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Est. Setup Cost (₹)</label>
+                    <input type="text" readOnly className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" value={((parseFloat(operationForm.setupTimeMin || 0) / (parseFloat(operationForm.cycleTimeMin || 60) || 60)) * parseFloat(operationForm.hourlyRate || 0)).toFixed(2)} />
+                    <p className="text-[8px] text-slate-400 mt-0.5">Calculated: (Setup / Cycle) * Rate</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -867,7 +849,7 @@ const BOMFormPage = () => {
                     </select>
                   </div>
                   <div className="flex flex-col justify-end">
-                    <button onClick={() => handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' })} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-lg shadow-purple-100">+ Add</button>
+                    <button onClick={() => handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: 60, setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' })} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-lg shadow-purple-100">+ Add</button>
                   </div>
                 </div>
               </div>
@@ -877,22 +859,21 @@ const BOMFormPage = () => {
                     <thead className="bg-slate-50/50">
                       <tr>
                         <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Operation</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Cycle</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Setup</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Std Cycle</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Setup Ref</th>
                         <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Rate/hr</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Time / FG</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Cost / FG</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Chargeable Time</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Setup Cost</th>
                         <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {bomData.operations.map((o) => {
-                        const cycleTime = parseFloat(o.cycle_time_min || 0);
+                        const cycleTime = parseFloat(o.cycle_time_min || 60);
                         const setupTime = parseFloat(o.setup_time_min || 0);
                         const hourlyRate = parseFloat(o.hourly_rate || 0);
-                        const perUnitTimeMin = cycleTime + (setupTime / batchQty);
-                        const perUnitTimeHrs = perUnitTimeMin / 60;
-                        const operationCost = perUnitTimeHrs * hourlyRate;
+                        const chargeableTime = (setupTime / (cycleTime || 60)) * 60;
+                        const operationCost = (setupTime / (cycleTime || 60)) * hourlyRate;
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/50">
                             <td className="px-4 py-2 text-xs font-medium text-slate-700">
@@ -902,7 +883,7 @@ const BOMFormPage = () => {
                             <td className="px-4 py-2 text-xs text-center">{cycleTime}m</td>
                             <td className="px-4 py-2 text-xs text-center">{setupTime}m</td>
                             <td className="px-4 py-2 text-xs text-center">₹{hourlyRate.toFixed(2)}</td>
-                            <td className="px-4 py-2 text-xs text-center">{perUnitTimeHrs.toFixed(4)}h</td>
+                            <td className="px-4 py-2 text-xs text-center text-blue-600 font-medium">{chargeableTime.toFixed(1)}m</td>
                             <td className="px-4 py-2 text-xs text-center font-bold text-purple-600">₹{operationCost.toFixed(2)}</td>
                             <td className="px-4 py-2 text-right">
                               <button onClick={() => handleDeleteSectionItem('operations', o.id)} className="text-red-400 hover:text-red-600">🗑️</button>
@@ -1058,9 +1039,9 @@ const BOMFormPage = () => {
                   <p className="text-[10px] text-blue-400 font-medium mt-1">(Components - Scrap)</p>
                 </div>
                 <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
-                  <p className="text-[10px] font-bold text-purple-600 uppercase mb-1">Labour Cost / FG</p>
+                  <p className="text-[10px] font-bold text-purple-600 uppercase mb-1">Operation Setup Cost / FG</p>
                   <p className="text-2xl font-black text-purple-900">₹{operationsCost.toFixed(2)}</p>
-                  <p className="text-[10px] text-purple-400 font-medium mt-1">Operations</p>
+                  <p className="text-[10px] text-purple-400 font-medium mt-1">Based on Setup/Cycle * Rate</p>
                 </div>
                 <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
                   <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">Total Cost / FG</p>
@@ -1087,9 +1068,9 @@ const BOMFormPage = () => {
                     <span className="text-xs font-bold text-blue-700">Material Cost / FG (after Scrap):</span>
                     <span className="text-xs font-black text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</span>
                   </div>
-                  <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
-                    <span className="text-xs font-medium text-slate-600">Operations Cost / FG:</span>
-                    <span className="text-xs font-bold text-slate-900">₹{operationsCost.toFixed(2)}</span>
+                  <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors text-purple-600">
+                    <span className="text-xs font-medium">Setup Cost / FG (Dynamic):</span>
+                    <span className="text-xs font-bold text-purple-900">₹{operationsCost.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center bg-amber-50/50">
                     <span className="text-xs font-bold text-amber-700">Total Scrap Qty / FG:</span>
