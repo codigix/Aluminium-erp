@@ -10,6 +10,8 @@ const BOMFormPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [workstations, setWorkstations] = useState([]);
+  const [operationsList, setOperationsList] = useState([]);
+  const [stockItems, setStockItems] = useState([]);
   const [bomData, setBomData] = useState({
     materials: [],
     components: [],
@@ -84,6 +86,24 @@ const BOMFormPage = () => {
       if (wsResponse.ok) {
         const wsData = await wsResponse.json();
         setWorkstations(wsData);
+      }
+
+      // Fetch Operations Master
+      const opsResponse = await fetch(`${API_BASE}/operations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (opsResponse.ok) {
+        const opsData = await opsResponse.json();
+        setOperationsList(opsData);
+      }
+
+      // Fetch Stock Items (Raw Materials)
+      const stockResponse = await fetch(`${API_BASE}/stock/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (stockResponse.ok) {
+        const stockData = await stockResponse.json();
+        setStockItems(stockData);
       }
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
@@ -231,6 +251,8 @@ const BOMFormPage = () => {
   };
 
   // Cost Calculations
+  const batchQty = parseFloat(productForm.quantity || 1);
+
   const componentsCost = bomData.components.reduce((sum, c) => {
     const baseCost = parseFloat(c.quantity || 0) * parseFloat(c.rate || 0);
     const lossPercent = parseFloat(c.loss_percent || 0) / 100;
@@ -238,7 +260,9 @@ const BOMFormPage = () => {
     return sum + (baseCost - loss);
   }, 0);
   
-  const rawMaterialsCost = bomData.materials.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(m.rate || 0)), 0);
+  const rawMaterialsCost = bomData.materials.reduce((sum, m) => 
+    sum + (parseFloat(m.qty_per_pc || 0) * batchQty * parseFloat(m.rate || 0)), 0);
+
   const scrapLoss = bomData.scrap.reduce((sum, s) => {
     const input = parseFloat(s.input_qty || 0);
     const loss = parseFloat(s.loss_percent || 0) / 100;
@@ -250,12 +274,13 @@ const BOMFormPage = () => {
   
   const operationsCost = bomData.operations.reduce((sum, o) => {
     const cycle = parseFloat(o.cycle_time_min || 0);
+    const setup = parseFloat(o.setup_time_min || 0);
     const rate = parseFloat(o.hourly_rate || 0);
-    return sum + (cycle / 60 * rate);
+    return sum + (((cycle * batchQty) + setup) / 60 * rate);
   }, 0);
 
   const totalBOMCost = materialCostAfterScrap + operationsCost;
-  const costPerUnit = totalBOMCost / parseFloat(productForm.quantity || 1);
+  const costPerUnit = totalBOMCost / batchQty;
   const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100)), 0);
 
   if (loading) return <div className="p-8 text-center text-slate-500">Loading Item Details...</div>;
@@ -378,7 +403,26 @@ const BOMFormPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Component Code *</label>
-                    <input type="text" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="Enter component code" value={componentForm.componentCode} onChange={(e) => setComponentForm({...componentForm, componentCode: e.target.value})} />
+                    <select 
+                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                      value={componentForm.componentCode}
+                      onChange={(e) => {
+                        const item = stockItems.find(i => i.item_code === e.target.value);
+                        setComponentForm({
+                          ...componentForm,
+                          componentCode: e.target.value,
+                          rate: item ? (item.valuation_rate || 0) : componentForm.rate,
+                          uom: item ? (item.unit || 'Kg') : componentForm.uom
+                        });
+                      }}
+                    >
+                      <option value="">Select Component</option>
+                      {stockItems.map(item => (
+                        <option key={item.id} value={item.item_code}>
+                          {item.item_code} - {item.material_name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Qty *</label>
@@ -469,7 +513,26 @@ const BOMFormPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Item Name *</label>
-                    <input type="text" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="e.g. Aluminium Sheet" value={materialForm.materialName} onChange={(e) => setMaterialForm({...materialForm, materialName: e.target.value})} />
+                    <select 
+                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                      value={materialForm.materialName}
+                      onChange={(e) => {
+                        const item = stockItems.find(i => i.material_name === e.target.value);
+                        setMaterialForm({
+                          ...materialForm,
+                          materialName: e.target.value,
+                          rate: item ? (item.valuation_rate || 0) : materialForm.rate,
+                          uom: item ? (item.unit || 'Kg') : materialForm.uom
+                        });
+                      }}
+                    >
+                      <option value="">Select Material</option>
+                      {stockItems.map(item => (
+                        <option key={item.id} value={item.material_name}>
+                          {item.material_name} ({item.item_code})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Qty *</label>
@@ -501,9 +564,17 @@ const BOMFormPage = () => {
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Operation</label>
                     <div className="flex gap-2">
-                      <select className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs" value={materialForm.operation} onChange={(e) => setMaterialForm({...materialForm, operation: e.target.value})}>
-                        <option value="">Select</option>
-                        <option value="Cutting">Cutting</option>
+                      <select 
+                        className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                        value={materialForm.operation} 
+                        onChange={(e) => setMaterialForm({...materialForm, operation: e.target.value})}
+                      >
+                        <option value="">Select Operation</option>
+                        {operationsList.map(op => (
+                          <option key={op.id} value={op.operation_name}>
+                            {op.operation_name}
+                          </option>
+                        ))}
                       </select>
                       <button onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '' })} className="px-4 py-2 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 shadow-lg shadow-red-100">+ Add</button>
                     </div>
@@ -516,23 +587,26 @@ const BOMFormPage = () => {
                     <thead className="bg-slate-50/50">
                       <tr>
                         <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Item</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Qty</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Qty/pc</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Total Qty</th>
                         <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Rate</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Amount</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Total Amount</th>
                         <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {bomData.materials.map((m) => {
-                        const qty = parseFloat(m.qty_per_pc || 0);
+                        const qtyPerPc = parseFloat(m.qty_per_pc || 0);
+                        const totalQty = qtyPerPc * batchQty;
                         const rate = parseFloat(m.rate || 0);
-                        const amount = qty * rate;
+                        const amount = totalQty * rate;
                         return (
                           <tr key={m.id} className="hover:bg-slate-50/50">
                             <td className="px-4 py-2 text-xs font-medium text-slate-700">{m.material_name || 'N/A'}</td>
-                            <td className="px-4 py-2 text-xs text-center">{qty.toFixed(2)} {m.uom || 'Kg'}</td>
+                            <td className="px-4 py-2 text-xs text-center">{qtyPerPc.toFixed(4)}</td>
+                            <td className="px-4 py-2 text-xs text-center font-medium text-slate-900">{totalQty.toFixed(2)} {m.uom || 'Kg'}</td>
                             <td className="px-4 py-2 text-xs text-center">₹{rate.toFixed(2)}</td>
-                            <td className="px-4 py-2 text-xs text-center font-bold">₹{amount.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-xs text-center font-bold text-emerald-600">₹{amount.toFixed(2)}</td>
                             <td className="px-4 py-2 text-right">
                               <button onClick={() => handleDeleteSectionItem('materials', m.id)} className="text-red-400 hover:text-red-600">🗑️</button>
                             </td>
@@ -569,7 +643,31 @@ const BOMFormPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Operation *</label>
-                    <input type="text" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="Enter operation name" value={operationForm.operationName} onChange={(e) => setOperationForm({...operationForm, operationName: e.target.value})} />
+                    <select 
+                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                      value={operationForm.operationName}
+                      onChange={(e) => {
+                        const op = operationsList.find(o => o.operation_name === e.target.value);
+                        if (op) {
+                          setOperationForm({
+                            ...operationForm,
+                            operationName: e.target.value,
+                            workstation: op.workstation_code || op.workstation || '',
+                            cycleTimeMin: op.std_time || 0,
+                            hourlyRate: op.hourly_rate || 0
+                          });
+                        } else {
+                          setOperationForm({ ...operationForm, operationName: e.target.value });
+                        }
+                      }}
+                    >
+                      <option value="">Select Operation</option>
+                      {operationsList.map(op => (
+                        <option key={op.id} value={op.operation_name}>
+                          {op.operation_name} ({op.operation_code})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Operation Resource</label>
@@ -638,16 +736,21 @@ const BOMFormPage = () => {
                       <tr>
                         <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase">Operation</th>
                         <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Cycle</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Rate</th>
-                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Cost</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Setup</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Rate/hr</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Total Time</th>
+                        <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase">Total Cost</th>
                         <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {bomData.operations.map((o) => {
                         const cycleTime = parseFloat(o.cycle_time_min || 0);
+                        const setupTime = parseFloat(o.setup_time_min || 0);
                         const hourlyRate = parseFloat(o.hourly_rate || 0);
-                        const operationCost = (cycleTime / 60) * hourlyRate;
+                        const totalTimeMin = (cycleTime * batchQty) + setupTime;
+                        const totalTimeHrs = totalTimeMin / 60;
+                        const operationCost = totalTimeHrs * hourlyRate;
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/50">
                             <td className="px-4 py-2 text-xs font-medium text-slate-700">
@@ -655,8 +758,10 @@ const BOMFormPage = () => {
                               <div className="text-[9px] text-slate-400">{o.workstation || 'N/A'}</div>
                             </td>
                             <td className="px-4 py-2 text-xs text-center">{cycleTime}m</td>
+                            <td className="px-4 py-2 text-xs text-center">{setupTime}m</td>
                             <td className="px-4 py-2 text-xs text-center">₹{hourlyRate.toFixed(2)}</td>
-                            <td className="px-4 py-2 text-xs text-center font-bold">₹{operationCost.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-xs text-center">{totalTimeHrs.toFixed(2)}h</td>
+                            <td className="px-4 py-2 text-xs text-center font-bold text-purple-600">₹{operationCost.toFixed(2)}</td>
                             <td className="px-4 py-2 text-right">
                               <button onClick={() => handleDeleteSectionItem('operations', o.id)} className="text-red-400 hover:text-red-600">🗑️</button>
                             </td>
@@ -697,7 +802,26 @@ const BOMFormPage = () => {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Name</label>
-                    <input className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="Item name" value={scrapForm.itemName} onChange={(e) => setScrapForm({...scrapForm, itemName: e.target.value})} />
+                    <select 
+                      className="px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                      value={scrapForm.itemName}
+                      onChange={(e) => {
+                        const item = stockItems.find(i => i.material_name === e.target.value);
+                        setScrapForm({
+                          ...scrapForm,
+                          itemName: e.target.value,
+                          itemCode: item ? item.item_code : scrapForm.itemCode,
+                          rate: item ? (item.valuation_rate || 0) : scrapForm.rate
+                        });
+                      }}
+                    >
+                      <option value="">Select Item</option>
+                      {stockItems.map(item => (
+                        <option key={item.id} value={item.material_name}>
+                          {item.material_name} ({item.item_code})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Input Qty *</label>
@@ -771,7 +895,7 @@ const BOMFormPage = () => {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm">₹</div>
               <div>
                 <h4 className="text-sm font-bold text-slate-800">BOM Costing</h4>
-                <p className="text-[10px] text-slate-400 font-medium uppercase">₹{totalBOMCost.toFixed(2)} Total Cost</p>
+                <p className="text-[10px] text-slate-400 font-medium uppercase">₹{totalBOMCost.toFixed(2)} Analysis for {batchQty} {productForm.uom}</p>
               </div>
             </div>
             <div className="text-slate-400">{collapsedSections.costing ? '▼' : '▲'}</div>

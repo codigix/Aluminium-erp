@@ -760,6 +760,42 @@ const ensureBOMMaterialsColumns = async () => {
   }
 };
 
+const ensureOperationsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS operations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        operation_code VARCHAR(50) UNIQUE NOT NULL,
+        operation_name VARCHAR(100) NOT NULL,
+        workstation_id INT,
+        std_time DECIMAL(10, 2) DEFAULT 0.00,
+        time_uom ENUM('Hr', 'Min', 'Sec') DEFAULT 'Hr',
+        hourly_rate DECIMAL(10, 2) DEFAULT 0.00,
+        is_active TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL
+      )
+    `);
+    
+    // Check for missing hourly_rate column if table already exists
+    const [columns] = await connection.query('SHOW COLUMNS FROM operations');
+    const hasHourlyRate = columns.some(col => col.Field === 'hourly_rate');
+    if (!hasHourlyRate) {
+      await connection.query('ALTER TABLE operations ADD COLUMN hourly_rate DECIMAL(10, 2) DEFAULT 0.00 AFTER time_uom');
+      console.log('Added hourly_rate column to operations table');
+    }
+
+    console.log('Operations table synchronized');
+  } catch (error) {
+    console.error('Operations table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -780,6 +816,7 @@ const bootstrapDatabase = async () => {
   await ensureSalesOrderItemMaterialsTable();
   await ensureBOMAdditionalTables();
   await ensureBOMMaterialsColumns();
+  await ensureOperationsTable();
 };
 
 bootstrapDatabase();

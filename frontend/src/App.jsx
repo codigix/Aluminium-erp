@@ -36,13 +36,14 @@ import RoutingOperations from './pages/RoutingOperations'
 import ProcessSheet from './pages/ProcessSheet'
 import BOMApproval from './pages/BOMApproval'
 import BOMFormPage from './pages/BOMFormPage'
+import WorkstationMaster from './pages/WorkstationMaster'
 import OperationMaster from './pages/OperationMaster'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'operation-master']
+const MODULE_IDS = ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master']
 const DEFAULT_MODULE = 'customer-drawing'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -191,14 +192,14 @@ const getContactStatusActionLabel = status => {
 
 const DEPARTMENT_MODULES = {
   SALES: ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
-  DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'operation-master'],
-  PRODUCTION: ['incoming-orders', 'operation-master'],
+  DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'operation-master', 'workstation-master'],
+  PRODUCTION: ['incoming-orders', 'operation-master', 'workstation-master'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
   SHIPMENT: ['incoming-orders'],
   ACCOUNTS: [],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
-  ADMIN: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'operation-master']
+  ADMIN: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'operation-master', 'workstation-master']
 }
 
 function App() {
@@ -290,6 +291,8 @@ function App() {
   const [poCompanyLocked, setPoCompanyLocked] = useState(false)
   const [poSaving, setPoSaving] = useState(false)
   const [showPoForm, setShowPoForm] = useState(false)
+  const [showWorkstationForm, setShowWorkstationForm] = useState(false)
+  const [showOperationForm, setShowOperationForm] = useState(false)
   const [showSalesOrderForm, setShowSalesOrderForm] = useState(false)
   const [editingPoId, setEditingPoId] = useState(null)
   const [customerPos, setCustomerPos] = useState([])
@@ -1354,7 +1357,8 @@ function App() {
     { label: 'Client Quotations', moduleId: 'client-quotations', icon: '📋' },
     { label: 'Drawing Master', moduleId: 'drawing-master', icon: '✏️', indent: true },
     { label: 'BOM Creation', moduleId: 'bom-creation', icon: '📝', indent: true },
-    { label: 'Operation Master', moduleId: 'operation-master', icon: '🏭', indent: true },
+    { label: 'Workstation Master', moduleId: 'workstation-master', icon: '🏭', indent: true },
+    { label: 'Operation Master', moduleId: 'operation-master', icon: '⚙️', indent: true },
     { label: 'Routing / Operations', moduleId: 'routing-operations', icon: '⚙️', indent: true },
     { label: 'Process Sheet', moduleId: 'process-sheet', icon: '📊', indent: true },
     { label: 'BOM Approval', moduleId: 'bom-approval', icon: '✅', indent: true },
@@ -1640,11 +1644,51 @@ function App() {
       description: 'Review and approve finalized BOMs',
       actions: null
     },
+    'workstation-master': {
+      badge: 'Production Master',
+      title: 'Workstation Master',
+      description: 'Manage and monitor all manufacturing workstations',
+      actions: (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600"
+            onClick={() => window.dispatchEvent(new CustomEvent('refreshWorkstations'))}
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowWorkstationForm(!showWorkstationForm)}
+            className="px-5 py-2 rounded-2xl bg-slate-900 text-white text-sm font-semibold shadow-sm hover:bg-slate-800"
+          >
+            {showWorkstationForm ? 'View List' : '+ Add Workstation'}
+          </button>
+        </div>
+      )
+    },
     'operation-master': {
       badge: 'Production Master',
       title: 'Operation Master',
-      description: 'Manage factory operations and machine capacities',
-      actions: null
+      description: 'Define and manage manufacturing operations',
+      actions: (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600"
+            onClick={() => window.dispatchEvent(new CustomEvent('refreshOperations'))}
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowOperationForm(!showOperationForm)}
+            className="px-5 py-2 rounded-2xl bg-slate-900 text-white text-sm font-semibold shadow-sm hover:bg-slate-800"
+          >
+            {showOperationForm ? 'View List' : '+ Add Operation'}
+          </button>
+        </div>
+      )
     }
   }
 
@@ -2263,8 +2307,11 @@ function App() {
                   <BOMFormPage />
                 )}
 
+                {activeModule === 'workstation-master' && (
+                  <WorkstationMaster showForm={showWorkstationForm} setShowForm={setShowWorkstationForm} />
+                )}
                 {activeModule === 'operation-master' && (
-                  <WorkstationMaster />
+                  <OperationMaster showForm={showOperationForm} setShowForm={setShowOperationForm} />
                 )}
               </>
             )}

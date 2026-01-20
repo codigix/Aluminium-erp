@@ -12,9 +12,18 @@ const getWorkstationById = async (id) => {
 
 const createWorkstation = async (data) => {
   const [result] = await pool.query(
-    `INSERT INTO workstations (workstation_code, workstation_name, workstation_type, department, capacity_type, hourly_rate, status) 
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [data.workstation_code, data.workstation_name, data.workstation_type, data.department, data.capacity_type, data.hourly_rate, data.status || 'Active']
+    `INSERT INTO workstations (
+      workstation_code, workstation_name, workstation_type, department, 
+      location, capacity_per_hour, target_utilization, hourly_rate, equipment_code, 
+      maintenance_frequency, last_maintenance_date, assigned_operators, 
+      description, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      data.workstation_code, data.workstation_name, data.workstation_type, data.department,
+      data.location, data.capacity_per_hour, data.target_utilization, data.hourly_rate || 0, 
+      data.equipment_code, data.maintenance_frequency, data.last_maintenance_date, 
+      data.assigned_operators, data.description, data.status || 'Active'
+    ]
   );
   return { id: result.insertId, ...data };
 };
@@ -26,11 +35,23 @@ const updateWorkstation = async (id, data) => {
       workstation_name = ?, 
       workstation_type = ?, 
       department = ?, 
-      capacity_type = ?, 
-      hourly_rate = ?, 
+      location = ?,
+      capacity_per_hour = ?,
+      target_utilization = ?,
+      hourly_rate = ?,
+      equipment_code = ?,
+      maintenance_frequency = ?,
+      last_maintenance_date = ?,
+      assigned_operators = ?,
+      description = ?,
       status = ?
      WHERE id = ?`,
-    [data.workstation_code, data.workstation_name, data.workstation_type, data.department, data.capacity_type, data.hourly_rate, data.status, id]
+    [
+      data.workstation_code, data.workstation_name, data.workstation_type, data.department,
+      data.location, data.capacity_per_hour, data.target_utilization, data.hourly_rate || 0,
+      data.equipment_code, data.maintenance_frequency, data.last_maintenance_date, 
+      data.assigned_operators, data.description, data.status, id
+    ]
   );
   return { id, ...data };
 };
