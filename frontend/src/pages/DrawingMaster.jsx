@@ -127,8 +127,8 @@ const DrawingMaster = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Drawing Master</h1>
-          <p className="text-sm text-slate-500">Central repository for all engineering drawings and revisions</p>
+          <h1 className="text-xl text-slate-900">Drawing Master</h1>
+          <p className="text-xs text-slate-500">Central repository for all engineering drawings and revisions</p>
         </div>
         <form onSubmit={handleSearch} className="flex gap-2">
           <input 
@@ -140,14 +140,14 @@ const DrawingMaster = () => {
           />
           <button 
             type="submit"
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-colors"
+            className="p-2 bg-indigo-600 text-white rounded-md text-xs  hover:bg-indigo-700 transition-colors"
           >
             Search
           </button>
           <button 
             type="button"
             onClick={() => { setSearchTerm(''); fetchDrawings(); }}
-            className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
+            className="p-2 bg-slate-100 text-slate-600 rounded-md text-xs  hover:bg-slate-200 transition-colors"
           >
             Reset
           </button>
@@ -156,16 +156,16 @@ const DrawingMaster = () => {
 
       <Card>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
+          <table className="min-w-full divide-y divide-slate-200 bg-white">
             <thead className="bg-slate-50">
               <tr>
-                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Drawing No</th>
-                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Latest Rev</th>
-                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">PO / SO Ref</th>
-                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
-                <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Used</th>
-                <th className="p-2text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">PDF</th>
-                <th className="p-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Drawing No</th>
+                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Latest Rev</th>
+                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">PO / SO Ref</th>
+                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Description</th>
+                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Last Used</th>
+                <th className="p-2text-center text-xs  text-slate-500  tracking-wider">PDF</th>
+                <th className="p-2 text-right text-xs  text-slate-500  tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
@@ -176,15 +176,15 @@ const DrawingMaster = () => {
               ) : (
                 drawings.map((drawing, idx) => (
                   <tr key={`${drawing.drawing_no}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-2 whitespace-nowrap text-sm font-bold text-slate-900">{drawing.drawing_no}</td>
+                    <td className="p-2 whitespace-nowrap text-sm text-slate-900">{drawing.drawing_no}</td>
                     <td className="p-2 whitespace-nowrap text-sm text-slate-600">
                       <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-mono">{drawing.revision_no || '0'}</span>
                     </td>
                     <td className="p-2 whitespace-nowrap">
-                      <div className="text-xs font-bold text-slate-900">{drawing.po_number || 'N/A'}</div>
+                      <div className="text-xs text-slate-900">{drawing.po_number || 'N/A'}</div>
                       <div className="text-[10px] text-slate-500">SO-{String(drawing.sales_order_id).padStart(4, '0')}</div>
                     </td>
-                    <td className="p-2 text-sm text-slate-500 max-w-xs truncate">{drawing.description}</td>
+                    <td className="p-2 text-xs text-slate-500 max-w-xs truncate ">{drawing.description}</td>
                     <td className="p-2 whitespace-nowrap text-xs text-slate-500">
                       {new Date(drawing.last_used_at).toLocaleDateString('en-IN')}
                     </td>
@@ -202,19 +202,27 @@ const DrawingMaster = () => {
                         </a>
                       ) : '—'}
                     </td>
-                    <td className="p-2 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      <button 
-                        onClick={() => handleEdit(drawing)}
-                        className="text-indigo-600 hover:text-indigo-900 font-semibold"
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => handleViewRevisions(drawing)}
-                        className="text-slate-600 hover:text-slate-900 font-semibold"
-                      >
-                        History
-                      </button>
+                    <td className="p-2 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end gap-2">
+                        <button 
+                          onClick={() => handleEdit(drawing)}
+                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Edit Drawing"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          onClick={() => handleViewRevisions(drawing)}
+                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          title="Revision History"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -230,10 +238,10 @@ const DrawingMaster = () => {
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-slate-900 opacity-75" onClick={() => setShowEditModal(false)}></div>
             <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-              <h3 className="text-xl font-bold text-slate-900 mb-4">Edit Drawing: {editData.drawing_no}</h3>
+              <h3 className="text-xl text-slate-900 mb-4">Edit Drawing: {editData.drawing_no}</h3>
               <form onSubmit={handleSave} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Revision No</label>
+                  <label className="block text-xs  text-slate-500  mb-1">Revision No</label>
                   <input 
                     type="text" 
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
@@ -242,7 +250,7 @@ const DrawingMaster = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
+                  <label className="block text-xs  text-slate-500  mb-1">Description</label>
                   <textarea 
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px]"
                     value={editData.description}
@@ -250,11 +258,11 @@ const DrawingMaster = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Upload PDF</label>
+                  <label className="block text-xs  text-slate-500  mb-1">Upload PDF</label>
                   <input 
                     type="file" 
                     accept=".pdf"
-                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file: file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                     onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
                   />
                 </div>
@@ -262,14 +270,14 @@ const DrawingMaster = () => {
                   <button 
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="px-4 py-2 text-slate-600 font-semibold"
+                    className="px-4 py-2 text-slate-600 "
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
                     disabled={saveLoading}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50"
+                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg  hover:bg-indigo-700 disabled:opacity-50"
                   >
                     {saveLoading ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -294,7 +302,7 @@ const DrawingMaster = () => {
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900">
+                    <h3 className="text-xl text-slate-900">
                       Revision History: {selectedDrawing?.drawing_no}
                     </h3>
                   </div>
@@ -313,24 +321,24 @@ const DrawingMaster = () => {
                     <div className="py-12 text-center text-slate-500 italic">Fetching revisions...</div>
                   ) : (
                     <div className="overflow-hidden border border-slate-100 rounded-xl">
-                      <table className="min-w-full divide-y divide-slate-200">
+                      <table className="min-w-full divide-y divide-slate-200 bg-white">
                         <thead className="bg-slate-50">
                           <tr>
-                            <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">Rev</th>
-                            <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
-                            <th className="p-2text-left text-xs font-semibold text-slate-500 uppercase">Description</th>
-                            <th className="p-2text-center text-xs font-semibold text-slate-500 uppercase">File</th>
-                            <th className="p-2 text-right text-xs font-semibold text-slate-500 uppercase">Order</th>
+                            <th className="p-2 text-left text-xs  text-slate-500 ">Rev</th>
+                            <th className="p-2 text-left text-xs  text-slate-500 ">Date</th>
+                            <th className="p-2 text-left text-xs  text-slate-500 ">Description</th>
+                            <th className="p-2text-center text-xs  text-slate-500 ">File</th>
+                            <th className="p-2 text-right text-xs  text-slate-500 ">Order</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
                           {revisions.map((rev, i) => (
                             <tr key={i} className="hover:bg-slate-50">
-                              <td className="p-2 whitespace-nowrap text-sm font-mono font-bold text-indigo-600">{rev.revision_no || '0'}</td>
+                              <td className="p-2 whitespace-nowrap text-sm font-mono  text-indigo-600">{rev.revision_no || '0'}</td>
                               <td className="p-2 whitespace-nowrap text-sm text-slate-600">
                                 {new Date(rev.created_at).toLocaleDateString('en-IN')}
                               </td>
-                              <td className="p-2 text-sm text-slate-500">{rev.description}</td>
+                              <td className="p-2 text-xs text-slate-500">{rev.description}</td>
                               <td className="p-2 text-left">
                                 {rev.drawing_pdf ? (
                                   <a 
@@ -344,7 +352,7 @@ const DrawingMaster = () => {
                                 ) : '—'}
                               </td>
                               <td className="p-2 text-right">
-                                <div className="text-xs font-bold text-slate-700">{rev.po_number || 'N/A'}</div>
+                                <div className="text-xs  text-slate-700">{rev.po_number || 'N/A'}</div>
                                 <div className="text-[10px] text-slate-400">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
                               </td>
                             </tr>

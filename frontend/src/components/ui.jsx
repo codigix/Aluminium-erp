@@ -1,21 +1,21 @@
 export const Card = ({ id, title, subtitle, action, children }) => (
-  <div id={id} className="bg-white border border-slate-200/80 rounded-[32px] shadow-lg">
+  <div id={id} >
     {(title || subtitle || action) && (
-      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between px-8 py-6 border-b border-slate-100/80 rounded-t-[32px]">
+      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between p-2 border-b border-slate-100/80 rounded-t-[32px]">
         <div>
-          {subtitle && <p className="text-[0.65rem] font-semibold tracking-[0.35em] text-slate-400 uppercase">{subtitle}</p>}
-          {title && <h2 className="text-2xl font-semibold text-slate-900 text-xs">{title}</h2>}
+          {subtitle && <p className="text-sm text-slate-400 ">{subtitle}</p>}
+          {title && <h2 className="text-xl text-slate-900 text-xs">{title}</h2>}
         </div>
         {action}
       </div>
     )}
-    <div className="px-8 py-8 space-y-6">{children}</div>
+    <div className="p-2">{children}</div>
   </div>
 )
 
 export const FormControl = ({ label, children }) => (
   <label className="flex flex-col gap-2">
-    <span className="text-[0.65rem] font-semibold tracking-[0.35em] text-slate-500 uppercase">{label}</span>
+    <span className="text-[0.65rem] text-slate-500 ">{label}</span>
     {children}
   </label>
 )
@@ -54,8 +54,30 @@ export const StatusBadge = ({ status }) => {
   }
 
   return (
-    <span className={`px-3 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getStatusStyles(normalized)}`}>
+    <span className={`px-3 py-1 rounded-full text-[10px]  border  tracking-wider ${getStatusStyles(normalized)}`}>
       {formatStatus(normalized)}
     </span>
+  )
+}
+
+export const Modal = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-md shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white border-b border-slate-100 p-2 flex items-center justify-between rounded-sm">
+          <h2 className="text-lg  text-slate-900">{title}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="p-4">
+          {children}
+        </div>
+      </div>
+    </div>
   )
 }

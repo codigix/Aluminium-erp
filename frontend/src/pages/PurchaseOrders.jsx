@@ -336,28 +336,39 @@ const PurchaseOrders = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card title="Purchase Orders" subtitle="Create and manage vendor purchase orders from quotations">
         <div className="flex gap-4 justify-between items-center mb-6">
-          <div className="flex-1">
+          <div className="flex-1 relative">
+            <span className="absolute left-3 top-2.5 text-slate-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
             <input
               type="text"
               placeholder="Search PO number or vendor..."
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div className="flex gap-2">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm  hover:bg-emerald-700 transition-colors"
             >
-              + Create PO from Quote
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Create PO
             </button>
             <button
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm  hover:bg-blue-700 transition-colors"
             >
-              ⬇ Export Report
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export
             </button>
           </div>
         </div>
@@ -370,7 +381,7 @@ const PurchaseOrders = () => {
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm  hover:bg-slate-800"
             >
               + Create PO from Quote
             </button>
@@ -378,15 +389,15 @@ const PurchaseOrders = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">PO Number</th>
-                  <th className="px-4 py-3 text-left font-semibold">Vendor</th>
-                  <th className="px-4 py-3 text-left font-semibold">Total Amount</th>
-                  <th className="px-4 py-3 text-left font-semibold">Expected Delivery</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
-                  <th className="px-4 py-3 text-left font-semibold">Items</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="px-4 py-3 text-left ">PO Number</th>
+                  <th className="px-4 py-3 text-left ">Vendor</th>
+                  <th className="px-4 py-3 text-left ">Total Amount</th>
+                  <th className="px-4 py-3 text-left ">Expected Delivery</th>
+                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="px-4 py-3 text-left ">Items</th>
+                  <th className="px-4 py-3 text-right ">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -394,18 +405,45 @@ const PurchaseOrders = () => {
                   <tr key={`po-${po.id}`} className="border-t border-slate-100">
                     <td className="px-4 py-4 font-medium text-slate-900">{po.po_number || `PO-${String(po.id).padStart(4, '0')}`}</td>
                     <td className="px-4 py-4 text-slate-600">{po.vendor_name}</td>
-                    <td className="px-4 py-4 font-semibold text-slate-900 text-xs">{formatCurrency(po.total_amount)}</td>
+                    <td className="px-4 py-4 text-slate-900 text-xs">{formatCurrency(po.total_amount)}</td>
                     <td className="px-4 py-4 text-slate-600">{formatDate(po.expected_delivery_date)}</td>
                     <td className="px-4 py-4">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${poStatusColors[po.status]?.badge}`}>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs  ${poStatusColors[po.status]?.badge}`}>
                         {poStatusColors[po.status]?.label || po.status}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-slate-600">{po.items_count || 0} items</td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button onClick={() => handleViewPO(po.id)} className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium">👁 View</button>
-                      <button onClick={() => handleEditPO(po.id)} className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium">✎ Edit</button>
-                      <button onClick={() => handleDeletePO(po.id)} className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium">🗑</button>
+                    <td className="px-4 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => handleViewPO(po.id)}
+                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
+                          title="View PO Details"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleEditPO(po.id)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                          title="Edit PO"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeletePO(po.id)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                          title="Delete PO"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -418,20 +456,20 @@ const PurchaseOrders = () => {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">Total POs</p>
-            <p className="text-2xl font-bold text-blue-900">{stats.total_pos || 0}</p>
+            <p className="text-xs text-blue-600   tracking-wider mb-1">Total POs</p>
+            <p className="text-2xl  text-blue-900">{stats.total_pos || 0}</p>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">Pending</p>
-            <p className="text-2xl font-bold text-yellow-900">{stats.pending_pos || 0}</p>
+            <p className="text-xs text-yellow-600   tracking-wider mb-1">Pending</p>
+            <p className="text-2xl  text-yellow-900">{stats.pending_pos || 0}</p>
           </div>
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Approved</p>
-            <p className="text-2xl font-bold text-emerald-900">{stats.approved_pos || 0}</p>
+            <p className="text-xs text-emerald-600   tracking-wider mb-1">Approved</p>
+            <p className="text-2xl  text-emerald-900">{stats.approved_pos || 0}</p>
           </div>
           <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
-            <p className="text-xs text-cyan-600 font-semibold uppercase tracking-wider mb-1">Delivered</p>
-            <p className="text-2xl font-bold text-cyan-900">{stats.delivered_pos || 0}</p>
+            <p className="text-xs text-cyan-600   tracking-wider mb-1">Delivered</p>
+            <p className="text-2xl  text-cyan-900">{stats.delivered_pos || 0}</p>
           </div>
         </div>
       )}
@@ -440,7 +478,7 @@ const PurchaseOrders = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create Purchase Order from Quotation</h3>
+              <h3 className="text-md text-slate-900 text-xs">Create Purchase Order from Quotation</h3>
               <button onClick={() => {
                 setShowCreateModal(false);
                 setPoItems([]);
@@ -524,14 +562,14 @@ const PurchaseOrders = () => {
                   <label className="block text-sm font-medium text-slate-700">Quotation Items Preview</label>
                   <div className="overflow-x-auto border border-slate-100 rounded">
                     <table className="w-full text-xs">
-                      <thead className="bg-slate-50 text-slate-600 uppercase">
+                      <thead className="bg-slate-50 text-slate-600 ">
                         <tr>
-                          <th className="px-3 py-2 text-left font-semibold">Description</th>
-                          <th className="px-3 py-2 text-left font-semibold">Material</th>
-                          <th className="px-3 py-2 text-right font-semibold">Qty</th>
-                          <th className="px-3 py-2 text-center font-semibold">Unit</th>
-                          <th className="px-3 py-2 text-right font-semibold">Rate</th>
-                          <th className="px-3 py-2 text-right font-semibold">Total</th>
+                          <th className="px-3 py-2 text-left ">Description</th>
+                          <th className="px-3 py-2 text-left ">Material</th>
+                          <th className="px-3 py-2 text-right ">Qty</th>
+                          <th className="px-3 py-2 text-center ">Unit</th>
+                          <th className="px-3 py-2 text-right ">Rate</th>
+                          <th className="px-3 py-2 text-right ">Total</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -548,10 +586,10 @@ const PurchaseOrders = () => {
                             <td className="px-3 py-2 text-right text-slate-600">{item.quantity}</td>
                             <td className="px-3 py-2 text-center text-slate-600">{item.unit || 'NOS'}</td>
                             <td className="px-3 py-2 text-right text-slate-600">{formatCurrency(item.unit_rate)}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-slate-900 text-xs">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
+                            <td className="px-3 py-2 text-right text-slate-900 text-xs">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
                           </tr>
                         ))}
-                        <tr className="bg-slate-50 font-bold border-t border-slate-200">
+                        <tr className="bg-slate-50  border-t border-slate-200">
                           <td colSpan="4" className="px-3 py-2 text-right text-slate-700">Total Amount</td>
                           <td className="px-3 py-2 text-right text-emerald-600">
                             {formatCurrency(poItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || (item.quantity * item.unit_rate)), 0))}
@@ -584,7 +622,7 @@ const PurchaseOrders = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700 font-semibold"
+                  className="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700 "
                 >
                   Create PO
                 </button>
@@ -598,60 +636,60 @@ const PurchaseOrders = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Purchase Order Details</h3>
+              <h3 className="text-md text-slate-900 text-xs">Purchase Order Details</h3>
               <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
             <div className="grid grid-cols-2 gap-6 mb-6">
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">PO Number</p>
-                <p className="text-lg font-bold text-slate-900">{selectedPO.po_number}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">PO Number</p>
+                <p className="text-md text-slate-900">{selectedPO.po_number}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Vendor</p>
-                <p className="text-lg font-bold text-slate-900">{selectedPO.vendor_name}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Vendor</p>
+                <p className="text-md text-slate-900">{selectedPO.vendor_name}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Total Amount</p>
-                <p className="text-lg font-bold text-emerald-600">{formatCurrency(selectedPO.total_amount)}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Total Amount</p>
+                <p className="text-lg  text-emerald-600">{formatCurrency(selectedPO.total_amount)}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Status</p>
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${poStatusColors[selectedPO.status]?.badge}`}>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Status</p>
+                <span className={`inline-block px-3 py-1 rounded-full text-xs  ${poStatusColors[selectedPO.status]?.badge}`}>
                   {poStatusColors[selectedPO.status]?.label || selectedPO.status}
                 </span>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Expected Delivery</p>
-                <p className="text-lg font-bold text-slate-900">{formatDate(selectedPO.expected_delivery_date)}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Expected Delivery</p>
+                <p className="text-md text-slate-900">{formatDate(selectedPO.expected_delivery_date)}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Created</p>
-                <p className="text-lg font-bold text-slate-900">{formatDate(selectedPO.created_at)}</p>
+                <p className="text-xs text-slate-500  tracking-wider  mb-1">Created</p>
+                <p className="text-md text-slate-900">{formatDate(selectedPO.created_at)}</p>
               </div>
             </div>
 
             {selectedPO.notes && (
               <div className="mb-6 bg-blue-50 border border-blue-200 p-4 rounded">
-                <p className="text-xs text-blue-600 uppercase tracking-wider font-semibold mb-2">Notes</p>
+                <p className="text-xs text-blue-600  tracking-wider  mb-2">Notes</p>
                 <p className="text-slate-700">{selectedPO.notes}</p>
               </div>
             )}
 
             <div className="mb-6">
-              <h4 className="text-sm font-semibold text-slate-900 text-xs mb-3">Order Items ({poItems.length})</h4>
+              <h4 className="text-sm text-slate-900 text-xs mb-3">Order Items ({poItems.length})</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-100 text-slate-600 uppercase">
+                  <thead className="bg-slate-100 text-slate-600 ">
                     <tr>
-                      <th className="px-3 py-2 text-left font-semibold">Item Code</th>
-                      <th className="px-3 py-2 text-left font-semibold">Description</th>
-                      <th className="px-3 py-2 text-left font-semibold">Material</th>
-                      <th className="px-3 py-2 text-right font-semibold">Qty</th>
-                      <th className="px-3 py-2 text-center font-semibold">Unit</th>
-                      <th className="px-3 py-2 text-right font-semibold">Rate</th>
-                      <th className="px-3 py-2 text-right font-semibold">Amount</th>
-                      <th className="px-3 py-2 text-right font-semibold">Total</th>
+                      <th className="px-3 py-2 text-left ">Item Code</th>
+                      <th className="px-3 py-2 text-left ">Description</th>
+                      <th className="px-3 py-2 text-left ">Material</th>
+                      <th className="px-3 py-2 text-right ">Qty</th>
+                      <th className="px-3 py-2 text-center ">Unit</th>
+                      <th className="px-3 py-2 text-right ">Rate</th>
+                      <th className="px-3 py-2 text-right ">Amount</th>
+                      <th className="px-3 py-2 text-right ">Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -670,8 +708,8 @@ const PurchaseOrders = () => {
                         <td className="px-3 py-2 text-right font-medium text-slate-900">{item.quantity}</td>
                         <td className="px-3 py-2 text-center text-slate-600">{item.unit}</td>
                         <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrency(item.unit_rate)}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-emerald-600">{formatCurrency(item.amount)}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-slate-900 text-xs">{formatCurrency(item.total_amount || (parseFloat(item.amount) + parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)))}</td>
+                        <td className="px-3 py-2 text-right  text-emerald-600">{formatCurrency(item.amount)}</td>
+                        <td className="px-3 py-2 text-right text-slate-900 text-xs">{formatCurrency(item.total_amount || (parseFloat(item.amount) + parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -695,7 +733,7 @@ const PurchaseOrders = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Edit Purchase Order</h3>
+              <h3 className="text-md text-slate-900 text-xs">Edit Purchase Order</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
@@ -707,7 +745,7 @@ const PurchaseOrders = () => {
                     type="text"
                     value={selectedPO.po_number}
                     onChange={(e) => setSelectedPO({...selectedPO, po_number: e.target.value})}
-                    className="flex-1 bg-white border border-slate-200 rounded px-2 py-0.5 text-blue-600 font-mono font-bold"
+                    className="flex-1 bg-white border border-slate-200 rounded px-2 py-0.5 text-blue-600 font-mono "
                   />
                 </div>
                 <p className="text-slate-600"><span className="font-medium w-24 inline-block">Vendor:</span> {selectedPO.vendor_name}</p>

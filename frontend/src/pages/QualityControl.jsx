@@ -1,37 +1,45 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { 
+  Archive, 
+  Shield, 
+  Search, 
+  Plus,
+  Eye,
+  Edit,
+  X,
+  Clock,
+  RotateCcw,
+  CheckCircle,
+  XCircle,
+  MessageSquare,
+  Calendar,
+  User,
+  Inbox,
+  ArrowUpRight
+} from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const grnStatusColors = {
-  PENDING: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
-  RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
-  INSPECTED: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'Inspected' },
-  APPROVED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', label: 'Approved' },
-  REJECTED: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600', badge: 'bg-red-100 text-red-700', label: 'Rejected' }
+  PENDING: { badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Pending' },
+  RECEIVED: { badge: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Received' },
+  INSPECTED: { badge: 'bg-indigo-100 text-indigo-700 border-indigo-200', label: 'Inspected' },
+  APPROVED: { badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Approved' },
+  REJECTED: { badge: 'bg-red-100 text-red-700 border-red-200', label: 'Rejected' }
 };
 
 const qcStatusColors = {
-  PENDING: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
-  IN_PROGRESS: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'In Progress' },
-  PASSED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', label: 'Passed' },
-  FAILED: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600', badge: 'bg-red-100 text-red-700', label: 'Failed' }
+  PENDING: { badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Pending' },
+  IN_PROGRESS: { badge: 'bg-blue-100 text-blue-700 border-blue-200', label: 'In Progress' },
+  PASSED: { badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Passed' },
+  FAILED: { badge: 'bg-red-100 text-red-700 border-red-200', label: 'Failed' }
 };
 
 const formatDate = (date) => {
   if (!date) return '—';
   return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
-const formatCurrency = (value) => {
-  if (!value || isNaN(value)) return '—';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
 };
 
 const QualityControl = () => {
@@ -42,8 +50,6 @@ const QualityControl = () => {
   const [loading, setLoading] = useState(false);
   const [showGRNModal, setShowGRNModal] = useState(false);
   const [showQCModal, setShowQCModal] = useState(false);
-  const [selectedGRN, setSelectedGRN] = useState(null);
-  const [selectedQC, setSelectedQC] = useState(null);
 
   const [grnFormData, setGrnFormData] = useState({
     poNumber: '',
@@ -163,7 +169,12 @@ const QualityControl = () => {
 
       if (!response.ok) throw new Error('Failed to create GRN');
 
-      await Swal.fire('Success', 'GRN created successfully', 'success');
+      await Swal.fire({
+        title: 'Success',
+        text: 'GRN created successfully',
+        icon: 'success',
+        confirmButtonColor: '#4f46e5'
+      });
       setShowGRNModal(false);
       setGrnFormData({
         poNumber: '',
@@ -206,7 +217,12 @@ const QualityControl = () => {
 
       if (!response.ok) throw new Error('Failed to create QC Inspection');
 
-      await Swal.fire('Success', 'QC Inspection created successfully', 'success');
+      await Swal.fire({
+        title: 'Success',
+        text: 'QC Inspection created successfully',
+        icon: 'success',
+        confirmButtonColor: '#4f46e5'
+      });
       setShowQCModal(false);
       setQcFormData({
         grnId: '',
@@ -223,263 +239,299 @@ const QualityControl = () => {
     }
   };
 
+  const StatMiniCard = ({ label, value, icon: Icon, colorClass }) => (
+    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+      <div className={`p-2 rounded-lg ${colorClass}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</p>
+        <p className="text-sm text-slate-900 leading-tight">{value}</p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      <Card title="Quality Control" subtitle="Manage GRN Processing and QC Inspections">
-        <div className="border-b border-slate-200 mb-6">
-          <div className="flex gap-6">
-            <button
-              onClick={() => setActiveTab('grn')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition ${
-                activeTab === 'grn'
-                  ? 'border-emerald-500 text-emerald-600'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              📦 GRN Processing
-            </button>
-            <button
-              onClick={() => setActiveTab('qc')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition ${
-                activeTab === 'qc'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              ✓ QC Inspections
-            </button>
-          </div>
+    <div className="space-y-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
+          <button
+            onClick={() => setActiveTab('grn')}
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === 'grn'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Archive className="w-4 h-4" />
+            GRN Processing
+          </button>
+          <button
+            onClick={() => setActiveTab('qc')}
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === 'qc'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Shield className="w-4 h-4" />
+            QC Inspections
+          </button>
         </div>
 
-        {activeTab === 'grn' ? (
-          <div className="space-y-6">
-            <div className="flex gap-4 justify-between items-center">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Search PO number or vendor..."
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <button
-                onClick={() => setShowGRNModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"
-              >
-                + Create GRN
-              </button>
-            </div>
+        <button
+          onClick={() => activeTab === 'grn' ? setShowGRNModal(true) : setShowQCModal(true)}
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
+        >
+          <Plus className="w-5 h-5" />
+          {activeTab === 'grn' ? 'Create GRN' : 'New Inspection'}
+        </button>
+      </div>
 
-            {loading ? (
-              <p className="text-sm text-slate-400">Loading GRNs...</p>
-            ) : grns.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-slate-500 mb-3">No GRNs created yet</p>
-                <button
-                  type="button"
-                  onClick={() => setShowGRNModal(true)}
-                  className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
-                >
-                  + Create First GRN
-                </button>
+      <Card>
+        <div className="space-y-3">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-center pb-2">
+            <div className="relative w-full md:w-96">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder={activeTab === 'grn' ? "Search PO number or vendor..." : "Search by GRN number..."}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+              />
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-24">
+              <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4" />
+              <p className="text-sm font-medium text-slate-500">Retrieving quality data...</p>
+            </div>
+          ) : (activeTab === 'grn' ? grns : qcInspections).length === 0 ? (
+            <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm text-slate-300 mb-4">
+                <Inbox className="w-8 h-8" />
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <p className="text-slate-900 font-bold">No records found</p>
+              <p className="text-slate-500 text-sm mt-1 max-w-xs mx-auto">
+                {activeTab === 'grn' 
+                  ? "Start by creating a Goods Received Note for incoming material."
+                  : "Pending GRNs will appear here for quality inspection."}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  {activeTab === 'grn' ? (
                     <tr>
-                      <th className="px-4 py-3 text-left font-semibold">GRN #</th>
-                      <th className="px-4 py-3 text-left font-semibold">PO Number</th>
-                      <th className="px-4 py-3 text-left font-semibold">GRN Date</th>
-                      <th className="px-4 py-3 text-right font-semibold">Received Qty</th>
-                      <th className="px-4 py-3 text-left font-semibold">Status</th>
-                      <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN #</th>
+                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">PO Number</th>
+                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN Date</th>
+                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Received Qty</th>
+                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
+                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Actions</th>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {grns.map((grn) => (
-                      <tr key={`grn-${grn.id}`} className="border-t border-slate-100">
-                        <td className="px-4 py-4 font-medium text-slate-900">GRN-{String(grn.id).padStart(4, '0')}</td>
-                        <td className="px-4 py-4 text-slate-600">{grn.poNumber}</td>
-                        <td className="px-4 py-4 text-slate-600">{formatDate(grn.grnDate)}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-slate-900 text-xs">{grn.receivedQuantity}</td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${grnStatusColors[grn.status]?.badge}`}>
+                  ) : (
+                    <tr>
+                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Inspection #</th>
+                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN #</th>
+                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Inspection Date</th>
+                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Pass Qty</th>
+                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Fail Qty</th>
+                      <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
+                      <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Actions</th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {activeTab === 'grn' ? (
+                    grns.map((grn) => (
+                      <tr key={`grn-${grn.id}`} className="hover:bg-indigo-50/30 transition-colors group">
+                        <td className="p-2 font-mono font-bold text-indigo-600">
+                          GRN-{String(grn.id).padStart(4, '0')}
+                        </td>
+                        <td className="p-2 font-medium text-slate-700">{grn.poNumber}</td>
+                        <td className="p-2 text-slate-500">{formatDate(grn.grnDate)}</td>
+                        <td className="p-2 text-right font-mono font-bold text-slate-900">{grn.receivedQuantity}</td>
+                        <td className="p-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${grnStatusColors[grn.status]?.badge}`}>
                             {grnStatusColors[grn.status]?.label || grn.status}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-right space-x-2">
-                          <button className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium">👁 View</button>
-                          <button className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium">✎ Edit</button>
+                        <td className="p-2 text-right">
+                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="flex gap-4 justify-between items-center">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Search by GRN number..."
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <button
-                onClick={() => setShowQCModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
-              >
-                + Create QC Inspection
-              </button>
-            </div>
-
-            {loading ? (
-              <p className="text-sm text-slate-400">Loading QC Inspections...</p>
-            ) : qcInspections.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-slate-500 mb-3">No QC Inspections created yet</p>
-                <button
-                  type="button"
-                  onClick={() => setShowQCModal(true)}
-                  className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
-                >
-                  + Create First QC Inspection
-                </button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold">Inspection #</th>
-                      <th className="px-4 py-3 text-left font-semibold">GRN #</th>
-                      <th className="px-4 py-3 text-left font-semibold">Inspection Date</th>
-                      <th className="px-4 py-3 text-right font-semibold">Pass Qty</th>
-                      <th className="px-4 py-3 text-right font-semibold">Fail Qty</th>
-                      <th className="px-4 py-3 text-left font-semibold">Status</th>
-                      <th className="px-4 py-3 text-right font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {qcInspections.map((qc) => (
-                      <tr key={`qc-${qc.id}`} className="border-t border-slate-100">
-                        <td className="px-4 py-4 font-medium text-slate-900">QC-{String(qc.id).padStart(4, '0')}</td>
-                        <td className="px-4 py-4 text-slate-600">GRN-{String(qc.grnId).padStart(4, '0')}</td>
-                        <td className="px-4 py-4 text-slate-600">{formatDate(qc.inspectionDate)}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-emerald-600">{qc.passQuantity}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-red-600">{qc.failQuantity || 0}</td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${qcStatusColors[qc.status]?.badge}`}>
+                    ))
+                  ) : (
+                    qcInspections.map((qc) => (
+                      <tr key={`qc-${qc.id}`} className="hover:bg-indigo-50/30 transition-colors group">
+                        <td className="p-2 font-mono font-bold text-indigo-600">
+                          QC-{String(qc.id).padStart(4, '0')}
+                        </td>
+                        <td className="p-2 font-mono text-slate-500">
+                          GRN-{String(qc.grnId).padStart(4, '0')}
+                        </td>
+                        <td className="p-2 text-slate-500">{formatDate(qc.inspectionDate)}</td>
+                        <td className="p-2 text-right font-mono font-bold text-emerald-600">{qc.passQuantity}</td>
+                        <td className="p-2 text-right font-mono font-bold text-red-600">{qc.failQuantity || 0}</td>
+                        <td className="p-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
                             {qcStatusColors[qc.status]?.label || qc.status}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-right space-x-2">
-                          <button className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium">👁 View</button>
-                          <button className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium">✎ Edit</button>
+                        <td className="p-2 text-right">
+                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </Card>
 
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">Pending GRNs</p>
-            <p className="text-2xl font-bold text-yellow-900">{stats.pendingGrns || 0}</p>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">QC In Progress</p>
-            <p className="text-2xl font-bold text-blue-900">{stats.inProgressQc || 0}</p>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">QC Passed</p>
-            <p className="text-2xl font-bold text-emerald-900">{stats.passedQc || 0}</p>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-xs text-red-600 font-semibold uppercase tracking-wider mb-1">QC Failed</p>
-            <p className="text-2xl font-bold text-red-900">{stats.failedQc || 0}</p>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatMiniCard 
+            label="Pending GRNs" 
+            value={stats.pendingGrns || 0} 
+            icon={Clock} 
+            colorClass="bg-amber-50 text-amber-600" 
+          />
+          <StatMiniCard 
+            label="QC In Progress" 
+            value={stats.inProgressQc || 0} 
+            icon={RotateCcw} 
+            colorClass="bg-blue-50 text-blue-600" 
+          />
+          <StatMiniCard 
+            label="QC Passed" 
+            value={stats.passedQc || 0} 
+            icon={CheckCircle} 
+            colorClass="bg-emerald-50 text-emerald-600" 
+          />
+          <StatMiniCard 
+            label="QC Failed" 
+            value={stats.failedQc || 0} 
+            icon={XCircle} 
+            colorClass="bg-red-50 text-red-600" 
+          />
         </div>
       )}
 
+      {/* GRN Modal */}
       {showGRNModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create GRN (Goods Received Note)</h3>
-              <button onClick={() => setShowGRNModal(false)} className="text-slate-500 text-2xl">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Create Goods Received Note</h3>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Inventory Inward</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowGRNModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleCreateGRN} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">PO Number *</label>
-                <input
-                  type="text"
-                  value={grnFormData.poNumber}
-                  onChange={(e) => setGrnFormData({...grnFormData, poNumber: e.target.value})}
-                  placeholder="Enter PO number"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
+            <form onSubmit={handleCreateGRN} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">PO Number *</label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={grnFormData.poNumber}
+                      onChange={(e) => setGrnFormData({...grnFormData, poNumber: e.target.value})}
+                      placeholder="PO-2024-XXXX"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">GRN Date *</label>
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="date"
+                      value={grnFormData.grnDate}
+                      onChange={(e) => setGrnFormData({...grnFormData, grnDate: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Received Quantity *</label>
+                  <div className="relative">
+                    <ArchiveBoxIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={grnFormData.receivedQuantity}
+                      onChange={(e) => setGrnFormData({...grnFormData, receivedQuantity: e.target.value})}
+                      placeholder="0.00"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      required
+                      min="1"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Notes (Optional)</label>
+                  <div className="relative">
+                    <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <textarea
+                      value={grnFormData.notes}
+                      onChange={(e) => setGrnFormData({...grnFormData, notes: e.target.value})}
+                      placeholder="Material condition, vehicle number, etc."
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[80px]"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">GRN Date *</label>
-                <input
-                  type="date"
-                  value={grnFormData.grnDate}
-                  onChange={(e) => setGrnFormData({...grnFormData, grnDate: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Received Quantity *</label>
-                <input
-                  type="number"
-                  value={grnFormData.receivedQuantity}
-                  onChange={(e) => setGrnFormData({...grnFormData, receivedQuantity: e.target.value})}
-                  placeholder="0"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                  min="1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Optional)</label>
-                <textarea
-                  value={grnFormData.notes}
-                  onChange={(e) => setGrnFormData({...grnFormData, notes: e.target.value})}
-                  placeholder="Add any notes about the receipt"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  rows="3"
-                />
-              </div>
-
-              <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
+              <div className="flex gap-3 justify-end pt-4">
                 <button
                   type="button"
                   onClick={() => setShowGRNModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="px-6 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
                 >
-                  Create GRN
+                  Complete Receipt
                 </button>
               </div>
             </form>
@@ -487,105 +539,137 @@ const QualityControl = () => {
         </div>
       )}
 
+      {/* QC Modal */}
       {showQCModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create QC Inspection</h3>
-              <button onClick={() => setShowQCModal(false)} className="text-slate-500 text-2xl">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                  <CheckBadgeIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Create QC Inspection</h3>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Quality Verification</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowQCModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleCreateQC} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Select GRN *</label>
-                <select
-                  value={qcFormData.grnId}
-                  onChange={(e) => setQcFormData({...qcFormData, grnId: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">-- Select a GRN --</option>
-                  {grns.map(grn => (
-                    <option key={grn.id} value={grn.id}>
-                      GRN-{String(grn.id).padStart(4, '0')} - {grn.poNumber} ({grn.receivedQuantity} items)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Inspection Date *</label>
-                <input
-                  type="date"
-                  value={qcFormData.inspectionDate}
-                  onChange={(e) => setQcFormData({...qcFormData, inspectionDate: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Pass Quantity *</label>
-                  <input
-                    type="number"
-                    value={qcFormData.passQuantity}
-                    onChange={(e) => setQcFormData({...qcFormData, passQuantity: e.target.value})}
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                    min="0"
-                  />
+            <form onSubmit={handleCreateQC} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Select GRN *</label>
+                  <div className="relative">
+                    <Inbox className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <select
+                      value={qcFormData.grnId}
+                      onChange={(e) => setQcFormData({...qcFormData, grnId: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
+                      required
+                    >
+                      <option value="">-- Choose a pending GRN --</option>
+                      {grns.map(grn => (
+                        <option key={grn.id} value={grn.id}>
+                          GRN-{String(grn.id).padStart(4, '0')} ({grn.receivedQuantity} units)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Fail Quantity</label>
-                  <input
-                    type="number"
-                    value={qcFormData.failQuantity}
-                    onChange={(e) => setQcFormData({...qcFormData, failQuantity: e.target.value})}
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min="0"
-                  />
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Inspection Date *</label>
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="date"
+                      value={qcFormData.inspectionDate}
+                      onChange={(e) => setQcFormData({...qcFormData, inspectionDate: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Pass Quantity *</label>
+                    <div className="relative">
+                      <CheckCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" />
+                      <input
+                        type="number"
+                        value={qcFormData.passQuantity}
+                        onChange={(e) => setQcFormData({...qcFormData, passQuantity: e.target.value})}
+                        placeholder="0.00"
+                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        required
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Fail Quantity</label>
+                    <div className="relative">
+                      <XCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-red-500" />
+                      <input
+                        type="number"
+                        value={qcFormData.failQuantity}
+                        onChange={(e) => setQcFormData({...qcFormData, failQuantity: e.target.value})}
+                        placeholder="0.00"
+                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Defects & Issues</label>
+                  <div className="relative">
+                    <ArrowUpRight className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <textarea
+                      value={qcFormData.defects}
+                      onChange={(e) => setQcFormData({...qcFormData, defects: e.target.value})}
+                      placeholder="Specify visual defects, dimensional errors..."
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all min-h-[60px]"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Remarks</label>
+                  <div className="relative">
+                    <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <textarea
+                      value={qcFormData.remarks}
+                      onChange={(e) => setQcFormData({...qcFormData, remarks: e.target.value})}
+                      placeholder="Final decision notes..."
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all min-h-[60px]"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Defects/Issues</label>
-                <textarea
-                  value={qcFormData.defects}
-                  onChange={(e) => setQcFormData({...qcFormData, defects: e.target.value})}
-                  placeholder="Describe any defects or issues found"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows="2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Remarks</label>
-                <textarea
-                  value={qcFormData.remarks}
-                  onChange={(e) => setQcFormData({...qcFormData, remarks: e.target.value})}
-                  placeholder="Add inspection remarks"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows="2"
-                />
-              </div>
-
-              <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
+              <div className="flex gap-3 justify-end pt-4">
                 <button
                   type="button"
                   onClick={() => setShowQCModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="px-6 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all"
                 >
-                  Create QC Inspection
+                  Submit Inspection
                 </button>
               </div>
             </form>

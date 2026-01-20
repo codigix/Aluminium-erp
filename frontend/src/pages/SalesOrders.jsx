@@ -51,7 +51,7 @@ const MaterialInputTable = ({ materials = [], onAdd, onDelete }) => {
   return (
     <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
       <table className="w-full text-[10px]">
-        <thead className="bg-slate-50 text-slate-500 uppercase font-bold">
+        <thead className="bg-slate-50 text-slate-500  ">
           <tr>
             <th className="px-4 py-2 text-left">Material Name</th>
             <th className="px-4 py-2 text-right w-20">Qty</th>
@@ -63,10 +63,18 @@ const MaterialInputTable = ({ materials = [], onAdd, onDelete }) => {
           {materials.map((mat, i) => (
             <tr key={i}>
               <td className="px-4 py-2 text-slate-900 font-medium">{mat.material_name}</td>
-              <td className="px-4 py-2 text-right font-bold">{mat.qty}</td>
+              <td className="px-4 py-2 text-right ">{mat.qty}</td>
               <td className="px-4 py-2 text-slate-500">{mat.uom}</td>
               <td className="px-4 py-2 text-right">
-                <button onClick={() => onDelete(i)} className="text-rose-500 hover:text-rose-700">Delete</button>
+                <button 
+                  onClick={() => onDelete(i)} 
+                  className="p-1 text-rose-500 hover:bg-rose-50 rounded transition-colors"
+                  title="Delete"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
               </td>
             </tr>
           ))}
@@ -106,9 +114,12 @@ const MaterialInputTable = ({ materials = [], onAdd, onDelete }) => {
                     setNewMat({ material_name: '', qty: '', uom: 'Kg' })
                   }
                 }}
-                className="text-indigo-600 font-bold"
+                className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                title="Add Material"
               >
-                Add
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
+                </svg>
               </button>
             </td>
           </tr>
@@ -135,7 +146,7 @@ const SalesOrders = ({
   selectedPoForSo,
   soItems,
   setSoItems,
-  poItemsLoading,
+  customerPosLoading,
   fieldInputClass
 }) => {
   const [expandedItems, setExpandedItems] = useState({})
@@ -152,7 +163,7 @@ const SalesOrders = ({
           <div className="grid gap-6 lg:grid-cols-2">
             {/* --- Section 1: Customer Selection & Details --- */}
             <div className="space-y-5">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Customer Details</h3>
+              <h3 className="text-xs  text-slate-400  tracking-[0.2em] mb-4">Customer Details</h3>
               
               <FormControl label="Company *">
                 <select
@@ -190,7 +201,7 @@ const SalesOrders = ({
               <FormControl label="GSTIN">
                 <input
                   readOnly
-                  className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed uppercase`}
+                  className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed `}
                   value={selectedCompany?.gstin || '—'}
                 />
               </FormControl>
@@ -198,7 +209,7 @@ const SalesOrders = ({
 
             {/* --- Section 2: PO Selection & Details --- */}
             <div className="space-y-5">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Purchase Order Information</h3>
+              <h3 className="text-xs  text-slate-400  tracking-[0.2em] mb-4">Purchase Order Information</h3>
               
               <FormControl label="Customer PO *">
                 <select
@@ -225,7 +236,7 @@ const SalesOrders = ({
                 <FormControl label="PO Total">
                   <input
                     readOnly
-                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed font-semibold`}
+                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed `}
                     value={selectedPoForSo ? formatCurrency(selectedPoForSo.net_total, selectedPoForSo.currency) : '—'}
                   />
                 </FormControl>
@@ -242,12 +253,12 @@ const SalesOrders = ({
 
             {/* --- Section 3: Project & Production Setup --- */}
             <div className="col-span-full border-t border-slate-100 pt-6 mt-2">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-6">Production & Project Setup</h3>
+              <h3 className="text-xs  text-slate-400  tracking-[0.2em] mb-6">Production & Project Setup</h3>
               <div className="grid gap-5 lg:grid-cols-3">
                 <FormControl label="Project / Job Code">
                   <input
                     readOnly
-                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed font-bold uppercase`}
+                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed  `}
                     value={salesOrderForm.projectName || '—'}
                     placeholder="Auto-filled from PO"
                   />
@@ -283,49 +294,49 @@ const SalesOrders = ({
                     checked={salesOrderForm.drawingRequired}
                     onChange={e => onFieldChange('drawingRequired', e.target.checked)}
                   />
-                  <span className="text-sm font-semibold text-slate-700">Drawing Required</span>
+                  <span className="text-sm  text-slate-700">Drawing Required</span>
                 </label>
               </div>
             </div>
 
-            {poItemsLoading && (
+            {customerPosLoading && (
               <div className="col-span-full py-8 flex flex-col items-center justify-center gap-3 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 mt-4">
                 <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fetching PO Details...</p>
+                <p className="text-xs  text-slate-400  tracking-widest">Fetching PO Details...</p>
               </div>
             )}
 
-            {selectedPoForSo && !poItemsLoading && (
+            {selectedPoForSo && !customerPosLoading && (
               <div className="col-span-full mt-6 space-y-4">
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                   <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Review Items from {selectedPoForSo.po_number}</h4>
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">
+                    <h4 className="text-[10px]  text-slate-400  tracking-[0.2em]">Review Items from {selectedPoForSo.po_number}</h4>
+                    <span className="text-[10px]  text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full ">
                       {soItems?.length || 0} Items
                     </span>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
-                      <thead className="bg-slate-50/30 text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      <thead className="bg-slate-50/30 text-slate-400  tracking-wider border-b border-slate-100">
                         <tr>
-                          <th className="px-5 py-3 text-left font-bold">Description</th>
-                          <th className="px-5 py-3 text-left font-bold w-[180px]">Drawing No</th>
-                          <th className="px-5 py-3 text-right font-bold">Qty</th>
-                          <th className="px-5 py-3 text-left font-bold">Unit</th>
-                          <th className="px-5 py-3 text-right font-bold">Rate</th>
-                          <th className="px-5 py-3 text-right font-bold">Basic Amount</th>
-                          <th className="px-5 py-3 text-right font-bold w-[120px]">BOM</th>
+                          <th className="px-5 py-3 text-left ">Description</th>
+                          <th className="px-5 py-3 text-left  w-[180px]">Drawing No</th>
+                          <th className="px-5 py-3 text-right ">Qty</th>
+                          <th className="px-5 py-3 text-left ">Unit</th>
+                          <th className="px-5 py-3 text-right ">Rate</th>
+                          <th className="px-5 py-3 text-right ">Basic Amount</th>
+                          <th className="px-5 py-3 text-right  w-[120px]">BOM</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {(soItems || []).map((item, idx) => (
                           <React.Fragment key={`so-item-wrapper-${idx}`}>
                             <tr className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-5 py-4">
-                                <p className="font-semibold text-slate-900 text-xs">{item.description}</p>
+                              <td className="p-2">
+                                <p className="text-slate-900 text-xs">{item.description}</p>
                                 {item.item_code && <p className="text-[10px] text-slate-400 mt-0.5">{item.item_code}</p>}
                               </td>
-                              <td className="px-5 py-4">
+                              <td className="p-2">
                                 <input 
                                   className="w-full p-1.5 border border-slate-200 rounded text-[11px] font-mono focus:ring-1 focus:ring-slate-900 focus:outline-none"
                                   value={item.drawing_no || ''}
@@ -337,19 +348,19 @@ const SalesOrders = ({
                                   placeholder="Enter Drawing #"
                                 />
                               </td>
-                              <td className="px-5 py-4 text-right text-slate-900 font-bold">{item.quantity}</td>
-                              <td className="px-5 py-4 text-slate-500 font-medium">{item.unit}</td>
-                              <td className="px-5 py-4 text-right text-slate-600 font-medium">
+                              <td className="p-2 text-right text-slate-900 ">{item.quantity}</td>
+                              <td className="p-2 text-slate-500 font-medium">{item.unit}</td>
+                              <td className="p-2 text-right text-slate-600 font-medium">
                                 {formatCurrency(item.rate, selectedPoForSo.currency)}
                               </td>
-                              <td className="px-5 py-4 text-right text-slate-900 font-bold">
+                              <td className="p-2 text-right text-slate-900 ">
                                 {formatCurrency(item.basic_amount || (item.quantity * item.rate), selectedPoForSo.currency)}
                               </td>
-                              <td className="px-5 py-4 text-right">
+                              <td className="p-2 text-right">
                                 <button 
                                   type="button"
                                   onClick={() => setExpandedItems(prev => ({...prev, [idx]: !prev[idx]}))}
-                                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                                  className={`px-3 py-1.5 rounded-lg text-[10px]   transition-all ${
                                     expandedItems[idx] ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                   }`}
                                 >
@@ -387,19 +398,19 @@ const SalesOrders = ({
                       </tbody>
                     </table>
                   </div>
-                  <div className="px-5 py-4 bg-slate-900 flex justify-between items-center">
+                  <div className="p-2 bg-slate-900 flex justify-between items-center">
                     <div className="flex gap-6">
                       <div className="space-y-0.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Subtotal</p>
-                        <p className="text-sm font-bold text-white">{formatCurrency(selectedPoForSo.subtotal, selectedPoForSo.currency)}</p>
+                        <p className="text-[9px]  text-slate-400  tracking-widest">Subtotal</p>
+                        <p className="text-sm  text-white">{formatCurrency(selectedPoForSo.subtotal, selectedPoForSo.currency)}</p>
                       </div>
                       <div className="space-y-0.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tax Total</p>
-                        <p className="text-sm font-bold text-white">{formatCurrency(selectedPoForSo.tax_total, selectedPoForSo.currency)}</p>
+                        <p className="text-[9px]  text-slate-400  tracking-widest">Tax Total</p>
+                        <p className="text-sm  text-white">{formatCurrency(selectedPoForSo.tax_total, selectedPoForSo.currency)}</p>
                       </div>
                     </div>
                     <div className="text-right space-y-0.5">
-                      <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">Net Payable</p>
+                      <p className="text-[9px]  text-indigo-400  tracking-widest">Net Payable</p>
                       <p className="text-lg font-black text-white">{formatCurrency(selectedPoForSo.net_total, selectedPoForSo.currency)}</p>
                     </div>
                   </div>
@@ -420,14 +431,14 @@ const SalesOrders = ({
           <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
             <button
               type="button"
-              className="px-5 py-2.5 rounded-2xl border border-slate-200 text-slate-600 text-sm font-semibold hover:border-slate-300"
+              className="px-5 py-2.5 rounded-2xl border border-slate-200 text-slate-600 text-sm  hover:border-slate-300"
               onClick={onResetForm}
             >
               Cancel
             </button>
             <button
               type="button"
-              className="px-5 py-2.5 rounded-2xl bg-slate-900 text-white text-sm font-semibold shadow-sm hover:bg-slate-800 disabled:opacity-60"
+              className="px-5 py-2.5 rounded-2xl bg-slate-900 text-white text-sm  shadow-sm hover:bg-slate-800 disabled:opacity-60"
               onClick={onSubmit}
               disabled={loading}
             >
@@ -445,24 +456,24 @@ const SalesOrders = ({
         <div className="flex items-center justify-center py-12">
           <div className="text-center space-y-3">
             <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-slate-500">Refreshing board...</p>
+            <p className="text-xs text-slate-500">Refreshing board...</p>
           </div>
         </div>
       )}
 
       {!loading && hasOrders ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-100 text-slate-500 uppercase tracking-[0.2em] text-[0.65rem]">
+          <table className="w-full text-sm bg-white">
+            <thead className="bg-slate-100 text-slate-500  text-xs">
               <tr>
-                <th className="px-5 py-4 text-left font-semibold">Order Code</th>
-                <th className="px-5 py-4 text-left font-semibold">Customer / Project</th>
-                <th className="px-5 py-4 text-left font-semibold">PO Number</th>
-                <th className="px-5 py-4 text-left font-semibold">PO Date</th>
-                <th className="px-5 py-4 text-left font-semibold">Net Value</th>
-                <th className="px-5 py-4 text-left font-semibold">Priority</th>
-                <th className="px-5 py-4 text-left font-semibold">Status</th>
-                <th className="px-5 py-4 text-right font-semibold">Actions</th>
+                <th className="p-2 text-left text-thin">Order Code</th>
+                <th className="p-2 text-left text-thin">Customer / Project</th>
+                <th className="p-2 text-left text-thin">PO Number</th>
+                <th className="p-2 text-left text-thin">PO Date</th>
+                <th className="p-2 text-left text-thin">Net Value</th>
+                <th className="p-2 text-left text-thin">Priority</th>
+                <th className="p-2 text-left text-thin">Status</th>
+                <th className="p-2 text-right text-thin">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -477,50 +488,57 @@ const SalesOrders = ({
 
                 return (
                   <tr key={`so-row-${order.id}`} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="px-5 py-5 align-middle">
-                      <p className="font-bold text-slate-900">{formatOrderCode(order.id)}</p>
+                    <td className="p-2 align-middle">
+                      <p className="text-slate-900">{formatOrderCode(order.id)}</p>
                     </td>
-                    <td className="px-5 py-5 align-middle">
-                      <p className="font-semibold text-slate-900 text-xs">{order.company_name || '—'}</p>
+                    <td className="p-2 align-middle">
+                      <p className="text-slate-900 text-xs">{order.company_name || '—'}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{order.project_name || '—'}</p>
                     </td>
-                    <td className="px-5 py-5 text-slate-600 align-middle">
+                    <td className="p-2 text-slate-600 align-middle text-xs">
                       {order.po_number || '—'}
                     </td>
-                    <td className="px-5 py-5 text-slate-600 align-middle">
+                    <td className="p-2 text-slate-600 align-middle text-xs">
                       {formatDate(order.po_date)}
                     </td>
-                    <td className="px-5 py-5 text-slate-900 font-semibold align-middle">
+                    <td className="p-2 text-slate-900  align-middle">
                       {hasNetValue ? formatCurrency(netValue, order.po_currency) : '—'}
                     </td>
-                    <td className="px-5 py-5 align-middle">
-                      <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">
+                    <td className="p-2 align-middle">
+                      <span className="text-xs text-slate-600 tracking-tight">
                         {formatPriority(order.production_priority)}
                       </span>
                     </td>
-                    <td className="px-5 py-5 align-middle">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeClasses}`}>
+                    <td className="p-2 align-middle">
+                      <span className={`px-3 py-1 rounded-full text-[10px]   tracking-wider border ${badgeClasses}`}>
                         {formatStatus(order.status)}
                       </span>
                     </td>
-                    <td className="px-5 py-5 align-middle">
+                    <td className="p-2 align-middle">
                       <div className="flex justify-end gap-2">
                         {canViewPo && (
                           <button
                             type="button"
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                            className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition"
                             onClick={() => onViewPo(order.customer_po_id)}
+                            title="View PO Details"
                           >
-                            Details
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
                           </button>
                         )}
                         {normalizedStatus === 'CREATED' && typeof onSendOrder === 'function' && (
                           <button
                             type="button"
-                            className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition shadow-sm"
+                            className="p-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm"
                             onClick={() => onSendOrder(order.id)}
+                            title="Send Order"
                           >
-                            Send
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
                           </button>
                         )}
                         {soPdfUrl && (
@@ -566,12 +584,12 @@ const SalesOrders = ({
               </svg>
             </div>
             <div>
-              <p className="text-base font-bold text-slate-900">No Sales Orders Found</p>
-              <p className="text-sm text-slate-500 max-w-xs mx-auto mt-1">Push a Customer PO to start the workflow or refresh the list.</p>
+              <p className="text-base text-slate-900">No Sales Orders Found</p>
+              <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1">Push a Customer PO to start the workflow or refresh the list.</p>
             </div>
             <button
               type="button"
-              className="px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition"
+              className="px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-sm  text-slate-700 shadow-sm hover:bg-slate-50 transition"
               onClick={onRefresh}
             >
               Refresh List

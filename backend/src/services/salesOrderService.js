@@ -36,10 +36,9 @@ const getIncomingOrders = async (departmentCode) => {
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
      LEFT JOIN (
-       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit,
-              ROW_NUMBER() OVER (PARTITION BY sales_order_id ORDER BY id ASC) as rn
+       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit
        FROM sales_order_items
-     ) soi ON soi.sales_order_id = so.id AND soi.rn = 1
+     ) soi ON soi.sales_order_id = so.id
      WHERE (${whereClause}) AND so.request_accepted = 0
      ORDER BY so.created_at DESC`;
   
@@ -205,14 +204,19 @@ const approveDesignAndCreateQuotation = async (salesOrderId) => {
       ['DESIGN_APPROVED', 'SALES', salesOrderId]
     );
     
-    const [quotationResult] = await connection.execute(
-      `INSERT INTO quotation_requests (sales_order_id, company_id, status, created_at)
-       VALUES (?, ?, ?, NOW())`,
-      [salesOrderId, order.company_id, 'PENDING']
-    );
+    // Create quotation requests for each item
+    const [items] = await connection.query('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [salesOrderId]);
+    
+    for (const item of items) {
+      await connection.execute(
+        `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, created_at)
+         VALUES (?, ?, ?, ?, NOW())`,
+        [salesOrderId, item.id, order.company_id, 'PENDING']
+      );
+    }
     
     await connection.commit();
-    return quotationResult.insertId;
+    return true;
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -271,11 +275,14 @@ const bulkApproveDesigns = async (orderIds) => {
     );
     
     for (const order of orders) {
-      await connection.execute(
-        `INSERT INTO quotation_requests (sales_order_id, company_id, status, created_at)
-         VALUES (?, ?, ?, NOW())`,
-        [order.id, order.company_id, 'PENDING']
-      );
+      const [items] = await connection.query('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [order.id]);
+      for (const item of items) {
+        await connection.execute(
+          `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, created_at)
+           VALUES (?, ?, ?, ?, NOW())`,
+          [order.id, item.id, order.company_id, 'PENDING']
+        );
+      }
     }
     
     await connection.commit();
@@ -449,10 +456,10 @@ const generateSalesOrderPDF = async (salesOrderId) => {
         .order-meta { text-align: right; }
         .order-meta p { margin: 2px 0; font-size: 14px; }
         .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-        .section-title { font-weight: bold; font-size: 12px; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
+        .section-title { font-weight: bold; font-size: 12px; text-transform: ; color: #64748b; margin-bottom: 8px; }
         .info-box { background: #f8fafc; padding: 12px; border-radius: 6px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #f1f5f9; text-align: left; padding: 10px; font-size: 12px; text-transform: uppercase; color: #475569; }
+        th { background: #f1f5f9; text-align: left; padding: 10px; font-size: 12px; text-transform: ; color: #475569; }
         td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
         .totals { margin-top: 20px; float: right; width: 250px; }
         .total-row { display: flex; justify-content: space-between; padding: 5px 0; }

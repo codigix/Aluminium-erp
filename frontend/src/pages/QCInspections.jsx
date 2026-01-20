@@ -1,16 +1,35 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { 
+  Search, 
+  Plus,
+  Eye,
+  Edit,
+  Trash2,
+  X,
+  Clock,
+  RotateCcw,
+  CheckCircle,
+  XCircle,
+  Inbox,
+  Calendar,
+  User,
+  ListTodo,
+  MessageSquare,
+  AlertTriangle,
+  FileText
+} from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const qcStatusColors = {
-  PENDING: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
-  IN_PROGRESS: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'In Progress' },
-  PASSED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', label: 'Passed' },
-  FAILED: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600', badge: 'bg-red-100 text-red-700', label: 'Failed' },
-  SHORTAGE: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', label: 'Shortage' },
-  ACCEPTED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', label: 'Accepted' }
+  PENDING: { badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Pending' },
+  IN_PROGRESS: { badge: 'bg-blue-100 text-blue-700 border-blue-200', label: 'In Progress' },
+  PASSED: { badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Passed' },
+  FAILED: { badge: 'bg-red-100 text-red-700 border-red-200', label: 'Failed' },
+  SHORTAGE: { badge: 'bg-orange-100 text-orange-700 border-orange-200', label: 'Shortage' },
+  ACCEPTED: { badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Accepted' }
 };
 
 const QCInspections = () => {
@@ -146,7 +165,12 @@ const QCInspections = () => {
 
       if (!response.ok) throw new Error('Failed to create QC Inspection');
 
-      await Swal.fire('Success', 'QC Inspection created successfully', 'success');
+      await Swal.fire({
+        title: 'Success',
+        text: 'QC Inspection created successfully',
+        icon: 'success',
+        confirmButtonColor: '#4f46e5'
+      });
       setShowModal(false);
       setFormData({
         grnId: '',
@@ -202,7 +226,12 @@ const QCInspections = () => {
         throw new Error(errorData.message || 'Failed to update QC Inspection');
       }
 
-      await Swal.fire('Success', 'QC Inspection updated successfully', 'success');
+      await Swal.fire({
+        title: 'Updated',
+        text: 'Inspection status updated successfully',
+        icon: 'success',
+        confirmButtonColor: '#4f46e5'
+      });
       setShowEditModal(false);
       fetchQCInspections();
       fetchStats();
@@ -213,13 +242,14 @@ const QCInspections = () => {
 
   const handleDeleteQC = async (qcId) => {
     const result = await Swal.fire({
-      title: 'Delete QC Inspection?',
-      text: 'This action cannot be undone',
+      title: 'Delete Inspection?',
+      text: 'This action cannot be undone and will affect inventory records.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Delete',
       cancelButtonText: 'Cancel',
-      confirmButtonColor: '#dc2626'
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#94a3b8'
     });
 
     if (!result.isConfirmed) return;
@@ -236,7 +266,12 @@ const QCInspections = () => {
 
       if (!response.ok) throw new Error('Failed to delete QC Inspection');
 
-      await Swal.fire('Success', 'QC Inspection deleted successfully', 'success');
+      await Swal.fire({
+        title: 'Deleted',
+        text: 'QC Inspection has been removed',
+        icon: 'success',
+        confirmButtonColor: '#4f46e5'
+      });
       fetchQCInspections();
       fetchStats();
     } catch (error) {
@@ -251,202 +286,274 @@ const QCInspections = () => {
     qc.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const StatMiniCard = ({ label, value, icon: Icon, colorClass }) => (
+    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+      <div className={`p-2 rounded-lg ${colorClass}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</p>
+        <p className="text-sm text-slate-900 leading-tight">{value}</p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      <Card title="QC Inspections" subtitle="Manage Quality Control Inspections">
-        <div className="flex gap-4 justify-between items-center mb-6">
-          <div className="flex-1">
+    <div className="space-y-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h2 className="text-xl font-bold text-slate-900">QC Inspections</h2>
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
+        >
+          <Plus className="w-5 h-5" />
+          Create Inspection
+        </button>
+      </div>
+
+      <Card>
+        <div className="space-y-3">
+          <div className="relative w-full max-w-md">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search inspection, GRN, PO or vendor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
             />
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
-          >
-            + Create Inspection
-          </button>
-        </div>
 
-        {loading ? (
-          <p className="text-sm text-slate-400">Loading QC Inspections...</p>
-        ) : filteredQC.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500 mb-3">No QC Inspections {searchTerm ? 'found' : 'created yet'}</p>
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
-            >
-              + Create Inspection
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold">GRN #</th>
-                  <th className="px-4 py-3 text-left font-semibold">PO No</th>
-                  <th className="px-4 py-3 text-left font-semibold">Vendor</th>
-                  <th className="px-4 py-3 text-right font-semibold">Items</th>
-                  <th className="px-4 py-3 text-right font-semibold">Accepted</th>
-                  <th className="px-4 py-3 text-right font-semibold">Shortage</th>
-                  <th className="px-4 py-3 text-right font-semibold">Overage</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredQC.map((qc) => (
-                  <tr key={`qc-${qc.id}`} className="border-t border-slate-100">
-                    <td className="px-4 py-4 font-medium text-slate-900">GRN-{String(qc.grn_id).padStart(4, '0')}</td>
-                    <td className="px-4 py-4 text-slate-600">{qc.po_number || '—'}</td>
-                    <td className="px-4 py-4 text-slate-600">{qc.vendor_name || '—'}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-slate-900 text-xs">{qc.items || 0}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-emerald-600">{qc.accepted_quantity || 0}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-orange-600">{qc.shortage || 0}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-blue-600">{qc.overage || 0}</td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${qcStatusColors[qc.status]?.badge}`}>
-                        {qcStatusColors[qc.status]?.label || qc.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button onClick={() => handleViewQC(qc)} className="px-3 py-1 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium">👁 View</button>
-                      <button onClick={() => handleEditQC(qc)} className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium">✎ Edit</button>
-                      <button onClick={() => handleDeleteQC(qc.id)} className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium">🗑</button>
-                    </td>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-24">
+              <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4" />
+              <p className="text-sm font-medium text-slate-500">Retrieving inspection records...</p>
+            </div>
+          ) : filteredQC.length === 0 ? (
+            <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm text-slate-300 mb-4">
+                <Inbox className="w-8 h-8" />
+              </div>
+              <p className="text-slate-900 font-bold">No inspections found</p>
+              <p className="text-slate-500 text-sm mt-1">
+                {searchTerm ? "Try adjusting your search terms." : "Start by creating your first quality inspection."}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">GRN #</th>
+                    <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">PO & Vendor</th>
+                    <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Total Qty</th>
+                    <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Pass/Fail</th>
+                    <th className="p-2 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
+                    <th className="p-2 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {filteredQC.map((qc) => (
+                    <tr key={`qc-${qc.id}`} className="hover:bg-indigo-50/30 transition-colors group">
+                      <td className="p-2 font-mono font-bold text-indigo-600">
+                        GRN-{String(qc.grn_id).padStart(4, '0')}
+                      </td>
+                      <td className="p-2">
+                        <div className="font-medium text-slate-900">{qc.po_number || '—'}</div>
+                        <div className="text-xs text-slate-500">{qc.vendor_name || '—'}</div>
+                      </td>
+                      <td className="p-2 text-right font-mono font-bold text-slate-900">
+                        {qc.items || 0}
+                      </td>
+                      <td className="p-2 text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="text-emerald-600 font-bold">{qc.pass_quantity || qc.accepted_quantity || 0}</span>
+                          <span className="text-red-500 text-[10px] font-bold">Fail: {qc.fail_quantity || 0}</span>
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
+                          {qcStatusColors[qc.status]?.label || qc.status}
+                        </span>
+                      </td>
+                      <td className="p-2 text-right">
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleViewQC(qc)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors shadow-sm bg-white border border-slate-100">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleEditQC(qc)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shadow-sm bg-white border border-slate-100">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDeleteQC(qc.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shadow-sm bg-white border border-slate-100">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </Card>
 
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">Pending</p>
-            <p className="text-2xl font-bold text-yellow-900">{stats.pendingQc || 0}</p>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">In Progress</p>
-            <p className="text-2xl font-bold text-blue-900">{stats.inProgressQc || 0}</p>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Passed</p>
-            <p className="text-2xl font-bold text-emerald-900">{stats.passedQc || 0}</p>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-xs text-red-600 font-semibold uppercase tracking-wider mb-1">Failed</p>
-            <p className="text-2xl font-bold text-red-900">{stats.failedQc || 0}</p>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatMiniCard 
+            label="Pending" 
+            value={stats.pendingQc || 0} 
+            icon={Clock} 
+            colorClass="bg-amber-50 text-amber-600" 
+          />
+          <StatMiniCard 
+            label="In Progress" 
+            value={stats.inProgressQc || 0} 
+            icon={RotateCcw} 
+            colorClass="bg-blue-50 text-blue-600" 
+          />
+          <StatMiniCard 
+            label="Passed" 
+            value={stats.passedQc || 0} 
+            icon={CheckCircle} 
+            colorClass="bg-emerald-50 text-emerald-600" 
+          />
+          <StatMiniCard 
+            label="Failed" 
+            value={stats.failedQc || 0} 
+            icon={XCircle} 
+            colorClass="bg-red-50 text-red-600" 
+          />
         </div>
       )}
 
+      {/* Create Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Create QC Inspection</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-500 text-2xl">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">New QC Inspection</h3>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Quality Assurance</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleCreateQC} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Select GRN *</label>
-                <select
-                  value={formData.grnId}
-                  onChange={(e) => setFormData({...formData, grnId: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">-- Select a GRN --</option>
-                  {grns.map(grn => (
-                    <option key={grn.id} value={grn.id}>
-                      GRN-{String(grn.id).padStart(4, '0')} - {grn.poNumber} ({grn.receivedQuantity} items)
-                    </option>
-                  ))}
-                </select>
+            <form onSubmit={handleCreateQC} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Select GRN *</label>
+                <div className="relative">
+                  <Inbox className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={formData.grnId}
+                    onChange={(e) => setFormData({...formData, grnId: e.target.value})}
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none"
+                    required
+                  >
+                    <option value="">-- Choose a pending GRN --</option>
+                    {grns.map(grn => (
+                      <option key={grn.id} value={grn.id}>
+                        GRN-{String(grn.id).padStart(4, '0')} - {grn.poNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Inspection Date *</label>
-                <input
-                  type="date"
-                  value={formData.inspectionDate}
-                  onChange={(e) => setFormData({...formData, inspectionDate: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Inspection Date *</label>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="date"
+                    value={formData.inspectionDate}
+                    onChange={(e) => setFormData({...formData, inspectionDate: e.target.value})}
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    required
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Pass Quantity *</label>
-                  <input
-                    type="number"
-                    value={formData.passQuantity}
-                    onChange={(e) => setFormData({...formData, passQuantity: e.target.value})}
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                    min="0"
-                  />
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Pass Qty *</label>
+                  <div className="relative">
+                    <CheckCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" />
+                    <input
+                      type="number"
+                      value={formData.passQuantity}
+                      onChange={(e) => setFormData({...formData, passQuantity: e.target.value})}
+                      placeholder="0"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      required
+                      min="0"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Fail Quantity</label>
-                  <input
-                    type="number"
-                    value={formData.failQuantity}
-                    onChange={(e) => setFormData({...formData, failQuantity: e.target.value})}
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min="0"
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Fail Qty</label>
+                  <div className="relative">
+                    <XCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-red-500" />
+                    <input
+                      type="number"
+                      value={formData.failQuantity}
+                      onChange={(e) => setFormData({...formData, failQuantity: e.target.value})}
+                      placeholder="0"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      min="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Defects Found</label>
+                <div className="relative">
+                  <AlertTriangle className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <textarea
+                    value={formData.defects}
+                    onChange={(e) => setFormData({...formData, defects: e.target.value})}
+                    placeholder="Describe any quality issues..."
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[60px]"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Defects/Issues</label>
-                <textarea
-                  value={formData.defects}
-                  onChange={(e) => setFormData({...formData, defects: e.target.value})}
-                  placeholder="Describe any defects or issues found"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows="2"
-                />
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Remarks</label>
+                <div className="relative">
+                  <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <textarea
+                    value={formData.remarks}
+                    onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+                    placeholder="General inspection notes..."
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[60px]"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Remarks</label>
-                <textarea
-                  value={formData.remarks}
-                  onChange={(e) => setFormData({...formData, remarks: e.target.value})}
-                  placeholder="Add inspection remarks"
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows="2"
-                />
-              </div>
-
-              <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
+              <div className="flex gap-3 justify-end pt-4">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="px-6 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
                 >
                   Create Inspection
                 </button>
@@ -456,171 +563,194 @@ const QCInspections = () => {
         </div>
       )}
 
+      {/* View Modal */}
       {showViewModal && selectedQC && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 sticky top-0 bg-white">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">QC Inspection - GRN-{String(selectedQC.grn_id).padStart(4, '0')}</h3>
-              <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
+            <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <EyeIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Inspection Details</h3>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">GRN-{String(selectedQC.grn_id).padStart(4, '0')}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowViewModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6 pb-4 border-b border-slate-200">
-              <div>
-                <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">PO Number</p>
-                <p className="text-lg font-bold text-slate-900">{selectedQC.po_number || '—'}</p>
+            <div className="p-6 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-slate-100 rounded-xl text-slate-500">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">PO Number</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedQC.po_number || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-slate-100 rounded-xl text-slate-500">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Vendor</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedQC.vendor_name || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-slate-100 rounded-xl text-slate-500">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</p>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${qcStatusColors[selectedQC.status]?.badge}`}>
+                      {qcStatusColors[selectedQC.status]?.label || selectedQC.status}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">Vendor</p>
-                <p className="text-lg font-bold text-slate-900">{selectedQC.vendor_name || '—'}</p>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="bg-slate-50 p-3 rounded">
-                <p className="text-xs text-slate-600 uppercase tracking-wider font-semibold mb-1">Status</p>
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${qcStatusColors[selectedQC.status]?.badge}`}>
-                  {qcStatusColors[selectedQC.status]?.label || selectedQC.status}
-                </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <StatMiniCard label="Items Ordered" value={selectedQC.items || 0} icon={ListTodo} colorClass="bg-blue-50 text-blue-600" />
+                <StatMiniCard label="Accepted" value={selectedQC.accepted_quantity || 0} icon={CheckCircle} colorClass="bg-emerald-50 text-emerald-600" />
+                <StatMiniCard label="Pass Qty" value={selectedQC.pass_quantity || 0} icon={CheckCircle} colorClass="bg-indigo-50 text-indigo-600" />
+                <StatMiniCard label="Fail Qty" value={selectedQC.fail_quantity || 0} icon={XCircle} colorClass="bg-red-50 text-red-600" />
+                <StatMiniCard label="Shortage" value={selectedQC.shortage || 0} icon={AlertTriangle} colorClass="bg-orange-50 text-orange-600" />
               </div>
-              <div className="bg-blue-50 p-3 rounded">
-                <p className="text-xs text-blue-600 uppercase tracking-wider font-semibold mb-1">Items (Ordered)</p>
-                <p className="text-lg font-bold text-blue-600">{selectedQC.items || 0}</p>
-              </div>
-              <div className="bg-emerald-50 p-3 rounded">
-                <p className="text-xs text-emerald-600 uppercase tracking-wider font-semibold mb-1">Accepted Qty</p>
-                <p className="text-lg font-bold text-emerald-600">{selectedQC.accepted_quantity || 0}</p>
-              </div>
-              <div className="bg-orange-50 p-3 rounded">
-                <p className="text-xs text-orange-600 uppercase tracking-wider font-semibold mb-1">Shortage</p>
-                <p className="text-lg font-bold text-orange-600">{selectedQC.shortage || 0}</p>
-              </div>
-              <div className="bg-cyan-50 p-3 rounded">
-                <p className="text-xs text-cyan-600 uppercase tracking-wider font-semibold mb-1">Overage</p>
-                <p className="text-lg font-bold text-cyan-600">{selectedQC.overage || 0}</p>
-              </div>
-              <div className="bg-emerald-50 p-3 rounded">
-                <p className="text-xs text-emerald-600 uppercase tracking-wider font-semibold mb-1">Pass Quantity</p>
-                <p className="text-lg font-bold text-emerald-600">{selectedQC.pass_quantity || 0}</p>
-              </div>
-              <div className="bg-red-50 p-3 rounded">
-                <p className="text-xs text-red-600 uppercase tracking-wider font-semibold mb-1">Fail Quantity</p>
-                <p className="text-lg font-bold text-red-600">{selectedQC.fail_quantity || 0}</p>
-              </div>
-            </div>
 
-            {selectedQC.items_detail && selectedQC.items_detail.length > 0 && (
-              <div className="mb-6">
-                <h4 className="text-sm font-semibold text-slate-900 text-xs mb-3">Items Inspection</h4>
-                <div className="overflow-x-auto border border-slate-200 rounded">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-widest">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-semibold">Item Details</th>
-                        <th className="px-3 py-2 text-right font-semibold">Expected</th>
-                        <th className="px-3 py-2 text-center font-semibold">Invoice Qty</th>
-                        <th className="px-3 py-2 text-right font-semibold">Received</th>
-                        <th className="px-3 py-2 text-right font-semibold">Shortage</th>
-                        <th className="px-3 py-2 text-right font-semibold">Overage</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedQC.items_detail.map((item) => (
-                        <tr key={item.id} className="border-t border-slate-100">
-                          <td className="px-3 py-2">
-                            <p className="font-medium text-slate-900">{item.item_code || 'N/A'}</p>
-                            {item.description && <p className="text-xs text-slate-500">{item.description}</p>}
-                          </td>
-                          <td className="px-3 py-2 text-right font-semibold text-slate-900 text-xs">{item.ordered_qty}</td>
-                          <td className="px-3 py-2 text-center font-semibold text-slate-900 text-xs">{item.ordered_qty}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-emerald-600">{item.received_qty}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-orange-600">{item.shortage || 0}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-cyan-600">{item.overage || 0}</td>
+              {selectedQC.items_detail && selectedQC.items_detail.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-[0.2em]">Items Verification</h4>
+                  <div className="overflow-hidden rounded-xl border border-slate-200">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="px-4 py-3 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Item Code</th>
+                          <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Ordered</th>
+                          <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Received</th>
+                          <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider text-[10px]">Shortage</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedQC.items_detail.map((item) => (
+                          <tr key={item.id}>
+                            <td className="px-4 py-3">
+                              <p className="font-bold text-slate-900">{item.item_code || 'N/A'}</p>
+                              {item.description && <p className="text-[10px] text-slate-500 uppercase">{item.description}</p>}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{item.ordered_qty}</td>
+                            <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">{item.received_qty}</td>
+                            <td className="px-4 py-3 text-right font-mono font-bold text-orange-600">{item.shortage || 0}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
+                <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-2">Defects Identified</p>
+                  <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                    {selectedQC.defects || "No specific defects reported."}
+                  </p>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2">Final Remarks</p>
+                  <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                    {selectedQC.remarks || "No additional remarks."}
+                  </p>
                 </div>
               </div>
-            )}
+            </div>
 
-            {(selectedQC.defects || selectedQC.remarks) && (
-              <div className="mb-6 pt-4 border-t border-slate-200">
-                <h4 className="text-sm font-semibold text-slate-900 text-xs mb-3">General Remarks</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  {selectedQC.defects && (
-                    <div className="bg-yellow-50 border border-yellow-200 p-4 rounded">
-                      <p className="text-xs text-yellow-600 uppercase tracking-wider font-semibold mb-2">Defects</p>
-                      <p className="text-slate-700 text-sm">{selectedQC.defects}</p>
-                    </div>
-                  )}
-
-                  {selectedQC.remarks && (
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded">
-                      <p className="text-xs text-blue-600 uppercase tracking-wider font-semibold mb-2">Remarks</p>
-                      <p className="text-slate-700 text-sm">{selectedQC.remarks}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
+            <div className="p-2 bg-slate-50 border-t border-slate-100 flex justify-end">
               <button
                 onClick={() => setShowViewModal(false)}
-                className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                className="px-6 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all"
               >
-                Close
+                Close View
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Edit Modal */}
       {showEditModal && selectedQC && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 text-xs">Edit QC Inspection</h3>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                  <Edit className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Update Status</h3>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">QC-{String(selectedQC.id).padStart(4, '0')}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowEditModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleUpdateQC} className="space-y-4">
-              <div className="bg-slate-50 p-3 rounded text-sm">
-                <p className="text-slate-600"><span className="font-medium">Inspection #:</span> QC-{String(selectedQC.id).padStart(4, '0')}</p>
-                <p className="text-slate-600"><span className="font-medium">GRN #:</span> GRN-{String(selectedQC.grn_id).padStart(4, '0')}</p>
-                <p className="text-slate-600"><span className="font-medium">Pass Qty:</span> {selectedQC.pass_quantity}</p>
-                <p className="text-slate-600"><span className="font-medium">Fail Qty:</span> {selectedQC.fail_quantity || 0}</p>
+            <form onSubmit={handleUpdateQC} className="p-6 space-y-3">
+              <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 font-bold uppercase tracking-wider">Pass Quantity:</span>
+                  <span className="text-emerald-600 font-bold">{selectedQC.pass_quantity}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 font-bold uppercase tracking-wider">Fail Quantity:</span>
+                  <span className="text-red-500 font-bold">{selectedQC.fail_quantity || 0}</span>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                <select
-                  value={editFormData.status}
-                  onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">-- Select Status --</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="PASSED">Passed</option>
-                  <option value="FAILED">Failed</option>
-                </select>
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">Update Decision Status *</label>
+                <div className="relative">
+                  <RotateCcw className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none"
+                    required
+                  >
+                    <option value="">-- Select Status --</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="PASSED">Passed</option>
+                    <option value="FAILED">Failed</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
+              <div className="flex gap-3 justify-end pt-2">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="px-6 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
                 >
-                  Update Inspection
+                  Update Decision
                 </button>
               </div>
             </form>

@@ -61,54 +61,72 @@ const InventoryDashboard = () => {
   };
 
   const StatCard = ({ title, count, color, icon }) => (
-    <div className={`${color} rounded-lg p-4 border border-slate-200`}>
+    <div className={`${color} rounded-lg p-5 border border-slate-200 transition-all hover:shadow-sm`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider mb-1">{title}</p>
+          <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase mb-1">{title}</p>
           <p className="text-2xl font-bold text-slate-900">{count}</p>
         </div>
-        <div className="text-2xl">{icon}</div>
+        <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
+          {icon}
+        </div>
       </div>
     </div>
   );
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center space-y-3">
-          <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-slate-500">Loading inventory data...</p>
+      <div className="flex items-center justify-center py-24">
+        <div className="text-center space-y-4">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 font-medium">Fetching inventory insights...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Incoming Orders" 
           count={stats.incomingPos.length} 
-          color="bg-blue-50"
-          icon="📊"
+          color="bg-indigo-50"
+          icon={
+            <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          }
         />
         <StatCard 
           title="Material Requests" 
           count={stats.materialRequests.length} 
           color="bg-emerald-50"
-          icon="📝"
+          icon={
+            <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+          }
         />
         <StatCard 
           title="Pending GRNs" 
           count={stats.pendingGRNs.length} 
           color="bg-amber-50"
-          icon="📋"
+          icon={
+            <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
         />
         <StatCard 
           title="Low Stock Items" 
           count={stats.lowStockItems.length} 
-          color="bg-orange-50"
-          icon="⚠️"
+          color="bg-rose-50"
+          icon={
+            <svg className="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          }
         />
       </div>
 
@@ -120,14 +138,14 @@ const InventoryDashboard = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Order Code</th>
-                  <th className="px-4 py-3 text-left font-semibold">Customer</th>
-                  <th className="px-4 py-3 text-left font-semibold">Project</th>
-                  <th className="px-4 py-3 text-right font-semibold">Amount</th>
-                  <th className="px-4 py-3 text-left font-semibold">Target Dispatch</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
+                  <th className="px-4 py-3 text-left ">Order Code</th>
+                  <th className="px-4 py-3 text-left ">Customer</th>
+                  <th className="px-4 py-3 text-left ">Project</th>
+                  <th className="px-4 py-3 text-right ">Amount</th>
+                  <th className="px-4 py-3 text-left ">Target Dispatch</th>
+                  <th className="px-4 py-3 text-left ">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -143,7 +161,7 @@ const InventoryDashboard = () => {
                       {order.target_dispatch_date ? new Date(order.target_dispatch_date).toLocaleDateString() : '—'}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                      <span className="px-2 py-1 rounded-full text-xs  bg-blue-100 text-blue-700">
                         {order.status?.replace(/_/g, ' ')}
                       </span>
                     </td>
@@ -163,13 +181,13 @@ const InventoryDashboard = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Request No</th>
-                  <th className="px-4 py-3 text-left font-semibold">Material</th>
-                  <th className="px-4 py-3 text-right font-semibold">Qty</th>
-                  <th className="px-4 py-3 text-left font-semibold">Req. Date</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
+                  <th className="px-4 py-3 text-left ">Request No</th>
+                  <th className="px-4 py-3 text-left ">Material</th>
+                  <th className="px-4 py-3 text-right ">Qty</th>
+                  <th className="px-4 py-3 text-left ">Req. Date</th>
+                  <th className="px-4 py-3 text-left ">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,7 +202,7 @@ const InventoryDashboard = () => {
                       {req.required_date ? new Date(req.required_date).toLocaleDateString() : '—'}
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      <span className={`px-2 py-1 rounded-full text-[10px]   tracking-wider ${
                         req.status === 'PENDING' ? 'bg-orange-100 text-orange-600' : 
                         req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-600' : 
                         'bg-slate-100 text-slate-600'
@@ -208,13 +226,13 @@ const InventoryDashboard = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">GRN ID</th>
-                  <th className="px-4 py-3 text-left font-semibold">PO Number</th>
-                  <th className="px-4 py-3 text-right font-semibold">Qty Received</th>
-                  <th className="px-4 py-3 text-left font-semibold">Date</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
+                  <th className="px-4 py-3 text-left ">GRN ID</th>
+                  <th className="px-4 py-3 text-left ">PO Number</th>
+                  <th className="px-4 py-3 text-right ">Qty Received</th>
+                  <th className="px-4 py-3 text-left ">Date</th>
+                  <th className="px-4 py-3 text-left ">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,7 +247,7 @@ const InventoryDashboard = () => {
                       {new Date(grn.grn_date).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                      <span className="px-2 py-1 rounded-full text-xs  bg-amber-100 text-amber-700">
                         {grn.status}
                       </span>
                     </td>
@@ -249,12 +267,12 @@ const InventoryDashboard = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.2em] text-xs">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Item Code</th>
-                  <th className="px-4 py-3 text-left font-semibold">Description</th>
-                  <th className="px-4 py-3 text-right font-semibold">Current Balance</th>
-                  <th className="px-4 py-3 text-left font-semibold">Unit</th>
+                  <th className="px-4 py-3 text-left ">Item Code</th>
+                  <th className="px-4 py-3 text-left ">Description</th>
+                  <th className="px-4 py-3 text-right ">Current Balance</th>
+                  <th className="px-4 py-3 text-left ">Unit</th>
                 </tr>
               </thead>
               <tbody>
@@ -263,7 +281,7 @@ const InventoryDashboard = () => {
                     <td className="px-4 py-4 font-medium text-slate-900">{item.item_code}</td>
                     <td className="px-4 py-4 text-slate-600 text-xs max-w-xs truncate">{item.item_description}</td>
                     <td className="px-4 py-4 text-right">
-                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                      <span className="px-2 py-1 rounded-full text-xs  bg-orange-100 text-orange-700">
                         {parseFloat(item.current_balance || 0).toFixed(3)}
                       </span>
                     </td>

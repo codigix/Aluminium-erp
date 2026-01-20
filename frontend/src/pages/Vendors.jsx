@@ -18,12 +18,16 @@ const StarRating = ({ rating }) => {
   return (
     <div className="flex items-center gap-1">
       {[...Array(filled)].map((_, i) => (
-        <span key={`filled-${i}`} className="text-yellow-400">★</span>
+        <svg key={`filled-${i}`} className="w-4 h-4 text-yellow-400 fill-current" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
       ))}
       {[...Array(empty)].map((_, i) => (
-        <span key={`empty-${i}`} className="text-slate-300">★</span>
+        <svg key={`empty-${i}`} className="w-4 h-4 text-slate-300 fill-current" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
       ))}
-      <span className="text-sm text-slate-600 ml-1">{numRating.toFixed(1)}</span>
+      <span className="text-sm text-slate-600 ml-1 font-medium">{numRating.toFixed(1)}</span>
     </div>
   );
 };
@@ -214,13 +218,8 @@ const Vendors = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const getFilterValue = () => {
-    if (filterStatus === 'All Vendors') return 'All Vendors';
-    return vendorStatusColors[filterStatus]?.label || filterStatus;
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card title="Vendor Management" subtitle="Manage and track vendor relationships">
         <div className="flex gap-4 justify-between items-center mb-6">
           <div className="flex-1">
@@ -247,15 +246,21 @@ const Vendors = () => {
           <div className="flex gap-2">
             <button
               onClick={handleExportList}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm  hover:bg-blue-700 transition-colors"
             >
-              ⬇ Export List
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export
             </button>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm  hover:bg-emerald-700 transition-colors"
             >
-              + Add Vendor
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Vendor
             </button>
           </div>
         </div>
@@ -265,7 +270,7 @@ const Vendors = () => {
             <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-blue-50 border-b border-blue-200 p-2 flex justify-between items-center">
                 <div>
-                  <h2 className="text-base font-semibold text-slate-900 text-xs">Add New Vendor</h2>
+                  <h2 className="text-base text-slate-900 text-xs">Add New Vendor</h2>
                   <p className="text-xs text-blue-600">Fill in the vendor details below</p>
                 </div>
                 <button
@@ -276,12 +281,12 @@ const Vendors = () => {
                 </button>
               </div>
 
-              <form onSubmit={handleAddVendor} className="p-6 space-y-6">
+              <form onSubmit={handleAddVendor} className="p-6 space-y-3">
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4">Basic Information</h3>
+                  <h3 className="text-xs text-slate-900  tracking-wider mb-4">Basic Information</h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Vendor Name <span className="text-red-500">*</span></label>
+                      <label className="block text-xs text-slate-900 text-xs mb-2">Vendor Name <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         placeholder="Enter vendor name"
@@ -293,7 +298,7 @@ const Vendors = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Contact Person</label>
+                      <label className="block text-xs text-slate-900 text-xs mb-2">Contact Person</label>
                       <input
                         type="text"
                         placeholder="Contact person name"
@@ -305,7 +310,7 @@ const Vendors = () => {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Category</label>
+                        <label className="block text-xs text-slate-900 text-xs mb-2">Category</label>
                         <input
                           type="text"
                           placeholder="e.g., Electronics"
@@ -316,7 +321,7 @@ const Vendors = () => {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Vendor Type <span className="text-red-500">*</span></label>
+                        <label className="block text-xs text-slate-900 text-xs mb-2">Vendor Type <span className="text-red-500">*</span></label>
                         <select
                           value={formData.vendorType}
                           onChange={(e) => setFormData({...formData, vendorType: e.target.value})}
@@ -330,7 +335,7 @@ const Vendors = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Status</label>
+                      <label className="block text-xs text-slate-900 text-xs mb-2">Status</label>
                       <select
                         value={formData.status}
                         onChange={(e) => setFormData({...formData, status: e.target.value})}
@@ -345,11 +350,11 @@ const Vendors = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4">Contact Information</h3>
+                  <h3 className="text-xs text-slate-900  tracking-wider mb-4">Contact Information</h3>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Email</label>
+                        <label className="block text-xs text-slate-900 text-xs mb-2">Email</label>
                         <input
                           type="email"
                           placeholder="vendor@example.com"
@@ -360,7 +365,7 @@ const Vendors = () => {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Phone</label>
+                        <label className="block text-xs text-slate-900 text-xs mb-2">Phone</label>
                         <input
                           type="tel"
                           placeholder="+91 XXXXXXXXXX"
@@ -372,7 +377,7 @@ const Vendors = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Address</label>
+                      <label className="block text-xs text-slate-900 text-xs mb-2">Address</label>
                       <textarea
                         placeholder="Enter vendor address"
                         value={formData.address}
@@ -385,9 +390,9 @@ const Vendors = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4">Performance</h3>
+                  <h3 className="text-xs text-slate-900  tracking-wider mb-4">Performance</h3>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-900 text-xs mb-2">Initial Rating (0-5)</label>
+                    <label className="block text-xs text-slate-900 text-xs mb-2">Initial Rating (0-5)</label>
                     <div className="flex items-center gap-3">
                       <input
                         type="number"
@@ -413,13 +418,13 @@ const Vendors = () => {
                   <button
                     type="button"
                     onClick={() => setShowForm(false)}
-                    className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-semibold text-slate-900 text-xs hover:bg-slate-50"
+                    className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 text-xs hover:bg-slate-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm  hover:bg-emerald-700"
                   >
                     Add Vendor
                   </button>
@@ -438,7 +443,7 @@ const Vendors = () => {
               <button
                 type="button"
                 onClick={() => setShowForm(true)}
-                className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+                className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm  hover:bg-slate-800"
               >
                 + Add Vendor
               </button>
@@ -453,7 +458,7 @@ const Vendors = () => {
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-slate-900 text-xs text-sm">{vendor.vendor_name}</h3>
+                    <h3 className="text-slate-900 text-xs text-sm">{vendor.vendor_name}</h3>
                     <div className="flex gap-2 mt-2 flex-wrap">
                       {vendor.category && (
                         <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700">
@@ -462,7 +467,7 @@ const Vendors = () => {
                       )}
                     </div>
                   </div>
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${vendorStatusColors[vendor.status]?.badge}`}>
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs  ${vendorStatusColors[vendor.status]?.badge}`}>
                     {vendorStatusColors[vendor.status]?.label}
                   </span>
                 </div>
@@ -470,19 +475,26 @@ const Vendors = () => {
                 <div className="space-y-2 mb-4 text-xs text-slate-600 border-t border-b border-slate-100 py-3">
                   {vendor.email && (
                     <div className="flex items-center gap-2">
-                      <span>✉</span>
+                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
                       <span>{vendor.email}</span>
                     </div>
                   )}
                   {vendor.phone && (
                     <div className="flex items-center gap-2">
-                      <span>☎</span>
+                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
                       <span>{vendor.phone}</span>
                     </div>
                   )}
                   {vendor.location && (
                     <div className="flex items-center gap-2">
-                      <span>📍</span>
+                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
                       <span>{vendor.location}</span>
                     </div>
                   )}
@@ -491,15 +503,15 @@ const Vendors = () => {
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="text-center p-2 bg-slate-50 rounded">
                     <p className="text-xs text-slate-500 mb-1">Orders</p>
-                    <p className="font-semibold text-slate-900 text-xs">{vendor.total_orders || 0}</p>
+                    <p className="text-slate-900 text-xs">{vendor.total_orders || 0}</p>
                   </div>
                   <div className="text-center p-2 bg-slate-50 rounded">
                     <p className="text-xs text-slate-500 mb-1">Value</p>
-                    <p className="font-semibold text-slate-900 text-xs">₹{(vendor.total_value || 0).toLocaleString('en-IN')}</p>
+                    <p className="text-slate-900 text-xs">₹{(vendor.total_value || 0).toLocaleString('en-IN')}</p>
                   </div>
                   <div className="text-center p-2 bg-slate-50 rounded">
                     <p className="text-xs text-slate-500 mb-1">Last Order</p>
-                    <p className="font-semibold text-slate-900 text-xs">{vendor.last_order_date ? new Date(vendor.last_order_date).toLocaleDateString('en-IN', {day: '2-digit', month: 'short'}) : 'N/A'}</p>
+                    <p className="text-slate-900 text-xs">{vendor.last_order_date ? new Date(vendor.last_order_date).toLocaleDateString('en-IN', {day: '2-digit', month: 'short'}) : 'N/A'}</p>
                   </div>
                 </div>
 
@@ -510,22 +522,31 @@ const Vendors = () => {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="flex-1 px-3 py-2 text-xs rounded border border-blue-200 text-blue-600 font-medium hover:bg-blue-50"
+                    className="flex-1 px-3 py-2 text-xs rounded border border-blue-200 text-blue-600 font-medium hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5"
                   >
-                    ✎ Edit
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
                   </button>
                   <button
                     type="button"
-                    className="flex-1 px-3 py-2 text-xs rounded border border-slate-200 text-slate-600 font-medium hover:bg-slate-50"
+                    className="flex-1 px-3 py-2 text-xs rounded border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
                   >
-                    📊 Performance
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Performance
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDeleteVendor(vendor.id, vendor.vendor_name)}
-                    className="px-3 py-2 text-xs rounded border border-red-200 text-red-600 font-medium hover:bg-red-50"
+                    className="px-3 py-2 text-xs rounded border border-red-200 text-red-600 font-medium hover:bg-red-50 transition-colors flex items-center justify-center"
+                    title="Delete Vendor"
                   >
-                    🗑
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -537,20 +558,20 @@ const Vendors = () => {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">Total Vendors</p>
-            <p className="text-2xl font-bold text-blue-900">{stats.total_vendors || 0}</p>
+            <p className="text-xs text-blue-600   tracking-wider mb-1">Total Vendors</p>
+            <p className="text-2xl  text-blue-900">{stats.total_vendors || 0}</p>
           </div>
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Active Vendors</p>
-            <p className="text-2xl font-bold text-emerald-900">{stats.active_vendors || 0}</p>
+            <p className="text-xs text-emerald-600   tracking-wider mb-1">Active Vendors</p>
+            <p className="text-2xl  text-emerald-900">{stats.active_vendors || 0}</p>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">Avg. Rating</p>
-            <p className="text-2xl font-bold text-yellow-900">{(parseFloat(stats.avg_rating) || 0).toFixed(1)}</p>
+            <p className="text-xs text-yellow-600   tracking-wider mb-1">Avg. Rating</p>
+            <p className="text-2xl  text-yellow-900">{(parseFloat(stats.avg_rating) || 0).toFixed(1)}</p>
           </div>
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <p className="text-xs text-purple-600 font-semibold uppercase tracking-wider mb-1">Total Orders</p>
-            <p className="text-2xl font-bold text-purple-900">{stats.total_orders || 0}</p>
+            <p className="text-xs text-purple-600   tracking-wider mb-1">Total Orders</p>
+            <p className="text-2xl  text-purple-900">{stats.total_orders || 0}</p>
           </div>
         </div>
       )}
