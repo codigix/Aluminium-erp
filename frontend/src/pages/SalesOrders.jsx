@@ -850,7 +850,7 @@ const SalesOrders = ({
           </div>
         )
       )}
-    </Card>
+    </>
   )
 }
 
