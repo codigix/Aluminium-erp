@@ -356,6 +356,9 @@ const CustomerDrawing = () => {
     file: null,
     remarks: ''
   });
+  const [manualDrawings, setManualDrawings] = useState([
+    { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
+  ]);
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -366,6 +369,30 @@ const CustomerDrawing = () => {
         ...newDrawing,
         file: file
       });
+    }
+  };
+
+  const handleManualDrawingChange = (id, field, value) => {
+    setManualDrawings(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d));
+  };
+
+  const addManualDrawingRow = () => {
+    setManualDrawings(prev => [
+      ...prev,
+      { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
+    ]);
+  };
+
+  const removeManualDrawingRow = (id) => {
+    if (manualDrawings.length > 1) {
+      setManualDrawings(prev => prev.filter(d => d.id !== id));
+    }
+  };
+
+  const handleManualFileChange = (e, id) => {
+    const file = e.target.files[0];
+    if (file) {
+      handleManualDrawingChange(id, 'file', file);
     }
   };
 
@@ -406,38 +433,21 @@ const CustomerDrawing = () => {
     setShowSuggestions(false);
   };
 
-  const handleAddDrawing = async (e) => {
-    e.preventDefault();
-    const fileExt = newDrawing.file ? newDrawing.file.name.split('.').pop().toUpperCase() : '';
+  const saveSingleDrawing = async (drawingData, sendToDesign = false) => {
+    const fileExt = drawingData.file ? drawingData.file.name.split('.').pop().toUpperCase() : '';
     const isExcel = fileExt === 'XLSX' || fileExt === 'XLS';
     
-    if (!newDrawing.file) {
-      return Swal.fire('Missing Info', 'Drawing File is mandatory', 'warning');
-    }
-    
-    if (!isExcel && !newDrawing.drawing_no) {
-      return Swal.fire('Missing Info', 'Drawing Number is mandatory for non-Excel files', 'warning');
-    }
-
-    return await saveDrawing(false);
-  };
-
-  const saveDrawing = async (sendToDesign = false) => {
-    const fileExt = newDrawing.file ? newDrawing.file.name.split('.').pop().toUpperCase() : '';
-    const isExcel = fileExt === 'XLSX' || fileExt === 'XLS';
-    
-    if (!newDrawing.file) {
+    if (!drawingData.file) {
       Swal.fire('Missing Info', 'Drawing File is mandatory', 'warning');
       return null;
     }
     
-    if (!isExcel && !newDrawing.drawing_no) {
-      Swal.fire('Missing Info', 'Drawing Number is mandatory for non-Excel files', 'warning');
+    if (!isExcel && !drawingData.drawing_no) {
+      Swal.fire('Missing Info', 'Drawing Number is mandatory', 'warning');
       return null;
     }
 
     try {
-      setLoading(true);
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
       formData.append('clientName', newDrawing.client_name);
@@ -450,13 +460,14 @@ const CustomerDrawing = () => {
       formData.append('state', newDrawing.state);
       formData.append('billingAddress', newDrawing.billing_address);
       formData.append('shippingAddress', newDrawing.shipping_address);
-      formData.append('drawingNo', newDrawing.drawing_no || (newDrawing.file ? newDrawing.file.name : 'BATCH_IMPORT'));
-      formData.append('revision', newDrawing.revision);
-      formData.append('qty', newDrawing.qty);
-      formData.append('description', newDrawing.description);
-      formData.append('remarks', newDrawing.remarks);
+      
+      formData.append('drawingNo', drawingData.drawing_no || (drawingData.file ? drawingData.file.name : 'BATCH_IMPORT'));
+      formData.append('revision', drawingData.revision || '');
+      formData.append('qty', drawingData.qty || 1);
+      formData.append('description', drawingData.description || '');
+      formData.append('remarks', drawingData.remarks || '');
       formData.append('fileType', fileExt);
-      formData.append('file', newDrawing.file);
+      formData.append('file', drawingData.file);
 
       const response = await fetch(`${API_BASE}/drawings`, {
         method: 'POST',
@@ -466,7 +477,10 @@ const CustomerDrawing = () => {
         body: formData
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Upload failed');
+      }
       
       const savedDrawing = await response.json();
       const drawingId = savedDrawing.id || savedDrawing.drawing_id;
@@ -476,62 +490,72 @@ const CustomerDrawing = () => {
         await shareDrawingWithDesign(drawingId);
       } else if (isExcelUpload && sendToDesign) {
         await sendBulkUploadedToDesign(newDrawing.client_name, savedDrawing.count);
-      } else {
-        Swal.fire('Success', isExcelUpload ? `${savedDrawing.count} Excel drawings imported successfully` : 'Drawing added successfully', 'success');
       }
       
-      // If manual mode, keep the client but clear drawing details
-      if (uploadMode === 'manual') {
-        setNewDrawing(prev => ({
-          ...prev,
-          drawing_no: '',
-          revision: '',
-          qty: 1,
-          description: '',
-          file: null,
-          remarks: ''
-        }));
-        setClientLocked(true);
-      } else {
-        // If bulk mode, clear everything and show send option
-        setNewDrawing({
-          client_name: '',
-          contact_person: '',
-          phone_number: '',
-          email_address: '',
-          customer_type: '',
-          gstin: '',
-          city: '',
-          state: '',
-          billing_address: '',
-          shipping_address: '',
-          drawing_no: '',
-          revision: '',
-          qty: 1,
-          description: '',
-          file: null,
-          remarks: ''
-        });
-        setClientLocked(false);
-        
-        if (isExcelUpload) {
-          setLastUploadedDrawings({
-            clientName: newDrawing.client_name,
-            count: savedDrawing.count,
-            timestamp: Date.now()
-          });
-        }
-      }
-      
-      fetchDrawings();
-      return drawingId;
+      return { drawingId, isExcelUpload, count: savedDrawing.count };
     } catch (error) {
       console.error(error);
+      throw error;
+    }
+  };
+
+  const handleAddDrawing = async (e) => {
+    e.preventDefault();
+    if (!newDrawing.client_name) {
+      return Swal.fire('Missing Info', 'Client Name is mandatory', 'warning');
+    }
+
+    try {
+      setLoading(true);
+      if (uploadMode === 'bulk') {
+        if (!newDrawing.file) return Swal.fire('Missing Info', 'Excel File is mandatory', 'warning');
+        const result = await saveSingleDrawing(newDrawing, false);
+        if (result) {
+          Swal.fire('Success', result.isExcelUpload ? `${result.count} Excel drawings imported successfully` : 'Drawing added successfully', 'success');
+          setNewDrawing({
+            client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: ''
+          });
+          setLastUploadedDrawings({ clientName: newDrawing.client_name, count: result.count, timestamp: Date.now() });
+        }
+      } else {
+        let successCount = 0;
+        for (const drawing of manualDrawings) {
+          if (!drawing.drawing_no || !drawing.file) continue;
+          await saveSingleDrawing(drawing, false);
+          successCount++;
+        }
+        
+        if (successCount > 0) {
+          Swal.fire('Success', `${successCount} drawings added successfully`, 'success');
+          setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
+          setClientLocked(true);
+        } else {
+          Swal.fire('Warning', 'No drawings were added. Please fill in Drawing # and select a file for at least one row.', 'warning');
+        }
+      }
+      fetchDrawings();
+    } catch (error) {
       Swal.fire('Error', error.message, 'error');
-      return null;
     } finally {
       setLoading(false);
     }
+  };
+
+  const shareDrawingsBulkAPI = async (ids) => {
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE}/drawings/share/bulk`, {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ids })
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Bulk share failed');
+    }
+    return response.json();
   };
 
   const sendBulkUploadedToDesign = async (clientName, count) => {
@@ -541,25 +565,13 @@ const CustomerDrawing = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       }).then(r => r.json());
 
-      const clientDrawings = allDrawings.filter(d => d.client_name === clientName && !d.status || d.status !== 'SHARED');
-      const recentDrawings = clientDrawings.slice(-count);
+      const clientDrawings = allDrawings.filter(d => d.client_name === clientName && (!d.status || d.status !== 'SHARED'));
+      const recentDrawings = clientDrawings.slice(0, count); // Get the most recent unshared drawings
 
-      const sharePromises = recentDrawings.map(drawing =>
-        fetch(`${API_BASE}/drawings/${drawing.id}/share`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-      );
-
-      const results = await Promise.all(sharePromises);
-      const failed = results.filter(r => !r.ok);
-
-      if (failed.length === 0) {
-        Swal.fire('Success', `All ${count} imported drawings sent to Design Engineer for review and approval`, 'success');
+      if (recentDrawings.length > 0) {
+        await shareDrawingsBulkAPI(recentDrawings.map(d => d.id));
+        Swal.fire('Success', `All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`, 'success');
         setLastUploadedDrawings([]);
-        fetchDrawings();
-      } else {
-        Swal.fire('Partial Error', `${failed.length} drawings failed to share.`, 'warning');
         fetchDrawings();
       }
     } catch (error) {
@@ -588,25 +600,9 @@ const CustomerDrawing = () => {
     if (result.isConfirmed) {
       try {
         setLoading(true);
-        const token = localStorage.getItem('authToken');
-        
-        const sharePromises = unsharedDrawings.map(drawing =>
-          fetch(`${API_BASE}/drawings/${drawing.id}/share`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-        );
-
-        const results = await Promise.all(sharePromises);
-        const failed = results.filter(r => !r.ok);
-
-        if (failed.length === 0) {
-          Swal.fire('Success', `All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer`, 'success');
-          fetchDrawings();
-        } else {
-          Swal.fire('Partial Error', `${failed.length} drawings failed to share.`, 'warning');
-          fetchDrawings();
-        }
+        await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.id));
+        Swal.fire('Success', `All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer as a single request`, 'success');
+        fetchDrawings();
       } catch (error) {
         Swal.fire('Error', error.message, 'error');
       } finally {
@@ -637,7 +633,41 @@ const CustomerDrawing = () => {
 
   const handleAddAndSendToDesign = async (e) => {
     e.preventDefault();
-    await saveDrawing(true);
+    if (!newDrawing.client_name) {
+      return Swal.fire('Missing Info', 'Client Name is mandatory', 'warning');
+    }
+
+    try {
+      setLoading(true);
+      if (uploadMode === 'bulk') {
+        const result = await saveSingleDrawing(newDrawing, true);
+        if (result) {
+          setNewDrawing({
+            client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: ''
+          });
+        }
+      } else {
+        let successIds = [];
+        for (const drawing of manualDrawings) {
+          if (!drawing.drawing_no || !drawing.file) continue;
+          const result = await saveSingleDrawing(drawing, false); // Don't share individually
+          if (result && result.drawingId) {
+            successIds.push(result.drawingId);
+          }
+        }
+        if (successIds.length > 0) {
+          await shareDrawingsBulkAPI(successIds);
+          Swal.fire('Success', `${successIds.length} drawings added and sent to Design Engineering as a single request`, 'success');
+          setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
+          setClientLocked(true);
+        }
+      }
+      fetchDrawings();
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleShareWithDesign = async (id) => {
@@ -964,77 +994,116 @@ const CustomerDrawing = () => {
 
               {/* CONDITIONAL FIELDS BASED ON MODE */}
               {uploadMode === 'manual' ? (
-                <>
-                  <div>
-                    <label className=" flex items-center gap-2 text-xs text-slate-600 mt-2">Drawing # <span className="text-red-500">*</span></label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="DRW-1001"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                      value={newDrawing.drawing_no}
-                      onChange={(e) => setNewDrawing({...newDrawing, drawing_no: e.target.value})}
-                    />
+                <div className="lg:col-span-5 mt-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-xs font-semibold text-slate-700">Drawing Details</h3>
+                    <button 
+                      type="button"
+                      onClick={addManualDrawingRow}
+                      className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md text-[10px] hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                      Add Drawing
+                    </button>
                   </div>
-                  <div className="lg:col-span-2 mt-2">
-                    <label className=" flex items-center gap-2 text-xs text-slate-600">Description</label>
-                    <input 
-                      type="text" 
-                      placeholder="Aluminum Frame"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                      value={newDrawing.description}
-                      onChange={(e) => setNewDrawing({...newDrawing, description: e.target.value})}
-                    />
+                  <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                    <table className="min-w-full divide-y divide-slate-200">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Drawing # *</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Description</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Rev</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider w-20">Qty</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">File *</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Notes</th>
+                          <th className="px-3 py-2 text-center text-[10px] font-medium text-slate-500 uppercase tracking-wider w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-slate-200">
+                        {manualDrawings.map((drawing, index) => (
+                          <tr key={drawing.id}>
+                            <td className="px-2 py-2">
+                              <input 
+                                type="text" 
+                                required
+                                placeholder="DRW-1001"
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={drawing.drawing_no}
+                                onChange={(e) => handleManualDrawingChange(drawing.id, 'drawing_no', e.target.value)}
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input 
+                                type="text" 
+                                placeholder="Aluminum Frame"
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={drawing.description}
+                                onChange={(e) => handleManualDrawingChange(drawing.id, 'description', e.target.value)}
+                              />
+                            </td>
+                            <td className="px-2 py-2 w-16">
+                              <input 
+                                type="text" 
+                                placeholder="A"
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={drawing.revision}
+                                onChange={(e) => handleManualDrawingChange(drawing.id, 'revision', e.target.value)}
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input 
+                                type="number" 
+                                min="1"
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={drawing.qty}
+                                onChange={(e) => handleManualDrawingChange(drawing.id, 'qty', e.target.value)}
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <div className="relative">
+                                <input 
+                                  type="file" 
+                                  required={!drawing.file}
+                                  accept=".pdf,.dwg,.step,.stp"
+                                  className="hidden"
+                                  onChange={(e) => handleManualFileChange(e, drawing.id)}
+                                  id={`file-${drawing.id}`}
+                                />
+                                <label 
+                                  htmlFor={`file-${drawing.id}`}
+                                  className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-[10px] cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400'}`}
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                                  <span className="truncate max-w-[80px]">{drawing.file ? drawing.file.name : 'Choose File'}</span>
+                                </label>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2">
+                              <input 
+                                type="text" 
+                                placeholder="Notes..."
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={drawing.remarks}
+                                onChange={(e) => handleManualDrawingChange(drawing.id, 'remarks', e.target.value)}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              {manualDrawings.length > 1 && (
+                                <button 
+                                  type="button"
+                                  onClick={() => removeManualDrawingRow(drawing.id)}
+                                  className="text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div>
-                    <label className=" flex items-center gap-2 text-xs text-slate-600 mt-2">Rev</label>
-                    <input 
-                      type="text" 
-                      placeholder="A"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                      value={newDrawing.revision}
-                      onChange={(e) => setNewDrawing({...newDrawing, revision: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className=" flex items-center gap-2 text-xs text-slate-600 mt-2">Qty</label>
-                    <input 
-                      type="number" 
-                      min="1"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                      value={newDrawing.qty}
-                      onChange={(e) => setNewDrawing({...newDrawing, qty: e.target.value})}
-                    />
-                  </div>
-                  <div className="lg:col-span-2 mt-2">
-                    <label className=" flex items-center gap-2 text-xs text-slate-600">File <span className="text-red-500">*</span></label>
-                    <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-3 hover:border-indigo-400 transition-colors bg-slate-50/50 cursor-pointer">
-                      <input 
-                        type="file" 
-                        required
-                        accept=".pdf,.dwg,.step,.stp"
-                        className="hidden"
-                        onChange={handleFileChange}
-                        id="manual-file"
-                      />
-                      <label htmlFor="manual-file" className="cursor-pointer text-center w-full">
-                        <svg className="mx-auto h-6 w-6 text-slate-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                        <p className="text-xs text-slate-600 ">{newDrawing.file ? newDrawing.file.name : 'Click'}</p>
-                        <p className="text-xs text-slate-500">PDF, DWG, STEP</p>
-                      </label>
-                    </div>
-                  </div>
-                  <div className="lg:col-span-2 mt-2">
-                    <label className=" flex items-center gap-2 text-xs text-slate-600">Notes</label>
-                    <textarea 
-                      rows="1"
-                      placeholder="Special notes..."
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors resize-none"
-                      value={newDrawing.remarks}
-                      onChange={(e) => setNewDrawing({...newDrawing, remarks: e.target.value})}
-                    />
-                  </div>
-                </>
+                </div>
               ) : (
                 /* BULK MODE */
                 <>
@@ -1067,6 +1136,7 @@ const CustomerDrawing = () => {
                 type="button"
                 onClick={() => {
                   setNewDrawing({ client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' });
+                  setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
                   setClientLocked(false);
                 }}
                 className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs  transition-colors"

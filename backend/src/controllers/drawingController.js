@@ -24,7 +24,7 @@ const updateDrawing = async (req, res, next) => {
   try {
     const { drawingNo } = req.params;
     const { description, revisionNo } = req.body;
-    const drawingPdf = req.file ? req.file.path : null;
+    const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
 
     await drawingService.updateDrawing(drawingNo, { description, revisionNo, drawingPdf });
     res.json({ message: 'Drawing updated successfully' });
@@ -37,7 +37,7 @@ const updateItemDrawing = async (req, res, next) => {
   try {
     const { itemId } = req.params;
     const { drawingNo, revisionNo, description } = req.body;
-    const drawingPdf = req.file ? req.file.path : null;
+    const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
 
     await drawingService.updateItemDrawing(itemId, { drawingNo, revisionNo, description, drawingPdf });
     res.json({ message: 'Item drawing updated successfully' });
@@ -49,7 +49,9 @@ const updateItemDrawing = async (req, res, next) => {
 const createDrawing = async (req, res, next) => {
   try {
     const { clientName, drawingNo, revision, qty, description, remarks, fileType, contactPerson, phoneNumber, emailAddress } = req.body;
-    const filePath = req.file ? req.file.path : null;
+    
+    // Use relative path for database storage to ensure frontend can access it via static middleware
+    const filePath = req.file ? `uploads/${req.file.filename}` : null;
     if (!filePath) throw new Error('Drawing file is required');
 
     const uploadedBy = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'Sales';
@@ -120,6 +122,19 @@ const shareDrawing = async (req, res, next) => {
   }
 };
 
+const shareDrawingsBulk = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      throw new Error('Drawing IDs are required and must be an array');
+    }
+    await drawingService.shareDrawingsBulk(ids);
+    res.json({ message: `${ids.length} drawings shared with Design Engineering successfully` });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listDrawings,
   getDrawingRevisions,
@@ -127,5 +142,6 @@ module.exports = {
   updateItemDrawing,
   createDrawing,
   deleteDrawing,
-  shareDrawing
+  shareDrawing,
+  shareDrawingsBulk
 };

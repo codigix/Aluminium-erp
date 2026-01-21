@@ -102,34 +102,18 @@ const shareWithDesign = async (id) => {
       }
     }
     
-    const [pos] = await connection.query(
-      'SELECT id FROM customer_pos WHERE company_id = ? ORDER BY created_at DESC LIMIT 1',
-      [companyId]
-    );
-    
-    let poId;
-    if (pos.length > 0) {
-      poId = pos[0].id;
-    } else {
-      const [poResult] = await connection.execute(
-        'INSERT INTO customer_pos (company_id, po_number, po_date, status) VALUES (?, ?, ?, ?)',
-        [companyId, `PO-${drawing.client_name.substring(0, 3).toUpperCase()}-${Date.now()}`, new Date().toISOString().split('T')[0], 'APPROVED']
-      );
-      poId = poResult.insertId;
-    }
-    
     const [soResult] = await connection.execute(
       `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, status, current_department, request_accepted)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [poId, companyId, `Design Review - ${drawing.drawing_no}`, 1, 'CREATED', 'DESIGN_ENG', 0]
+      [null, companyId, `Design Review - ${drawing.drawing_no}`, 1, 'CREATED', 'DESIGN_ENG', 0]
     );
     
     const salesOrderId = soResult.insertId;
     
     await connection.execute(
-      `INSERT INTO sales_order_items (sales_order_id, drawing_no, description, quantity, unit, rate)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [salesOrderId, drawing.drawing_no, drawing.description || 'Design Review', drawing.qty || 1, 'NOS', 0]
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, description, quantity, unit, rate, drawing_pdf)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [salesOrderId, drawing.drawing_no, drawing.revision || null, drawing.description || 'Design Review', drawing.qty || 1, 'NOS', 0, drawing.file_path]
     );
     
     await connection.commit();
@@ -212,6 +196,94 @@ const updateItemDrawing = async (itemId, data) => {
   await pool.execute(query, params);
 };
 
+const shareDrawingsBulk = async (ids) => {
+  if (!ids || ids.length === 0) return;
+  
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    // 1. Mark all drawings as SHARED
+    const placeholders = ids.map(() => '?').join(',');
+    await connection.execute(`UPDATE customer_drawings SET status = "SHARED" WHERE id IN (${placeholders})`, ids);
+    
+    // 2. Fetch all drawing details
+    const [drawings] = await connection.query(`SELECT * FROM customer_drawings WHERE id IN (${placeholders})`, ids);
+    if (!drawings.length) throw new Error('Drawings not found');
+    
+    // Group drawings by client (just in case they are from different clients, though usually they won't be)
+    const drawingsByClient = drawings.reduce((acc, d) => {
+      if (!acc[d.client_name]) acc[d.client_name] = [];
+      acc[d.client_name].push(d);
+      return acc;
+    }, {});
+
+    for (const [clientName, clientDrawings] of Object.entries(drawingsByClient)) {
+      // 3. Handle Company
+      const [companies] = await connection.query(
+        'SELECT id FROM companies WHERE company_name = ?',
+        [clientName]
+      );
+      
+      let companyId;
+      if (companies.length > 0) {
+        companyId = companies[0].id;
+      } else {
+        const [companyResult] = await connection.execute(
+          'INSERT INTO companies (company_name, company_code, status) VALUES (?, ?, ?)',
+          [clientName, clientName.replace(/\s+/g, '_').toUpperCase(), 'ACTIVE']
+        );
+        companyId = companyResult.insertId;
+      }
+      
+      // 4. Handle primary contact from first drawing that has contact info
+      const firstWithContact = clientDrawings.find(d => d.email || d.phone || d.contact_person) || clientDrawings[0];
+      if (firstWithContact.email || firstWithContact.phone || firstWithContact.contact_person) {
+        const [existingContact] = await connection.query(
+          'SELECT id FROM contacts WHERE company_id = ? AND contact_type = "PRIMARY" LIMIT 1',
+          [companyId]
+        );
+        
+        if (existingContact.length === 0) {
+          await connection.execute(
+            'INSERT INTO contacts (company_id, name, email, phone, contact_type, status) VALUES (?, ?, ?, ?, ?, ?)',
+            [companyId, firstWithContact.contact_person || clientName, firstWithContact.email || null, firstWithContact.phone || null, 'PRIMARY', 'ACTIVE']
+          );
+        }
+      }
+      
+      // 5. Create ONE Sales Order (Design Request) for all drawings of this client
+      const projectName = clientDrawings.length === 1 
+        ? `Design Review - ${clientDrawings[0].drawing_no}` 
+        : `Design Review - ${clientDrawings.length} Drawings for ${clientName}`;
+
+      const [soResult] = await connection.execute(
+        `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, status, current_department, request_accepted)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [null, companyId, projectName, 1, 'CREATED', 'DESIGN_ENG', 0]
+      );
+      
+      const salesOrderId = soResult.insertId;
+      
+      // 6. Add all drawings as items to this Sales Order
+      for (const d of clientDrawings) {
+        await connection.execute(
+          `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, description, quantity, unit, rate, drawing_pdf)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [salesOrderId, d.drawing_no, d.revision || null, d.description || 'Design Review', d.qty || 1, 'NOS', 0, d.file_path]
+        );
+      }
+    }
+    
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   listDrawings,
   getDrawingRevisions,
@@ -220,5 +292,6 @@ module.exports = {
   createCustomerDrawing,
   createBatchCustomerDrawings,
   deleteCustomerDrawing,
-  shareWithDesign
+  shareWithDesign,
+  shareDrawingsBulk
 };
