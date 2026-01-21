@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card } from '../components/ui.jsx';
+import { Card, Modal, FormControl } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -265,174 +265,151 @@ const Vendors = () => {
           </div>
         </div>
 
-        {showForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-blue-50 border-b border-blue-200 p-2 flex justify-between items-center">
-                <div>
-                  <h2 className="text-base text-slate-900 text-xs">Add New Vendor</h2>
-                  <p className="text-xs text-blue-600">Fill in the vendor details below</p>
-                </div>
-                <button
-                  onClick={() => setShowForm(false)}
-                  className="text-slate-500 hover:text-slate-900 text-xl"
-                >
-                  ✕
-                </button>
+      <Modal
+        isOpen={showForm}
+        onClose={() => setShowForm(false)}
+        title="Add New Vendor"
+      >
+        <form onSubmit={handleAddVendor} className="space-y-8 max-h-[70vh] overflow-y-auto px-1">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase border-b border-slate-100 pb-2 mb-4">Basic Information</h3>
+            <div className="space-y-4">
+              <FormControl label="Vendor Name *">
+                <input
+                  type="text"
+                  placeholder="Enter vendor name"
+                  value={formData.vendorName}
+                  onChange={(e) => setFormData({...formData, vendorName: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  required
+                />
+              </FormControl>
+
+              <FormControl label="Contact Person">
+                <input
+                  type="text"
+                  placeholder="Contact person name"
+                  value={formData.contactPerson}
+                  onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                />
+              </FormControl>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormControl label="Category">
+                  <input
+                    type="text"
+                    placeholder="e.g., Electronics"
+                    value={formData.category}
+                    onChange={(e) => setFormData({...formData, category: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  />
+                </FormControl>
+
+                <FormControl label="Vendor Type *">
+                  <select
+                    value={formData.vendorType}
+                    onChange={(e) => setFormData({...formData, vendorType: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  >
+                    {vendorTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </FormControl>
               </div>
 
-              <form onSubmit={handleAddVendor} className="p-6 space-y-3">
-                <div>
-                  <h3 className="text-xs text-slate-900  tracking-wider mb-4">Basic Information</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs text-slate-900 text-xs mb-2">Vendor Name <span className="text-red-500">*</span></label>
-                      <input
-                        type="text"
-                        placeholder="Enter vendor name"
-                        value={formData.vendorName}
-                        onChange={(e) => setFormData({...formData, vendorName: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-slate-900 text-xs mb-2">Contact Person</label>
-                      <input
-                        type="text"
-                        placeholder="Contact person name"
-                        value={formData.contactPerson}
-                        onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs text-slate-900 text-xs mb-2">Category</label>
-                        <input
-                          type="text"
-                          placeholder="e.g., Electronics"
-                          value={formData.category}
-                          onChange={(e) => setFormData({...formData, category: e.target.value})}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs text-slate-900 text-xs mb-2">Vendor Type <span className="text-red-500">*</span></label>
-                        <select
-                          value={formData.vendorType}
-                          onChange={(e) => setFormData({...formData, vendorType: e.target.value})}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          {vendorTypes.map(type => (
-                            <option key={type} value={type}>{type}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-slate-900 text-xs mb-2">Status</label>
-                      <select
-                        value={formData.status}
-                        onChange={(e) => setFormData({...formData, status: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        {statuses.map(status => (
-                          <option key={status} value={status}>{status}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-xs text-slate-900  tracking-wider mb-4">Contact Information</h3>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs text-slate-900 text-xs mb-2">Email</label>
-                        <input
-                          type="email"
-                          placeholder="vendor@example.com"
-                          value={formData.email}
-                          onChange={(e) => setFormData({...formData, email: e.target.value})}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs text-slate-900 text-xs mb-2">Phone</label>
-                        <input
-                          type="tel"
-                          placeholder="+91 XXXXXXXXXX"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-slate-900 text-xs mb-2">Address</label>
-                      <textarea
-                        placeholder="Enter vendor address"
-                        value={formData.address}
-                        onChange={(e) => setFormData({...formData, address: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows="3"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-xs text-slate-900  tracking-wider mb-4">Performance</h3>
-                  <div>
-                    <label className="block text-xs text-slate-900 text-xs mb-2">Initial Rating (0-5)</label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="number"
-                        min="0"
-                        max="5"
-                        step="0.1"
-                        value={formData.rating}
-                        onChange={(e) => setFormData({...formData, rating: parseFloat(e.target.value) || 0})}
-                        className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={i < Math.floor(formData.rating) ? 'text-yellow-400 text-lg' : 'text-slate-300 text-lg'}>
-                            ★
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 justify-end pt-6 border-t border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => setShowForm(false)}
-                    className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 text-xs hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm  hover:bg-emerald-700"
-                  >
-                    Add Vendor
-                  </button>
-                </div>
-              </form>
+              <FormControl label="Status">
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                >
+                  {statuses.map(status => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </FormControl>
             </div>
           </div>
-        )}
+
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase border-b border-slate-100 pb-2 mb-4">Contact Information</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormControl label="Email">
+                  <input
+                    type="email"
+                    placeholder="vendor@example.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  />
+                </FormControl>
+
+                <FormControl label="Phone">
+                  <input
+                    type="tel"
+                    placeholder="+91 XXXXXXXXXX"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  />
+                </FormControl>
+              </div>
+
+              <FormControl label="Address">
+                <textarea
+                  placeholder="Enter vendor address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white min-h-[80px]"
+                />
+              </FormControl>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase border-b border-slate-100 pb-2 mb-4">Performance</h3>
+            <FormControl label="Initial Rating (0-5)">
+              <div className="flex items-center gap-4">
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  value={formData.rating}
+                  onChange={(e) => setFormData({...formData, rating: parseFloat(e.target.value) || 0})}
+                  className="w-32 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+                <div className="flex items-center gap-1">
+                  {[...Array(5)].map((_, i) => (
+                    <span key={i} className={i < Math.floor(formData.rating) ? 'text-yellow-400 text-xl' : 'text-slate-200 text-xl'}>
+                      ★
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </FormControl>
+          </div>
+
+          <div className="flex gap-3 justify-end pt-6 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+            >
+              Add Vendor
+            </button>
+          </div>
+        </form>
+      </Modal>
 
         {loading ? (
           <p className="text-sm text-slate-400">Loading vendors...</p>

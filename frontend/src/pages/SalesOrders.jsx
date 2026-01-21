@@ -465,16 +465,15 @@ const SalesOrders = ({
       {!loading && hasOrders ? (
         <div className="overflow-x-auto">
           <table className="w-full text-sm bg-white">
-            <thead className="bg-slate-100 text-slate-500  text-xs">
+            <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
               <tr>
-                <th className="p-2 text-left text-thin">Order Code</th>
-                <th className="p-2 text-left text-thin">Customer / Project</th>
-                <th className="p-2 text-left text-thin">PO Number</th>
-                <th className="p-2 text-left text-thin">PO Date</th>
-                <th className="p-2 text-left text-thin">Net Value</th>
-                <th className="p-2 text-left text-thin">Priority</th>
-                <th className="p-2 text-left text-thin">Status</th>
-                <th className="p-2 text-right text-thin">Actions</th>
+                <th className="px-4 py-3 text-left">Client / Order ID</th>
+                <th className="px-4 py-3 text-left">Date</th>
+                <th className="px-4 py-3 text-left">PO Number</th>
+                <th className="px-4 py-3 text-left">Net Value</th>
+                <th className="px-4 py-3 text-left">Priority</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -486,103 +485,148 @@ const SalesOrders = ({
                 const canViewPo = typeof onViewPo === 'function' && Boolean(order.customer_po_id)
                 const pdfUrl = typeof getPoPdfUrl === 'function' ? getPoPdfUrl(order.pdf_path) : null
                 const soPdfUrl = `${API_BASE}/sales-orders/${order.id}/pdf`
+                const isExpanded = expandedItems[order.id]
 
                 return (
-                  <tr key={`so-row-${order.id}`} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="p-2 align-middle">
-                      <p className="text-slate-900">{formatOrderCode(order.id)}</p>
-                    </td>
-                    <td className="p-2 align-middle">
-                      <p className="text-slate-900 text-xs">{order.company_name || '—'}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{order.project_name || '—'}</p>
-                    </td>
-                    <td className="p-2 text-slate-600 align-middle text-xs">
-                      {order.po_number || '—'}
-                    </td>
-                    <td className="p-2 text-slate-600 align-middle text-xs">
-                      {formatDate(order.po_date)}
-                    </td>
-                    <td className="p-2 text-slate-900  align-middle">
-                      {hasNetValue ? formatCurrency(netValue, order.po_currency) : '—'}
-                    </td>
-                    <td className="p-2 align-middle">
-                      <span className="text-xs text-slate-600 tracking-tight">
-                        {formatPriority(order.production_priority)}
-                      </span>
-                    </td>
-                    <td className="p-2 align-middle">
-                      <span className={`px-3 py-1 rounded-full text-[10px]   tracking-wider border ${badgeClasses}`}>
-                        {formatStatus(order.status)}
-                      </span>
-                    </td>
-                    <td className="p-2 align-middle">
-                      <div className="flex justify-end gap-2">
-                        {canViewPo && (
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition"
-                            onClick={() => onViewPo(order.customer_po_id)}
-                            title="View PO Details"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  <React.Fragment key={`so-row-group-${order.id}`}>
+                    <tr 
+                      className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${isExpanded ? 'bg-slate-50' : ''}`}
+                      onClick={() => setExpandedItems(prev => ({ ...prev, [order.id]: !prev[order.id] }))}
+                    >
+                      <td className="px-4 py-3 align-middle">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                             </svg>
-                          </button>
-                        )}
-                        {normalizedStatus === 'CREATED' && typeof onSendOrder === 'function' && (
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm"
-                            onClick={() => onSendOrder(order.id)}
-                            title="Send Order"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                            </svg>
-                          </button>
-                        )}
-                        {soPdfUrl && (
-                          <a
-                            href={soPdfUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-1.5 rounded-xl border border-indigo-200 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
-                            title="View Sales Order PDF"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </a>
-                        )}
-                        {pdfUrl && (
-                          <a
-                            href={pdfUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 transition"
-                            title="View Customer PO PDF"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </a>
-                        )}
-                        {typeof onDeleteOrder === 'function' && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteOrder(order.id)}
-                            className="p-1.5 rounded-xl border border-rose-200 text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                            title="Delete Order"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                          </span>
+                          <div>
+                            <p className="text-slate-900 font-bold">{order.company_name || '—'}</p>
+                            <p className="text-[10px] text-indigo-600 font-mono">{formatOrderCode(order.id)}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 align-middle text-xs">
+                        {formatDate(order.po_date)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 align-middle text-xs">
+                        {order.po_number || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-900 font-medium align-middle">
+                        {hasNetValue ? formatCurrency(netValue, order.po_currency) : '—'}
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <span className="text-xs text-slate-600">
+                          {formatPriority(order.production_priority)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${badgeClasses}`}>
+                          {formatStatus(order.status).toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                          {canViewPo && (
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-white shadow-sm transition"
+                              onClick={() => onViewPo(order.customer_po_id)}
+                              title="View PO Details"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                              </svg>
+                            </button>
+                          )}
+                          {normalizedStatus === 'CREATED' && typeof onSendOrder === 'function' && (
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm"
+                              onClick={() => onSendOrder(order.id)}
+                              title="Send Order"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                              </svg>
+                            </button>
+                          )}
+                          {soPdfUrl && (
+                            <a
+                              href={soPdfUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1.5 rounded-lg border border-indigo-200 text-indigo-500 hover:bg-indigo-50 transition shadow-sm"
+                              title="View Sales Order PDF"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </a>
+                          )}
+                          {typeof onDeleteOrder === 'function' && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteOrder(order.id)}
+                              className="p-1.5 rounded-lg border border-rose-100 text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition shadow-sm"
+                              title="Delete Order"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan="7" className="px-8 py-4 bg-slate-50/50">
+                          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                            <table className="w-full text-xs">
+                              <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] font-bold tracking-wider">
+                                <tr>
+                                  <th className="px-4 py-2 text-left">Drawing No</th>
+                                  <th className="px-4 py-2 text-left">Description</th>
+                                  <th className="px-4 py-2 text-center">Qty</th>
+                                  <th className="px-4 py-2 text-right">Unit Rate</th>
+                                  <th className="px-4 py-2 text-right">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {order.items && order.items.length > 0 ? (
+                                  order.items.map((item, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                      <td className="px-4 py-2 font-mono text-indigo-600">{item.drawing_no || 'N/A'}</td>
+                                      <td className="px-4 py-2 text-slate-600">{item.description}</td>
+                                      <td className="px-4 py-2 text-center font-bold">{item.quantity} {item.unit}</td>
+                                      <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.rate, order.po_currency)}</td>
+                                      <td className="px-4 py-2 text-right font-bold text-slate-900">{formatCurrency(item.quantity * item.rate, order.po_currency)}</td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan="5" className="px-4 py-6 text-center text-slate-400 italic">No items found for this order</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                              {order.items && order.items.length > 0 && (
+                                <tfoot className="bg-slate-50/50">
+                                  <tr>
+                                    <td colSpan="4" className="px-4 py-2 text-right font-bold text-slate-500">Total Amount:</td>
+                                    <td className="px-4 py-2 text-right font-black text-indigo-600 text-sm">
+                                      {formatCurrency(netValue, order.po_currency)}
+                                    </td>
+                                  </tr>
+                                </tfoot>
+                              )}
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 )
               })}
             </tbody>

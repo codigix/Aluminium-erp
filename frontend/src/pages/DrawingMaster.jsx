@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from '../components/ui.jsx';
+import { Card, Modal, FormControl } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -271,150 +271,119 @@ const DrawingMaster = () => {
         </div>
       </Card>
 
-      {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-slate-900 opacity-75" onClick={() => setShowEditModal(false)}></div>
-            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-              <h3 className="text-xl text-slate-900 mb-4">Edit Drawing: {editData.drawing_no}</h3>
-              <form onSubmit={handleSave} className="space-y-4">
-                <div>
-                  <label className="block text-xs  text-slate-500  mb-1">Revision No</label>
-                  <input 
-                    type="text" 
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={editData.revision_no}
-                    onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs  text-slate-500  mb-1">Description</label>
-                  <textarea 
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px]"
-                    value={editData.description}
-                    onChange={(e) => setEditData({...editData, description: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs  text-slate-500  mb-1">Upload PDF</label>
-                  <input 
-                    type="file" 
-                    accept=".pdf"
-                    className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file: file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
-                  />
-                </div>
-                <div className="flex justify-end gap-3 mt-6">
-                  <button 
-                    type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="px-4 py-2 text-slate-600 "
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    disabled={saveLoading}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg  hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                    {saveLoading ? 'Saving...' : 'Save Changes'}
-                  </button>
-                </div>
-              </form>
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title={`Edit Drawing: ${editData.drawing_no}`}
+      >
+        <form onSubmit={handleSave} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormControl label="Revision No">
+              <input 
+                type="text" 
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                value={editData.revision_no}
+                onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
+              />
+            </FormControl>
+          </div>
+          <FormControl label="Description">
+            <textarea 
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-h-[100px] transition-all"
+              value={editData.description}
+              onChange={(e) => setEditData({...editData, description: e.target.value})}
+            />
+          </FormControl>
+          <FormControl label="Upload PDF">
+            <input 
+              type="file" 
+              accept=".pdf"
+              className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all"
+              onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
+            />
+          </FormControl>
+          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
+            <button 
+              type="button"
+              onClick={() => setShowEditModal(false)}
+              className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              disabled={saveLoading}
+              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50"
+            >
+              {saveLoading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={showRevisions}
+        onClose={() => setShowRevisions(false)}
+        title={`Revision History: ${selectedDrawing?.drawing_no}`}
+      >
+        <div className="space-y-4">
+          {revisionsLoading ? (
+            <div className="py-12 text-center text-slate-500 italic">Fetching revisions...</div>
+          ) : (
+            <div className="overflow-hidden border border-slate-100 rounded-xl">
+              <table className="min-w-full divide-y divide-slate-200 bg-white">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-slate-500 uppercase tracking-wider">Rev</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-slate-500 uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-slate-500 uppercase tracking-wider">Description</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-slate-500 uppercase tracking-wider">File</th>
+                    <th className="px-4 py-3 text-right text-[11px] font-medium text-slate-500 uppercase tracking-wider">Order</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100">
+                  {revisions.map((rev, i) => (
+                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-mono font-medium text-indigo-600">{rev.revision_no || '0'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-600">
+                        {new Date(rev.created_at).toLocaleDateString('en-IN')}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-500 max-w-xs truncate">{rev.description}</td>
+                      <td className="px-4 py-3">
+                        {rev.drawing_pdf ? (
+                          <a 
+                            href={`${API_BASE.replace('/api', '')}/${rev.drawing_pdf}`} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-900 font-medium text-sm"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            View PDF
+                          </a>
+                        ) : <span className="text-slate-400 text-xs italic">No file</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="text-sm font-medium text-slate-700">{rev.po_number || 'N/A'}</div>
+                        <div className="text-[10px] text-slate-400">SO-{String(rev.sales_order_id || 0).padStart(4, '0')}</div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          )}
+          <div className="flex justify-end pt-4">
+            <button 
+              onClick={() => setShowRevisions(false)}
+              className="px-6 py-2.5 bg-slate-800 text-white rounded-xl text-xs font-semibold hover:bg-slate-700 transition-all"
+            >
+              Close
+            </button>
           </div>
         </div>
-      )}
-
-      {/* Revisions Modal */}
-      {showRevisions && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-slate-900 opacity-75" onClick={() => setShowRevisions(false)}></div>
-            </div>
-
-            <span className="hidden sm:inline-block sm:align-middle sm:min-h-screen" aria-hidden="true">&#8203;</span>
-
-            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h3 className="text-xl text-slate-900">
-                      Revision History: {selectedDrawing?.drawing_no}
-                    </h3>
-                  </div>
-                  <button 
-                    onClick={() => setShowRevisions(false)}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="mt-4">
-                  {revisionsLoading ? (
-                    <div className="py-12 text-center text-slate-500 italic">Fetching revisions...</div>
-                  ) : (
-                    <div className="overflow-hidden border border-slate-100 rounded-xl">
-                      <table className="min-w-full divide-y divide-slate-200 bg-white">
-                        <thead className="bg-slate-50">
-                          <tr>
-                            <th className="p-2 text-left text-xs  text-slate-500 ">Rev</th>
-                            <th className="p-2 text-left text-xs  text-slate-500 ">Date</th>
-                            <th className="p-2 text-left text-xs  text-slate-500 ">Description</th>
-                            <th className="p-2text-center text-xs  text-slate-500 ">File</th>
-                            <th className="p-2 text-right text-xs  text-slate-500 ">Order</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-slate-200">
-                          {revisions.map((rev, i) => (
-                            <tr key={i} className="hover:bg-slate-50">
-                              <td className="p-2 whitespace-nowrap text-sm font-mono  text-indigo-600">{rev.revision_no || '0'}</td>
-                              <td className="p-2 whitespace-nowrap text-sm text-slate-600">
-                                {new Date(rev.created_at).toLocaleDateString('en-IN')}
-                              </td>
-                              <td className="p-2 text-xs text-slate-500">{rev.description}</td>
-                              <td className="p-2 text-left">
-                                {rev.drawing_pdf ? (
-                                  <a 
-                                    href={`${API_BASE.replace('/api', '')}/${rev.drawing_pdf}`} 
-                                    target="_blank" 
-                                    rel="noreferrer"
-                                    className="text-blue-600 hover:text-blue-900"
-                                  >
-                                    View PDF
-                                  </a>
-                                ) : '—'}
-                              </td>
-                              <td className="p-2 text-right">
-                                <div className="text-xs  text-slate-700">{rev.po_number || 'N/A'}</div>
-                                <div className="text-[10px] text-slate-400">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="bg-slate-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button 
-                  type="button" 
-                  className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={() => setShowRevisions(false)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };

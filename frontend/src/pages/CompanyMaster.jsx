@@ -11,7 +11,7 @@ import {
   MapPin,
   Search
 } from 'lucide-react'
-import { FormControl, StatusBadge } from '../components/ui.jsx'
+import { FormControl, StatusBadge, Modal } from '../components/ui.jsx'
 
 const formatCustomerType = value => {
   if (!value) return '—'
@@ -59,221 +59,202 @@ const CompanyMaster = ({
 
   return (
     <>
-      {/* Modal Form */}
-      {showCreatePanel && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
-            {/* Header */}
-            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center">
-                  <Building2 className="w-6 h-6 text-indigo-600" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold tracking-[0.2em] text-indigo-600 ">Master Data</p>
-                  <h2 className="text-2xl font-semibold text-slate-900">Register Company</h2>
-                </div>
-              </div>
-              <button
-                onClick={onToggleCreatePanel}
-                className="p-2 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all"
-              >
-                <X className="w-6 h-6" />
-              </button>
+      <Modal
+        isOpen={showCreatePanel}
+        onClose={onToggleCreatePanel}
+        title="Register Company"
+      >
+        <form onSubmit={onInlineSubmit} className="space-y-8 max-h-[70vh] overflow-y-auto px-1">
+          {/* Company Info */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Building2 className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Company Information</h3>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormControl label="Company Name">
+                <input
+                  type="text"
+                  value={companyForm.companyName}
+                  onChange={e => setCompanyForm({ ...companyForm, companyName: e.target.value })}
+                  placeholder="Enter company name"
+                  className={fieldInputClass}
+                  required
+                />
+              </FormControl>
 
-            {/* Form Content */}
-            <form onSubmit={onInlineSubmit} className="flex-1 overflow-y-auto p-8 space-y-8">
-              {/* Company Info */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                  <Building2 className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-semibold text-slate-800  tracking-wider">Company Information</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-6">
-                  <FormControl label="Company Name">
-                    <input
-                      type="text"
-                      value={companyForm.companyName}
-                      onChange={e => setCompanyForm({ ...companyForm, companyName: e.target.value })}
-                      placeholder="Enter company name"
-                      className={fieldInputClass}
-                      required
-                    />
-                  </FormControl>
-                  <FormControl label="Customer Type">
-                    <select
-                      value={companyForm.customerType}
-                      onChange={e => setCompanyForm({ ...companyForm, customerType: e.target.value })}
-                      className={fieldInputClass}
-                    >
-                      <option value="REGULAR">Regular</option>
-                      <option value="PREMIUM">Premium</option>
-                      <option value="DISTRIBUTOR">Distributor</option>
-                    </select>
-                  </FormControl>
-                </div>
-              </div>
-
-              {/* Tax Info */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                  <User className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-semibold text-slate-800  tracking-wider">Tax Information</h3>
-                </div>
-                <div className="grid grid-cols-3 gap-6">
-                  <FormControl label="GSTIN">
-                    <input
-                      type="text"
-                      value={companyForm.gstin}
-                      onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value })}
-                      placeholder="XXXXXXXXXXXX"
-                      className={`${fieldInputClass} font-mono `}
-                      required
-                    />
-                  </FormControl>
-                  <FormControl label="CIN">
-                    <input
-                      type="text"
-                      value={companyForm.cin}
-                      onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value })}
-                      placeholder="CIN number"
-                      className={`${fieldInputClass} font-mono `}
-                    />
-                  </FormControl>
-                  <FormControl label="PAN">
-                    <input
-                      type="text"
-                      value={companyForm.pan}
-                      onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value })}
-                      placeholder="PAN number"
-                      className={`${fieldInputClass} font-mono `}
-                    />
-                  </FormControl>
-                </div>
-              </div>
-
-              {/* Billing Address */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                  <MapPin className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-semibold text-slate-800  tracking-wider">Billing Address</h3>
-                </div>
-                <FormControl label="Address Line 1">
-                  <input
-                    type="text"
-                    value={companyForm.billingAddress.line1}
-                    onChange={e => updateAddress('billingAddress', 'line1', e.target.value)}
-                    className={fieldInputClass}
-                    placeholder="Street name, Building number"
-                  />
-                </FormControl>
-                <div className="grid grid-cols-2 gap-6">
-                  <FormControl label="City">
-                    <input
-                      type="text"
-                      value={companyForm.billingAddress.city}
-                      onChange={e => updateAddress('billingAddress', 'city', e.target.value)}
-                      className={fieldInputClass}
-                    />
-                  </FormControl>
-                  <FormControl label="State">
-                    <input
-                      type="text"
-                      value={companyForm.billingAddress.state}
-                      onChange={e => updateAddress('billingAddress', 'state', e.target.value)}
-                      className={fieldInputClass}
-                    />
-                  </FormControl>
-                </div>
-                <div className="grid grid-cols-2 gap-6">
-                  <FormControl label="Pincode">
-                    <input
-                      type="text"
-                      value={companyForm.billingAddress.pincode}
-                      onChange={e => updateAddress('billingAddress', 'pincode', e.target.value)}
-                      className={`${fieldInputClass} font-mono`}
-                    />
-                  </FormControl>
-                  <FormControl label="Country">
-                    <input
-                      type="text"
-                      value={companyForm.billingAddress.country}
-                      onChange={e => updateAddress('billingAddress', 'country', e.target.value)}
-                      className={fieldInputClass}
-                    />
-                  </FormControl>
-                </div>
-              </div>
-
-              {/* Contact Information */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                  <User className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-semibold text-slate-800  tracking-wider">Contact Person</h3>
-                </div>
-                <FormControl label="Contact Person Name">
-                  <input
-                    type="text"
-                    value={companyForm.contactPerson || ''}
-                    onChange={e => setCompanyForm({ ...companyForm, contactPerson: e.target.value })}
-                    placeholder="e.g., Mr. Milind Potdar"
-                    className={fieldInputClass}
-                  />
-                </FormControl>
-                <div className="grid grid-cols-2 gap-6">
-                  <FormControl label="Mobile No.">
-                    <input
-                      type="tel"
-                      value={companyForm.contactMobile || ''}
-                      onChange={e => setCompanyForm({ ...companyForm, contactMobile: e.target.value })}
-                      placeholder="e.g., 9823714674"
-                      className={`${fieldInputClass} font-mono`}
-                    />
-                  </FormControl>
-                  <FormControl label="Email">
-                    <input
-                      type="email"
-                      value={companyForm.contactEmail || ''}
-                      onChange={e => setCompanyForm({ ...companyForm, contactEmail: e.target.value })}
-                      placeholder="e.g., contact@company.com"
-                      className={fieldInputClass}
-                    />
-                  </FormControl>
-                </div>
-              </div>
-            </form>
-
-            {/* Actions */}
-            <div className="px-8 py-6 border-t border-slate-100 flex gap-3 justify-end bg-slate-50/50">
-              <button
-                type="button"
-                onClick={onToggleCreatePanel}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-white hover:shadow-sm transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-8 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
-              >
-                {loading ? (
-                  <>
-                    <RotateCcw className="w-4 h-4 animate-spin" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-4 h-4" />
-                    <span>Save Company</span>
-                  </>
-                )}
-              </button>
+              <FormControl label="Customer Type">
+                <select
+                  value={companyForm.customerType}
+                  onChange={e => setCompanyForm({ ...companyForm, customerType: e.target.value })}
+                  className={fieldInputClass}
+                >
+                  <option value="REGULAR">Regular</option>
+                  <option value="PREMIUM">Premium</option>
+                  <option value="DISTRIBUTOR">Distributor</option>
+                </select>
+              </FormControl>
             </div>
           </div>
-        </div>
-      )}
+
+          {/* Tax Info */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Building2 className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Tax Information</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <FormControl label="GSTIN">
+                <input
+                  type="text"
+                  value={companyForm.gstin}
+                  onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value })}
+                  placeholder="XXXXXXXXXXXX"
+                  className={`${fieldInputClass} font-mono`}
+                  required
+                />
+              </FormControl>
+              <FormControl label="CIN">
+                <input
+                  type="text"
+                  value={companyForm.cin}
+                  onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value })}
+                  placeholder="CIN number"
+                  className={`${fieldInputClass} font-mono`}
+                />
+              </FormControl>
+              <FormControl label="PAN">
+                <input
+                  type="text"
+                  value={companyForm.pan}
+                  onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value })}
+                  placeholder="PAN number"
+                  className={`${fieldInputClass} font-mono`}
+                />
+              </FormControl>
+            </div>
+          </div>
+
+          {/* Billing Address */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <MapPin className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Billing Address</h3>
+            </div>
+            <div className="space-y-6">
+              <FormControl label="Address Line 1">
+                <input
+                  type="text"
+                  value={companyForm.billingAddress.line1}
+                  onChange={e => updateAddress('billingAddress', 'line1', e.target.value)}
+                  className={fieldInputClass}
+                  placeholder="Street name, Building number"
+                />
+              </FormControl>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormControl label="City">
+                  <input
+                    type="text"
+                    value={companyForm.billingAddress.city}
+                    onChange={e => updateAddress('billingAddress', 'city', e.target.value)}
+                    className={fieldInputClass}
+                  />
+                </FormControl>
+                <FormControl label="State">
+                  <input
+                    type="text"
+                    value={companyForm.billingAddress.state}
+                    onChange={e => updateAddress('billingAddress', 'state', e.target.value)}
+                    className={fieldInputClass}
+                  />
+                </FormControl>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormControl label="Pincode">
+                  <input
+                    type="text"
+                    value={companyForm.billingAddress.pincode}
+                    onChange={e => updateAddress('billingAddress', 'pincode', e.target.value)}
+                    className={`${fieldInputClass} font-mono`}
+                  />
+                </FormControl>
+                <FormControl label="Country">
+                  <input
+                    type="text"
+                    value={companyForm.billingAddress.country}
+                    onChange={e => updateAddress('billingAddress', 'country', e.target.value)}
+                    className={fieldInputClass}
+                  />
+                </FormControl>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Person */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <User className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Contact Person</h3>
+            </div>
+            <FormControl label="Contact Person Name">
+              <input
+                type="text"
+                value={companyForm.contactPerson || ''}
+                onChange={e => setCompanyForm({ ...companyForm, contactPerson: e.target.value })}
+                placeholder="e.g., Mr. Milind Potdar"
+                className={fieldInputClass}
+              />
+            </FormControl>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormControl label="Mobile No.">
+                <input
+                  type="tel"
+                  value={companyForm.contactMobile || ''}
+                  onChange={e => setCompanyForm({ ...companyForm, contactMobile: e.target.value })}
+                  placeholder="e.g., 9823714674"
+                  className={`${fieldInputClass} font-mono`}
+                />
+              </FormControl>
+              <FormControl label="Email">
+                <input
+                  type="email"
+                  value={companyForm.contactEmail || ''}
+                  onChange={e => setCompanyForm({ ...companyForm, contactEmail: e.target.value })}
+                  placeholder="e.g., contact@company.com"
+                  className={fieldInputClass}
+                />
+              </FormControl>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onToggleCreatePanel}
+              className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-10 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Save Company
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Action Toolbar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">

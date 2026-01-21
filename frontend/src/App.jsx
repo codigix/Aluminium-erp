@@ -1094,11 +1094,12 @@ function App() {
   }
 
   const allNavigationItems = [
-    { label: 'Customer Drawing', moduleId: 'customer-drawing', icon: 'clipboard' },
+    { label: 'Client Requirements ', moduleId: 'customer-drawing', icon: 'clipboard' },
+    { label: 'Client Quotations', moduleId: 'client-quotations', icon: 'clipboard' },
     { label: 'Customer PO', moduleId: 'customer-po', icon: 'document' },
     { label: 'Sales Order', moduleId: 'sales-order', icon: 'package' },
     { label: 'Design Orders', moduleId: 'design-orders', icon: 'palette' },
-    { label: 'Client Quotations', moduleId: 'client-quotations', icon: 'clipboard' },
+    
     { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'pencil', indent: true },
     { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'clipboard', indent: true },
     { label: 'Workstation Master', moduleId: 'workstation-master', icon: 'factory', indent: true },

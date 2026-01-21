@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, StatusBadge } from '../components/ui.jsx';
+import { Card, StatusBadge, Modal } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -150,7 +150,6 @@ const OperationMaster = ({ showForm, setShowForm }) => {
     setEditingId(op.id);
     setIsEditing(true);
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleToggleStatus = async (op) => {
@@ -222,133 +221,122 @@ const OperationMaster = ({ showForm, setShowForm }) => {
 
   return (
     <div className="space-y-8 pb-20">
-      {showForm && (
-        <Card>
-          <div className="p-2  mb-8">
-            <h2 className="text-lg  text-white flex items-center gap-3">
-              <div className="p-2 bg-indigo-500/50 rounded-lg">
-                <svg className="w-5 h-5 text-indigo-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              {isEditing ? 'Edit Operation' : 'Add New Operation'}
-            </h2>
-            <p className="text-indigo-100 text-xs mt-1 ml-13">Define operation parameters and standard times</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <Modal 
+        isOpen={showForm} 
+        onClose={() => { setShowForm(false); resetForm(); }}
+        title={isEditing ? 'Edit Operation' : 'Add New Operation'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Operation Code *</label>
+              <input 
+                type="text" 
+                name="operation_code"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                placeholder="e.g., OP-10"
+                value={formData.operation_code}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Operation Name *</label>
+              <input 
+                type="text" 
+                name="operation_name"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                placeholder="e.g., VMC Machining"
+                value={formData.operation_name}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Workstation *</label>
+              <select 
+                name="workstation_id"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                value={formData.workstation_id}
+                onChange={handleInputChange}
+                required
+              >
+                <option value="">Select Workstation</option>
+                {workstations.map(ws => (
+                  <option key={ws.id} value={ws.id}>{ws.workstation_name} ({ws.workstation_code})</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[11px]  text-slate-500  tracking-wider">Operation Code *</label>
+                <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Std Time *</label>
                 <input 
-                  type="text" 
-                  name="operation_code"
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  placeholder="e.g., OP-10"
-                  value={formData.operation_code}
+                  type="number" 
+                  name="std_time"
+                  step="0.01"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  value={formData.std_time}
                   onChange={handleInputChange}
                   required
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px]  text-slate-500  tracking-wider">Operation Name *</label>
-                <input 
-                  type="text" 
-                  name="operation_name"
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  placeholder="e.g., VMC Machining"
-                  value={formData.operation_name}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px]  text-slate-500  tracking-wider">Workstation *</label>
+                <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">UOM</label>
                 <select 
-                  name="workstation_id"
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  value={formData.workstation_id}
+                  name="time_uom"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  value={formData.time_uom}
                   onChange={handleInputChange}
-                  required
                 >
-                  <option value="">Select Workstation</option>
-                  {workstations.map(ws => (
-                    <option key={ws.id} value={ws.id}>{ws.workstation_name} ({ws.workstation_code})</option>
-                  ))}
+                  {timeUOMs.map(uom => <option key={uom} value={uom}>{uom}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px]  text-slate-500  tracking-wider">Std Time *</label>
-                  <input 
-                    type="number" 
-                    name="std_time"
-                    step="0.01"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                    value={formData.std_time}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px]  text-slate-500  tracking-wider">UOM</label>
-                  <select 
-                    name="time_uom"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                    value={formData.time_uom}
-                    onChange={handleInputChange}
-                  >
-                    {timeUOMs.map(uom => <option key={uom} value={uom}>{uom}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px]  text-slate-500  tracking-wider">Hourly Rate (Override)</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-3.5 text-slate-400 text-sm">₹</span>
-                  <input 
-                    type="number" 
-                    name="hourly_rate"
-                    step="0.01"
-                    className="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                    placeholder="Leave 0 to use workstation rate"
-                    value={formData.hourly_rate}
-                    onChange={handleInputChange}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 pt-6">
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Hourly Rate (Override)</label>
+              <div className="relative">
+                <span className="absolute left-4 top-2.5 text-slate-400 text-sm">₹</span>
                 <input 
-                  type="checkbox" 
-                  name="is_active"
-                  id="is_active"
-                  className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                  checked={formData.is_active === 1}
+                  type="number" 
+                  name="hourly_rate"
+                  step="0.01"
+                  className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  placeholder="Leave 0 to use workstation rate"
+                  value={formData.hourly_rate}
                   onChange={handleInputChange}
                 />
-                <label htmlFor="is_active" className="text-sm font-medium text-slate-700">Active</label>
               </div>
             </div>
-
-            <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
-              <button 
-                type="button" 
-                onClick={() => { setShowForm(false); resetForm(); }}
-                className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs  hover:bg-slate-50 transition-all"
-              >
-                Cancel
-              </button>
-              <button 
-                type="submit"
-                className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
-              >
-                {isEditing ? 'Update Operation' : 'Save Operation'}
-              </button>
+            <div className="flex items-center gap-2 pt-6">
+              <input 
+                type="checkbox" 
+                name="is_active"
+                id="is_active"
+                className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                checked={formData.is_active === 1}
+                onChange={handleInputChange}
+              />
+              <label htmlFor="is_active" className="text-sm font-medium text-slate-700">Active</label>
             </div>
-          </form>
-        </Card>
-      )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
+            <button 
+              type="button" 
+              onClick={() => { setShowForm(false); resetForm(); }}
+              className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+            >
+              {isEditing ? 'Update Operation' : 'Save Operation'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <div className="mb-6 flex justify-between items-center">
