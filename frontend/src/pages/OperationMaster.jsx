@@ -226,14 +226,14 @@ const OperationMaster = ({ showForm, setShowForm }) => {
         onClose={() => { setShowForm(false); resetForm(); }}
         title={isEditing ? 'Edit Operation' : 'Add New Operation'}
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Operation Code *</label>
+              <label className="text-xs font-medium text-slate-500">Operation Code *</label>
               <input 
                 type="text" 
                 name="operation_code"
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                 placeholder="e.g., OP-10"
                 value={formData.operation_code}
                 onChange={handleInputChange}
@@ -241,11 +241,11 @@ const OperationMaster = ({ showForm, setShowForm }) => {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Operation Name *</label>
+              <label className="text-xs font-medium text-slate-500">Operation Name *</label>
               <input 
                 type="text" 
                 name="operation_name"
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                 placeholder="e.g., VMC Machining"
                 value={formData.operation_name}
                 onChange={handleInputChange}
@@ -253,10 +253,10 @@ const OperationMaster = ({ showForm, setShowForm }) => {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Workstation *</label>
+              <label className="text-xs font-medium text-slate-500">Workstation *</label>
               <select 
                 name="workstation_id"
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                 value={formData.workstation_id}
                 onChange={handleInputChange}
                 required
@@ -269,22 +269,22 @@ const OperationMaster = ({ showForm, setShowForm }) => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Std Time *</label>
+                <label className="text-xs font-medium text-slate-500">Std Time *</label>
                 <input 
                   type="number" 
                   name="std_time"
                   step="0.01"
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                   value={formData.std_time}
                   onChange={handleInputChange}
                   required
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">UOM</label>
+                <label className="text-xs font-medium text-slate-500">UOM</label>
                 <select 
                   name="time_uom"
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                   value={formData.time_uom}
                   onChange={handleInputChange}
                 >
@@ -293,7 +293,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Hourly Rate (Override)</label>
+              <label className="text-xs font-medium text-slate-500">Hourly Rate (Override)</label>
               <div className="relative">
                 <span className="absolute left-4 top-2.5 text-slate-400 text-sm">₹</span>
                 <input 

@@ -61,7 +61,7 @@ const Vendors = ({ onAddVendor }) => {
       )}
       {vendors.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
                 <th className="px-4 py-3 text-left ">Vendor Name</th>
@@ -124,7 +124,7 @@ const Quotations = ({ onCreateRFQ }) => {
       )}
       {rfqs.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
                 <th className="px-4 py-3 text-left ">RFQ #</th>
@@ -189,7 +189,7 @@ const PurchaseOrders = ({ onCreatePO }) => {
       )}
       {pos.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
                 <th className="px-4 py-3 text-left ">PO #</th>

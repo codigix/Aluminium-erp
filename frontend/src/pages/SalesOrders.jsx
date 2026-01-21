@@ -333,7 +333,7 @@ const SalesOrders = ({
             )}
 
             {selectedPoForSo && !customerPosLoading && (
-              <div className="col-span-full mt-6 space-y-4">
+              <div className="col-span-full mt-6 ">
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                   <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                     <h4 className="text-[10px]  text-slate-400  tracking-[0.2em]">Review Items from {selectedPoForSo.po_number}</h4>
@@ -489,7 +489,7 @@ const SalesOrders = ({
 
       {!loading && hasOrders ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm bg-white">
+          <table className="w-full text-xs bg-white">
             <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
               <tr>
                 <th className="px-4 py-3 text-left">Client / Order ID</th>
@@ -659,7 +659,7 @@ const SalesOrders = ({
         </div>
       ) : (
         !loading && (
-          <div className="py-20 text-center space-y-4">
+          <div className="py-20 text-center ">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-full">
               <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

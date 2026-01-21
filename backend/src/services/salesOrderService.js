@@ -12,8 +12,8 @@ const listSalesOrders = async () => {
   return rows;
 };
 
-const getIncomingOrders = async (departmentCode) => {
-  console.log(`[getIncomingOrders-service] Starting query for department: "${departmentCode}"`);
+const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
+  console.log(`[getIncomingOrders-service] Starting query for department: "${departmentCode}", includeAccepted: ${includeAccepted}`);
   
   let whereClause = '';
   if (departmentCode === 'DESIGN_ENG') {
@@ -28,18 +28,27 @@ const getIncomingOrders = async (departmentCode) => {
     whereClause = `so.current_department = '${departmentCode}'`;
   }
   
+  const acceptedFilter = includeAccepted ? '' : ' AND so.request_accepted = 0';
+
   const query = `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
-            soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit
+            soi.item_id, soi.item_code, soi.drawing_no, 
+            COALESCE(soi.drawing_pdf, cd.file_path) as drawing_pdf,
+            soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
      LEFT JOIN (
-       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit
+       SELECT sales_order_id, id as item_id, item_code, drawing_no, drawing_pdf, description, quantity, unit
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id
-     WHERE (${whereClause}) AND so.request_accepted = 0
+     LEFT JOIN (
+       SELECT drawing_no, file_path, 
+              ROW_NUMBER() OVER (PARTITION BY drawing_no ORDER BY created_at DESC) as rn
+       FROM customer_drawings
+     ) cd ON cd.drawing_no = soi.drawing_no AND cd.rn = 1
+     WHERE (${whereClause})${acceptedFilter}
      ORDER BY so.created_at DESC`;
   
   const [rows] = await pool.query(query);
@@ -55,8 +64,8 @@ const createSalesOrder = async (customerPoId, companyId, projectName, drawingReq
 
     const [result] = await connection.execute(
       `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted)
-       VALUES (?, ?, ?, ?, ?, ?, 'CREATED', 'DESIGN_ENG', 0)`,
-      [customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate]
+       VALUES (?, ?, ?, ?, ?, ?, 'CREATED', ?, 0)`,
+      [customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate, drawingRequired ? 'DESIGN_ENG' : 'PRODUCTION']
     );
 
     const salesOrderId = result.insertId;
@@ -144,9 +153,14 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
         newStatus = 'MATERIAL_PURCHASE_IN_PROGRESS';
         nextDepartment = 'PROCUREMENT';
       }
-    } else if (departmentCode === 'PRODUCTION' && (currentOrder.status === 'MATERIAL_READY' || currentOrder.status === 'IN_PRODUCTION')) {
-      newStatus = 'PRODUCTION_COMPLETED';
-      nextDepartment = 'QC';
+    } else if (departmentCode === 'PRODUCTION') {
+      if (currentOrder.status === 'CREATED' || currentOrder.status === 'MATERIAL_READY' || currentOrder.status === 'DESIGN_APPROVED') {
+        newStatus = 'IN_PRODUCTION';
+        nextDepartment = 'PRODUCTION';
+      } else if (currentOrder.status === 'IN_PRODUCTION') {
+        newStatus = 'PRODUCTION_COMPLETED';
+        nextDepartment = 'QC';
+      }
     }
 
     await connection.execute(

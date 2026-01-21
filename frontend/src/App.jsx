@@ -42,12 +42,17 @@ import BOMApproval from './pages/BOMApproval'
 import BOMFormPage from './pages/BOMFormPage'
 import WorkstationMaster from './pages/WorkstationMaster'
 import OperationMaster from './pages/OperationMaster'
+import ProjectRequests from './pages/ProjectRequests'
+import MaterialRequirements from './pages/MaterialRequirements'
+import ProductionPlan from './pages/ProductionPlan'
+import WorkOrder from './pages/WorkOrder'
+import JobCard from './pages/JobCard'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master']
+const MODULE_IDS = ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card']
 const DEFAULT_MODULE = 'customer-drawing'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -170,13 +175,13 @@ const getContactStatusActionLabel = status => {
 const DEPARTMENT_MODULES = {
   SALES: ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
   DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'operation-master', 'workstation-master'],
-  PRODUCTION: ['incoming-orders', 'operation-master', 'workstation-master'],
+  PRODUCTION: ['incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
   SHIPMENT: ['incoming-orders'],
   ACCOUNTS: [],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
   PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
-  ADMIN: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'operation-master', 'workstation-master']
+  ADMIN: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card']
 }
 
 function App() {
@@ -1102,11 +1107,17 @@ function App() {
     
     { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'pencil', indent: true },
     { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'clipboard', indent: true },
-    { label: 'Workstation Master', moduleId: 'workstation-master', icon: 'factory', indent: true },
-    { label: 'Operation Master', moduleId: 'operation-master', icon: 'settings', indent: true },
     { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings', indent: true },
     { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'chart', indent: true },
     { label: 'BOM Approval', moduleId: 'bom-approval', icon: 'check', indent: true },
+    { label: 'Production Control', isGroup: true, isDisabled: true, groupId: 'production-group' },
+    { label: 'Project Requests', moduleId: 'project-requests', icon: 'clipboard', indent: true },
+    { label: 'Material Requirements', moduleId: 'material-requirements', icon: 'package', indent: true },
+    { label: 'Production Plan', moduleId: 'production-plan', icon: 'chart', indent: true },
+    { label: 'Work Order', moduleId: 'work-order', icon: 'document', indent: true },
+    { label: 'Job Card', moduleId: 'job-card', icon: 'clipboard', indent: true },
+    { label: 'Workstations', moduleId: 'workstation-master', icon: 'factory', indent: true },
+    { label: 'Operations', moduleId: 'operation-master', icon: 'settings', indent: true },
     { label: 'Vendor Management', isGroup: true, isDisabled: true, groupId: 'vendor-group' },
     { label: 'Vendors', moduleId: 'vendors', icon: 'handshake', indent: true },
     { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: 'message', indent: true },
@@ -1180,7 +1191,7 @@ function App() {
             </div>
 
             {authMode === 'login' ? (
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleLogin} className="">
                 <div>
                   <label className="block text-sm  text-slate-700 mb-2">Email</label>
                   <input
@@ -1723,6 +1734,26 @@ function App() {
                 {activeModule === 'operation-master' && (
                   <OperationMaster showForm={showOperationForm} setShowForm={setShowOperationForm} />
                 )}
+
+                {activeModule === 'project-requests' && (
+                  <ProjectRequests />
+                )}
+
+                {activeModule === 'material-requirements' && (
+                  <MaterialRequirements />
+                )}
+
+                {activeModule === 'production-plan' && (
+                  <ProductionPlan />
+                )}
+
+                {activeModule === 'work-order' && (
+                  <WorkOrder />
+                )}
+
+                {activeModule === 'job-card' && (
+                  <JobCard />
+                )}
               </>
             )}
           </div>
@@ -1866,7 +1897,7 @@ function App() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-6 grid gap-6 lg:grid-cols-[1.25fr_1fr]">
-              <div className="space-y-4">
+              <div className="">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs  text-slate-400 ">Directory</p>
@@ -1946,7 +1977,7 @@ function App() {
                     Activate this company to manage contacts.
                   </div>
                 )}
-                <form className="space-y-4" onSubmit={handleContactSubmit}>
+                <form className="" onSubmit={handleContactSubmit}>
                   <div className="space-y-2">
                     <label className="text-[0.65rem]  tracking-[0.35em] text-slate-500 ">Name</label>
                     <input
@@ -2105,7 +2136,7 @@ function App() {
                   <div className="border-t border-slate-200 pt-8">
                     <p className="text-base text-slate-900 mb-4">Line Items</p>
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <table className="w-full text-xs">
                         <thead className="bg-slate-50 border-y border-slate-200">
                           <tr>
                             <th className="px-4 py-3 text-left  text-slate-700">#</th>

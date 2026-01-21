@@ -320,7 +320,7 @@ const QualityControl = () => {
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full text-sm text-left">
+              <table className="w-full text-xs text-left">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   {activeTab === 'grn' ? (
                     <tr>
@@ -458,7 +458,7 @@ const QualityControl = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateGRN} className="p-6 space-y-4">
+            <form onSubmit={handleCreateGRN} className="p-6 ">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 tracking-wider ml-1">PO Number *</label>
@@ -561,7 +561,7 @@ const QualityControl = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateQC} className="p-6 space-y-4">
+            <form onSubmit={handleCreateQC} className="p-6 ">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 tracking-wider ml-1">Select GRN *</label>

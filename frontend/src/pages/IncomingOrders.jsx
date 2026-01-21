@@ -144,7 +144,7 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-slate-100 text-slate-500  tracking-[0.2em] text-[0.65rem]">
               <tr>
                 <th className="px-5 py-4 text-left ">SO Code</th>

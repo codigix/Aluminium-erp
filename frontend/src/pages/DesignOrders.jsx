@@ -1342,7 +1342,7 @@ const DesignOrders = () => {
               <p className="text-indigo-100 text-xs mt-1">Order: {reviewOrder.project_name}</p>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase">Customer</label>
@@ -1428,7 +1428,7 @@ const DesignOrders = () => {
           <div className="flex items-center justify-center min-h-screen px-4 py-8">
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowAddMaterialModal(false)}></div>
             <div className="relative bg-white rounded-2xl shadow-2xl max-w-5xl w-full overflow-hidden transform transition-all border border-slate-200">
-              <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+              <div className="bg-slate-50 p-2 border-b border-slate-200 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                   <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg text-xs">📦</span>
                   {isEditingMaterial ? 'Edit Material / Item' : 'Add New Material / Item'}
@@ -1443,7 +1443,7 @@ const DesignOrders = () => {
                 </button>
               </div>
 
-              <form onSubmit={handleMaterialSubmit} className="p-8 space-y-6">
+              <form onSubmit={handleMaterialSubmit} className="p-8 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Row 1 */}
                   <div className="space-y-1.5">

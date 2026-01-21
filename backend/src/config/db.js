@@ -796,6 +796,57 @@ const ensureOperationsTable = async () => {
   }
 };
 
+const ensureProductionPlanTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // Create production_plans table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS production_plans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        plan_code VARCHAR(50) UNIQUE NOT NULL,
+        plan_date DATE NOT NULL,
+        start_date DATE,
+        end_date DATE,
+        status ENUM('DRAFT', 'PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') DEFAULT 'DRAFT',
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        created_by INT,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Create production_plan_items table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS production_plan_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        plan_id INT NOT NULL,
+        sales_order_id INT NOT NULL,
+        sales_order_item_id INT NOT NULL,
+        planned_qty DECIMAL(12, 3) NOT NULL,
+        workstation_id INT,
+        planned_start_date DATE,
+        planned_end_date DATE,
+        status ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') DEFAULT 'PENDING',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE,
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE,
+        FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL
+      )
+    `);
+
+    console.log('Production Plan tables synchronized');
+  } catch (error) {
+    console.error('Production Plan tables sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -817,6 +868,7 @@ const bootstrapDatabase = async () => {
   await ensureBOMAdditionalTables();
   await ensureBOMMaterialsColumns();
   await ensureOperationsTable();
+  await ensureProductionPlanTables();
 };
 
 bootstrapDatabase();

@@ -55,7 +55,7 @@ const CompanyMaster = ({
                 <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">General</p>
                 <h3 className="text-md text-slate-900 text-xs">Company Profile</h3>
               </div>
-              <div className="space-y-4">
+              <div className="">
                 <FormControl label="Company Name">
                   <input className={fieldInputClass} value={companyForm.companyName} onChange={e => setCompanyForm(prev => ({ ...prev, companyName: e.target.value }))} required />
                 </FormControl>
@@ -82,7 +82,7 @@ const CompanyMaster = ({
                 <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">Compliance</p>
                 <h3 className="text-md text-slate-900 text-xs">Registration Numbers</h3>
               </div>
-              <div className="space-y-4">
+              <div className="">
                 <FormControl label="GSTIN">
                   <input className={`${fieldInputClass} `} value={companyForm.gstin} onChange={e => setCompanyForm(prev => ({ ...prev, gstin: e.target.value }))} required />
                 </FormControl>
@@ -157,7 +157,7 @@ const CompanyMaster = ({
     <Card id="company-master" title="Company Directory" subtitle="Master List">
       {companies.length ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-slate-100 text-slate-500  tracking-[0.2em] text-[0.65rem]">
               <tr>
                 <th className="px-5 py-4 text-left ">Company</th>

@@ -126,7 +126,7 @@ const QualityDashboard = () => {
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg border border-slate-200">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3 text-left font-bold text-slate-600  tracking-wider text-[10px]">GRN ID</th>
