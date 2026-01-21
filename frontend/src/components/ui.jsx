@@ -152,6 +152,23 @@ export const StatusBadge = ({ status }) => {
   )
 }
 
+export const Badge = ({ children, variant = 'default', className = '' }) => {
+  const variants = {
+    default: 'bg-slate-100 text-slate-600 border-slate-200',
+    success: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+    warning: 'bg-amber-50 text-amber-600 border-amber-200',
+    danger: 'bg-rose-50 text-rose-600 border-rose-200',
+    info: 'bg-blue-50 text-blue-600 border-blue-200',
+    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200'
+  };
+
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${variants[variant] || variants.default} ${className}`}>
+      {children}
+    </span>
+  );
+};
+
 export const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
 

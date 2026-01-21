@@ -515,339 +515,55 @@ const ClientQuotations = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen bg-slate-50/50 p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6 flex justify-between items-end">
+        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl text-slate-900 mb-1">Client Quotations</h1>
-            <p className="text-slate-600 text-xs">Create and track quotations from design-approved drawings</p>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Client Quotations</h1>
+            <p className="text-slate-500 text-xs font-medium">Create and track quotations from design-approved drawings</p>
           </div>
-          <div className="flex bg-slate-200 p-1 rounded-xl">
-            <button
-              onClick={() => setActiveTab('pending')}
-              className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'pending' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              Pending Approval
-            </button>
-            <button
-              onClick={() => setActiveTab('sent')}
-              className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'sent' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              Sent Quotations
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-          <div className={`bg-gradient-to-r ${activeTab === 'pending' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'} p-2`}>
-            <div className="flex justify-between items-center">
-              <h2 className="text-xs  text-white flex items-center gap-2">
-                {activeTab === 'pending' ? (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    Design-Approved Orders
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                    </svg>
-                    Sent Quotations History
-                  </>
-                )}
-              </h2>
+          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+            {[
+              { id: 'pending', label: 'Pending Approval', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'emerald' },
+              { id: 'sent', label: 'Sent History', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', color: 'blue' }
+            ].map(tab => (
               <button
-                onClick={activeTab === 'pending' ? fetchApprovedOrders : fetchSentQuotations}
-                disabled={loading}
-                className="px-3 py-1.5 bg-white rounded text-xs  shadow-sm transition-colors disabled:opacity-50"
-                style={{ color: activeTab === 'pending' ? '#059669' : '#4f46e5' }}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === tab.id 
+                    ? `bg-${tab.color}-600 text-white shadow-lg shadow-${tab.color}-200` 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
               >
-                ↻ Refresh
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={tab.icon} />
+                </svg>
+                {tab.label}
               </button>
-            </div>
+            ))}
           </div>
-
-          {loading ? (
-            <div className="py-12 text-center">
-              <div className="flex justify-center mb-3">
-                <div className={`w-6 h-6 border-2 ${activeTab === 'pending' ? 'border-emerald-600' : 'border-indigo-600'} border-t-transparent rounded-full animate-spin`}></div>
-              </div>
-              <p className="text-slate-600  text-sm">Loading data...</p>
-            </div>
-          ) : activeTab === 'pending' ? (
-            Object.keys(groupedByClient).length === 0 ? (
-              <div className="py-12 text-center">
-                <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-                <p className="text-slate-500 ">No design-approved orders found</p>
-                <p className="text-slate-400 text-sm mt-1">Orders must be approved by Design Engineer first</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full divide-y divide-slate-100">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Client Name</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Email</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Phone</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Date</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Items</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-100">
-                    {Object.entries(groupedByClient).map(([clientName, clientData]) => {
-                      const totalItems = clientData.orders.reduce((sum, order) => sum + (order.items?.length || 0), 0);
-                      return (
-                        <React.Fragment key={clientName}>
-                          <tr className="hover:bg-slate-50 transition-colors">
-                            <td className="p-2">
-                              <div className="text-slate-900 text-xs">{clientData.company_name}</div>
-                              {clientData.contact_person && (
-                                <div className="text-xs text-slate-600 mt-0.5">{clientData.contact_person}</div>
-                              )}
-                            </td>
-                            <td className="p-2">
-                              <div className="text-sm text-slate-600">{clientData.email || '—'}</div>
-                            </td>
-                            <td className="p-2">
-                              <div className="text-sm text-slate-600">{clientData.phone || '—'}</div>
-                            </td>
-                            <td className="p-2">
-                              <div className="text-sm text-slate-600">
-                                {new Date(clientData.created_at).toLocaleDateString('en-IN')}
-                              </div>
-                            </td>
-                            <td className="p-2 text-left">
-                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs ">
-                                {totalItems}
-                              </span>
-                            </td>
-                            <td className="p-2 text-left">
-                              <div className="flex gap-2 justify-left">
-                                <button
-                                  onClick={() => toggleExpandClient(clientName)}
-                                  className="px-4 py-1.5 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-colors inline-flex items-center gap-1"
-                                >
-                                  {expandedClientName === clientName ? 'Hide' : 'View'}
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteApprovedOrders(clientName)}
-                                  className="px-4 py-1.5 bg-red-600 text-white rounded text-xs  hover:bg-red-700 transition-colors inline-flex items-center gap-1"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-
-                          {expandedClientName === clientName && (
-                            <tr>
-                              <td colSpan="6" className="px-0 py-0">
-                                <div className="bg-slate-50 border-t border-b border-slate-200">
-                                  <div className="bg-white border border-slate-200 overflow-hidden">
-                                    <div className="bg-slate-100 p-2 border-b border-slate-200">
-                                      <h3 className="text-slate-900 text-xs">Approved Drawings & Pricing</h3>
-                                    </div>
-                                    <table className="w-full divide-y divide-slate-100">
-                                      <thead className="bg-white">
-                                        <tr className="border-b border-slate-200">
-                                          <th className="p-2 text-left text-xs  text-slate-700 ">#</th>
-                                          <th className="p-2 text-left text-xs  text-slate-700 ">Drawing</th>
-                                          <th className="p-2 text-left text-xs  text-slate-700 ">Description</th>
-                                          <th className="p-2 text-left text-xs  text-slate-700 ">Qty</th>
-                                          <th className="p-2 text-left text-xs  text-slate-700 ">Unit</th>
-                                          <th className="p-2 text-left text-xs  text-slate-700 ">Quote Price</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-slate-100">
-                                        {clientData.orders.flatMap((order, orderIdx) => 
-                                          (order.items || []).map((item, itemIdx) => (
-                                            <tr key={`${order.id}-${item.id}`} className="hover:bg-slate-50">
-                                              <td className="p-2 text-xs text-slate-600 ">
-                                                {clientData.orders.slice(0, orderIdx).reduce((sum, o) => sum + (o.items?.length || 0), 0) + itemIdx + 1}
-                                              </td>
-                                              <td className="p-2">
-                                                <div className="text-slate-900 text-xs">{item.drawing_no || 'N/A'}</div>
-                                              </td>
-                                              <td className="p-2 text-xs text-slate-600">{item.description || '—'}</td>
-                                              <td className="p-2 text-left text-sm text-slate-900 text-xs">{item.quantity}</td>
-                                              <td className="p-2 text-xs text-slate-600">{item.unit || 'Pcs'}</td>
-                                              <td className="p-2 text-right">
-                                                <input
-                                                  type="text"
-                                                  inputMode="decimal"
-                                                  placeholder="₹ 0.00"
-                                                  value={quotePricesMap[clientName]?.[item.id] || ''}
-                                                  onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                      handlePriceChange(clientName, item.id, val);
-                                                    }
-                                                  }}
-                                                  className="w-32 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                                />
-                                              </td>
-                                            </tr>
-                                          ))
-                                        )}
-                                      </tbody>
-                                    </table>
-                                    <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-between items-center">
-                                      <div>
-                                        <p className="text-xs text-slate-600 ">Total Quotation Value</p>
-                                        <p className="text-2xl  text-emerald-600">
-                                          ₹{calculateClientTotal(clientName).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                        </p>
-                                      </div>
-                                      <button
-                                        onClick={() => handleSendQuote(clientName)}
-                                        disabled={sendingClientName === clientName || calculateClientTotal(clientName) === 0}
-                                        className="px-6 py-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2 text-sm"
-                                      >
-                                        {sendingClientName === clientName ? 'Sending...' : 'Send Quote to Client'}
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          ) : (
-            sentQuotations.length === 0 ? (
-              <div className="py-12 text-center">
-                <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                </svg>
-                <p className="text-slate-500 ">No sent quotations found</p>
-                <p className="text-slate-400 text-sm mt-1">Quotations you send will appear here</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full divide-y divide-slate-100">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Quote ID</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Client</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Project / Details</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Total Amount</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Date</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Status</th>
-                      <th className="p-2 text-left text-xs  text-slate-700 ">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-100">
-                    {sentQuotations.map((group) => {
-                      const key = group.company_id;
-                      return (
-                        <React.Fragment key={key}>
-                          <tr className="hover:bg-slate-50 transition-colors">
-                            <td className="p-2 text-xs  text-indigo-600">QRT-{String(group.id).padStart(4, '0')}</td>
-                            <td className="p-2">
-                              <div className="text-slate-900 text-xs">{group.company_name}</div>
-                            </td>
-                            <td className="p-2 text-xs text-slate-600">
-                              {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : group.quotes[0]?.project_name}
-                            </td>
-                            <td className="p-2 text-xs  text-emerald-600">
-                              <div className="flex flex-col">
-                                <span className="text-slate-400 text-[10px] font-normal">Incl. GST (18%)</span>
-                                <span>₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                              </div>
-                            </td>
-                            <td className="p-2 text-xs text-slate-500">{new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                            <td className="p-2">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px]  ${
-                                group.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 
-                                group.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 
-                                'bg-slate-100 text-slate-700'
-                              }`}>
-                                {group.status}
-                              </span>
-                            </td>
-                            <td className="p-2">
-                              <button
-                                onClick={() => setExpandedSentKey(expandedSentKey === key ? null : key)}
-                                className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors"
-                              >
-                                {expandedSentKey === key ? 'Hide' : 'View'}
-                              </button>
-                            </td>
-                          </tr>
-                          {expandedSentKey === key && (
-                            <tr>
-                              <td colSpan="7" className="px-0 py-0">
-                                <div className="bg-slate-50 p-3 border-t border-b border-slate-200">
-                                  <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-                                    <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
-                                      <h4 className="text-[10px]  text-slate-700 ">Quotation Breakdown</h4>
-                                    </div>
-                                    <table className="w-full divide-y divide-slate-100">
-                                      <thead className="bg-white">
-                                        <tr className="border-b border-slate-200">
-                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">#</th>
-                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Drawing</th>
-                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Description</th>
-                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Qty</th>
-                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Unit</th>
-                                          <th className="p-2 text-right text-[10px]  text-slate-700 ">Quote Price</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-slate-100">
-                                        {group.quotes.map((q, idx) => (
-                                          <tr key={q.id} className="hover:bg-slate-50">
-                                            <td className="p-2 text-[10px] text-slate-600 ">{idx + 1}</td>
-                                            <td className="p-2">
-                                              <div className=" text-slate-900 text-[11px]">{q.drawing_no || '—'}</div>
-                                            </td>
-                                            <td className="p-2 text-[11px] text-slate-600">{q.item_description}</td>
-                                            <td className="p-2 text-left text-[11px]  text-slate-900">
-                                              {q.item_qty !== null ? Number(q.item_qty).toFixed(3) : '—'}
-                                            </td>
-                                            <td className="p-2 text-[11px] text-slate-600">{q.item_unit || 'NOS'}</td>
-                                            <td className="p-2 text-right text-[11px]  text-emerald-600">₹{(q.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                      <tfoot className="bg-slate-50">
-                                        <tr>
-                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-slate-700">Sub Total:</td>
-                                          <td className="p-2 text-right text-[11px] text-slate-900">₹{group.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                        </tr>
-                                        <tr>
-                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-slate-700">GST (18%):</td>
-                                          <td className="p-2 text-right text-[11px] text-slate-900">₹{(group.total_amount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                        </tr>
-                                        <tr className="bg-emerald-50">
-                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-emerald-700 ">Grand Total (Incl. GST):</td>
-                                          <td className="p-2 text-right text-[11px]  text-emerald-600 text-sm">₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                        </tr>
-                                      </tfoot>
-                                    </table>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          )}
         </div>
+
+        <DataTable
+          columns={activeTab === 'pending' ? pendingColumns : sentColumns}
+          data={activeTab === 'pending' ? pendingData : sentQuotations}
+          loading={loading}
+          searchPlaceholder={`Search ${activeTab === 'pending' ? 'pending orders' : 'sent quotations'}...`}
+          renderExpanded={activeTab === 'pending' ? renderPendingExpanded : renderSentExpanded}
+          emptyMessage={activeTab === 'pending' ? 'No design-approved orders found' : 'No sent quotations found'}
+          actions={
+            <button
+              onClick={activeTab === 'pending' ? fetchApprovedOrders : fetchSentQuotations}
+              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors group"
+              title="Refresh Data"
+            >
+              <svg className={`w-5 h-5 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          }
+        />
       </div>
     </div>
   );

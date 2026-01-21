@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, StatusBadge, Modal } from '../components/ui.jsx';
+import { Card, Modal, DataTable, Badge, FormControl } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -219,8 +219,131 @@ const OperationMaster = ({ showForm, setShowForm }) => {
     op.operation_code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const columns = [
+    { 
+      label: 'Operation Code', 
+      key: 'operation_code', 
+      sortable: true,
+      render: (val) => <span className="font-bold text-indigo-600 font-mono">{val}</span>
+    },
+    { 
+      label: 'Operation Name', 
+      key: 'operation_name', 
+      sortable: true,
+      render: (val) => <span className="font-medium text-slate-900">{val}</span>
+    },
+    { 
+      label: 'Workstation', 
+      key: 'workstation_name', 
+      sortable: true,
+      render: (val, row) => (
+        <div>
+          <div className="text-slate-900 font-medium">{val}</div>
+          <div className="text-[10px] text-slate-400 font-mono">{row.workstation_code}</div>
+        </div>
+      )
+    },
+    { 
+      label: 'Std Time', 
+      key: 'std_time',
+      render: (val, row) => (
+        <span className="text-slate-600 font-medium">
+          {val} {row.time_uom}
+        </span>
+      )
+    },
+    { 
+      label: 'Hourly Rate', 
+      key: 'operation_rate',
+      render: (val) => (
+        <span className="text-emerald-600 font-bold">
+          ₹{val || 0}
+        </span>
+      )
+    },
+    { 
+      label: 'Status', 
+      key: 'is_active',
+      render: (val) => (
+        <Badge variant={val ? 'success' : 'danger'}>
+          {val ? 'Active' : 'Inactive'}
+        </Badge>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex justify-end gap-2">
+          <button 
+            onClick={() => handleEdit(row)}
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            title="Edit Operation"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button 
+            onClick={() => handleToggleStatus(row)}
+            className={`p-1.5 rounded-lg transition-colors ${row.is_active ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
+            title={row.is_active ? 'Disable Operation' : 'Enable Operation'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          </button>
+          <button 
+            onClick={() => handleDelete(row)}
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            title="Delete Operation"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      )
+    }
+  ];
+
   return (
-    <div className="space-y-8 pb-20">
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Operation Master</h1>
+          <p className="text-xs text-slate-500 font-medium">Define and manage manufacturing operations and standard times</p>
+        </div>
+        <div className="flex gap-2">
+          <button 
+            onClick={fetchOperations}
+            className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all"
+            title="Refresh Data"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <button 
+            onClick={() => { resetForm(); setShowForm(true); }}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all active:scale-95"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Operation
+          </button>
+        </div>
+      </div>
+
+      <DataTable 
+        columns={columns}
+        data={operations}
+        loading={loading}
+        searchPlaceholder="Search by code or name..."
+      />
+
       <Modal 
         isOpen={showForm} 
         onClose={() => { setShowForm(false); resetForm(); }}

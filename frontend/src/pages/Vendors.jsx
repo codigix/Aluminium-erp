@@ -671,7 +671,7 @@ const Vendors = () => {
             ))}
           </div>
         )}
-      </Card>
+    
 
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -693,8 +693,8 @@ const Vendors = () => {
           </div>
         </div>
       )}
-    </div>
+   
+</div>
   );
 };
-
 export default Vendors;
