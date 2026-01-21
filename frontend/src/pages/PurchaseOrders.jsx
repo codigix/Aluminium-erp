@@ -29,12 +29,12 @@ const formatCurrency = (value, currency = 'INR') => {
 };
 
 const PurchaseOrders = () => {
+  const [expandedPOs, setExpandedPOs] = useState({});
   const [pos, setPos] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [quotations, setQuotations] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
   const [poItems, setPoItems] = useState([]);
@@ -60,6 +60,13 @@ const PurchaseOrders = () => {
     fetchStats();
     fetchApprovedQuotations();
   }, []);
+
+  const toggleExpandPO = (poId) => {
+    setExpandedPOs(prev => ({
+      ...prev,
+      [poId]: !prev[poId]
+    }));
+  };
 
   const fetchPOs = async () => {
     try {
@@ -228,23 +235,7 @@ const PurchaseOrders = () => {
   };
 
   const handleViewPO = async (poId) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/purchase-orders/${poId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch PO details');
-      const data = await response.json();
-      setSelectedPO(data);
-      setPoItems(data.items || []);
-      setShowViewModal(true);
-    } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to load PO details', 'error');
-    }
+    toggleExpandPO(poId);
   };
 
   const handleEditPO = async (poId) => {
@@ -401,52 +392,108 @@ const PurchaseOrders = () => {
                 </tr>
               </thead>
               <tbody>
-                {pos.map((po) => (
-                  <tr key={`po-${po.id}`} className="border-t border-slate-100">
-                    <td className="px-4 py-4 font-medium text-slate-900">{po.po_number || `PO-${String(po.id).padStart(4, '0')}`}</td>
-                    <td className="px-4 py-4 text-slate-600">{po.vendor_name}</td>
-                    <td className="px-4 py-4 text-slate-900 text-xs">{formatCurrency(po.total_amount)}</td>
-                    <td className="px-4 py-4 text-slate-600">{formatDate(po.expected_delivery_date)}</td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs  ${poStatusColors[po.status]?.badge}`}>
-                        {poStatusColors[po.status]?.label || po.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">{po.items_count || 0} items</td>
-                    <td className="px-4 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleViewPO(po.id)}
-                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
-                          title="View PO Details"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleEditPO(po.id)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
-                          title="Edit PO"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDeletePO(po.id)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
-                          title="Delete PO"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {pos.map((po) => {
+                  const isExpanded = expandedPOs[po.id];
+                  return (
+                    <React.Fragment key={`po-group-${po.id}`}>
+                      <tr 
+                        className={`border-t border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer ${isExpanded ? 'bg-slate-50' : ''}`}
+                        onClick={() => toggleExpandPO(po.id)}
+                      >
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </span>
+                            <span className="font-medium text-slate-900">{po.po_number || `PO-${String(po.id).padStart(4, '0')}`}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-slate-600">{po.vendor_name}</td>
+                        <td className="px-4 py-4 text-slate-900 text-xs font-bold">{formatCurrency(po.total_amount)}</td>
+                        <td className="px-4 py-4 text-slate-600 text-xs">{formatDate(po.expected_delivery_date)}</td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold tracking-wider border ${poStatusColors[po.status]?.badge}`}>
+                            {poStatusColors[po.status]?.label?.toUpperCase() || po.status?.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-slate-500 text-xs italic">{po.items_count || 0} items</td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => handleEditPO(po.id)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 shadow-sm"
+                              title="Edit PO"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDeletePO(po.id)}
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 shadow-sm"
+                              title="Delete PO"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan="7" className="px-8 py-4 bg-slate-50/50">
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                              <table className="w-full text-xs">
+                                <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] font-bold tracking-wider">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left">Description</th>
+                                    <th className="px-4 py-2 text-left">Material</th>
+                                    <th className="px-4 py-2 text-center">Qty</th>
+                                    <th className="px-4 py-2 text-right">Unit Rate</th>
+                                    <th className="px-4 py-2 text-right">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {po.items && po.items.length > 0 ? (
+                                    po.items.map((item, idx) => (
+                                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-4 py-2">
+                                          <p className="font-medium text-slate-900">{item.description}</p>
+                                          {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
+                                        </td>
+                                        <td className="px-4 py-2 text-slate-600">{item.material_name || '—'}</td>
+                                        <td className="px-4 py-2 text-center font-bold">{item.quantity} {item.unit || 'NOS'}</td>
+                                        <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.unit_rate)}</td>
+                                        <td className="px-4 py-2 text-right font-bold text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
+                                      </tr>
+                                    ))
+                                  ) : (
+                                    <tr>
+                                      <td colSpan="5" className="px-4 py-6 text-center text-slate-400 italic">No items found for this PO</td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                                {po.items && po.items.length > 0 && (
+                                  <tfoot className="bg-slate-50/50">
+                                    <tr>
+                                      <td colSpan="4" className="px-4 py-2 text-right font-bold text-slate-500">Total Amount:</td>
+                                      <td className="px-4 py-2 text-right font-black text-indigo-600 text-sm">
+                                        {formatCurrency(po.total_amount)}
+                                      </td>
+                                    </tr>
+                                  </tfoot>
+                                )}
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -628,103 +675,6 @@ const PurchaseOrders = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {showViewModal && selectedPO && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-md text-slate-900 text-xs">Purchase Order Details</h3>
-              <button onClick={() => setShowViewModal(false)} className="text-slate-500 text-2xl">✕</button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500  tracking-wider  mb-1">PO Number</p>
-                <p className="text-md text-slate-900">{selectedPO.po_number}</p>
-              </div>
-              <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500  tracking-wider  mb-1">Vendor</p>
-                <p className="text-md text-slate-900">{selectedPO.vendor_name}</p>
-              </div>
-              <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500  tracking-wider  mb-1">Total Amount</p>
-                <p className="text-lg  text-emerald-600">{formatCurrency(selectedPO.total_amount)}</p>
-              </div>
-              <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500  tracking-wider  mb-1">Status</p>
-                <span className={`inline-block px-3 py-1 rounded-full text-xs  ${poStatusColors[selectedPO.status]?.badge}`}>
-                  {poStatusColors[selectedPO.status]?.label || selectedPO.status}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500  tracking-wider  mb-1">Expected Delivery</p>
-                <p className="text-md text-slate-900">{formatDate(selectedPO.expected_delivery_date)}</p>
-              </div>
-              <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500  tracking-wider  mb-1">Created</p>
-                <p className="text-md text-slate-900">{formatDate(selectedPO.created_at)}</p>
-              </div>
-            </div>
-
-            {selectedPO.notes && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 p-4 rounded">
-                <p className="text-xs text-blue-600  tracking-wider  mb-2">Notes</p>
-                <p className="text-slate-700">{selectedPO.notes}</p>
-              </div>
-            )}
-
-            <div className="mb-6">
-              <h4 className="text-sm text-slate-900 text-xs mb-3">Order Items ({poItems.length})</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-100 text-slate-600 ">
-                    <tr>
-                      <th className="px-3 py-2 text-left ">Item Code</th>
-                      <th className="px-3 py-2 text-left ">Description</th>
-                      <th className="px-3 py-2 text-left ">Material</th>
-                      <th className="px-3 py-2 text-right ">Qty</th>
-                      <th className="px-3 py-2 text-center ">Unit</th>
-                      <th className="px-3 py-2 text-right ">Rate</th>
-                      <th className="px-3 py-2 text-right ">Amount</th>
-                      <th className="px-3 py-2 text-right ">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {poItems.map((item, idx) => (
-                      <tr key={idx} className="border-t border-slate-100">
-                        <td className="px-3 py-2 text-slate-600">{item.item_code || '—'}</td>
-                        <td className="px-3 py-2 text-slate-600">{item.description || '—'}</td>
-                        <td className="px-3 py-2 text-slate-600">
-                          {item.material_name ? (
-                            <div>
-                              <p className="font-medium">{item.material_name}</p>
-                              {item.material_type && <p className="text-[10px] opacity-70">{item.material_type}</p>}
-                            </div>
-                          ) : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right font-medium text-slate-900">{item.quantity}</td>
-                        <td className="px-3 py-2 text-center text-slate-600">{item.unit}</td>
-                        <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrency(item.unit_rate)}</td>
-                        <td className="px-3 py-2 text-right  text-emerald-600">{formatCurrency(item.amount)}</td>
-                        <td className="px-3 py-2 text-right text-slate-900 text-xs">{formatCurrency(item.total_amount || (parseFloat(item.amount) + parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}

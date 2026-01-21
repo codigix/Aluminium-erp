@@ -152,7 +152,32 @@ const SalesOrders = ({
 }) => {
   const [expandedItems, setExpandedItems] = useState({})
   const list = Array.isArray(orders) ? orders : []
-  const hasOrders = list.length > 0
+  
+  // Group orders by company to support "Single Request" view
+  const groupedOrders = list.reduce((acc, order) => {
+    const key = order.company_id || 'unassigned'
+    if (!acc[key]) {
+      acc[key] = {
+        ...order,
+        all_items: [...(order.items || [])],
+        all_pos: [order.po_number],
+        total_net_value: Number(order.po_net_total) || 0,
+        order_count: 1
+      }
+    } else {
+      acc[key].all_items = [...acc[key].all_items, ...(order.items || [])]
+      if (order.po_number && !acc[key].all_pos.includes(order.po_number)) {
+        acc[key].all_pos.push(order.po_number)
+      }
+      acc[key].total_net_value += Number(order.po_net_total) || 0
+      acc[key].order_count += 1
+      // Keep the most recent status/priority or similar logic if needed
+    }
+    return acc
+  }, {})
+
+  const displayList = Object.values(groupedOrders)
+  const hasOrders = displayList.length > 0
 
   if (showSalesOrderForm) {
     const filteredPos = (customerPos || []).filter(po => String(po.company_id) === String(salesOrderForm.companyId))
