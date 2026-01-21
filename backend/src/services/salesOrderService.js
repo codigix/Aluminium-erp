@@ -1,15 +1,22 @@
 const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
-const listSalesOrders = async () => {
-  const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path
-     FROM sales_orders so
-     LEFT JOIN companies c ON c.id = so.company_id
-     LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-     WHERE so.customer_po_id IS NOT NULL
-     ORDER BY so.created_at DESC`
-  );
+const listSalesOrders = async (includeWithoutPo = false) => {
+  let query = `
+    SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    (SELECT drawing_no FROM sales_order_items WHERE sales_order_id = so.id LIMIT 1) as drawing_no
+    FROM sales_orders so
+    LEFT JOIN companies c ON c.id = so.company_id
+    LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+  `;
+  
+  if (!includeWithoutPo) {
+    query += ' WHERE so.customer_po_id IS NOT NULL';
+  }
+  
+  query += ' ORDER BY so.created_at DESC';
+
+  const [rows] = await pool.query(query);
   return rows;
 };
 

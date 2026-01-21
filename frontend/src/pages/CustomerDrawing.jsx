@@ -7,6 +7,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api
 
 const CustomerDrawing = () => {
   const [drawings, setDrawings] = useState([]);
+  const [requirements, setRequirements] = useState([]);
   const [showFormModal, setShowFormModal] = useState(false);
   const [reqLoading, setReqLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
@@ -274,7 +275,7 @@ const CustomerDrawing = () => {
     try {
       setReqLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders`, {
+      const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requirements');
@@ -573,6 +574,7 @@ const CustomerDrawing = () => {
         }
       }
       fetchDrawings();
+      fetchRequirements();
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     } finally {
@@ -611,7 +613,9 @@ const CustomerDrawing = () => {
         await shareDrawingsBulkAPI(recentDrawings.map(d => d.id));
         Swal.fire('Success', `All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`, 'success');
         setLastUploadedDrawings([]);
+        setShowFormModal(false);
         fetchDrawings();
+        fetchRequirements();
       }
     } catch (error) {
       console.error(error);
@@ -642,6 +646,7 @@ const CustomerDrawing = () => {
         await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.id));
         Swal.fire('Success', `All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer as a single request`, 'success');
         fetchDrawings();
+        fetchRequirements();
       } catch (error) {
         Swal.fire('Error', error.message, 'error');
       } finally {
@@ -664,6 +669,7 @@ const CustomerDrawing = () => {
       
       Swal.fire('Success', 'Drawing saved and sent to Design Engineer for review and approval', 'success');
       fetchDrawings();
+      fetchRequirements();
     } catch (error) {
       console.error(error);
       Swal.fire('Error', error.message, 'error');
@@ -684,6 +690,7 @@ const CustomerDrawing = () => {
           setNewDrawing({
             client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: ''
           });
+          setShowFormModal(false);
         }
       } else {
         let successIds = [];
@@ -699,9 +706,11 @@ const CustomerDrawing = () => {
           Swal.fire('Success', `${successIds.length} drawings added and sent to Design Engineering as a single request`, 'success');
           setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
           setClientLocked(true);
+          setShowFormModal(false);
         }
       }
       fetchDrawings();
+      fetchRequirements();
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     } finally {
@@ -723,6 +732,7 @@ const CustomerDrawing = () => {
       
       Swal.fire('Shared', 'Drawing shared with Engineering Department', 'success');
       fetchDrawings(searchTerm);
+      fetchRequirements();
     } catch (error) {
       console.error(error);
       Swal.fire('Error', error.message, 'error');
@@ -883,354 +893,23 @@ const CustomerDrawing = () => {
             </div>
             <DataTable 
               columns={requirementColumns}
-              data={drawings}
-              loading={loading}
+              data={requirements}
+              loading={reqLoading}
             />
           </Card>
         </div>
-        
-        {/* SECTION 3: CUSTOMER DRAWINGS TABLE */}
-                <div className="flex gap-1">
-                  <div className="relative flex-1 client-input-container">
-                    <input 
-                      type="text"
-                      required
-                      disabled={clientLocked}
-                      placeholder="Type client name..."
-                      className={`w-full px-3 py-1.5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all ${clientLocked ? 'bg-slate-100 cursor-not-allowed text-slate-600  border-slate-300' : 'border-slate-300 hover:border-slate-400'}`}
-                      value={newDrawing.client_name}
-                      onChange={(e) => handleClientInput(e.target.value)}
-                      onFocus={() => newDrawing.client_name && setShowSuggestions(true)}
-                    />
-                    {showSuggestions && clientSuggestions.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 rounded shadow-lg z-10 max-h-48 overflow-y-auto">
-                        {clientSuggestions.map((company) => (
-                          <button
-                            key={company.id}
-                            type="button"
-                            onClick={() => handleSelectClient(company)}
-                            className="w-full text-left px-3 py-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
-                          >
-                            <div className="text-slate-900 text-xs">{company.company_name}</div>
-                            {company.contact_email && <div className="text-slate-500 text-xs">{company.contact_email}</div>}
-                            {company.contact_mobile && <div className="text-slate-500 text-xs">{company.contact_mobile}</div>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {clientLocked && (
-                    <button 
-                      type="button"
-                      onClick={() => setClientLocked(false)}
-                      className="p-1 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-100 transition-colors text-sm"
-                      title="Change Client"
-                    >
-                      🔄
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className=" flex items-center gap-2 text-xs text-slate-600">Contact Person</label>
-                <input 
-                  type="text"
-                  placeholder="Contact person name"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.contact_person}
-                  onChange={(e) => setNewDrawing({...newDrawing, contact_person: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className=" flex items-center gap-2 text-xs text-slate-600">Phone</label>
-                <input 
-                  type="text"
-                  placeholder="Phone number"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.phone_number}
-                  onChange={(e) => setNewDrawing({...newDrawing, phone_number: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className=" flex items-center gap-2 text-xs text-slate-600">Email</label>
-                <input 
-                  type="email"
-                  placeholder="Email address"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.email_address}
-                  onChange={(e) => setNewDrawing({...newDrawing, email_address: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className=" flex items-center gap-2 text-xs text-slate-600">Type</label>
-                <input 
-                  type="text"
-                  placeholder="Customer type"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.customer_type}
-                  onChange={(e) => setNewDrawing({...newDrawing, customer_type: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className=" flex items-center gap-2 text-xs text-slate-600">GSTIN</label>
-                <input 
-                  type="text"
-                  placeholder="GST number"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.gstin}
-                  onChange={(e) => setNewDrawing({...newDrawing, gstin: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className=" flex items-center gap-2 text-xs text-slate-600">City</label>
-                <input 
-                  type="text"
-                  placeholder="City"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.city}
-                  onChange={(e) => setNewDrawing({...newDrawing, city: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className=" flex items-center gap-2 text-xs text-slate-600">State</label>
-                <input 
-                  type="text"
-                  placeholder="State"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.state}
-                  onChange={(e) => setNewDrawing({...newDrawing, state: e.target.value})}
-                />
-              </div>
-              <div className="lg:col-span-2">
-                <label className=" flex items-center gap-2 text-xs text-slate-600">Billing Address</label>
-                <input 
-                  type="text"
-                  placeholder="Billing address"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.billing_address}
-                  onChange={(e) => setNewDrawing({...newDrawing, billing_address: e.target.value})}
-                />
-              </div>
-              <div className="lg:col-span-2">
-                <label className=" flex items-center gap-2 text-xs text-slate-600">Shipping Address</label>
-                <input 
-                  type="text"
-                  placeholder="Shipping address"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                  value={newDrawing.shipping_address}
-                  onChange={(e) => setNewDrawing({...newDrawing, shipping_address: e.target.value})}
-                />
-              </div>
-            </div>
-
-              {/* CONDITIONAL FIELDS BASED ON MODE */}
-              {uploadMode === 'manual' ? (
-                <div className="lg:col-span-5 mt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-xs font-semibold text-slate-700">Drawing Details</h3>
-                    <button 
-                      type="button"
-                      onClick={addManualDrawingRow}
-                      className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md text-[10px] hover:bg-indigo-100 transition-colors flex items-center gap-1"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
-                      Add Drawing
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                    <table className="min-w-full divide-y divide-slate-200">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Drawing # *</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Description</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Rev</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider w-20">Qty</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">File *</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Notes</th>
-                          <th className="px-3 py-2 text-center text-[10px] font-medium text-slate-500 uppercase tracking-wider w-10"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-slate-200">
-                        {manualDrawings.map((drawing, index) => (
-                          <tr key={drawing.id}>
-                            <td className="px-2 py-2">
-                              <input 
-                                type="text" 
-                                required
-                                placeholder="DRW-1001"
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                                value={drawing.drawing_no}
-                                onChange={(e) => handleManualDrawingChange(drawing.id, 'drawing_no', e.target.value)}
-                              />
-                            </td>
-                            <td className="px-2 py-2">
-                              <input 
-                                type="text" 
-                                placeholder="Aluminum Frame"
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                                value={drawing.description}
-                                onChange={(e) => handleManualDrawingChange(drawing.id, 'description', e.target.value)}
-                              />
-                            </td>
-                            <td className="px-2 py-2 w-16">
-                              <input 
-                                type="text" 
-                                placeholder="A"
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                                value={drawing.revision}
-                                onChange={(e) => handleManualDrawingChange(drawing.id, 'revision', e.target.value)}
-                              />
-                            </td>
-                            <td className="px-2 py-2">
-                              <input 
-                                type="number" 
-                                min="1"
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                                value={drawing.qty}
-                                onChange={(e) => handleManualDrawingChange(drawing.id, 'qty', e.target.value)}
-                              />
-                            </td>
-                            <td className="px-2 py-2">
-                              <div className="relative">
-                                <input 
-                                  type="file" 
-                                  required={!drawing.file}
-                                  accept=".pdf,.dwg,.step,.stp"
-                                  className="hidden"
-                                  onChange={(e) => handleManualFileChange(e, drawing.id)}
-                                  id={`file-${drawing.id}`}
-                                />
-                                <label 
-                                  htmlFor={`file-${drawing.id}`}
-                                  className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-[10px] cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400'}`}
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                                  <span className="truncate max-w-[80px]">{drawing.file ? drawing.file.name : 'Choose File'}</span>
-                                </label>
-                              </div>
-                            </td>
-                            <td className="px-2 py-2">
-                              <input 
-                                type="text" 
-                                placeholder="Notes..."
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                                value={drawing.remarks}
-                                onChange={(e) => handleManualDrawingChange(drawing.id, 'remarks', e.target.value)}
-                              />
-                            </td>
-                            <td className="px-2 py-2 text-center">
-                              {manualDrawings.length > 1 && (
-                                <button 
-                                  type="button"
-                                  onClick={() => removeManualDrawingRow(drawing.id)}
-                                  className="text-slate-400 hover:text-red-500 transition-colors"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                /* BULK MODE */
-                <>
-                  <div className="lg:col-span-4 mt-2">
-                    <label className=" flex items-center gap-2 text-xs text-slate-600">Excel File <span className="text-red-500">*</span></label>
-                    <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-4 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
-                      <input 
-                        type="file" 
-                        required
-                        accept=".xlsx,.xls"
-                        className="hidden"
-                        onChange={handleFileChange}
-                        id="bulk-file"
-                      />
-                      <label htmlFor="bulk-file" className="cursor-pointer text-center w-full">
-                        <svg className="mx-auto h-8 w-8 text-indigo-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 7v6m0 0v6m0-6h6m0 0h6m-6-6H6m0 0H0"/></svg>
-                        <p className="text-sm text-slate-900 ">{newDrawing.file ? newDrawing.file.name : 'Drag Excel file or click'}</p>
-                        <p className="text-xs text-slate-600">Columns: Drawing No, Revision, Description, Qty</p>
-                        {newDrawing.file && (newDrawing.file.name.endsWith('.xlsx') || newDrawing.file.name.endsWith('.xls')) && (
-                          <p className="mt-1 text-xs text-emerald-600 ">✅ Ready</p>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-                </>
-              )}
-
-            <div className="mt-3 flex gap-2 justify-end border-t border-slate-200 pt-3">
-              <button 
-                type="button"
-                onClick={() => {
-                  setNewDrawing({ client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' });
-                  setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
-                  setClientLocked(false);
-                }}
-                className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs  transition-colors"
-              >
-                Clear
-              </button>
-              <button 
-                type="submit"
-                disabled={loading}
-                className={`px-5 py-1.5 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all flex items-center gap-1 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                {loading ? 'Processing...' : uploadMode === 'bulk' ? 'Upload' : 'Save'}
-              </button>
-              {uploadMode === 'manual' && (
-                <button 
-                  type="button"
-                  onClick={handleAddAndSendToDesign}
-                  disabled={loading}
-                  className={`px-5 py-1.5 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all flex items-center gap-1 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                  {loading ? 'Sending...' : '➤ Send to Design Engineer'}
-                </button>
-              )}
-            </div>
-
-            {lastUploadedDrawings && lastUploadedDrawings.clientName && (
-              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                    <div>
-                      <p className="text-xs  text-emerald-900">✅ {lastUploadedDrawings.count} drawings uploaded from Excel</p>
-                      <p className="text-xs text-emerald-700 mt-0.5">Ready to send to Design Engineer for review and approval</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => sendBulkUploadedToDesign(lastUploadedDrawings.clientName, lastUploadedDrawings.count)}
-                    disabled={loading}
-                    className={`px-4 py-1.5 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all flex items-center gap-1 whitespace-nowrap ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                    {loading ? 'Sending...' : '➤ Send to Design'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </form>
-        </div>
 
         {/* SECTION 3: CUSTOMER DRAWINGS TABLE */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200">
-          <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
-            <div>
-              <h2 className="text-base text-slate-900 flex items-center gap-2 mb-0.5">
-                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Drawings Database
-              </h2>
-              <p className="text-xs text-slate-600"><span className="">{drawings.length}</span> drawings | <span className="">{Object.keys(groupedDrawings).length}</span> clients</p>
-            </div>
+        <div className="mb-4">
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200">
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+              <div>
+                <h2 className="text-base text-slate-900 flex items-center gap-2 mb-0.5">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  Drawings Database
+                </h2>
+                <p className="text-xs text-slate-600"><span className="">{drawings.length}</span> drawings | <span className="">{Object.keys(groupedDrawings).length}</span> clients</p>
+              </div>
             <div className="flex items-center gap-2">
               <select 
                 className="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs  text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
@@ -1445,6 +1124,7 @@ const CustomerDrawing = () => {
           </div>
         </div>
       </div>
+    </div>
 
       {/* Edit Modal */}
       {showEditModal && (
@@ -1742,6 +1422,373 @@ const CustomerDrawing = () => {
           </div>
         </div>
       )}
+      {/* Add Client Requirement Modal */}
+      <Modal 
+        isOpen={showFormModal} 
+        onClose={() => setShowFormModal(false)}
+        title="Add Client Requirement"
+      >
+        <form onSubmit={handleAddDrawing} className="space-y-4">
+          <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input 
+                  type="radio" 
+                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  checked={uploadMode === 'bulk'} 
+                  onChange={() => setUploadMode('bulk')} 
+                />
+                <span className={`text-xs font-medium transition-colors ${uploadMode === 'bulk' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Bulk Import (Excel)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input 
+                  type="radio" 
+                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  checked={uploadMode === 'manual'} 
+                  onChange={() => setUploadMode('manual')} 
+                />
+                <span className={`text-xs font-medium transition-colors ${uploadMode === 'manual' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Manual Entry</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-lg border border-slate-200">
+            {/* Client Selection */}
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Client Name *</label>
+              <div className="flex gap-1">
+                <div className="relative flex-1 client-input-container">
+                  <input 
+                    type="text"
+                    required
+                    disabled={clientLocked}
+                    placeholder="Type client name..."
+                    className={`w-full px-3 py-1.5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all ${clientLocked ? 'bg-slate-100 cursor-not-allowed text-slate-600 border-slate-300' : 'border-slate-300 hover:border-slate-400'}`}
+                    value={newDrawing.client_name}
+                    onChange={(e) => handleClientInput(e.target.value)}
+                    onFocus={() => newDrawing.client_name && setShowSuggestions(true)}
+                  />
+                  {showSuggestions && clientSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                      {clientSuggestions.map((company) => (
+                        <button
+                          key={company.id}
+                          type="button"
+                          onClick={() => handleSelectClient(company)}
+                          className="w-full text-left px-3 py-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
+                        >
+                          <div className="text-slate-900 text-xs">{company.company_name}</div>
+                          {company.contact_email && <div className="text-slate-500 text-xs">{company.contact_email}</div>}
+                          {company.contact_mobile && <div className="text-slate-500 text-xs">{company.contact_mobile}</div>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {clientLocked && (
+                  <button 
+                    type="button"
+                    onClick={() => setClientLocked(false)}
+                    className="p-1 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-100 transition-colors"
+                    title="Change Client"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Contact Person</label>
+              <input 
+                type="text"
+                placeholder="Contact person name"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.contact_person}
+                onChange={(e) => setNewDrawing({...newDrawing, contact_person: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Phone</label>
+              <input 
+                type="text"
+                placeholder="Phone number"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.phone_number}
+                onChange={(e) => setNewDrawing({...newDrawing, phone_number: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+              <input 
+                type="email"
+                placeholder="Email address"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.email_address}
+                onChange={(e) => setNewDrawing({...newDrawing, email_address: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Type</label>
+              <input 
+                type="text"
+                placeholder="Customer type"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.customer_type}
+                onChange={(e) => setNewDrawing({...newDrawing, customer_type: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">GSTIN</label>
+              <input 
+                type="text"
+                placeholder="GST number"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.gstin}
+                onChange={(e) => setNewDrawing({...newDrawing, gstin: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">City</label>
+              <input 
+                type="text"
+                placeholder="City"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.city}
+                onChange={(e) => setNewDrawing({...newDrawing, city: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">State</label>
+              <input 
+                type="text"
+                placeholder="State"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.state}
+                onChange={(e) => setNewDrawing({...newDrawing, state: e.target.value})}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Billing Address</label>
+              <input 
+                type="text"
+                placeholder="Billing address"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.billing_address}
+                onChange={(e) => setNewDrawing({...newDrawing, billing_address: e.target.value})}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Shipping Address</label>
+              <input 
+                type="text"
+                placeholder="Shipping address"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                value={newDrawing.shipping_address}
+                onChange={(e) => setNewDrawing({...newDrawing, shipping_address: e.target.value})}
+              />
+            </div>
+          </div>
+
+          {/* CONDITIONAL FIELDS BASED ON MODE */}
+          {uploadMode === 'manual' ? (
+            <div className="mt-4">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xs font-semibold text-slate-700">Drawing Details</h3>
+                <button 
+                  type="button"
+                  onClick={addManualDrawingRow}
+                  className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md text-[10px] hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Drawing
+                </button>
+              </div>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Drawing # *</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Description</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider w-16">Rev</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider w-16">Qty</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">File *</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Notes</th>
+                      <th className="px-3 py-2 text-center text-[10px] font-medium text-slate-500 uppercase tracking-wider w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-200">
+                    {manualDrawings.map((drawing) => (
+                      <tr key={drawing.id}>
+                        <td className="px-2 py-2">
+                          <input 
+                            type="text" 
+                            required
+                            placeholder="DRW-1001"
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={drawing.drawing_no}
+                            onChange={(e) => handleManualDrawingChange(drawing.id, 'drawing_no', e.target.value)}
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input 
+                            type="text" 
+                            placeholder="Aluminum Frame"
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={drawing.description}
+                            onChange={(e) => handleManualDrawingChange(drawing.id, 'description', e.target.value)}
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input 
+                            type="text" 
+                            placeholder="A"
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
+                            value={drawing.revision}
+                            onChange={(e) => handleManualDrawingChange(drawing.id, 'revision', e.target.value)}
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input 
+                            type="number" 
+                            min="1"
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
+                            value={drawing.qty}
+                            onChange={(e) => handleManualDrawingChange(drawing.id, 'qty', e.target.value)}
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="relative">
+                            <input 
+                              type="file" 
+                              required={!drawing.file}
+                              accept=".pdf,.dwg,.step,.stp"
+                              className="hidden"
+                              onChange={(e) => handleManualFileChange(e, drawing.id)}
+                              id={`file-${drawing.id}`}
+                            />
+                            <label 
+                              htmlFor={`file-${drawing.id}`}
+                              className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-[10px] cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400'}`}
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span className="truncate max-w-[60px]">{drawing.file ? drawing.file.name : 'Choose'}</span>
+                            </label>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <input 
+                            type="text" 
+                            placeholder="Notes..."
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={drawing.remarks}
+                            onChange={(e) => handleManualDrawingChange(drawing.id, 'remarks', e.target.value)}
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          {manualDrawings.length > 1 && (
+                            <button 
+                              type="button"
+                              onClick={() => removeManualDrawingRow(drawing.id)}
+                              className="text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* BULK MODE */
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-slate-700 mb-2">Excel File <span className="text-red-500">*</span></label>
+              <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded-lg p-6 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                <input 
+                  type="file" 
+                  required
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  id="bulk-file"
+                />
+                <label htmlFor="bulk-file" className="cursor-pointer text-center w-full">
+                  <svg className="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                  <p className="text-sm text-slate-900 font-medium">{newDrawing.file ? newDrawing.file.name : 'Upload Excel File'}</p>
+                  <p className="text-xs text-slate-500 mt-1">Format: Drawing No, Revision, Description, Qty</p>
+                  {newDrawing.file && (
+                    <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center justify-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                      File selected
+                    </p>
+                  )}
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex gap-3 justify-end border-t border-slate-200 pt-4">
+            <button 
+              type="button"
+              onClick={() => {
+                setNewDrawing({ client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' });
+                setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
+                setClientLocked(false);
+              }}
+              className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors"
+            >
+              Clear Form
+            </button>
+            <button 
+              type="submit"
+              disabled={loading}
+              className={`px-6 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-all flex items-center gap-2 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {loading ? 'Processing...' : uploadMode === 'bulk' ? 'Upload Excel' : 'Save Requirement'}
+            </button>
+            {uploadMode === 'manual' && (
+              <button 
+                type="button"
+                onClick={handleAddAndSendToDesign}
+                disabled={loading}
+                className={`px-6 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-all flex items-center gap-2 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Send to Design
+              </button>
+            )}
+          </div>
+
+          {lastUploadedDrawings && lastUploadedDrawings.clientName && (
+            <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-900">{lastUploadedDrawings.count} Drawings Uploaded</p>
+                    <p className="text-xs text-emerald-700 mt-0.5">Ready to be sent to the Design Engineering department</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => sendBulkUploadedToDesign(lastUploadedDrawings.clientName, lastUploadedDrawings.count)}
+                  disabled={loading}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-all flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Send to Design Now
+                </button>
+              </div>
+            </div>
+          )}
+        </form>
+      </Modal>
     </div>
   );
 };
