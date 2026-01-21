@@ -102,20 +102,6 @@ const shareWithDesign = async (id) => {
       }
     }
     
-    const [soResult] = await connection.execute(
-      `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, status, current_department, request_accepted)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [null, companyId, `Design Review - ${drawing.drawing_no}`, 1, 'CREATED', 'DESIGN_ENG', 0]
-    );
-    
-    const salesOrderId = soResult.insertId;
-    
-    await connection.execute(
-      `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, description, quantity, unit, rate, drawing_pdf)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [salesOrderId, drawing.drawing_no, drawing.revision || null, drawing.description || 'Design Review', drawing.qty || 1, 'NOS', 0, drawing.file_path]
-    );
-    
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -250,28 +236,6 @@ const shareDrawingsBulk = async (ids) => {
             [companyId, firstWithContact.contact_person || clientName, firstWithContact.email || null, firstWithContact.phone || null, 'PRIMARY', 'ACTIVE']
           );
         }
-      }
-      
-      // 5. Create ONE Sales Order (Design Request) for all drawings of this client
-      const projectName = clientDrawings.length === 1 
-        ? `Design Review - ${clientDrawings[0].drawing_no}` 
-        : `Design Review - ${clientDrawings.length} Drawings for ${clientName}`;
-
-      const [soResult] = await connection.execute(
-        `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, status, current_department, request_accepted)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [null, companyId, projectName, 1, 'CREATED', 'DESIGN_ENG', 0]
-      );
-      
-      const salesOrderId = soResult.insertId;
-      
-      // 6. Add all drawings as items to this Sales Order
-      for (const d of clientDrawings) {
-        await connection.execute(
-          `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, description, quantity, unit, rate, drawing_pdf)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [salesOrderId, d.drawing_no, d.revision || null, d.description || 'Design Review', d.qty || 1, 'NOS', 0, d.file_path]
-        );
       }
     }
     

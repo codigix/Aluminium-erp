@@ -16,10 +16,14 @@ const CustomerPO = ({
   const groupedQuotes = useMemo(() => {
     const grouped = {}
     quotationRequests.forEach(quote => {
-      const key = quote.company_id
+      const date = new Date(quote.created_at);
+      const roundedTime = Math.floor(date.getTime() / 10000) * 10000;
+      const key = `${quote.company_id}_${roundedTime}`;
+      
       if (!grouped[key]) {
         grouped[key] = {
           id: quote.id,
+          uniqueKey: key,
           company_name: quote.company_name,
           company_id: quote.company_id,
           created_at: quote.created_at,
@@ -86,10 +90,10 @@ const CustomerPO = ({
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-100">
                     {groupedQuotes.map((group) => {
-                      const isExpanded = expandedQuoteKey === group.company_id;
+                      const isExpanded = expandedQuoteKey === group.uniqueKey;
                       return (
-                        <React.Fragment key={group.company_id}>
-                          <tr className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setExpandedQuoteKey(isExpanded ? null : group.company_id)}>
+                        <React.Fragment key={group.uniqueKey}>
+                          <tr className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setExpandedQuoteKey(isExpanded ? null : group.uniqueKey)}>
                             <td className="p-2">
                               <div className=" text-indigo-600 text-xs flex items-center gap-2">
                                 <span className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>

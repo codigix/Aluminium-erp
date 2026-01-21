@@ -59,13 +59,17 @@ const ClientQuotations = () => {
       if (!response.ok) throw new Error('Failed to fetch sent quotations');
       const data = await response.json();
       
-      // Group by client and day to show batches
+      // Group by client and timestamp (rounded to 10s to catch batches)
       const grouped = {};
       data.forEach(quote => {
-        const key = quote.company_id;
+        const date = new Date(quote.created_at);
+        const roundedTime = Math.floor(date.getTime() / 10000) * 10000;
+        const key = `${quote.company_id}_${roundedTime}`;
+        
         if (!grouped[key]) {
           grouped[key] = {
             id: quote.id,
+            uniqueKey: key,
             company_name: quote.company_name,
             company_id: quote.company_id,
             created_at: quote.created_at,
@@ -526,7 +530,7 @@ const ClientQuotations = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-100">
                     {sentQuotations.map((group) => {
-                      const key = group.company_id;
+                      const key = group.uniqueKey;
                       return (
                         <React.Fragment key={key}>
                           <tr className="hover:bg-slate-50 transition-colors">

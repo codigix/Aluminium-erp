@@ -7,6 +7,7 @@ const listSalesOrders = async () => {
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     WHERE so.customer_po_id IS NOT NULL
      ORDER BY so.created_at DESC`
   );
   return rows;
@@ -39,7 +40,7 @@ const getIncomingOrders = async (departmentCode) => {
        SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id
-     WHERE (${whereClause}) AND so.request_accepted = 0
+     WHERE (${whereClause}) AND so.request_accepted = 0 AND so.customer_po_id IS NOT NULL
      ORDER BY so.created_at DESC`;
   
   const [rows] = await pool.query(query);
@@ -204,17 +205,6 @@ const approveDesignAndCreateQuotation = async (salesOrderId) => {
       ['DESIGN_APPROVED', 'SALES', salesOrderId]
     );
     
-    // Create quotation requests for each item
-    const [items] = await connection.query('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [salesOrderId]);
-    
-    for (const item of items) {
-      await connection.execute(
-        `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, created_at)
-         VALUES (?, ?, ?, ?, NOW())`,
-        [salesOrderId, item.id, order.company_id, 'PENDING']
-      );
-    }
-    
     await connection.commit();
     return true;
   } catch (error) {
@@ -273,17 +263,6 @@ const bulkApproveDesigns = async (orderIds) => {
       `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id IN (${placeholders})`,
       ['DESIGN_APPROVED', 'SALES', ...orderIds]
     );
-    
-    for (const order of orders) {
-      const [items] = await connection.query('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [order.id]);
-      for (const item of items) {
-        await connection.execute(
-          `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, created_at)
-           VALUES (?, ?, ?, ?, NOW())`,
-          [order.id, item.id, order.company_id, 'PENDING']
-        );
-      }
-    }
     
     await connection.commit();
     return { approvedCount: orders.length };
