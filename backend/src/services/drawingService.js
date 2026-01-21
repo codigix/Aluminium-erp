@@ -101,19 +101,20 @@ const shareWithDesign = async (id) => {
         );
       }
     }
-    
+
+    // 5. Create Sales Order for Design Review
     const [soResult] = await connection.execute(
-      `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, status, current_department, request_accepted)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [null, companyId, `Design Review - ${drawing.drawing_no}`, 1, 'CREATED', 'DESIGN_ENG', 0]
-    );
-    
-    const salesOrderId = soResult.insertId;
-    
-    await connection.execute(
-      `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, description, quantity, unit, rate, drawing_pdf)
+      `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [salesOrderId, drawing.drawing_no, drawing.revision || null, drawing.description || 'Design Review', drawing.qty || 1, 'NOS', 0, drawing.file_path]
+      [null, companyId, `Design Review - ${drawing.drawing_no} for ${drawing.client_name}`, 1, 'NORMAL', 'CREATED', 'DESIGN_ENG', 0]
+    );
+    const salesOrderId = soResult.insertId;
+
+    // 6. Create Sales Order Item
+    await connection.execute(
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, drawing_pdf, description, quantity, unit)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [salesOrderId, drawing.drawing_no, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
     );
     
     await connection.commit();
@@ -251,26 +252,21 @@ const shareDrawingsBulk = async (ids) => {
           );
         }
       }
-      
-      // 5. Create ONE Sales Order (Design Request) for all drawings of this client
-      const projectName = clientDrawings.length === 1 
-        ? `Design Review - ${clientDrawings[0].drawing_no}` 
-        : `Design Review - ${clientDrawings.length} Drawings for ${clientName}`;
 
+      // 5. Create Sales Order for Design Review (Bulk)
       const [soResult] = await connection.execute(
-        `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, status, current_department, request_accepted)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [null, companyId, projectName, 1, 'CREATED', 'DESIGN_ENG', 0]
+        `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [null, companyId, `Design Review - ${clientDrawings.length} Drawings for ${clientName}`, 1, 'NORMAL', 'CREATED', 'DESIGN_ENG', 0]
       );
-      
       const salesOrderId = soResult.insertId;
-      
-      // 6. Add all drawings as items to this Sales Order
-      for (const d of clientDrawings) {
+
+      // 6. Create Sales Order Items
+      for (const drawing of clientDrawings) {
         await connection.execute(
-          `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, description, quantity, unit, rate, drawing_pdf)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [salesOrderId, d.drawing_no, d.revision || null, d.description || 'Design Review', d.qty || 1, 'NOS', 0, d.file_path]
+          `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, drawing_pdf, description, quantity, unit)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [salesOrderId, drawing.drawing_no, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
         );
       }
     }

@@ -17,7 +17,7 @@ const getQuotationRequests = async (req, res, next) => {
       JOIN sales_orders so ON so.id = qr.sales_order_id
       JOIN companies c ON c.id = qr.company_id
       LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-      LEFT JOIN sales_order_items soi ON (soi.id = qr.sales_order_item_id OR (qr.sales_order_item_id IS NULL AND soi.sales_order_id = qr.sales_order_id))
+      LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
       WHERE 1=1
     `;
     const params = [];

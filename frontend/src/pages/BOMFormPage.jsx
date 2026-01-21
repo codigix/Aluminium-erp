@@ -224,7 +224,10 @@ const BOMFormPage = () => {
           if (!confirm.isConfirmed) return;
         }
         payload.qtyPerPc = parseFloat(formData.qty) || 0;
+        payload.qty_per_pc = payload.qtyPerPc;
         payload.materialType = 'Raw Material';
+        payload.material_name = payload.materialName;
+        payload.item_group = payload.itemGroup;
         payload.rate = parseFloat(payload.rate) || 0;
         delete payload.qty;
       } else if (section === 'components') {
@@ -242,6 +245,8 @@ const BOMFormPage = () => {
           });
           if (!confirm.isConfirmed) return;
         }
+        payload.component_code = payload.componentCode;
+        payload.loss_percent = payload.lossPercent;
         payload.quantity = parseFloat(payload.quantity) || 0;
         payload.rate = parseFloat(payload.rate) || 0;
         payload.lossPercent = parseFloat(payload.lossPercent) || 0;
@@ -252,6 +257,11 @@ const BOMFormPage = () => {
         payload.cycleTimeMin = parseFloat(payload.cycleTimeMin) || 60;
         payload.setupTimeMin = parseFloat(payload.setupTimeMin) || 0;
         payload.hourlyRate = parseFloat(payload.hourlyRate) || 0;
+        payload.operation_name = payload.operationName;
+        payload.cycle_time_min = payload.cycleTimeMin;
+        payload.setup_time_min = payload.setupTimeMin;
+        payload.hourly_rate = payload.hourlyRate;
+        payload.operation_type = payload.operationType;
       } else if (section === 'scrap') {
         if (!payload.itemCode || payload.inputQty === '' || payload.rate === '') {
           throw new Error('Item Code, Input Qty, and Rate are required');
@@ -270,6 +280,10 @@ const BOMFormPage = () => {
         payload.inputQty = parseFloat(payload.inputQty) || 0;
         payload.lossPercent = parseFloat(payload.lossPercent) || 0;
         payload.rate = parseFloat(payload.rate) || 0;
+        payload.item_code = payload.itemCode;
+        payload.item_name = payload.itemName;
+        payload.input_qty = payload.inputQty;
+        payload.loss_percent = payload.lossPercent;
       }
 
       const response = await fetch(`${API_BASE}/bom/items/${itemId}/${section}`, {
@@ -509,7 +523,11 @@ const BOMFormPage = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (collapsedSections.components) toggleSection('components');
+                  if (collapsedSections.components) {
+                    toggleSection('components');
+                  } else {
+                    handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '' });
+                  }
                 }}
                 className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1 whitespace-nowrap"
               >
@@ -569,7 +587,16 @@ const BOMFormPage = () => {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs  text-slate-500  ml-1">Loss % (Scrap)</label>
-                    <input type="number" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="0" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({...componentForm, lossPercent: e.target.value})} />
+                    <div className="flex gap-2">
+                      <input type="number" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="0" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({...componentForm, lossPercent: e.target.value})} />
+                      <button 
+                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '' })}
+                        className="p-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 flex items-center justify-center min-w-[40px]"
+                        title="Add Component"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                   
                 </div>
@@ -636,7 +663,11 @@ const BOMFormPage = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (collapsedSections.materials) toggleSection('materials');
+                  if (collapsedSections.materials) {
+                    toggleSection('materials');
+                  } else {
+                    handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '' });
+                  }
                 }}
                 className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors flex items-center gap-1 whitespace-nowrap"
               >
@@ -719,6 +750,13 @@ const BOMFormPage = () => {
                           onChange={(e) => setMaterialForm({...materialForm, operation: e.target.value})}
                         />
                       </div>
+                      <button 
+                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '' })}
+                        className="p-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100 flex items-center justify-center min-w-[40px]"
+                        title="Add Material"
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -783,7 +821,11 @@ const BOMFormPage = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (collapsedSections.operations) toggleSection('operations');
+                  if (collapsedSections.operations) {
+                    toggleSection('operations');
+                  } else {
+                    handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: 60, setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
+                  }
                 }}
                 className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition-colors flex items-center gap-1 whitespace-nowrap"
               >
@@ -951,7 +993,11 @@ const BOMFormPage = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (collapsedSections.scrap) toggleSection('scrap');
+                  if (collapsedSections.scrap) {
+                    toggleSection('scrap');
+                  } else {
+                    handleAddSectionItem('scrap', scrapForm, setScrapForm, { itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
+                  }
                 }}
                 className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 transition-colors flex items-center gap-1 whitespace-nowrap"
               >
@@ -1008,6 +1054,13 @@ const BOMFormPage = () => {
                     <label className="text-xs  text-slate-500  ml-1">Rate (₹)</label>
                     <div className="flex gap-2">
                       <input type="number" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="0" step="0.01" value={scrapForm.rate} onChange={(e) => setScrapForm({...scrapForm, rate: e.target.value})} />
+                      <button 
+                        onClick={() => handleAddSectionItem('scrap', scrapForm, setScrapForm, { itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' })}
+                        className="p-2 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 shadow-lg shadow-orange-100 flex items-center justify-center min-w-[40px]"
+                        title="Add Scrap"
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
                 </div>

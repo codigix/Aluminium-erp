@@ -94,11 +94,14 @@ const DesignOrders = () => {
   };
 
   const groupedIncoming = incomingOrders.reduce((acc, order) => {
-    const key = order.po_number || 'NO-PO';
+    const poKey = order.po_number || 'NO-PO';
+    const companyKey = order.company_name || 'Unknown';
+    const key = `${companyKey}_${poKey}`;
+
     if (!acc[key]) {
       acc[key] = {
-        po_number: key,
-        company_name: order.company_name,
+        po_number: poKey,
+        company_name: companyKey,
         orders: []
       };
     }
@@ -166,7 +169,11 @@ const DesignOrders = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch order items');
       const items = await response.json();
-      setReviewDetails(items || []);
+      
+      // Filter items to show only the specific drawing that was clicked
+      const filteredItems = items.filter(item => item.drawing_no === order.drawing_no);
+      setReviewDetails(filteredItems || []);
+      
       setShowReviewModal(true);
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
@@ -886,17 +893,17 @@ const DesignOrders = () => {
                     </td>
                   </tr>
                 ) : (
-                  Object.entries(groupedIncoming).map(([poNumber, group]) => {
-                    const isExpanded = expandedIncomingPo[poNumber];
+                  Object.entries(groupedIncoming).map(([groupKey, group]) => {
+                    const isExpanded = expandedIncomingPo[groupKey];
                     const allSelected = group.orders.every(o => selectedIncomingOrders.has(o.id));
                     const someSelected = group.orders.some(o => selectedIncomingOrders.has(o.id));
 
                     return (
-                      <React.Fragment key={poNumber}>
+                      <React.Fragment key={groupKey}>
                         {/* Group Header */}
                         <tr 
                           className={`bg-slate-50/80 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-all ${isExpanded ? 'sticky top-0 z-10' : ''}`} 
-                          onClick={() => toggleIncomingPo(poNumber)}
+                          onClick={() => toggleIncomingPo(groupKey)}
                         >
                           <td className="px-4 py-3">
                             <input
@@ -917,7 +924,7 @@ const DesignOrders = () => {
                           <td className="px-4 py-3">
                             <div className="flex flex-col">
                               <span className="font-bold text-slate-900 text-xs">{group.company_name}</span>
-                              <span className="text-[10px] text-slate-500 font-medium">{poNumber === 'NO-PO' ? 'Design Request' : `PO: ${poNumber}`}</span>
+                              <span className="text-[10px] text-slate-500 font-medium">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
                             </div>
                           </td>
                           <td className="px-4 py-3 font-bold text-slate-900">
@@ -947,7 +954,7 @@ const DesignOrders = () => {
                              <button
                                onClick={(e) => {
                                  e.stopPropagation();
-                                 toggleIncomingPo(poNumber);
+                                 toggleIncomingPo(groupKey);
                                }}
                                className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-50 transition-colors"
                              >
@@ -1338,8 +1345,12 @@ const DesignOrders = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 sticky top-0">
-              <h2 className="text-lg font-bold text-white">Design Review - {reviewOrder.company_name}</h2>
-              <p className="text-indigo-100 text-xs mt-1">Order: {reviewOrder.project_name}</p>
+              <h2 className="text-lg font-bold text-white">
+                {reviewDetails.length === 1 ? 'Drawing Review' : 'Design Review'} - {reviewOrder.company_name}
+              </h2>
+              <p className="text-indigo-100 text-xs mt-1">
+                {reviewDetails.length === 1 ? `Drawing: ${reviewDetails[0].drawing_no}` : `Order: ${reviewOrder.project_name}`}
+              </p>
             </div>
 
             <div className="p-6 space-y-3">
