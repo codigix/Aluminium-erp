@@ -1007,9 +1007,6 @@ const DesignOrders = () => {
                             <td className="px-4 py-2.5">
                               <div className="flex flex-col">
                                 <span className="text-slate-600 italic">{order.item_description || 'No description'}</span>
-                                {order.item_status === 'REJECTED' && order.rejection_reason && (
-                                  <span className="text-[10px] text-red-500 font-medium mt-0.5">Reason: {order.rejection_reason}</span>
-                                )}
                               </div>
                             </td>
                             <td className="px-4 py-2.5 text-center font-bold text-slate-900">
@@ -1102,20 +1099,20 @@ const DesignOrders = () => {
                     </td>
                   </tr>
                 ) : (
-                  Object.entries(groupedActive).map(([poNumber, group]) => {
-                    const isExpanded = expandedActivePo[poNumber];
+                  Object.entries(groupedActive).map(([groupKey, group]) => {
+                    const isExpanded = expandedActivePo[groupKey];
                     return (
-                      <React.Fragment key={poNumber}>
+                      <React.Fragment key={groupKey}>
                         {/* Group Header */}
                         <tr 
                           className={`bg-slate-50/80 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-all ${isExpanded ? 'sticky top-0 z-10' : ''}`} 
-                          onClick={() => toggleActivePo(poNumber)}
+                          onClick={() => toggleActivePo(groupKey)}
                         >
                           <td className="px-4 py-3">
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
                                 <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                                <span className="font-bold text-slate-900 text-xs">{poNumber === 'NO-PO' ? 'Design Request' : `PO: ${poNumber}`}</span>
+                                <span className="font-bold text-slate-900 text-xs">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
                               </div>
                               <span className="font-bold text-indigo-600 text-[10px] ml-5">{group.company_name}</span>
                             </div>
@@ -1143,7 +1140,7 @@ const DesignOrders = () => {
                              <button
                                onClick={(e) => {
                                  e.stopPropagation();
-                                 toggleActivePo(poNumber);
+                                 toggleActivePo(groupKey);
                                }}
                                className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-50 transition-colors"
                              >
