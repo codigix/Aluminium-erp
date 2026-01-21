@@ -703,7 +703,7 @@ const Quotations = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
                   <th className="px-4 py-3 text-left ">Quote No.</th>
@@ -842,7 +842,7 @@ const Quotations = () => {
               <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl leading-none">&times;</button>
             </div>
 
-            <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="space-y-4">
+            <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="">
               {activeTab === 'sent' ? (
                 <>
                   <div className="grid grid-cols-2 gap-4">
@@ -1178,7 +1178,7 @@ const Quotations = () => {
               <button onClick={() => setShowEmailModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
-            <form onSubmit={handleSendEmail} className="space-y-4">
+            <form onSubmit={handleSendEmail} className="">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">To</label>
                 <input
@@ -1250,7 +1250,7 @@ const Quotations = () => {
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
-            <form onSubmit={handleEditQuotation} className="space-y-4">
+            <form onSubmit={handleEditQuotation} className="">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Vendor</label>

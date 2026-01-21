@@ -234,7 +234,7 @@ const StockLedger = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold ">
                 <tr>
                   <th className="px-4 py-4 text-left ">Item Code</th>
@@ -323,7 +323,7 @@ const StockLedger = () => {
             </div>
 
             <form onSubmit={handleAddEntry} className="p-6 space-y-3">
-              <div className="space-y-4">
+              <div className="">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Item Code *</label>
                   <input

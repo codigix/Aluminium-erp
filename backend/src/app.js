@@ -26,6 +26,7 @@ const warehouseAllocationRoutes = require('./routes/warehouseAllocationRoutes');
 const inventoryDashboardRoutes = require('./routes/inventoryDashboardRoutes');
 const workstationRoutes = require('./routes/workstationRoutes');
 const operationRoutes = require('./routes/operationRoutes');
+const productionPlanRoutes = require('./routes/productionPlanRoutes');
 const grnService = require('./services/grnService');
 const qcService = require('./services/qcInspectionsService');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
@@ -66,6 +67,7 @@ app.use('/api/warehouse-allocations', authenticate, warehouseAllocationRoutes);
 app.use('/api/inventory', authenticate, inventoryDashboardRoutes);
 app.use('/api/workstations', authenticate, workstationRoutes);
 app.use('/api/operations', authenticate, operationRoutes);
+app.use('/api/production-plans', authenticate, productionPlanRoutes);
 app.use('/api/dashboard', authenticate, dashboardRoutes);
 
 app.get('/api/grn-stats', authenticate, async (req, res) => {

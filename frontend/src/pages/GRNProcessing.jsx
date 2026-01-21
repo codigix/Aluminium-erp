@@ -450,7 +450,7 @@ const GRNProcessing = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
                   <th className="px-4 py-3 text-left ">GRN ID</th>
@@ -624,7 +624,7 @@ const GRNProcessing = () => {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
+                    <table className="w-full text-xs border-collapse">
                       <thead className="bg-slate-100">
                         <tr>
                           <th className="px-4 py-2 text-left  min-w-[150px]">Material</th>
@@ -741,7 +741,7 @@ const GRNProcessing = () => {
               <p className="text-center py-8 text-slate-500">No items in this GRN</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                     <tr>
                       <th className="px-4 py-3 text-left ">Material</th>

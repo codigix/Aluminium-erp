@@ -341,7 +341,7 @@ const QCInspections = () => {
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full text-sm text-left">
+              <table className="w-full text-xs text-left">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">GRN #</th>
@@ -449,7 +449,7 @@ const QCInspections = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateQC} className="p-6 space-y-4">
+            <form onSubmit={handleCreateQC} className="p-6 ">
               <div className="space-y-1">
                 <label className="text-xs text-slate-500 tracking-wider ml-1">Select GRN *</label>
                 <div className="relative">
@@ -630,7 +630,7 @@ const QCInspections = () => {
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-slate-900  tracking-[0.2em]">Items Verification</h4>
                   <div className="overflow-hidden rounded-xl border border-slate-200">
-                    <table className="w-full text-sm text-left">
+                    <table className="w-full text-xs text-left">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
                           <th className="px-4 py-3 font-bold text-slate-600  tracking-wider text-[10px]">Item Code</th>
@@ -657,7 +657,7 @@ const QCInspections = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-6 border-t border-slate-100">
                 <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
                   <p className="text-[10px] font-bold text-amber-600  tracking-wider mb-2">Defects Identified</p>
                   <p className="text-sm text-slate-700 leading-relaxed font-medium">

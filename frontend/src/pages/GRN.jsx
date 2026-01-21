@@ -278,7 +278,7 @@ const GRN = () => {
 
         {loading ? (
           <div className="flex items-center justify-center py-24">
-            <div className="text-center space-y-4">
+            <div className="text-center ">
               <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
               <p className="text-xs text-slate-500 font-medium">Fetching GRN records...</p>
             </div>
@@ -307,7 +307,7 @@ const GRN = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold ">
                 <tr>
                   <th className="p-2 text-left ">GRN #</th>

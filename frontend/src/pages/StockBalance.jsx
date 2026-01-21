@@ -110,7 +110,7 @@ const StockBalance = () => {
   return (
     <div className="space-y-3">
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
           <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-5 flex items-center justify-between">
             <div>
               <p className="text-[10px] text-indigo-600 font-bold tracking-widest  mb-1">Total Items</p>
@@ -179,7 +179,7 @@ const StockBalance = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold ">
                 <tr>
                   <th className="px-4 py-4 text-left ">Item Code</th>

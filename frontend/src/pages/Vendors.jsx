@@ -273,14 +273,14 @@ const Vendors = () => {
         <form onSubmit={handleAddVendor} className="space-y-8 max-h-[70vh] overflow-y-auto px-1">
           <div>
             <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase border-b border-slate-100 pb-2 mb-4">Basic Information</h3>
-            <div className="space-y-4">
+            <div className="">
               <FormControl label="Vendor Name *">
                 <input
                   type="text"
                   placeholder="Enter vendor name"
                   value={formData.vendorName}
                   onChange={(e) => setFormData({...formData, vendorName: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                   required
                 />
               </FormControl>
@@ -291,18 +291,18 @@ const Vendors = () => {
                   placeholder="Contact person name"
                   value={formData.contactPerson}
                   onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                 />
               </FormControl>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                 <FormControl label="Category">
                   <input
                     type="text"
                     placeholder="e.g., Electronics"
                     value={formData.category}
                     onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                   />
                 </FormControl>
 
@@ -310,7 +310,7 @@ const Vendors = () => {
                   <select
                     value={formData.vendorType}
                     onChange={(e) => setFormData({...formData, vendorType: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                   >
                     {vendorTypes.map(type => (
                       <option key={type} value={type}>{type}</option>
@@ -323,7 +323,7 @@ const Vendors = () => {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({...formData, status: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                 >
                   {statuses.map(status => (
                     <option key={status} value={status}>{status}</option>
@@ -335,15 +335,15 @@ const Vendors = () => {
 
           <div>
             <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase border-b border-slate-100 pb-2 mb-4">Contact Information</h3>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                 <FormControl label="Email">
                   <input
                     type="email"
                     placeholder="vendor@example.com"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                   />
                 </FormControl>
 
@@ -353,7 +353,7 @@ const Vendors = () => {
                     placeholder="+91 XXXXXXXXXX"
                     value={formData.phone}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                   />
                 </FormControl>
               </div>
@@ -363,7 +363,7 @@ const Vendors = () => {
                   placeholder="Enter vendor address"
                   value={formData.address}
                   onChange={(e) => setFormData({...formData, address: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white min-h-[80px]"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs min-h-[80px]"
                 />
               </FormControl>
             </div>
@@ -427,7 +427,7 @@ const Vendors = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
             {filteredVendors.map((vendor) => (
               <div
                 key={`vendor-${vendor.id}`}

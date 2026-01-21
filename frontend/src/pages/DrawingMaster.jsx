@@ -276,8 +276,8 @@ const DrawingMaster = () => {
         onClose={() => setShowEditModal(false)}
         title={`Edit Drawing: ${editData.drawing_no}`}
       >
-        <form onSubmit={handleSave} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <form onSubmit={handleSave} className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <FormControl label="Revision No">
               <input 
                 type="text" 
@@ -326,7 +326,7 @@ const DrawingMaster = () => {
         onClose={() => setShowRevisions(false)}
         title={`Revision History: ${selectedDrawing?.drawing_no}`}
       >
-        <div className="space-y-4">
+        <div className="">
           {revisionsLoading ? (
             <div className="py-12 text-center text-slate-500 italic">Fetching revisions...</div>
           ) : (
@@ -334,11 +334,11 @@ const DrawingMaster = () => {
               <table className="min-w-full divide-y divide-slate-200 bg-white">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-slate-500 uppercase tracking-wider">Rev</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-slate-500 uppercase tracking-wider">Date</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-slate-500 uppercase tracking-wider">Description</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-slate-500 uppercase tracking-wider">File</th>
-                    <th className="px-4 py-3 text-right text-[11px] font-medium text-slate-500 uppercase tracking-wider">Order</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Rev</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Description</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">File</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500">Order</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">

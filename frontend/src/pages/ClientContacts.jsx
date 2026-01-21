@@ -6,7 +6,7 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
       <div className="space-y-3">
         <p className="text-xs text-slate-500">Choose a company below to review its contact directory or add new customer touchpoints.</p>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
                 <th className="px-4 py-3 text-left ">Company</th>

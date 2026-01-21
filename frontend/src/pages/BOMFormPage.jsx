@@ -1132,8 +1132,8 @@ const BOMFormPage = () => {
             <div className="text-slate-400">{collapsedSections.costing ? '▼' : '▲'}</div>
           </div>
           {!collapsedSections.costing && (
-            <div className="p-6 pt-0 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-6 pt-0 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                 <div className="p-4 bg-blue-50 rounded-md border border-blue-100">
                   <p className="text-xs text-blue-600  mb-1">Material Cost / FG</p>
                   <p className="text-2xl font-black text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</p>

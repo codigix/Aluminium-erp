@@ -170,7 +170,7 @@ const POMaterialRequest = () => {
             <p className="text-slate-500">No PO material requests found</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="">
             {groupedRequests.map((group) => (
               <div key={group.po_id} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm transition-all hover:shadow-md">
                 {/* PO Header */}
@@ -234,7 +234,7 @@ const POMaterialRequest = () => {
                 {/* Items Table */}
                 {expandedPos.has(group.po_id) && (
                   <div className="p-0 bg-white">
-                    <table className="w-full text-sm text-left border-collapse">
+                    <table className="w-full text-xs text-left border-collapse">
                       <thead className="bg-slate-50/50 text-slate-400  tracking-widest text-[10px] ">
                         <tr>
                           <th className="p-2">Material / Item</th>

@@ -400,7 +400,7 @@ const POReceipts = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
                   <th className="px-4 py-3 text-left ">PO Number</th>
@@ -494,7 +494,7 @@ const POReceipts = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateReceipt} className="space-y-4">
+            <form onSubmit={handleCreateReceipt} className="">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Select Purchase Order *</label>
@@ -755,7 +755,7 @@ const POReceipts = () => {
               </button>
             </div>
 
-            <form onSubmit={handleUpdateReceipt} className="space-y-4">
+            <form onSubmit={handleUpdateReceipt} className="">
               <div className="bg-slate-50 p-3 rounded text-sm">
                 <p className="text-slate-600"><span className="font-medium">PO Number:</span> {selectedReceipt.po_number}</p>
                 <p className="text-slate-600"><span className="font-medium">Vendor:</span> {selectedReceipt.vendor_name || '—'}</p>

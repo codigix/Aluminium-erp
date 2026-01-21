@@ -1600,7 +1600,7 @@ const CustomerDrawing = () => {
                   <p className="text-slate-400 text-xs">Drawings must be approved by Design Engineer first</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="">
                   {!selectedApprovedClient ? (
                     <div className="space-y-2">
                       <p className="text-xs  text-slate-700 ">Select a Client</p>
@@ -1624,7 +1624,7 @@ const CustomerDrawing = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="">
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="text-sm text-slate-900">{selectedApprovedClient}</p>

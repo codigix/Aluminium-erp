@@ -1,3 +1,5 @@
+import React, { useState, useEffect, useRef } from 'react';
+
 export const Card = ({ id, title, subtitle, action, children }) => (
   <div id={id} >
     {(title || subtitle || action) && (
@@ -12,6 +14,91 @@ export const Card = ({ id, title, subtitle, action, children }) => (
     <div className="p-2">{children}</div>
   </div>
 )
+
+export const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef(null);
+
+  const selectedOption = options.find(opt => opt[valueField] === value);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm(selectedOption ? selectedOption[labelField] : (value || ''));
+    }
+  }, [value, selectedOption, isOpen]);
+
+  const filteredOptions = options.filter(opt => 
+    opt[labelField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    opt[valueField]?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (subLabelField && opt[subLabelField]?.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="relative">
+        <input
+          type="text"
+          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-900"
+          placeholder={placeholder}
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+            if (allowCustom) {
+              onChange({ target: { value: e.target.value } });
+            }
+          }}
+          onFocus={() => setIsOpen(true)}
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
+          {isOpen ? '▲' : '▼'}
+        </div>
+      </div>
+      
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 flex flex-col overflow-hidden">
+          <div className="overflow-y-auto flex-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, idx) => (
+                <div
+                  key={idx}
+                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${opt[valueField] === value ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
+                  onClick={() => {
+                    onChange({ target: { value: opt[valueField] } });
+                    setSearchTerm(opt[labelField]);
+                    setIsOpen(false);
+                  }}
+                >
+                  <div className="flex flex-col">
+                    <span>{opt[labelField]}</span>
+                    {subLabelField && opt[subLabelField] && (
+                      <span className="text-[9px] text-slate-400 font-normal">{opt[subLabelField]}</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-xs text-center text-slate-400">
+                {allowCustom ? 'Custom value entered' : 'No results found'}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const FormControl = ({ label, children }) => (
   <label className="flex flex-col gap-2">

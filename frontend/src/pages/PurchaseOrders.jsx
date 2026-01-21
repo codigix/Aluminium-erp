@@ -379,7 +379,7 @@ const PurchaseOrders = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
                   <th className="px-4 py-3 text-left ">PO Number</th>
@@ -532,7 +532,7 @@ const PurchaseOrders = () => {
               }} className="text-slate-500 text-2xl leading-none">&times;</button>
             </div>
 
-            <form onSubmit={handleCreatePO} className="space-y-4">
+            <form onSubmit={handleCreatePO} className="">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Select Approved Quotation *</label>
                 <select
@@ -687,7 +687,7 @@ const PurchaseOrders = () => {
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
 
-            <form onSubmit={handleUpdatePO} className="space-y-4">
+            <form onSubmit={handleUpdatePO} className="">
               <div className="bg-slate-50 p-3 rounded text-sm space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-slate-600 w-24">PO Number:</span>

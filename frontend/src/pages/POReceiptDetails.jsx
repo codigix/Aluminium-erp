@@ -180,7 +180,7 @@ const POReceiptDetails = () => {
               <div className="mb-8">
                 <h3 className="text-md text-slate-900 text-xs mb-4">PO Items</h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-xs">
                     <thead className="bg-slate-100 text-slate-600 ">
                       <tr>
                         <th className="px-4 py-3 text-left ">Description</th>

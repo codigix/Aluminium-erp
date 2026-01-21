@@ -66,12 +66,12 @@ const CompanyMaster = ({
       >
         <form onSubmit={onInlineSubmit} className="space-y-8 max-h-[70vh] overflow-y-auto px-1">
           {/* Company Info */}
-          <div className="space-y-4">
+          <div className="">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <Building2 className="w-4 h-4 text-indigo-500" />
               <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Company Information</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <FormControl label="Company Name">
                 <input
                   type="text"
@@ -98,7 +98,7 @@ const CompanyMaster = ({
           </div>
 
           {/* Tax Info */}
-          <div className="space-y-4">
+          <div className="">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <Building2 className="w-4 h-4 text-indigo-500" />
               <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Tax Information</h3>
@@ -136,12 +136,12 @@ const CompanyMaster = ({
           </div>
 
           {/* Billing Address */}
-          <div className="space-y-4">
+          <div className="">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <MapPin className="w-4 h-4 text-indigo-500" />
               <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Billing Address</h3>
             </div>
-            <div className="space-y-6">
+            <div className="space-y-3">
               <FormControl label="Address Line 1">
                 <input
                   type="text"
@@ -151,7 +151,7 @@ const CompanyMaster = ({
                   placeholder="Street name, Building number"
                 />
               </FormControl>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <FormControl label="City">
                   <input
                     type="text"
@@ -169,7 +169,7 @@ const CompanyMaster = ({
                   />
                 </FormControl>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <FormControl label="Pincode">
                   <input
                     type="text"
@@ -191,7 +191,7 @@ const CompanyMaster = ({
           </div>
 
           {/* Contact Person */}
-          <div className="space-y-4">
+          <div className="">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <User className="w-4 h-4 text-indigo-500" />
               <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Contact Person</h3>
@@ -205,7 +205,7 @@ const CompanyMaster = ({
                 className={fieldInputClass}
               />
             </FormControl>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <FormControl label="Mobile No.">
                 <input
                   type="tel"

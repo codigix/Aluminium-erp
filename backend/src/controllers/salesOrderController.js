@@ -12,15 +12,16 @@ const listSalesOrders = async (req, res, next) => {
 const getIncomingOrders = async (req, res, next) => {
   try {
     const departmentCode = req.user?.department_code || req.query.department;
-    console.log(`[getIncomingOrders] User:`, req.user?.email, `| JWT department_code:`, req.user?.department_code, `| Query dept:`, req.query.department, `| Final departmentCode:`, departmentCode);
+    const includeAccepted = req.query.includeAccepted === 'true';
+    console.log(`[getIncomingOrders] User:`, req.user?.email, `| Final departmentCode: "${departmentCode}" | includeAccepted: ${includeAccepted}`);
     
     if (!departmentCode) {
       console.error('[getIncomingOrders] ERROR: No department code provided');
       return res.status(400).json({ error: 'Department code is required' });
     }
     
-    console.log(`[getIncomingOrders] Calling service with departmentCode: "${departmentCode}"`);
-    const rows = await salesOrderService.getIncomingOrders(departmentCode);
+    console.log(`[getIncomingOrders] Calling service...`);
+    const rows = await salesOrderService.getIncomingOrders(departmentCode, includeAccepted);
     console.log(`[getIncomingOrders] Service returned ${rows.length} orders`);
     console.log(`[getIncomingOrders] Orders:`, rows.map(r => ({ id: r.id, status: r.status, current_department: r.current_department })));
     res.json(rows);
