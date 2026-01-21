@@ -169,7 +169,11 @@ const DesignOrders = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch order items');
       const items = await response.json();
-      setReviewDetails(items || []);
+      
+      // Filter items to show only the specific drawing that was clicked
+      const filteredItems = items.filter(item => item.drawing_no === order.drawing_no);
+      setReviewDetails(filteredItems || []);
+      
       setShowReviewModal(true);
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
@@ -1341,8 +1345,12 @@ const DesignOrders = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 sticky top-0">
-              <h2 className="text-lg font-bold text-white">Design Review - {reviewOrder.company_name}</h2>
-              <p className="text-indigo-100 text-xs mt-1">Order: {reviewOrder.project_name}</p>
+              <h2 className="text-lg font-bold text-white">
+                {reviewDetails.length === 1 ? 'Drawing Review' : 'Design Review'} - {reviewOrder.company_name}
+              </h2>
+              <p className="text-indigo-100 text-xs mt-1">
+                {reviewDetails.length === 1 ? `Drawing: ${reviewDetails[0].drawing_no}` : `Order: ${reviewOrder.project_name}`}
+              </p>
             </div>
 
             <div className="p-6 space-y-3">
