@@ -1,24 +1,22 @@
-import { useState, useEffect } from 'react';
-import { Card } from '../components/ui.jsx';
+import { useState, useEffect, useCallback } from 'react';
+import { Card, DataTable, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const itemStatusColors = {
-  APPROVED: 'bg-emerald-100 text-emerald-700 border border-emerald-300',
-  SHORTAGE: 'bg-yellow-100 text-yellow-700 border border-yellow-300',
-  OVERAGE: 'bg-orange-100 text-orange-700 border border-orange-300',
-  PENDING: 'bg-slate-100 text-slate-700 border border-slate-300'
+  APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  SHORTAGE: 'bg-amber-50 text-amber-700 border-amber-200',
+  OVERAGE: 'bg-orange-50 text-orange-700 border-orange-200',
+  PENDING: 'bg-slate-50 text-slate-700 border-slate-200'
 };
 
 const GRNProcessing = () => {
   const [grns, setGrns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showItemsModal, setShowItemsModal] = useState(false);
-  const [grnItems, setGrnItems] = useState([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
+  const [expandedItems, setExpandedItems] = useState({});
+  const [itemsLoading, setItemsLoading] = useState({});
 
   const [formData, setFormData] = useState({
     poId: '',
@@ -87,7 +85,7 @@ const GRNProcessing = () => {
 
   const fetchGrnItems = async (grnId) => {
     try {
-      setItemsLoading(true);
+      setItemsLoading(prev => ({ ...prev, [grnId]: true }));
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/grn-items/${grnId}/details`, {
         headers: {
@@ -98,29 +96,30 @@ const GRNProcessing = () => {
 
       if (!response.ok) throw new Error('Failed to fetch GRN items');
       const data = await response.json();
-      setGrnItems(Array.isArray(data.items) ? data.items : []);
+      setExpandedItems(prev => ({ ...prev, [grnId]: Array.isArray(data.items) ? data.items : [] }));
     } catch (error) {
       console.error('Error fetching GRN items:', error);
       Swal.fire('Error', 'Failed to load GRN items', 'error');
-      setGrnItems([]);
     } finally {
-      setItemsLoading(false);
+      setItemsLoading(prev => ({ ...prev, [grnId]: false }));
     }
   };
 
-  const handleViewItems = (grnId) => {
-    setShowItemsModal(true);
-    fetchGrnItems(grnId);
-  };
+  const fetchGrnItemsIfNeeded = useCallback((grnId) => {
+    if (!expandedItems[grnId] && !itemsLoading[grnId]) {
+      fetchGrnItems(grnId);
+    }
+  }, [expandedItems, itemsLoading]);
 
-  const handleDeleteItem = async (itemId) => {
+  const handleDeleteItem = async (itemId, grnId) => {
     const confirmDelete = await Swal.fire({
       title: 'Delete Item?',
       text: 'This action cannot be undone',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      confirmButtonText: 'Delete'
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Delete',
+      cancelButtonColor: '#64748b'
     });
 
     if (!confirmDelete.isConfirmed) return;
@@ -137,7 +136,10 @@ const GRNProcessing = () => {
 
       if (!response.ok) throw new Error('Failed to delete item');
       
-      setGrnItems(grnItems.filter(item => item.id !== itemId));
+      setExpandedItems(prev => ({
+        ...prev,
+        [grnId]: prev[grnId].filter(item => item.id !== itemId)
+      }));
       Swal.fire('Deleted', 'Item removed from GRN', 'success');
       fetchGRNs();
     } catch (error) {
@@ -410,144 +412,200 @@ const GRNProcessing = () => {
     }
   };
 
-  const filteredGRNs = grns.filter(grn =>
-    grn.poNumber?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  return (
-    <div className="space-y-3">
-      <Card title="GRN Processing" subtitle="Create GRN with Item-wise Shortage, Overage & Rejection Handling">
-        <div className="flex gap-4 justify-between items-center mb-6">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search PO number..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
+  const columns = [
+    { label: 'GRN ID', key: 'id', sortable: true, render: (val) => <span className="font-bold text-indigo-600">GRN-{val}</span> },
+    { label: 'PO Number', key: 'poNumber', sortable: true },
+    { 
+      label: 'Receipt Ref', 
+      key: 'receiptId', 
+      render: (val) => val ? (
+        <Badge variant="blue">REC-{val}</Badge>
+      ) : <span className="text-slate-400">—</span>
+    },
+    { 
+      label: 'GRN Date', 
+      key: 'grnDate', 
+      sortable: true,
+      render: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '—'
+    },
+    { 
+      label: 'Received Qty', 
+      key: 'receivedQuantity', 
+      className: 'text-right',
+      render: (val) => <span className="font-semibold text-slate-900">{val || 0}</span>
+    },
+    { 
+      label: 'Status', 
+      key: 'status',
+      render: (val) => (
+        <Badge className={itemStatusColors[val] || itemStatusColors.PENDING}>
+          {val || 'Pending'}
+        </Badge>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex justify-end gap-2">
           <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm  hover:bg-emerald-700"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteGRN(row.id);
+            }}
+            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            title="Delete GRN"
           >
-            + Create GRN
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
           </button>
         </div>
+      )
+    }
+  ];
 
-        {loading ? (
-          <p className="text-sm text-slate-400">Loading GRNs...</p>
-        ) : filteredGRNs.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500 mb-3">No GRNs {searchTerm ? 'found' : 'created yet'}</p>
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm  hover:bg-slate-800"
-            >
-              + Create Your First GRN
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
-                <tr>
-                  <th className="px-4 py-3 text-left ">GRN ID</th>
-                  <th className="px-4 py-3 text-left ">PO Number</th>
-                  <th className="px-4 py-3 text-left ">Receipt Ref</th>
-                  <th className="px-4 py-3 text-left ">GRN Date</th>
-                  <th className="px-4 py-3 text-right ">Received Qty</th>
-                  <th className="px-4 py-3 text-left ">Status</th>
-                  <th className="px-4 py-3 text-right ">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredGRNs.map((grn) => (
-                  <tr key={grn.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-4 font-medium text-slate-900">{grn.id}</td>
-                    <td className="px-4 py-4 text-slate-600">{grn.poNumber || '—'}</td>
-                    <td className="px-4 py-4">
-                      {grn.receiptId ? (
-                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-medium border border-blue-100">
-                          REC-{grn.receiptId}
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">
-                      {grn.grnDate ? new Date(grn.grnDate).toLocaleDateString('en-IN') : '—'}
-                    </td>
-                    <td className="px-4 py-4 text-right font-medium">{grn.receivedQuantity || 0}</td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs  ${itemStatusColors[grn.status] || itemStatusColors.PENDING}`}>
-                        {grn.status || 'Pending'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button
-                        onClick={() => handleViewItems(grn.id)}
-                        className="px-3 py-1 text-xs rounded border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium"
-                      >
-                        + View
-                      </button>
-                      <button
-                        onClick={() => handleDeleteGRN(grn.id)}
-                        className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium"
-                      >
-                        🗑
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+  const renderExpanded = (row) => {
+    fetchGrnItemsIfNeeded(row.id);
+    const items = expandedItems[row.id] || [];
+    const isLoading = itemsLoading[row.id];
+
+    if (isLoading) {
+      return (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-indigo-600/10 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+
+    if (items.length === 0) {
+      return (
+        <div className="text-center py-8 text-slate-500 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+          No items found for this GRN
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-slate-50/50 rounded-xl border border-slate-100 overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-white/80 text-slate-500 font-bold uppercase tracking-wider">
+            <tr>
+              <th className="px-4 py-3 text-left">Material / Description</th>
+              <th className="px-4 py-3 text-left">Type / Drawing</th>
+              <th className="px-4 py-3 text-center">PO Qty</th>
+              <th className="px-4 py-3 text-center">Accepted</th>
+              <th className="px-4 py-3 text-center">Status</th>
+              <th className="px-4 py-3 text-right pr-6">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((item) => (
+              <tr key={item.id} className="hover:bg-white/80 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="font-medium text-slate-900">{item.material_name}</div>
+                  <div className="text-slate-500 truncate max-w-[200px]">{item.description}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="text-slate-600">{item.material_type}</div>
+                  <div className="text-indigo-600 font-medium">{item.drawing_no}</div>
+                </td>
+                <td className="px-4 py-3 text-center font-medium">{item.po_qty}</td>
+                <td className="px-4 py-3 text-center font-bold text-indigo-600">{item.accepted_qty}</td>
+                <td className="px-4 py-3 text-center">
+                  <Badge className={itemStatusColors[item.status] || itemStatusColors.PENDING}>
+                    {item.status}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3 text-right pr-6">
+                  <button
+                    onClick={() => handleDeleteItem(item.id, row.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">GRN Processing</h1>
+          <p className="text-slate-500 mt-1">Manage Goods Received Notes and track material shortages</p>
+        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all active:scale-95"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Create GRN
+        </button>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={grns}
+        loading={loading}
+        renderExpanded={renderExpanded}
+        searchPlaceholder="Search PO numbers..."
+        emptyMessage="No GRNs found"
+      />
+
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg max-w-4xl w-full m-4 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl text-slate-900">Create GRN (Goods Received Note)</h2>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Create GRN</h2>
+                <p className="text-sm text-slate-500">Record material receipt and verify quantities</p>
+              </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-2xl"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
               >
-                ×
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
-            <form onSubmit={handleCreateGRN} className="space-y-3">
-              <div className="grid grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Purchase Order *
-                  </label>
+            <form onSubmit={handleCreateGRN} className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Purchase Order *</label>
                   <select
                     value={formData.poId}
                     onChange={(e) => handlePOSelect(e.target.value)}
                     required
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   >
                     <option value="">Select PO...</option>
                     {purchaseOrders.map((po) => (
-                      <option key={po.id} value={po.id}>
-                        {po.po_number}
-                      </option>
+                      <option key={po.id} value={po.id}>{po.po_number}</option>
                     ))}
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    PO Receipt (Optional)
-                  </label>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Receipt Ref (Optional)</label>
                   <select
                     value={selectedReceiptId}
                     onChange={(e) => handleReceiptSelect(e.target.value)}
                     disabled={!formData.poId}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-50 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none disabled:opacity-50"
                   >
                     <option value="">Select Receipt...</option>
                     {poReceipts
@@ -560,123 +618,112 @@ const GRNProcessing = () => {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    GRN Date *
-                  </label>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">GRN Date *</label>
                   <input
                     type="date"
                     value={formData.grnDate}
                     onChange={(e) => setFormData({ ...formData, grnDate: e.target.value })}
                     required
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Notes
-                  </label>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Notes</label>
                   <input
                     type="text"
-                    placeholder="Any notes..."
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Reference notes..."
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </div>
               </div>
 
               {formData.poId && (
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 grid grid-cols-4 gap-4 text-sm">
+                <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
                   <div>
-                    <p className="text-slate-500 font-medium  text-[10px] tracking-wider">Vendor</p>
-                    <p className="text-slate-900">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-400">Vendor</div>
+                    <div className="text-sm font-semibold text-slate-900">
                       {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.vendor_name || 'N/A'}
-                    </p>
+                    </div>
                   </div>
                   <div>
-                    <p className="text-slate-500 font-medium  text-[10px] tracking-wider">PO Total</p>
-                    <p className="text-slate-900">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-400">PO Total</div>
+                    <div className="text-sm font-semibold text-slate-900">
                       ₹{purchaseOrders.find(p => String(p.id) === String(formData.poId))?.total_amount?.toLocaleString('en-IN') || '0'}
-                    </p>
+                    </div>
                   </div>
                   <div>
-                    <p className="text-slate-500 font-medium  text-[10px] tracking-wider">Expected Delivery</p>
-                    <p className="text-slate-900">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-400">Delivery Date</div>
+                    <div className="text-sm font-semibold text-slate-900">
                       {new Date(purchaseOrders.find(p => String(p.id) === String(formData.poId))?.expected_delivery_date).toLocaleDateString('en-IN') || 'N/A'}
-                    </p>
+                    </div>
                   </div>
                   <div>
-                    <p className="text-slate-500 font-medium  text-[10px] tracking-wider">Status</p>
-                    <p className=" text-emerald-600">
-                      {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.status || 'N/A'}
-                    </p>
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-400">PO Status</div>
+                    <div className="text-sm">
+                      <Badge variant="success">
+                        {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.status || 'N/A'}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               )}
 
               {poItems.length > 0 && (
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-                    <h3 className="text-slate-900 text-xs">PO Items - Enter Accepted Quantities</h3>
-                    <p className="text-xs text-slate-500 mt-1">Enter how much you accepted. Status shows: APPROVED (match), SHORTAGE (less), OVERAGE (more)</p>
+                <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                    <h3 className="font-bold text-slate-900">PO Items</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Enter actual accepted quantities to track shortages</p>
                   </div>
-
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs border-collapse">
-                      <thead className="bg-slate-100">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50/50 text-slate-500 text-[10px] uppercase tracking-widest font-bold">
                         <tr>
-                          <th className="px-4 py-2 text-left  min-w-[150px]">Material</th>
-                          <th className="px-4 py-2 text-left  min-w-[120px]">Type</th>
-                          <th className="px-4 py-2 text-center  min-w-[70px]">PO Qty</th>
-                          <th className="px-4 py-2 text-center  min-w-[70px]">Accepted *</th>
-                          <th className="px-4 py-2 text-center  min-w-[120px]">Status</th>
-                          <th className="px-4 py-2 text-center  min-w-[100px]">Remarks</th>
+                          <th className="px-6 py-3 text-left">Material Details</th>
+                          <th className="px-6 py-3 text-center">PO Qty</th>
+                          <th className="px-6 py-3 text-center w-32">Accepted *</th>
+                          <th className="px-6 py-3 text-center w-32">Status</th>
+                          <th className="px-6 py-3 text-left">Remarks</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-slate-100">
                         {poItems.map((item) => {
                           const data = itemData[item.id] || {};
                           const accepted = parseInt(data.acceptedQty) || 0;
-                          const { status } = calculateMetrics(
-                            item.quantity,
-                            accepted
-                          );
+                          const { status } = calculateMetrics(item.quantity, accepted);
                           const itemError = validationErrors[item.id];
 
                           return (
-                            <tr
-                              key={item.id}
-                              className={`border-t border-slate-200 ${
-                                itemError ? 'bg-red-50' : 'hover:bg-slate-50'
-                              }`}
-                            >
-                              <td className="px-4 py-3 text-slate-600 font-medium">{item.material_name || '—'}</td>
-                              <td className="px-4 py-3 text-slate-600">{item.material_type || '—'}</td>
-                              <td className="px-4 py-3 text-center font-medium">{item.quantity}</td>
-                              <td className="px-4 py-3">
+                            <tr key={item.id} className={itemError ? 'bg-red-50/50' : 'hover:bg-slate-50/30'}>
+                              <td className="px-6 py-4">
+                                <div className="font-semibold text-slate-900">{item.material_name}</div>
+                                <div className="text-xs text-slate-500">{item.material_type} • {item.drawing_no || 'No Drawing'}</div>
+                              </td>
+                              <td className="px-6 py-4 text-center font-medium text-slate-700">{item.quantity}</td>
+                              <td className="px-6 py-4">
                                 <input
                                   type="number"
                                   min="0"
                                   value={data.acceptedQty}
                                   onChange={(e) => handleItemChange(item.id, 'acceptedQty', e.target.value)}
-                                  placeholder="0"
-                                  className="w-full px-2 py-1 border border-slate-300 rounded text-center text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  className={`w-full px-3 py-1.5 bg-white border ${itemError ? 'border-red-300' : 'border-slate-200'} rounded-lg text-center font-bold text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-none`}
                                 />
                               </td>
-                              <td className="px-4 py-3 text-center">
-                                <span className={`inline-block text-xs  px-3 py-1 rounded ${itemStatusColors[status] || itemStatusColors.PENDING}`}>
+                              <td className="px-6 py-4 text-center">
+                                <Badge className={itemStatusColors[status] || itemStatusColors.PENDING}>
                                   {status === 'PENDING' ? '—' : status}
-                                </span>
+                                </Badge>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-6 py-4">
                                 <input
                                   type="text"
-                                  value={data.remarks}
+                                  value={data.remarks || ''}
                                   onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
                                   placeholder="Notes..."
-                                  className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none"
                                 />
                               </td>
                             </tr>
@@ -685,110 +732,24 @@ const GRNProcessing = () => {
                       </tbody>
                     </table>
                   </div>
-
-                  {Object.keys(validationErrors).length > 0 && (
-                    <div className="bg-red-50 px-4 py-3 border-t border-red-200">
-                      <p className="text-sm  text-red-900 mb-2">Validation Errors:</p>
-                      <ul className="text-sm text-red-700 space-y-1">
-                        {Object.entries(validationErrors).map(([itemId, errors]) => (
-                          <li key={itemId}>
-                            <strong>{poItems.find(i => i.id == itemId)?.itemCode}:</strong> {errors.join(', ')}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </div>
               )}
-
-              <div className="flex gap-3 justify-end pt-4 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting || poItems.length === 0}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {submitting ? 'Creating GRN...' : 'Create GRN'}
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
 
-      {showItemsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg max-w-5xl w-full m-4 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl text-slate-900">GRN Items</h2>
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button
-                onClick={() => setShowItemsModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-2xl"
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-white transition-all"
               >
-                ×
+                Cancel
               </button>
-            </div>
-
-            {itemsLoading ? (
-              <p className="text-center py-8 text-slate-500">Loading items...</p>
-            ) : grnItems.length === 0 ? (
-              <p className="text-center py-8 text-slate-500">No items in this GRN</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
-                    <tr>
-                      <th className="px-4 py-3 text-left ">Material</th>
-                      <th className="px-4 py-3 text-left ">Type</th>
-                      <th className="px-4 py-3 text-center ">PO Qty</th>
-                      <th className="px-4 py-3 text-center ">Received</th>
-                      <th className="px-4 py-3 text-center ">Accepted</th>
-                      <th className="px-4 py-3 text-center ">Rejected</th>
-                      <th className="px-4 py-3 text-left ">Status</th>
-                      <th className="px-4 py-3 text-right ">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {grnItems.map((item) => (
-                      <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="px-4 py-4 text-slate-600 font-medium">{item.material_name || '—'}</td>
-                        <td className="px-4 py-4 text-slate-600">{item.material_type || '—'}</td>
-                        <td className="px-4 py-4 text-center">{item.po_qty || 0}</td>
-                        <td className="px-4 py-4 text-center">{item.received_qty || 0}</td>
-                        <td className="px-4 py-4 text-center font-medium">{item.accepted_qty || 0}</td>
-                        <td className="px-4 py-4 text-center">{item.rejected_qty || 0}</td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-block px-3 py-1 rounded-full text-xs  ${itemStatusColors[item.status] || itemStatusColors.PENDING}`}>
-                            {item.status || 'Pending'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <button
-                            onClick={() => handleDeleteItem(item.id)}
-                            className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 font-medium"
-                          >
-                            🗑
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end gap-2">
               <button
-                onClick={() => setShowItemsModal(false)}
-                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50"
+                onClick={handleCreateGRN}
+                disabled={submitting || poItems.length === 0}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 active:scale-95"
               >
-                Close
+                {submitting ? 'Processing...' : 'Create GRN'}
               </button>
             </div>
           </div>

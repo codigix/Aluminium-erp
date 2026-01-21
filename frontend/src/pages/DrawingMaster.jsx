@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Modal, FormControl } from '../components/ui.jsx';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, Modal, FormControl, DataTable, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -9,11 +9,9 @@ const DrawingMaster = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Revisions Modal State
-  const [showRevisions, setShowRevisions] = useState(false);
-  const [selectedDrawing, setSelectedDrawing] = useState(null);
-  const [revisions, setRevisions] = useState([]);
-  const [revisionsLoading, setRevisionsLoading] = useState(false);
+  // Expanded Revisions State
+  const [expandedRevisions, setExpandedRevisions] = useState({});
+  const [revisionsLoading, setRevisionsLoading] = useState({});
   
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -34,9 +32,7 @@ const DrawingMaster = () => {
         : `${API_BASE}/drawings`;
         
       const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch drawings');
       const data = await response.json();
@@ -49,35 +45,187 @@ const DrawingMaster = () => {
     }
   };
 
-  useEffect(() => {
-    fetchDrawings();
-  }, []);
-
   const handleSearch = (e) => {
     e.preventDefault();
     fetchDrawings(searchTerm);
   };
 
-  const handleViewRevisions = async (drawing) => {
+  useEffect(() => {
+    fetchDrawings();
+  }, []);
+
+  const fetchRevisions = async (drawingNo) => {
     try {
-      setSelectedDrawing(drawing);
-      setShowRevisions(true);
-      setRevisionsLoading(true);
+      setRevisionsLoading(prev => ({ ...prev, [drawingNo]: true }));
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(drawing.drawing_no)}/revisions`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(drawingNo)}/revisions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch revisions');
       const data = await response.json();
-      setRevisions(data);
+      setExpandedRevisions(prev => ({ ...prev, [drawingNo]: data }));
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'Failed to load revisions', 'error');
     } finally {
-      setRevisionsLoading(false);
+      setRevisionsLoading(prev => ({ ...prev, [drawingNo]: false }));
     }
+  };
+
+  const fetchRevisionsIfNeeded = useCallback((drawingNo) => {
+    if (!expandedRevisions[drawingNo] && !revisionsLoading[drawingNo]) {
+      fetchRevisions(drawingNo);
+    }
+  }, [expandedRevisions, revisionsLoading]);
+
+  const columns = [
+    { 
+      label: 'Drawing No', 
+      key: 'drawing_no',
+      render: (val) => <span className="font-medium text-slate-900">{val}</span>
+    },
+    { 
+      label: 'Latest Rev', 
+      key: 'revision_no',
+      render: (val) => (
+        <Badge variant="indigo" className="font-mono">
+          {val || '0'}
+        </Badge>
+      )
+    },
+    { 
+      label: 'PO / SO Ref', 
+      key: 'po_number',
+      render: (val, row) => (
+        <div>
+          <div className="text-xs text-slate-900">{val || 'N/A'}</div>
+          <div className="text-[10px] text-slate-500">SO-{String(row.sales_order_id).padStart(4, '0')}</div>
+        </div>
+      )
+    },
+    { 
+      label: 'Description', 
+      key: 'description',
+      render: (val) => <div className="max-w-xs truncate text-slate-500">{val}</div>
+    },
+    { 
+      label: 'Last Used', 
+      key: 'last_used_at',
+      render: (val) => (
+        <span className="text-slate-500">
+          {new Date(val).toLocaleDateString('en-IN')}
+        </span>
+      )
+    },
+    {
+      label: 'PDF',
+      key: 'drawing_pdf',
+      render: (val) => val ? (
+        <a 
+          href={`${API_BASE.replace('/api', '')}/${val}`} 
+          target="_blank" 
+          rel="noreferrer"
+          className="text-indigo-600 hover:text-indigo-900 transition-colors"
+        >
+          <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+        </a>
+      ) : <span className="text-slate-300">—</span>
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex justify-end gap-2">
+          <button 
+            onClick={() => handleEdit(row)}
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            title="Edit Drawing"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button 
+            onClick={() => handleDelete(row)}
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            title="Delete Drawing"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      )
+    }
+  ];
+
+  const renderExpanded = (row) => {
+    fetchRevisionsIfNeeded(row.drawing_no);
+    const revisions = expandedRevisions[row.drawing_no] || [];
+    const isLoading = revisionsLoading[row.drawing_no];
+
+    return (
+      <div className="bg-slate-50/50 p-4 rounded-lg border border-slate-100 m-2">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+            <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Revision History
+          </h4>
+        </div>
+        
+        {isLoading ? (
+          <div className="py-4 text-center text-xs text-slate-500 italic">Fetching revisions...</div>
+        ) : revisions.length === 0 ? (
+          <div className="py-4 text-center text-xs text-slate-400 italic">No previous revisions recorded</div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-500 uppercase">Rev</th>
+                  <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-500 uppercase">Date</th>
+                  <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-500 uppercase">Description</th>
+                  <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-500 uppercase">File</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {revisions.map((rev, i) => (
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-2 whitespace-nowrap text-xs font-mono font-medium text-indigo-600">
+                      {rev.revision_no || '0'}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-600">
+                      {new Date(rev.created_at).toLocaleDateString('en-IN')}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-slate-500 max-w-xs truncate">
+                      {rev.description}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {rev.drawing_pdf ? (
+                        <a 
+                          href={`${API_BASE.replace('/api', '')}/${rev.drawing_pdf}`} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:text-indigo-900 transition-colors inline-block"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                        </a>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const handleEdit = (drawing) => {
@@ -104,9 +252,7 @@ const DrawingMaster = () => {
 
       const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(editData.drawing_no)}`, {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
 
@@ -114,7 +260,12 @@ const DrawingMaster = () => {
       
       Swal.fire('Success', 'Drawing updated successfully', 'success');
       setShowEditModal(false);
-      fetchDrawings(searchTerm);
+      fetchDrawings();
+      setExpandedRevisions(prev => {
+        const next = { ...prev };
+        delete next[editData.drawing_no];
+        return next;
+      });
     } catch (error) {
       console.error(error);
       Swal.fire('Error', error.message, 'error');
@@ -125,13 +276,13 @@ const DrawingMaster = () => {
 
   const handleDelete = async (drawing) => {
     const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: `You want to delete drawing: ${drawing.drawing_no}. This action cannot be undone.`,
+      title: 'Delete Drawing?',
+      text: `Are you sure you want to delete drawing: ${drawing.drawing_no}? This will delete all revision history.`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#3085d6',
-      confirmButtonText: 'Yes, delete it!'
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonColor: '#64748b'
     });
 
     if (result.isConfirmed) {
@@ -143,8 +294,8 @@ const DrawingMaster = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to delete drawing');
-        Swal.fire('Deleted!', 'Drawing has been deleted successfully', 'success');
-        fetchDrawings(searchTerm);
+        Swal.fire('Deleted!', 'Drawing has been deleted', 'success');
+        fetchDrawings();
       } catch (error) {
         Swal.fire('Error', error.message, 'error');
       } finally {
@@ -157,127 +308,52 @@ const DrawingMaster = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-xl text-slate-900">Drawing Master</h1>
-          <p className="text-xs text-slate-500">Central repository for all engineering drawings and revisions</p>
+          <h1 className="text-xl font-bold text-slate-900">Drawing Master</h1>
+          <p className="text-xs text-slate-500 font-medium">Central repository for all engineering drawings and revisions</p>
         </div>
         <form onSubmit={handleSearch} className="flex gap-2">
-          <input 
-            type="text" 
-            placeholder="Search Drawing No, PO or Desc..." 
-            className="px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 w-64"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <div className="relative">
+            <input 
+              type="text" 
+              placeholder="Search Drawing No, PO or Desc..." 
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-72 transition-all shadow-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
           <button 
             type="submit"
-            className="p-2 bg-indigo-600 text-white rounded-md text-xs  hover:bg-indigo-700 transition-colors"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition-all shadow-sm"
           >
             Search
           </button>
           <button 
             type="button"
             onClick={() => { setSearchTerm(''); fetchDrawings(); }}
-            className="p-2 bg-slate-100 text-slate-600 rounded-md text-xs  hover:bg-slate-200 transition-colors"
+            className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-200 transition-all"
           >
             Reset
           </button>
         </form>
       </div>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 bg-white">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Drawing No</th>
-                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Latest Rev</th>
-                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">PO / SO Ref</th>
-                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Description</th>
-                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Last Used</th>
-                <th className="p-2text-center text-xs  text-slate-500  tracking-wider">PDF</th>
-                <th className="p-2 text-right text-xs  text-slate-500  tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
-              {loading ? (
-                <tr><td colSpan="7" className="px-6 py-12 text-center text-slate-500 italic">Loading drawing records...</td></tr>
-              ) : drawings.length === 0 ? (
-                <tr><td colSpan="7" className="px-6 py-12 text-center text-slate-400 italic">No drawings found matching your criteria</td></tr>
-              ) : (
-                drawings.map((drawing, idx) => (
-                  <tr key={`${drawing.drawing_no}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-2 whitespace-nowrap text-sm text-slate-900">{drawing.drawing_no}</td>
-                    <td className="p-2 whitespace-nowrap text-sm text-slate-600">
-                      <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-mono">{drawing.revision_no || '0'}</span>
-                    </td>
-                    <td className="p-2 whitespace-nowrap">
-                      <div className="text-xs text-slate-900">{drawing.po_number || 'N/A'}</div>
-                      <div className="text-[10px] text-slate-500">SO-{String(drawing.sales_order_id).padStart(4, '0')}</div>
-                    </td>
-                    <td className="p-2 text-xs text-slate-500 max-w-xs truncate ">{drawing.description}</td>
-                    <td className="p-2 whitespace-nowrap text-xs text-slate-500">
-                      {new Date(drawing.last_used_at).toLocaleDateString('en-IN')}
-                    </td>
-                    <td className="p-2 text-left">
-                      {drawing.drawing_pdf ? (
-                        <a 
-                          href={`${API_BASE.replace('/api', '')}/${drawing.drawing_pdf}`} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                          </svg>
-                        </a>
-                      ) : '—'}
-                    </td>
-                    <td className="p-2 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => handleEdit(drawing)}
-                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="Edit Drawing"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={() => handleViewRevisions(drawing)}
-                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                          title="Revision History"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(drawing)}
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Delete Drawing"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <DataTable 
+        columns={columns}
+        data={drawings}
+        loading={loading}
+        renderExpanded={renderExpanded}
+      />
 
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         title={`Edit Drawing: ${editData.drawing_no}`}
       >
-        <form onSubmit={handleSave} className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormControl label="Revision No">
               <input 
                 type="text" 
@@ -319,70 +395,6 @@ const DrawingMaster = () => {
             </button>
           </div>
         </form>
-      </Modal>
-
-      <Modal
-        isOpen={showRevisions}
-        onClose={() => setShowRevisions(false)}
-        title={`Revision History: ${selectedDrawing?.drawing_no}`}
-      >
-        <div className="">
-          {revisionsLoading ? (
-            <div className="py-12 text-center text-slate-500 italic">Fetching revisions...</div>
-          ) : (
-            <div className="overflow-hidden border border-slate-100 rounded-xl">
-              <table className="min-w-full divide-y divide-slate-200 bg-white">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Rev</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Description</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">File</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500">Order</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-100">
-                  {revisions.map((rev, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-mono font-medium text-indigo-600">{rev.revision_no || '0'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-600">
-                        {new Date(rev.created_at).toLocaleDateString('en-IN')}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-500 max-w-xs truncate">{rev.description}</td>
-                      <td className="px-4 py-3">
-                        {rev.drawing_pdf ? (
-                          <a 
-                            href={`${API_BASE.replace('/api', '')}/${rev.drawing_pdf}`} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-900 font-medium text-sm"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                            View PDF
-                          </a>
-                        ) : <span className="text-slate-400 text-xs italic">No file</span>}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="text-sm font-medium text-slate-700">{rev.po_number || 'N/A'}</div>
-                        <div className="text-[10px] text-slate-400">SO-{String(rev.sales_order_id || 0).padStart(4, '0')}</div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <div className="flex justify-end pt-4">
-            <button 
-              onClick={() => setShowRevisions(false)}
-              className="px-6 py-2.5 bg-slate-800 text-white rounded-xl text-xs font-semibold hover:bg-slate-700 transition-all"
-            >
-              Close
-            </button>
-          </div>
-        </div>
       </Modal>
     </div>
   );

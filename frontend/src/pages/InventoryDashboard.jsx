@@ -140,12 +140,12 @@ const InventoryDashboard = () => {
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left ">Order Code</th>
-                  <th className="px-4 py-3 text-left ">Customer</th>
-                  <th className="px-4 py-3 text-left ">Project</th>
+                  <th className="p-2 text-left ">Order Code</th>
+                  <th className="p-2 text-left ">Customer</th>
+                  <th className="p-2 text-left ">Project</th>
                   <th className="px-4 py-3 text-right ">Amount</th>
-                  <th className="px-4 py-3 text-left ">Target Dispatch</th>
-                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="p-2 text-left ">Target Dispatch</th>
+                  <th className="p-2 text-left ">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -183,11 +183,11 @@ const InventoryDashboard = () => {
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left ">Request No</th>
-                  <th className="px-4 py-3 text-left ">Material</th>
+                  <th className="p-2 text-left ">Request No</th>
+                  <th className="p-2 text-left ">Material</th>
                   <th className="px-4 py-3 text-right ">Qty</th>
-                  <th className="px-4 py-3 text-left ">Req. Date</th>
-                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="p-2 text-left ">Req. Date</th>
+                  <th className="p-2 text-left ">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -228,11 +228,11 @@ const InventoryDashboard = () => {
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left ">GRN ID</th>
-                  <th className="px-4 py-3 text-left ">PO Number</th>
+                  <th className="p-2 text-left ">GRN ID</th>
+                  <th className="p-2 text-left ">PO Number</th>
                   <th className="px-4 py-3 text-right ">Qty Received</th>
-                  <th className="px-4 py-3 text-left ">Date</th>
-                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="p-2 text-left ">Date</th>
+                  <th className="p-2 text-left ">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,10 +269,10 @@ const InventoryDashboard = () => {
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left ">Item Code</th>
-                  <th className="px-4 py-3 text-left ">Description</th>
+                  <th className="p-2 text-left ">Item Code</th>
+                  <th className="p-2 text-left ">Description</th>
                   <th className="px-4 py-3 text-right ">Current Balance</th>
-                  <th className="px-4 py-3 text-left ">Unit</th>
+                  <th className="p-2 text-left ">Unit</th>
                 </tr>
               </thead>
               <tbody>

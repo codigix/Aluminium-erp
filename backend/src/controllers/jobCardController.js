@@ -1,0 +1,35 @@
+const jobCardService = require('../services/jobCardService');
+
+const listJobCards = async (req, res) => {
+  try {
+    const jobCards = await jobCardService.listJobCards();
+    res.json(jobCards);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const createJobCard = async (req, res) => {
+  try {
+    const id = await jobCardService.createJobCard(req.body);
+    const newJC = await jobCardService.getJobCardById(id);
+    res.status(201).json(newJC);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const updateProgress = async (req, res) => {
+  try {
+    await jobCardService.updateJobCardProgress(req.params.id, req.body);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = {
+  listJobCards,
+  createJobCard,
+  updateProgress
+};

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
+import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -31,7 +31,7 @@ const ProductionPlan = () => {
 
   const fetchPlans = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/production-plans`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -48,7 +48,7 @@ const ProductionPlan = () => {
 
   const fetchWorkstations = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/workstations`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -63,7 +63,7 @@ const ProductionPlan = () => {
 
   const fetchReadyItems = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/production-plans/ready-items`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -78,7 +78,7 @@ const ProductionPlan = () => {
 
   const fetchReadyOrders = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/production-plans/ready-orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -93,7 +93,7 @@ const ProductionPlan = () => {
 
   const fetchNextCode = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/production-plans/next-code`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -132,7 +132,7 @@ const ProductionPlan = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/production-plans/sales-order/${orderId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -196,7 +196,7 @@ const ProductionPlan = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/production-plans`, {
         method: 'POST',
         headers: {
@@ -219,58 +219,77 @@ const ProductionPlan = () => {
     }
   };
 
+  const columns = [
+    {
+      label: 'Plan Code',
+      key: 'plan_code',
+      sortable: true,
+      render: (val) => <span className="font-medium text-slate-900">{val}</span>
+    },
+    {
+      label: 'Plan Date',
+      key: 'plan_date',
+      sortable: true,
+      render: (val) => new Date(val).toLocaleDateString()
+    },
+    {
+      label: 'Period',
+      key: 'id',
+      render: (_, row) => (
+        <span className="text-slate-600">
+          {row.start_date ? new Date(row.start_date).toLocaleDateString() : 'N/A'} - 
+          {row.end_date ? new Date(row.end_date).toLocaleDateString() : 'N/A'}
+        </span>
+      )
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      sortable: true,
+      render: (val) => <StatusBadge status={val} />
+    },
+    {
+      label: 'Created By',
+      key: 'creator_name',
+      sortable: true
+    },
+    {
+      label: 'Actions',
+      key: 'id',
+      className: 'text-right',
+      render: (val) => (
+        <button 
+          className="text-indigo-600 hover:text-indigo-900 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => {/* View logic */}}
+        >
+          View
+        </button>
+      )
+    }
+  ];
+
   return (
-    <div className="">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-900">Production Plan</h2>
+        <div>
+          <h2 className="text-xl text-slate-900">Production Plan</h2>
+          <p className="text-sm text-slate-500">Manage and schedule production activities</p>
+        </div>
         <button 
           onClick={handleCreateNew}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm"
         >
           Create Production Plan
         </button>
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-semibold">
-              <tr>
-                <th className="px-4 py-3">Plan Code</th>
-                <th className="px-4 py-3">Plan Date</th>
-                <th className="px-4 py-3">Period</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Created By</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">Loading plans...</td></tr>
-              ) : plans.length === 0 ? (
-                <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">No production plans found</td></tr>
-              ) : (
-                plans.map(plan => (
-                  <tr key={plan.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-900">{plan.plan_code}</td>
-                    <td className="px-4 py-3 text-slate-600">{new Date(plan.plan_date).toLocaleDateString()}</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {plan.start_date ? new Date(plan.start_date).toLocaleDateString() : 'N/A'} - 
-                      {plan.end_date ? new Date(plan.end_date).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={plan.status} />
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{plan.creator_name}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button className="text-indigo-600 hover:text-indigo-900 font-medium">View</button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable 
+          columns={columns}
+          data={plans}
+          loading={loading}
+          searchPlaceholder="Search plans..."
+        />
       </Card>
 
       <Modal 

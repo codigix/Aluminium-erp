@@ -64,10 +64,10 @@ const Vendors = ({ onAddVendor }) => {
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
-                <th className="px-4 py-3 text-left ">Vendor Name</th>
-                <th className="px-4 py-3 text-left ">Contact</th>
-                <th className="px-4 py-3 text-left ">Email</th>
-                <th className="px-4 py-3 text-left ">Status</th>
+                <th className="p-2 text-left ">Vendor Name</th>
+                <th className="p-2 text-left ">Contact</th>
+                <th className="p-2 text-left ">Email</th>
+                <th className="p-2 text-left ">Status</th>
                 <th className="px-4 py-3 text-right ">Actions</th>
               </tr>
             </thead>
@@ -127,11 +127,11 @@ const Quotations = ({ onCreateRFQ }) => {
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
-                <th className="px-4 py-3 text-left ">RFQ #</th>
-                <th className="px-4 py-3 text-left ">Vendor</th>
-                <th className="px-4 py-3 text-left ">Items</th>
-                <th className="px-4 py-3 text-left ">Status</th>
-                <th className="px-4 py-3 text-left ">Sent Date</th>
+                <th className="p-2 text-left ">RFQ #</th>
+                <th className="p-2 text-left ">Vendor</th>
+                <th className="p-2 text-left ">Items</th>
+                <th className="p-2 text-left ">Status</th>
+                <th className="p-2 text-left ">Sent Date</th>
                 <th className="px-4 py-3 text-right ">Actions</th>
               </tr>
             </thead>
@@ -192,11 +192,11 @@ const PurchaseOrders = ({ onCreatePO }) => {
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
-                <th className="px-4 py-3 text-left ">PO #</th>
-                <th className="px-4 py-3 text-left ">Vendor</th>
-                <th className="px-4 py-3 text-left ">Amount</th>
-                <th className="px-4 py-3 text-left ">Status</th>
-                <th className="px-4 py-3 text-left ">Created</th>
+                <th className="p-2 text-left ">PO #</th>
+                <th className="p-2 text-left ">Vendor</th>
+                <th className="p-2 text-left ">Amount</th>
+                <th className="p-2 text-left ">Status</th>
+                <th className="p-2 text-left ">Created</th>
                 <th className="px-4 py-3 text-right ">Actions</th>
               </tr>
             </thead>

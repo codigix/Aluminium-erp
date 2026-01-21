@@ -2,7 +2,8 @@ const salesOrderService = require('../services/salesOrderService');
 
 const listSalesOrders = async (req, res, next) => {
   try {
-    const rows = await salesOrderService.listSalesOrders();
+    const includeWithoutPo = req.query.includeWithoutPo === 'true';
+    const rows = await salesOrderService.listSalesOrders(includeWithoutPo);
     res.json(rows);
   } catch (error) {
     next(error);
