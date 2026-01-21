@@ -126,8 +126,10 @@ const ClientQuotations = () => {
     clientData.orders.forEach(order => {
       if (order.items) {
         order.items.forEach(item => {
-          const price = parseFloat(prices[item.id]) || 0;
-          total += price * (item.quantity || 1);
+          if (item.status !== 'REJECTED') {
+            const price = parseFloat(prices[item.id]) || 0;
+            total += price * (item.quantity || 1);
+          }
         });
       }
     });
@@ -149,7 +151,8 @@ const ClientQuotations = () => {
     
     clientData.orders.forEach(order => {
       if (order.items) {
-        allItems = allItems.concat(order.items);
+        const activeItems = order.items.filter(item => item.status !== 'REJECTED');
+        allItems = allItems.concat(activeItems);
       }
     });
 
@@ -382,7 +385,10 @@ const ClientQuotations = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-100">
                     {Object.entries(groupedByClient).map(([clientName, clientData]) => {
-                      const totalItems = clientData.orders.reduce((sum, order) => sum + (order.items?.length || 0), 0);
+                      const totalItems = clientData.orders.reduce((sum, order) => {
+                        const activeItemsCount = (order.items || []).filter(item => item.status !== 'REJECTED').length;
+                        return sum + activeItemsCount;
+                      }, 0);
                       return (
                         <React.Fragment key={clientName}>
                           <tr className="hover:bg-slate-50 transition-colors">
@@ -453,25 +459,46 @@ const ClientQuotations = () => {
                                                 {clientData.orders.slice(0, orderIdx).reduce((sum, o) => sum + (o.items?.length || 0), 0) + itemIdx + 1}
                                               </td>
                                               <td className="p-2">
-                                                <div className="text-slate-900 text-xs">{item.drawing_no || 'N/A'}</div>
+                                                <div className="flex flex-col gap-1 items-start">
+                                                  <div className="text-slate-900 text-xs">{item.drawing_no || 'N/A'}</div>
+                                                  {item.status === 'REJECTED' && (
+                                                    <div className="flex flex-col gap-1">
+                                                      <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[8px] font-bold uppercase w-fit">Rejected</span>
+                                                      {item.rejection_reason && (
+                                                        <span className="text-[9px] text-red-600 italic leading-tight">
+                                                          Reason: {item.rejection_reason}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                  {order.rejection_reason && order.status === 'DESIGN_QUERY' && (
+                                                    <div className="text-[9px] text-amber-600 italic mt-1">
+                                                      Note: {order.rejection_reason}
+                                                    </div>
+                                                  )}
+                                                </div>
                                               </td>
                                               <td className="p-2 text-xs text-slate-600">{item.description || '—'}</td>
                                               <td className="p-2 text-left text-sm text-slate-900 text-xs">{item.quantity}</td>
                                               <td className="p-2 text-xs text-slate-600">{item.unit || 'Pcs'}</td>
                                               <td className="p-2 text-right">
-                                                <input
-                                                  type="text"
-                                                  inputMode="decimal"
-                                                  placeholder="₹ 0.00"
-                                                  value={quotePricesMap[clientName]?.[item.id] || ''}
-                                                  onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                      handlePriceChange(clientName, item.id, val);
-                                                    }
-                                                  }}
-                                                  className="w-32 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                                />
+                                                {item.status === 'REJECTED' ? (
+                                                  <span className="text-red-600 font-bold text-[10px] uppercase pr-4">Rejected</span>
+                                                ) : (
+                                                  <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder="₹ 0.00"
+                                                    value={quotePricesMap[clientName]?.[item.id] || ''}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value;
+                                                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                        handlePriceChange(clientName, item.id, val);
+                                                      }
+                                                    }}
+                                                    className="w-32 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                                  />
+                                                )}
                                               </td>
                                             </tr>
                                           ))

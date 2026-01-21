@@ -41,6 +41,12 @@ const DesignOrders = () => {
   const [expandedActivePo, setExpandedActivePo] = useState({});
 
   const [showAddMaterialModal, setShowAddMaterialModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectData, setRejectData] = useState({
+    id: null,
+    type: '', // 'ITEM' or 'ORDER'
+    reason: ''
+  });
   const [materialFormData, setMaterialFormData] = useState({
     itemCode: '',
     itemName: '',
@@ -182,28 +188,6 @@ const DesignOrders = () => {
     }
   };
 
-  const handleAcceptOrder = async (orderId) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/${orderId}/accept`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ departmentCode: 'DESIGN_ENG' })
-      });
-
-      if (!response.ok) throw new Error('Failed to accept order');
-      
-      Swal.fire('Success', 'Order accepted and design task created', 'success');
-      fetchOrders();
-      fetchIncomingOrders();
-    } catch (error) {
-      Swal.fire('Error', error.message, 'error');
-    }
-  };
-
   const handleUpdateStatus = async (id, status) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -241,44 +225,72 @@ const DesignOrders = () => {
       
       Swal.fire('Success', 'Design approved. Sent to Sales for quotation.', 'success');
       setShowReviewModal(false);
+      setReviewOrder(null);
+      setReviewDetails([]);
+      fetchOrders();
       fetchIncomingOrders();
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     }
   };
 
-  const handleRejectDesign = async (orderId) => {
-    const result = await Swal.fire({
-      title: 'Reject Design',
-      input: 'textarea',
-      inputLabel: 'Rejection reason',
-      inputPlaceholder: 'Enter reason for rejection...',
-      showCancelButton: true,
-      inputValidator: (value) => {
-        if (!value) return 'Please enter a reason';
-      }
-    });
-    
-    if (result.isConfirmed) {
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/sales-orders/${orderId}/reject-design`, {
+  const handleRejectDesign = (orderId) => {
+    setRejectData({ id: orderId, type: 'ORDER', reason: '' });
+    setShowRejectModal(true);
+  };
+
+  const handleRejectItem = (itemId) => {
+    setRejectData({ id: itemId, type: 'ITEM', reason: '' });
+    setShowRejectModal(true);
+  };
+
+  const submitRejection = async () => {
+    if (!rejectData.reason) {
+      Swal.fire('Error', 'Please enter a rejection reason', 'error');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      if (rejectData.type === 'ORDER') {
+        const response = await fetch(`${API_BASE}/sales-orders/${rejectData.id}/reject-design`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ reason: result.value })
+          body: JSON.stringify({ reason: rejectData.reason })
         });
         
         if (!response.ok) throw new Error('Failed to reject design');
         
         Swal.fire('Success', 'Design rejected and sent back to sales.', 'success');
         setShowReviewModal(false);
-        fetchIncomingOrders();
-      } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+      } else {
+        const response = await fetch(`${API_BASE}/sales-orders/items/${rejectData.id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: 'REJECTED', reason: rejectData.reason })
+        });
+
+        if (!response.ok) throw new Error('Failed to reject item');
+
+        Swal.fire('Success', 'Item marked as rejected', 'success');
+        
+        setReviewDetails(prev => prev.map(item => 
+          item.id === rejectData.id ? { ...item, status: 'REJECTED', rejection_reason: rejectData.reason } : item
+        ));
       }
+      
+      setShowRejectModal(false);
+      setRejectData({ id: null, type: '', reason: '' });
+      fetchOrders();
+      fetchIncomingOrders();
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
     }
   };
 
@@ -754,16 +766,19 @@ const DesignOrders = () => {
   const groupedActive = filteredOrders.reduce((acc, order) => {
     const poKey = order.po_number || 'NO-PO';
     const companyKey = order.company_name || 'Unknown';
-    const key = `${companyKey}_${poKey}`;
+    const groupKey = `${companyKey}_${poKey}`;
 
-    if (!acc[key]) {
-      acc[key] = {
+    if (!acc[groupKey]) {
+      acc[groupKey] = {
         po_number: poKey,
         company_name: companyKey,
         orders: []
       };
     }
-    acc[key].orders.push(order);
+    
+    // Add all orders (which are individual items from the backend join)
+    acc[groupKey].orders.push(order);
+    
     return acc;
   }, {});
 
@@ -772,6 +787,7 @@ const DesignOrders = () => {
       case 'DRAFT': return 'bg-gray-100 text-gray-800';
       case 'IN_DESIGN': return 'bg-blue-100 text-blue-800';
       case 'COMPLETED': return 'bg-green-100 text-green-800';
+      case 'DESIGN_QUERY': return 'bg-amber-100 text-amber-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -896,7 +912,6 @@ const DesignOrders = () => {
                   Object.entries(groupedIncoming).map(([groupKey, group]) => {
                     const isExpanded = expandedIncomingPo[groupKey];
                     const allSelected = group.orders.every(o => selectedIncomingOrders.has(o.id));
-                    const someSelected = group.orders.some(o => selectedIncomingOrders.has(o.id));
 
                     return (
                       <React.Fragment key={groupKey}>
@@ -924,7 +939,9 @@ const DesignOrders = () => {
                           <td className="px-4 py-3">
                             <div className="flex flex-col">
                               <span className="font-bold text-slate-900 text-xs">{group.company_name}</span>
-                              <span className="text-[10px] text-slate-500 font-medium">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-500 font-medium">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 py-3 font-bold text-slate-900">
@@ -975,17 +992,25 @@ const DesignOrders = () => {
                             </td>
                             <td className="px-4 py-2.5 text-slate-400"></td>
                             <td className="px-4 py-2.5">
-                              {order.item_code ? (
-                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
-                                  {order.item_code}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic">Pending</span>
-                              )}
+                              <div className="flex flex-col gap-1 items-start">
+                                {order.item_code && (
+                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
+                                    {order.item_code}
+                                  </span>
+                                )}
+                                {!order.item_code && (
+                                  <span className="text-slate-400 italic">Pending</span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-2.5 font-bold text-indigo-600">{order.drawing_no || '—'}</td>
-                            <td className="px-4 py-2.5 text-slate-600 italic">
-                              {order.item_description || 'No description'}
+                            <td className="px-4 py-2.5">
+                              <div className="flex flex-col">
+                                <span className="text-slate-600 italic">{order.item_description || 'No description'}</span>
+                                {order.item_status === 'REJECTED' && order.rejection_reason && (
+                                  <span className="text-[10px] text-red-500 font-medium mt-0.5">Reason: {order.rejection_reason}</span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-2.5 text-center font-bold text-slate-900">
                               {order.item_qty || 1}
@@ -1051,6 +1076,7 @@ const DesignOrders = () => {
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Customer</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
                   <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Status</th>
                   <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Actions</th>
@@ -1059,7 +1085,7 @@ const DesignOrders = () => {
               <tbody className="bg-white divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="5" className="px-4 py-8 text-center">
+                    <td colSpan="6" className="px-4 py-8 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-xs text-slate-600 font-semibold">Loading design orders...</span>
@@ -1068,7 +1094,7 @@ const DesignOrders = () => {
                   </tr>
                 ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-4 py-8 text-center">
+                    <td colSpan="6" className="px-4 py-8 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         <p className="text-xs text-slate-500 font-semibold">No tasks match your search</p>
@@ -1103,8 +1129,14 @@ const DesignOrders = () => {
                             <span className="text-slate-600 font-bold text-xs">{group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}</span>
                           </td>
                           <td className="px-4 py-3">
-                            <span className="text-slate-400 text-[10px] font-medium">
-                              {group.orders.some(o => o.status === 'IN_DESIGN') ? 'Work In Progress' : 'Pending Start'}
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              group.orders.some(o => o.status === 'DESIGN_QUERY') 
+                                ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                                : group.orders.some(o => o.status === 'IN_DESIGN') 
+                                  ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}>
+                              {group.orders.some(o => o.status === 'DESIGN_QUERY') ? 'Rejected' : group.orders.some(o => o.status === 'IN_DESIGN') ? 'In Design' : 'Pending'}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-right">
@@ -1133,6 +1165,7 @@ const DesignOrders = () => {
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">{order.drawing_no || '—'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-slate-500 italic">{order.description || 'No description'}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-center font-bold text-slate-900">{order.total_quantity || 0}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <select
@@ -1383,21 +1416,36 @@ const DesignOrders = () => {
                   <div className="space-y-3">
                     {reviewDetails.map((item) => (
                       <div key={item.id} className="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div className="grid grid-cols-3 gap-3 text-sm">
-                          <div>
-                            <span className="text-xs text-slate-500">Drawing No</span>
-                            <p className="font-semibold text-slate-900 text-xs">{item.drawing_no || '—'}</p>
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="grid grid-cols-3 gap-3 text-sm flex-1">
+                            <div>
+                              <span className="text-xs text-slate-500">Drawing No</span>
+                              <p className="font-semibold text-slate-900 text-xs">{item.drawing_no || '—'}</p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-slate-500">Revision</span>
+                              <p className="font-semibold text-slate-900 text-xs">{item.revision_no || '—'}</p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-slate-500">Quantity</span>
+                              <p className="font-semibold text-slate-900 text-xs">{item.quantity || 1} {item.unit || 'NOS'}</p>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-xs text-slate-500">Revision</span>
-                            <p className="font-semibold text-slate-900 text-xs">{item.revision_no || '—'}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-slate-500">Quantity</span>
-                            <p className="font-semibold text-slate-900 text-xs">{item.quantity || 1} {item.unit || 'NOS'}</p>
-                          </div>
+                          {item.status === 'REJECTED' ? (
+                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-[10px] font-bold uppercase">Rejected</span>
+                          ) : (
+                            <button
+                              onClick={() => handleRejectItem(item.id)}
+                              className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-[10px] font-bold border border-red-200 transition-colors"
+                            >
+                              Reject Item
+                            </button>
+                          )}
                         </div>
                         <p className="text-xs text-slate-600 mt-2">{item.description}</p>
+                        {item.status === 'REJECTED' && item.rejection_reason && (
+                          <p className="text-[10px] text-red-500 mt-1 font-medium italic">Reason: {item.rejection_reason}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1407,13 +1455,7 @@ const DesignOrders = () => {
               </div>
             </div>
 
-            <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-between gap-3">
-              <button 
-                onClick={() => handleRejectDesign(reviewOrder.id)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors"
-              >
-                ✗ Reject & Return
-              </button>
+            <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-end gap-3">
               <div className="flex gap-3">
                 <button 
                   onClick={() => setShowReviewModal(false)}
@@ -1426,6 +1468,84 @@ const DesignOrders = () => {
                   className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors"
                 >
                   ✓ Approve & Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-[70] overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowRejectModal(false)}></div>
+            <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden transform transition-all border border-slate-200">
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 border-b border-white/10">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-1">
+                      Reject Reason
+                    </h3>
+                    <p className="text-indigo-100 text-xs font-medium">
+                      {rejectData.type === 'ITEM' ? 'Rejecting specific item' : `Rejecting order for ${reviewOrder?.company_name}`}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setShowRejectModal(false)}
+                    className="text-white/80 hover:text-white transition-colors p-1"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Customer</label>
+                    <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder?.company_name}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">PO Number</label>
+                    <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder?.po_number || '—'}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Project</label>
+                    <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder?.project_name}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase">Sales Order</label>
+                    <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder?.so_number || '—'}</p>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <label className="text-xs font-bold text-slate-600 uppercase block mb-2">Rejection Reason</label>
+                  <textarea
+                    value={rejectData.reason}
+                    onChange={(e) => setRejectData({ ...rejectData, reason: e.target.value })}
+                    placeholder="Enter reason for rejection here..."
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all min-h-[120px] resize-none"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end gap-3">
+                <button 
+                  onClick={() => setShowRejectModal(false)}
+                  className="px-4 py-2 bg-slate-300 text-slate-900 rounded-lg text-xs font-semibold hover:bg-slate-400 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={submitRejection}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors"
+                >
+                  Confirm Rejection
                 </button>
               </div>
             </div>

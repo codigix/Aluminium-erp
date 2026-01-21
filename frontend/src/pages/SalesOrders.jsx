@@ -508,7 +508,6 @@ const SalesOrders = ({
                 const netValue = Number(order.po_net_total)
                 const hasNetValue = !Number.isNaN(netValue)
                 const canViewPo = typeof onViewPo === 'function' && Boolean(order.customer_po_id)
-                const pdfUrl = typeof getPoPdfUrl === 'function' ? getPoPdfUrl(order.pdf_path) : null
                 const soPdfUrl = `${API_BASE}/sales-orders/${order.id}/pdf`
                 const isExpanded = expandedItems[order.id]
 
@@ -549,6 +548,11 @@ const SalesOrders = ({
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${badgeClasses}`}>
                           {formatStatus(order.status).toUpperCase()}
                         </span>
+                        {normalizedStatus === 'DESIGN_QUERY' && order.rejection_reason && (
+                          <div className="mt-1.5 p-2 bg-amber-50 border border-amber-100 rounded text-[10px] text-amber-700 leading-relaxed max-w-[200px]">
+                            <span className="font-bold text-amber-800">Reason:</span> {order.rejection_reason}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 align-middle">
                         <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
@@ -622,8 +626,20 @@ const SalesOrders = ({
                               <tbody className="divide-y divide-slate-100">
                                 {order.items && order.items.length > 0 ? (
                                   order.items.map((item, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                      <td className="px-4 py-2 font-mono text-indigo-600">{item.drawing_no || 'N/A'}</td>
+                                    <tr key={idx} className={`hover:bg-slate-50 transition-colors ${item.status === 'REJECTED' ? 'bg-red-50/50' : ''}`}>
+                                      <td className="px-4 py-2 font-mono text-indigo-600">
+                                        {item.drawing_no || 'N/A'}
+                                        {item.status === 'REJECTED' && (
+                                          <div className="flex flex-col gap-1 mt-1">
+                                            <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[8px] font-bold uppercase w-fit">Rejected</span>
+                                            {item.rejection_reason && (
+                                              <span className="text-[9px] text-red-600 italic leading-tight">
+                                                Reason: {item.rejection_reason}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </td>
                                       <td className="px-4 py-2 text-slate-600">{item.description}</td>
                                       <td className="px-4 py-2 text-center font-bold">{item.quantity} {item.unit}</td>
                                       <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.rate, order.po_currency)}</td>

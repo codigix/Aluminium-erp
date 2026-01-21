@@ -17,12 +17,14 @@ const listDesignOrders = async () => {
       soi.item_code,
       soi.id as item_id,
       soi.drawing_no,
+      soi.description,
       soi.quantity as total_quantity
     FROM design_orders do
     JOIN sales_orders so ON do.sales_order_id = so.id
     JOIN sales_order_items soi ON soi.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
+    WHERE so.request_accepted = 1
     ORDER BY do.created_at DESC
   `);
   return rows;

@@ -34,11 +34,21 @@ const formatOrderCode = (id) => {
 const SalesOrderRow = ({ order, onAction, actionLoading }) => {
   const currentStatus = statusColors[order.status] || statusColors.CREATED;
   const isProcessing = actionLoading === order.id;
+  const rejectedItems = (order.items || []).filter(item => item.status === 'REJECTED');
 
   return (
     <>
       <tr className="hover:bg-slate-50 transition-colors border-b border-slate-100">
-        <td className="px-5 py-4 text-slate-900 whitespace-nowrap">{formatOrderCode(order.id)}</td>
+        <td className="px-5 py-4 text-slate-900 whitespace-nowrap">
+          {formatOrderCode(order.id)}
+          {rejectedItems.length > 0 && (
+            <div className="mt-1">
+              <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[8px] font-bold uppercase">
+                {rejectedItems.length} Item(s) Rejected
+              </span>
+            </div>
+          )}
+        </td>
         <td className="px-5 py-4">
           <p className="text-slate-900 text-xs">{order.company_name}</p>
           <p className="text-xs text-slate-400">{order.project_name || '—'}</p>
@@ -54,6 +64,11 @@ const SalesOrderRow = ({ order, onAction, actionLoading }) => {
           <span className={`px-2 py-1 rounded-full text-[10px]  border ${currentStatus.bg} ${currentStatus.border} ${currentStatus.text}  whitespace-nowrap`}>
             {currentStatus.label}
           </span>
+          {order.status === 'DESIGN_QUERY' && order.rejection_reason && (
+            <div className="mt-1.5 p-2 bg-amber-50 border border-amber-100 rounded text-[10px] text-amber-700 leading-relaxed max-w-[200px]">
+              <span className="font-bold">Rejection Reason:</span> {order.rejection_reason}
+            </div>
+          )}
         </td>
         <td className="px-5 py-4 text-right">
           <div className="flex justify-end gap-2">
@@ -99,7 +114,27 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
       });
       if (!response.ok) throw new Error('Failed to fetch orders');
       const data = await response.json();
-      setOrders(Array.isArray(data) ? data : []);
+      
+      // Group flat rows by order ID
+      const grouped = (Array.isArray(data) ? data : []).reduce((acc, row) => {
+        if (!acc[row.id]) {
+          acc[row.id] = { ...row, items: [] };
+        }
+        if (row.item_id) {
+          acc[row.id].items.push({
+            id: row.item_id,
+            item_code: row.item_code,
+            drawing_no: row.drawing_no,
+            description: row.item_description,
+            quantity: row.item_qty,
+            unit: row.item_unit,
+            status: row.item_status
+          });
+        }
+        return acc;
+      }, {});
+      
+      setOrders(Object.values(grouped));
     } catch (error) {
       console.error('Error fetching incoming orders:', error);
       setOrders([]);

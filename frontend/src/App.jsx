@@ -66,26 +66,6 @@ const COMPANY_HINTS = {
   BOSSAR: ['bossar']
 }
 
-const normalizeKey = value => (value || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '')
-const parseIndianNumber = value => {
-  if (value === undefined || value === null) return 0
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0
-  }
-  const normalized = String(value).replace(/,/g, '').replace(/[^0-9.-]/g, '')
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-const normalizeTaxPercents = (cgstPercent, sgstPercent, igstPercent, isIntrastate) => {
-  if (isIntrastate) {
-    const safeCgst = cgstPercent || (igstPercent ? igstPercent / 2 : 0)
-    const safeSgst = sgstPercent || safeCgst
-    return { cgstPercent: safeCgst, sgstPercent: safeSgst, igstPercent: 0 }
-  }
-  const safeIgst = igstPercent || cgstPercent + sgstPercent
-  return { cgstPercent: 0, sgstPercent: 0, igstPercent: safeIgst }
-}
-
 const formatDisplayDate = value => {
   if (!value) return '—'
   const date = new Date(value)
@@ -277,6 +257,7 @@ function App() {
   const [salesOrdersLoading, setSalesOrdersLoading] = useState(false)
   const [poDetailDrawerOpen, setPoDetailDrawerOpen] = useState(false)
   const [poDetailLoading, setPoDetailLoading] = useState(false)
+  const [poItemsLoading, setPoItemsLoading] = useState(false)
   const [poDetail, setPoDetail] = useState(null)
   const [poDetailError, setPoDetailError] = useState('')
   const [, setSelectedPoId] = useState(null)

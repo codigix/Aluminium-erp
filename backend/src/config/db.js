@@ -587,7 +587,9 @@ const ensureSalesOrderItemColumns = async () => {
       { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
       { name: 'item_group', definition: 'VARCHAR(100)' },
       { name: 'is_active', definition: 'TINYINT(1) DEFAULT 1' },
-      { name: 'is_default', definition: 'TINYINT(1) DEFAULT 0' }
+      { name: 'is_default', definition: 'TINYINT(1) DEFAULT 0' },
+      { name: 'status', definition: "VARCHAR(50) DEFAULT 'PENDING'" },
+      { name: 'rejection_reason', definition: 'TEXT' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

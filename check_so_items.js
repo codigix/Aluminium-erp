@@ -1,15 +1,19 @@
-const pool = require('./backend/src/config/db');
+const mysql = require('mysql2/promise');
+require('dotenv').config({path: './backend/.env'});
 
-async function checkSchema() {
+async function main() {
   try {
-    const [columns] = await pool.query('DESCRIBE sales_order_items');
-    console.log('sales_order_items Schema:');
-    console.table(columns);
-    process.exit(0);
-  } catch (err) {
-    console.error(err);
-    process.exit(1);
+    const connection = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME
+    });
+    const [rows] = await connection.query('SHOW COLUMNS FROM sales_order_items');
+    console.log(JSON.stringify(rows, null, 2));
+    await connection.end();
+  } catch (error) {
+    console.error(error);
   }
 }
-
-checkSchema();
+main();

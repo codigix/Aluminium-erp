@@ -3,13 +3,23 @@ const designOrderService = require('./designOrderService');
 
 const listSalesOrders = async () => {
   const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path
+    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+            (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      WHERE so.customer_po_id IS NOT NULL
      ORDER BY so.created_at DESC`
   );
+  
+  for (const order of rows) {
+    const [items] = await pool.query(
+      'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
+      [order.id]
+    );
+    order.items = items;
+  }
+  
   return rows;
 };
 
@@ -31,13 +41,14 @@ const getIncomingOrders = async (departmentCode) => {
   
   const query = `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
-            soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit
+            soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
+            (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
      LEFT JOIN (
-       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit
+       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit, status as item_status, rejection_reason as item_rejection_reason
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id
      WHERE (${whereClause}) AND so.request_accepted = 0
@@ -215,6 +226,41 @@ const approveDesignAndCreateQuotation = async (salesOrderId) => {
   }
 };
 
+const updateSalesOrderItemStatus = async (itemId, status, reason) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Update status and rejection reason on the item
+    await connection.execute(
+      'UPDATE sales_order_items SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+      [status, status === 'REJECTED' ? reason : null, itemId]
+    );
+
+    if (status === 'REJECTED' && reason) {
+      // Get sales_order_id for this item
+      const [itemRows] = await connection.query('SELECT sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
+      if (itemRows.length > 0) {
+        const salesOrderId = itemRows[0].sales_order_id;
+        
+        // Log rejection reason
+        await connection.execute(
+          `INSERT INTO design_rejections (sales_order_id, reason, created_at)
+           VALUES (?, ?, NOW())`,
+          [salesOrderId, `Item ID ${itemId} Rejected: ${reason}`]
+        );
+      }
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const rejectDesign = async (salesOrderId, reason) => {
   const connection = await pool.getConnection();
   try {
@@ -314,7 +360,8 @@ const getApprovedDrawings = async () => {
      IFNULL(ct.email, '') as email,
      IFNULL(ct.phone, '') as phone,
      IFNULL(ct.name, '') as contact_person,
-     cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total
+     cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total,
+     (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
@@ -655,6 +702,7 @@ module.exports = {
   getOrderTimeline,
   getSalesOrderItem,
   updateSalesOrderItem,
+  updateSalesOrderItemStatus,
   generateSalesOrderPDF,
   deleteSalesOrder
 };

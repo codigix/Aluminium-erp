@@ -17,6 +17,7 @@ router.post('/:id/accept', salesOrderController.acceptRequest);
 router.post('/:id/reject', salesOrderController.rejectRequest);
 router.get('/items/:itemId', salesOrderController.getSalesOrderItem);
 router.patch('/items/:itemId', salesOrderController.updateSalesOrderItem);
+router.patch('/items/:itemId/status', salesOrderController.updateSalesOrderItemStatus);
 router.get('/:id/items', salesOrderController.getOrderTimeline);
 router.get('/:id/timeline', salesOrderController.getOrderTimeline);
 router.get('/:id/pdf', salesOrderController.generateSalesOrderPDF);

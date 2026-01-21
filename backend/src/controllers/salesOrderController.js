@@ -204,6 +204,17 @@ const updateSalesOrderItem = async (req, res, next) => {
   }
 };
 
+const updateSalesOrderItemStatus = async (req, res, next) => {
+  try {
+    const { itemId } = req.params;
+    const { status, reason } = req.body;
+    await salesOrderService.updateSalesOrderItemStatus(itemId, status, reason);
+    res.json({ success: true, message: 'Item status updated' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listSalesOrders,
   getIncomingOrders,
@@ -221,6 +232,7 @@ module.exports = {
   getOrderTimeline,
   getSalesOrderItem,
   updateSalesOrderItem,
+  updateSalesOrderItemStatus,
   generateSalesOrderPDF,
   deleteSalesOrder
 };
