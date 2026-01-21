@@ -39,7 +39,7 @@ const ClientQuotations = () => {
         }
         grouped[clientName].orders.push(order);
       });
-      setGroupedByClient(Object.values(grouped));
+      setGroupedByClient(grouped);
     } catch (error) {
       console.error(error);
       Swal.fire('Error', error.message, 'error');
@@ -190,6 +190,149 @@ const ClientQuotations = () => {
       }
     }));
   };
+
+  const pendingData = useMemo(() => Object.values(groupedByClient), [groupedByClient]);
+
+  const renderPendingExpanded = (clientData) => {
+    const clientName = clientData.company_name;
+    const allItems = clientData.orders.flatMap(order => order.items || []);
+    const total = calculateClientTotal(clientName);
+
+    return (
+      <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white p-4 border-b border-slate-200 flex justify-between items-center">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Approved Drawings & Pricing
+          </h3>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Quotation Value</p>
+            <p className="text-xl font-bold text-emerald-600">
+              ₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-100 text-slate-600 uppercase text-[9px] tracking-widest font-bold">
+              <tr>
+                <th className="px-4 py-3">#</th>
+                <th className="px-4 py-3">Drawing</th>
+                <th className="px-4 py-3">Description</th>
+                <th className="px-4 py-3 text-right">Qty</th>
+                <th className="px-4 py-3">Unit</th>
+                <th className="px-4 py-3 text-right">Quote Price</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {allItems.map((item, idx) => (
+                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-3 text-slate-400">{idx + 1}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900">{item.drawing_no || 'N/A'}</td>
+                  <td className="px-4 py-3 text-slate-600">{item.description || '—'}</td>
+                  <td className="px-4 py-3 text-right font-medium">{item.quantity}</td>
+                  <td className="px-4 py-3 text-slate-500">{item.unit || 'Pcs'}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end items-center gap-2">
+                      <span className="text-slate-400">₹</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={quotePricesMap[clientName]?.[item.id] || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                            handlePriceChange(clientName, item.id, val);
+                          }
+                        }}
+                        className="w-24 p-1.5 border border-slate-200 rounded-lg text-right focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+          <button
+            onClick={() => handleSendQuote(clientName)}
+            disabled={sendingClientName === clientName || total === 0}
+            className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm shadow-emerald-200 flex items-center gap-2 text-sm"
+          >
+            {sendingClientName === clientName ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Sending...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                Send Quote to Client
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSentExpanded = (group) => (
+    <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white p-3 border-b border-slate-200">
+        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Quotation Breakdown</h4>
+      </div>
+      <table className="w-full text-left text-[11px]">
+        <thead className="bg-slate-100 text-slate-600 uppercase text-[9px] tracking-widest font-bold">
+          <tr>
+            <th className="px-4 py-2">#</th>
+            <th className="px-4 py-2">Drawing</th>
+            <th className="px-4 py-2">Description</th>
+            <th className="px-4 py-2 text-right">Qty</th>
+            <th className="px-4 py-2">Unit</th>
+            <th className="px-4 py-2 text-right">Quote Price</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 bg-white">
+          {group.quotes.map((q, idx) => (
+            <tr key={q.id} className="hover:bg-slate-50 transition-colors">
+              <td className="px-4 py-2 text-slate-400">{idx + 1}</td>
+              <td className="px-4 py-2 font-medium text-slate-900">{q.drawing_no || '—'}</td>
+              <td className="px-4 py-2 text-slate-600">{q.item_description}</td>
+              <td className="px-4 py-2 text-right font-medium">
+                {q.item_qty !== null ? Number(q.item_qty).toFixed(3) : '—'}
+              </td>
+              <td className="px-4 py-2 text-slate-500">{q.item_unit || 'NOS'}</td>
+              <td className="px-4 py-2 text-right text-emerald-600 font-bold">
+                ₹{(q.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-slate-50 text-[10px]">
+          <tr>
+            <td colSpan="5" className="px-4 py-2 text-right text-slate-500 font-medium">Sub Total:</td>
+            <td className="px-4 py-2 text-right text-slate-900 font-bold">₹{group.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          </tr>
+          <tr>
+            <td colSpan="5" className="px-4 py-2 text-right text-slate-500 font-medium">GST (18%):</td>
+            <td className="px-4 py-2 text-right text-slate-900 font-bold">₹{(group.total_amount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          </tr>
+          <tr className="bg-emerald-50/50">
+            <td colSpan="5" className="px-4 py-2 text-right text-emerald-700 font-bold uppercase tracking-wider">Grand Total:</td>
+            <td className="px-4 py-2 text-right text-emerald-600 font-black text-xs">₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
 
   const calculateClientTotal = (clientName) => {
     const clientData = groupedByClient[clientName];
