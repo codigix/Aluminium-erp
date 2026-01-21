@@ -40,7 +40,7 @@ const getIncomingOrders = async (departmentCode) => {
        SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id
-     WHERE (${whereClause}) AND so.request_accepted = 0 AND so.customer_po_id IS NOT NULL
+     WHERE (${whereClause}) AND so.request_accepted = 0
      ORDER BY so.created_at DESC`;
   
   const [rows] = await pool.query(query);

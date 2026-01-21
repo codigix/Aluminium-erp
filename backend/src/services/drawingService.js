@@ -101,6 +101,21 @@ const shareWithDesign = async (id) => {
         );
       }
     }
+
+    // 5. Create Sales Order for Design Review
+    const [soResult] = await connection.execute(
+      `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [null, companyId, `Design Review - ${drawing.drawing_no} for ${drawing.client_name}`, 1, 'NORMAL', 'CREATED', 'DESIGN_ENG', 0]
+    );
+    const salesOrderId = soResult.insertId;
+
+    // 6. Create Sales Order Item
+    await connection.execute(
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, drawing_pdf, description, quantity, unit)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [salesOrderId, drawing.drawing_no, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
+    );
     
     await connection.commit();
   } catch (error) {
@@ -236,6 +251,23 @@ const shareDrawingsBulk = async (ids) => {
             [companyId, firstWithContact.contact_person || clientName, firstWithContact.email || null, firstWithContact.phone || null, 'PRIMARY', 'ACTIVE']
           );
         }
+      }
+
+      // 5. Create Sales Order for Design Review (Bulk)
+      const [soResult] = await connection.execute(
+        `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [null, companyId, `Design Review - ${clientDrawings.length} Drawings for ${clientName}`, 1, 'NORMAL', 'CREATED', 'DESIGN_ENG', 0]
+      );
+      const salesOrderId = soResult.insertId;
+
+      // 6. Create Sales Order Items
+      for (const drawing of clientDrawings) {
+        await connection.execute(
+          `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, drawing_pdf, description, quantity, unit)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [salesOrderId, drawing.drawing_no, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
+        );
       }
     }
     
