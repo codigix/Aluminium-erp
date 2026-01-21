@@ -740,7 +740,7 @@ const DesignOrders = () => {
       order.company_name?.toLowerCase().includes(searchLower) ||
       order.project_name?.toLowerCase().includes(searchLower) ||
       order.drawing_no?.toLowerCase().includes(searchLower) ||
-      `SO-${String(order.sales_order_id).padStart(4, '0')}`.toLowerCase().includes(searchLower)
+      ((order.po_number === 'NO-PO' ? 'DR-' : 'SO-') + String(order.sales_order_id).padStart(4, '0')).toLowerCase().includes(searchLower)
     );
   });
 
@@ -917,7 +917,7 @@ const DesignOrders = () => {
                           <td className="px-4 py-3">
                             <div className="flex flex-col">
                               <span className="font-bold text-slate-900 text-xs">{group.company_name}</span>
-                              <span className="text-[10px] text-slate-500 font-medium">PO: {poNumber}</span>
+                              <span className="text-[10px] text-slate-500 font-medium">{poNumber === 'NO-PO' ? 'Design Request' : `PO: ${poNumber}`}</span>
                             </div>
                           </td>
                           <td className="px-4 py-3 font-bold text-slate-900">
@@ -984,13 +984,6 @@ const DesignOrders = () => {
                               {order.item_qty || 1}
                             </td>
                             <td className="px-4 py-2.5 whitespace-nowrap text-right flex gap-1 justify-end">
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); openAddMaterialModal(order); }}
-                                className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors shadow-sm"
-                                title="Add Material"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
-                              </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleViewOrder(order); }}
                                 className="p-1 bg-slate-100 text-slate-500 rounded hover:bg-slate-200 transition-colors"
@@ -1089,7 +1082,7 @@ const DesignOrders = () => {
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
                                 <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                                <span className="font-bold text-slate-900 text-xs">PO: {poNumber}</span>
+                                <span className="font-bold text-slate-900 text-xs">{poNumber === 'NO-PO' ? 'Design Request' : `PO: ${poNumber}`}</span>
                               </div>
                               <span className="font-bold text-indigo-600 text-[10px] ml-5">{group.company_name}</span>
                             </div>
@@ -1149,10 +1142,12 @@ const DesignOrders = () => {
                               <div className="flex justify-end gap-1">
                                 <button 
                                   onClick={() => openAddMaterialModal(order)}
-                                  className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors shadow-sm"
+                                  className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100 rounded transition-all"
                                   title="Add Material"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                  </svg>
                                 </button>
                                 <button 
                                   onClick={() => handleViewDetails(order)}
@@ -1192,10 +1187,10 @@ const DesignOrders = () => {
                 <div className="flex justify-between items-start gap-4">
                   <div>
                     <h3 className="text-lg font-bold text-white mb-1">
-                      Technical Details: PO {selectedOrder?.po_number}
+                      Technical Details: {selectedOrder?.po_number && selectedOrder?.po_number !== 'NO-PO' ? `PO ${selectedOrder.po_number}` : 'Design Request'}
                     </h3>
                     <p className="text-sm text-purple-100">
-                      SO-{String(selectedOrder?.sales_order_id).padStart(4, '0')} | {selectedOrder?.company_name} - {selectedOrder?.project_name}
+                      {(selectedOrder?.po_number === 'NO-PO' ? 'DR-' : 'SO-') + String(selectedOrder?.sales_order_id).padStart(4, '0')} | {selectedOrder?.company_name} - {selectedOrder?.project_name}
                     </p>
                   </div>
                   <button 
@@ -1354,16 +1349,16 @@ const DesignOrders = () => {
                   <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.company_name}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">PO Number</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.po_number || '—'}</p>
+                  <label className="text-xs font-bold text-slate-600 uppercase">{reviewOrder.po_number === 'NO-PO' ? 'Request Type' : 'PO Number'}</label>
+                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.po_number === 'NO-PO' ? 'Design Request' : reviewOrder.po_number || '—'}</p>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase">Project</label>
                   <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.project_name}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">Sales Order</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">SO-{String(reviewOrder.id).padStart(4, '0')}</p>
+                  <label className="text-xs font-bold text-slate-600 uppercase">{reviewOrder.po_number === 'NO-PO' ? 'Request ID' : 'Sales Order'}</label>
+                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{(reviewOrder.po_number === 'NO-PO' ? 'DR-' : 'SO-') + String(reviewOrder.id).padStart(4, '0')}</p>
                 </div>
               </div>
 

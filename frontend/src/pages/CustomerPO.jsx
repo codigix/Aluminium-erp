@@ -79,6 +79,7 @@ const CustomerPO = ({
                     <tr>
                       <th className="p-2 text-left text-xs  text-slate-700 ">Quote ID / Client</th>
                       <th className="p-2 text-left text-xs  text-slate-700 ">Sent Date</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Total Amount</th>
                       <th className="p-2 text-center text-xs  text-slate-700 ">Status</th>
                       <th className="p-2 text-right text-xs  text-slate-700 ">Action</th>
                     </tr>
@@ -101,14 +102,20 @@ const CustomerPO = ({
                                 {new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                               </div>
                             </td>
+                            <td className="p-2">
+                              <div className="flex flex-col">
+                                <span className="text-slate-400 text-[10px] font-normal">Incl. GST (18%)</span>
+                                <span className="text-xs text-emerald-600 ">{formatCurrency(group.total_amount * 1.18)}</span>
+                              </div>
+                            </td>
                             <td className="p-2 text-center">
                               <span className={`inline-flex px-2 py-0.5 rounded-full text-[0.6rem]   tracking-wider ${
                                 group.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 
                                 group.status === 'APPROVAL' ? 'bg-blue-100 text-blue-700' :
-                                group.status === 'COMPLETED' ? 'bg-slate-100 text-slate-700' :
-                                'bg-emerald-100 text-emerald-700'
+                                group.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
+                                'bg-slate-100 text-slate-700'
                               }`}>
-                                {group.status}
+                                {group.status === 'COMPLETED' ? 'APPROVED' : group.status}
                               </span>
                             </td>
                             <td className="p-2 text-right">
@@ -131,7 +138,7 @@ const CustomerPO = ({
                           </tr>
                           {isExpanded && (
                             <tr>
-                              <td colSpan="4" className="p-4 bg-slate-50/50">
+                              <td colSpan="5" className="p-4 bg-slate-50/50">
                                 <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
                                   <table className="w-full text-xs">
                                     <thead className="bg-slate-50 border-b border-slate-200">
@@ -139,14 +146,11 @@ const CustomerPO = ({
                                         <th className="p-2 text-left text-slate-500 ">Drawing No</th>
                                         <th className="p-2 text-left text-slate-500 ">Description</th>
                                         <th className="p-2 text-center text-slate-500 ">Qty</th>
-                                        <th className="p-2 text-right text-slate-500 ">Unit Rate</th>
                                         <th className="p-2 text-right text-slate-500 ">Amount</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                       {group.quotes.map((item) => {
-                                        const rate = poQuotePrices[`q-${item.id}`] || '';
-                                        const amount = (parseFloat(item.item_qty) || 0) * (parseFloat(rate) || 0);
                                         return (
                                           <tr key={`quote-item-${item.id}`} className="hover:bg-slate-50">
                                             <td className="p-2 text-slate-900">{item.drawing_no}</td>
@@ -154,17 +158,8 @@ const CustomerPO = ({
                                             <td className="p-2 text-center ">
                                               {item.item_qty !== null ? Number(item.item_qty).toFixed(0) : '0'} {item.item_unit || 'NOS'}
                                             </td>
-                                            <td className="p-2 text-right">
-                                              <input
-                                                type="number"
-                                                placeholder="₹ 0.00"
-                                                className="w-24 p-1 border border-slate-200 rounded text-right text-[0.65rem] text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                value={rate}
-                                                onChange={(e) => onQuotePriceChange(`q-${item.id}`, e.target.value)}
-                                              />
-                                            </td>
                                             <td className="p-2 text-right text-slate-900">
-                                              {formatCurrency(amount)}
+                                              {formatCurrency(item.total_amount)}
                                             </td>
                                           </tr>
                                         );
@@ -172,40 +167,30 @@ const CustomerPO = ({
                                     </tbody>
                                     <tfoot className="bg-slate-50 border-t border-slate-200">
                                       <tr>
-                                        <td colSpan="4" className="p-2 text-right  text-slate-600  tracking-wider">Total Amount:</td>
-                                        <td className="p-2 text-right  text-indigo-600 text-sm">
-                                          {formatCurrency(group.quotes.reduce((sum, item) => {
-                                            const rate = poQuotePrices[`q-${item.id}`] || 0;
-                                            return sum + ((parseFloat(item.item_qty) || 0) * (parseFloat(rate) || 0));
-                                          }, 0))}
-                                        </td>
+                                        <td colSpan="3" className="p-2 text-right text-xs text-slate-600">Sub Total:</td>
+                                        <td className="p-2 text-right text-xs text-slate-900">{formatCurrency(group.total_amount)}</td>
+                                      </tr>
+                                      <tr>
+                                        <td colSpan="3" className="p-2 text-right text-xs text-slate-600">GST (18%):</td>
+                                        <td className="p-2 text-right text-xs text-slate-900">{formatCurrency(group.total_amount * 0.18)}</td>
+                                      </tr>
+                                      <tr className="bg-indigo-50">
+                                        <td colSpan="3" className="p-2 text-right text-xs text-indigo-700 font-medium">Grand Total (Incl. GST):</td>
+                                        <td className="p-2 text-right text-sm text-indigo-600 font-semibold">{formatCurrency(group.total_amount * 1.18)}</td>
                                       </tr>
                                     </tfoot>
                                   </table>
                                 </div>
                                 <div className="mt-3 flex justify-end gap-3">
-                                  <button
-                                    onClick={() => onUpdateQuotationRates(group.quotes)}
-                                    className="px-4 py-1.5 border border-indigo-600 text-indigo-600 rounded-lg text-[0.65rem]  hover:bg-indigo-50 transition-colors  tracking-wider"
-                                  >
-                                    Update Quotation
-                                  </button>
-                                  {group.status === 'APPROVAL' ? (
+                                  {group.status === 'PENDING' && (
                                     <button
                                       onClick={() => onSendToDesign(group.quotes)}
-                                      className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[0.65rem]  hover:bg-emerald-700 transition-colors  tracking-wider flex items-center gap-2"
+                                      className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[0.65rem]  hover:bg-indigo-700 transition-colors  tracking-wider flex items-center gap-2"
                                     >
                                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                       </svg>
-                                      Send to Design
-                                    </button>
-                                  ) : group.status === 'PENDING' && (
-                                    <button
-                                      onClick={() => onApproveQuotation(group.quotes)}
-                                      className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[0.65rem]  hover:bg-indigo-700 transition-colors  tracking-wider"
-                                    >
-                                      Create Quotation
+                                      Create Quotation & Send to Design
                                     </button>
                                   )}
                                 </div>

@@ -22,7 +22,7 @@ const listDesignOrders = async () => {
     JOIN sales_orders so ON do.sales_order_id = so.id
     JOIN sales_order_items soi ON soi.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
-    JOIN customer_pos cp ON so.customer_po_id = cp.id
+    LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
     ORDER BY do.created_at DESC
   `);
   return rows;
