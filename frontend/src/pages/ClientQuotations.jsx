@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -8,8 +9,6 @@ const ClientQuotations = () => {
   const [groupedByClient, setGroupedByClient] = useState({});
   const [sentQuotations, setSentQuotations] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [expandedClientName, setExpandedClientName] = useState(null);
-  const [expandedSentKey, setExpandedSentKey] = useState(null);
   const [quotePricesMap, setQuotePricesMap] = useState({});
   const [sendingClientName, setSendingClientName] = useState(null);
 
@@ -40,7 +39,7 @@ const ClientQuotations = () => {
         }
         grouped[clientName].orders.push(order);
       });
-      setGroupedByClient(grouped);
+      setGroupedByClient(Object.values(grouped));
     } catch (error) {
       console.error(error);
       Swal.fire('Error', error.message, 'error');
@@ -94,13 +93,93 @@ const ClientQuotations = () => {
     }
   }, [activeTab]);
 
-  const toggleExpandClient = (clientName) => {
-    if (expandedClientName === clientName) {
-      setExpandedClientName(null);
-    } else {
-      setExpandedClientName(clientName);
+  const pendingColumns = [
+    {
+      key: 'company_name',
+      label: 'Client Name',
+      sortable: true,
+      render: (val, row) => (
+        <div>
+          <div className="text-slate-900 font-medium">{val}</div>
+          {row.contact_person && (
+            <div className="text-[10px] text-slate-500">{row.contact_person}</div>
+          )}
+        </div>
+      )
+    },
+    { key: 'email', label: 'Email', sortable: true },
+    { key: 'phone', label: 'Phone' },
+    {
+      key: 'created_at',
+      label: 'Date',
+      sortable: true,
+      render: (val) => new Date(val).toLocaleDateString('en-IN')
+    },
+    {
+      key: 'orders',
+      label: 'Items',
+      render: (orders) => (
+        <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold">
+          {orders.reduce((sum, order) => sum + (order.items?.length || 0), 0)} Drawings
+        </span>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_, row) => (
+        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => handleDeleteApprovedOrders(row.company_name)}
+            className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            title="Delete Approved Orders"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      )
     }
-  };
+  ];
+
+  const sentColumns = [
+    {
+      key: 'id',
+      label: 'Quote ID',
+      sortable: true,
+      render: (val) => <span className="text-indigo-600 font-medium">QRT-{String(val).padStart(4, '0')}</span>
+    },
+    { key: 'company_name', label: 'Client', sortable: true },
+    {
+      key: 'quotes',
+      label: 'Project / Details',
+      render: (quotes) => quotes.length > 1 ? `${quotes.length} Drawings` : (quotes[0]?.project_name || '—')
+    },
+    {
+      key: 'total_amount',
+      label: 'Total Amount',
+      sortable: true,
+      render: (val) => (
+        <div className="flex flex-col">
+          <span className="text-[9px] text-slate-400">Incl. GST (18%)</span>
+          <span className="text-emerald-600 font-bold">₹{(val * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+        </div>
+      )
+    },
+    {
+      key: 'created_at',
+      label: 'Date',
+      sortable: true,
+      render: (val) => new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      render: (val) => <StatusBadge status={val} />
+    }
+  ];
 
   const handlePriceChange = (clientName, itemId, price) => {
     setQuotePricesMap(prev => ({

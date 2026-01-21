@@ -94,7 +94,7 @@ const ProjectRequests = () => {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Project Requests</h2>
+          <h2 className="text-xl text-slate-900">Project Requests</h2>
           <p className="text-sm text-slate-500 mt-1">New project requests from Sales department for production start</p>
         </div>
         <button 

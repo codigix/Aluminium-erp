@@ -233,7 +233,6 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState({})
   const [signupForm, setSignupForm] = useState({
     username: '',
     email: '',
@@ -1446,40 +1445,20 @@ function App() {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-2">
-            {navigationItems.map((item, index) => {
+            {navigationItems.map((item) => {
               const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
               const isDisabled = item.isGroup || !item.moduleId
-              const isGroupExpanded = expandedGroups[item.groupId]
               
               if (item.isGroup) {
-                const nextGroupIndex = navigationItems.findIndex((it, i) => i > index && it.isGroup)
-                const groupItems = navigationItems.slice(index + 1, nextGroupIndex === -1 ? undefined : nextGroupIndex)
-                const hasVisibleItems = groupItems.length > 0
-                
                 return (
                   <div key={item.label} className="pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedGroups(prev => ({ ...prev, [item.groupId]: !prev[item.groupId] }))}
+                    <div
                       className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500  tracking-wider hover:text-slate-700 transition-colors"
                     >
                       <span>{item.label}</span>
-                      {hasVisibleItems && (
-                        <svg className={`w-4 h-4 transition-transform ${isGroupExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                        </svg>
-                      )}
-                    </button>
+                    </div>
                   </div>
                 )
-              }
-              
-              if (item.indent) {
-                const prevGroupIndex = navigationItems.slice(0, index).findIndex(it => it.isGroup)
-                const groupId = navigationItems[prevGroupIndex]?.groupId
-                if (groupId && !expandedGroups[groupId]) {
-                  return null
-                }
               }
               
               return (
@@ -1545,7 +1524,7 @@ function App() {
             </div>
           </div>
 
-          <div className="flex-1 p-3 space-y-8">
+          <div className="flex-1 p-3">
             {location.pathname.startsWith('/receipt-details/') ? (
               <POReceiptDetails />
             ) : (
@@ -2139,10 +2118,10 @@ function App() {
                       <table className="w-full text-xs">
                         <thead className="bg-slate-50 border-y border-slate-200">
                           <tr>
-                            <th className="px-4 py-3 text-left  text-slate-700">#</th>
-                            <th className="px-4 py-3 text-left  text-slate-700">Description</th>
+                            <th className="p-2 text-left  text-slate-700">#</th>
+                            <th className="p-2 text-left  text-slate-700">Description</th>
                             <th className="px-4 py-3 text-right  text-slate-700">Qty</th>
-                            <th className="px-4 py-3 text-left  text-slate-700">Unit</th>
+                            <th className="p-2 text-left  text-slate-700">Unit</th>
                             <th className="px-4 py-3 text-right  text-slate-700">Rate</th>
                             <th className="px-4 py-3 text-right  text-slate-700">Amount</th>
                             <th className="px-4 py-3 text-right  text-slate-700">Tax %</th>

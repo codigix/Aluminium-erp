@@ -847,6 +847,94 @@ const ensureProductionPlanTables = async () => {
   }
 };
 
+const ensureWorkOrderTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS work_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        wo_number VARCHAR(50) UNIQUE NOT NULL,
+        production_plan_item_id INT,
+        sales_order_id INT NOT NULL,
+        sales_order_item_id INT NOT NULL,
+        workstation_id INT,
+        quantity DECIMAL(12, 3) NOT NULL,
+        start_date DATE,
+        end_date DATE,
+        priority ENUM('LOW', 'NORMAL', 'HIGH', 'URGENT') DEFAULT 'NORMAL',
+        status ENUM('RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED') DEFAULT 'RELEASED',
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (production_plan_item_id) REFERENCES production_plan_items(id) ON DELETE SET NULL,
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE,
+        FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS job_cards (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        work_order_id INT NOT NULL,
+        operation_id INT,
+        workstation_id INT,
+        assigned_to INT,
+        planned_qty DECIMAL(12, 3),
+        produced_qty DECIMAL(12, 3) DEFAULT 0,
+        rejected_qty DECIMAL(12, 3) DEFAULT 0,
+        start_time TIMESTAMP NULL,
+        end_time TIMESTAMP NULL,
+        status ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'PENDING',
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (operation_id) REFERENCES operations(id) ON DELETE SET NULL,
+        FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL,
+        FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    console.log('Work Order and Job Card tables synchronized');
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS material_issues (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        issue_number VARCHAR(50) UNIQUE NOT NULL,
+        work_order_id INT NOT NULL,
+        issued_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        issued_by INT,
+        remarks TEXT,
+        FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (issued_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS material_issue_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        issue_id INT NOT NULL,
+        material_name VARCHAR(255) NOT NULL,
+        material_type VARCHAR(100),
+        item_code VARCHAR(100),
+        quantity DECIMAL(12, 3) NOT NULL,
+        uom VARCHAR(20),
+        warehouse VARCHAR(100),
+        FOREIGN KEY (issue_id) REFERENCES material_issues(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('Material Issue tables synchronized');
+  } catch (error) {
+    console.error('Work Order, Job Card, and Material Issue tables sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -869,6 +957,7 @@ const bootstrapDatabase = async () => {
   await ensureBOMMaterialsColumns();
   await ensureOperationsTable();
   await ensureProductionPlanTables();
+  await ensureWorkOrderTables();
 };
 
 bootstrapDatabase();

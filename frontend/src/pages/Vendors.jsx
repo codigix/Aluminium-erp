@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Modal, FormControl } from '../components/ui.jsx';
+import { Card, Modal, FormControl, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -36,7 +36,6 @@ const Vendors = () => {
   const [vendors, setVendors] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All Vendors');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -206,64 +205,206 @@ const Vendors = () => {
     a.click();
   };
 
-  const filteredVendors = vendors.filter(vendor => {
-    const matchesSearch = 
-      vendor.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vendor.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vendor.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = 
-      filterStatus === 'All Vendors' || vendor.status === filterStatus;
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  return (
-    <div className="space-y-3">
-      <Card title="Vendor Management" subtitle="Manage and track vendor relationships">
-        <div className="flex gap-4 justify-between items-center mb-6">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search vendor or category..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+  const columns = [
+    {
+      label: 'Vendor',
+      key: 'vendor_name',
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg">
+            {val.charAt(0)}
           </div>
-          
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="All Vendors">All Vendors</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-            <option value="BLOCKED">Blocked</option>
-          </select>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleExportList}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm  hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Export
-            </button>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm  hover:bg-emerald-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Add Vendor
-            </button>
+          <div>
+            <div className="font-bold text-slate-900">{val}</div>
+            <div className="text-xs text-slate-400">{row.vendor_type}</div>
           </div>
         </div>
+      )
+    },
+    {
+      label: 'Category',
+      key: 'category',
+      sortable: true,
+      render: (val) => val ? (
+        <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium">
+          {val}
+        </span>
+      ) : '—'
+    },
+    {
+      label: 'Contact Details',
+      key: 'email',
+      render: (val, row) => (
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-slate-600">
+            <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span className="text-xs">{val || 'No email'}</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-600">
+            <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+            </svg>
+            <span className="text-xs">{row.phone || 'No phone'}</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      label: 'Rating',
+      key: 'rating',
+      sortable: true,
+      render: (val) => <StarRating rating={val} />
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      sortable: true,
+      render: (val) => {
+        const config = vendorStatusColors[val] || vendorStatusColors.ACTIVE;
+        return (
+          <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${config.badge}`}>
+            {config.label}
+          </span>
+        );
+      }
+    },
+    {
+      label: 'Actions',
+      key: 'id',
+      className: 'text-right',
+      render: (val, row) => (
+        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button 
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+            title="Edit Vendor"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button 
+            onClick={() => handleDeleteVendor(val, row.vendor_name)}
+            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+            title="Delete Vendor"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Vendors</h2>
+          <p className="text-sm text-slate-500">Manage your supplier network and performance</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={handleExportList}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Vendor
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="p-4 border border-slate-100 shadow-sm rounded-2xl bg-white">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-50 rounded-xl">
+              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Total Vendors</p>
+              <p className="text-2xl font-bold text-slate-900">{stats?.totalVendors || vendors.length}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 border border-slate-100 shadow-sm rounded-2xl bg-white">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-emerald-50 rounded-xl">
+              <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Active</p>
+              <p className="text-2xl font-bold text-slate-900">{vendors.filter(v => v.status === 'ACTIVE').length}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 border border-slate-100 shadow-sm rounded-2xl bg-white">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-yellow-50 rounded-xl">
+              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Avg Rating</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {(vendors.reduce((acc, v) => acc + parseFloat(v.rating || 0), 0) / (vendors.length || 1)).toFixed(1)}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 border border-slate-100 shadow-sm rounded-2xl bg-white">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-50 rounded-xl">
+              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Top Category</p>
+              <p className="text-xl font-bold text-slate-900 truncate max-w-[120px]">Material</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <DataTable 
+        columns={columns}
+        data={vendors.filter(v => filterStatus === 'All Vendors' || v.status === filterStatus)}
+        loading={loading}
+        searchPlaceholder="Search vendors, categories, emails..."
+        actions={
+          <div className="flex items-center gap-3">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
+            >
+              <option value="All Vendors">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="BLOCKED">Blocked</option>
+            </select>
+          </div>
+        }
+      />
 
       <Modal
         isOpen={showForm}

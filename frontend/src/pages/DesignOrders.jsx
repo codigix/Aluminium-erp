@@ -776,7 +776,7 @@ const DesignOrders = () => {
         <div className="mb-4">
           <div className="flex justify-between items-center mb-3 gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Design Engineering Hub</h1>
+              <h1 className="text-xl text-slate-900">Design Engineering Hub</h1>
               <p className="text-xs text-slate-600">Review customer drawings and create technical specifications</p>
             </div>
             <div className="flex gap-2">

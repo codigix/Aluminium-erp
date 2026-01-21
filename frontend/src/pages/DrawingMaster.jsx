@@ -334,10 +334,10 @@ const DrawingMaster = () => {
               <table className="min-w-full divide-y divide-slate-200 bg-white">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Rev</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Description</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">File</th>
+                    <th className="p-2 text-left text-xs font-medium text-slate-500">Rev</th>
+                    <th className="p-2 text-left text-xs font-medium text-slate-500">Date</th>
+                    <th className="p-2 text-left text-xs font-medium text-slate-500">Description</th>
+                    <th className="p-2 text-left text-xs font-medium text-slate-500">File</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-500">Order</th>
                   </tr>
                 </thead>

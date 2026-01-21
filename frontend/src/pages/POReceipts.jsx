@@ -403,11 +403,11 @@ const POReceipts = () => {
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left ">PO Number</th>
-                  <th className="px-4 py-3 text-left ">Vendor</th>
-                  <th className="px-4 py-3 text-left ">Receipt Date</th>
+                  <th className="p-2 text-left ">PO Number</th>
+                  <th className="p-2 text-left ">Vendor</th>
+                  <th className="p-2 text-left ">Receipt Date</th>
                   <th className="px-4 py-3 text-right ">Received Qty</th>
-                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="p-2 text-left ">Status</th>
                   <th className="px-4 py-3 text-right ">Actions</th>
                 </tr>
               </thead>

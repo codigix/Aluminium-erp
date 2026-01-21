@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Card } from '../components/ui.jsx';
+import React, { useState, useEffect } from 'react';
+import { Card, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -29,7 +29,6 @@ const formatCurrency = (value, currency = 'INR') => {
 };
 
 const PurchaseOrders = () => {
-  const [expandedPOs, setExpandedPOs] = useState({});
   const [pos, setPos] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -60,13 +59,6 @@ const PurchaseOrders = () => {
     fetchStats();
     fetchApprovedQuotations();
   }, []);
-
-  const toggleExpandPO = (poId) => {
-    setExpandedPOs(prev => ({
-      ...prev,
-      [poId]: !prev[poId]
-    }));
-  };
 
   const fetchPOs = async () => {
     try {
@@ -234,10 +226,6 @@ const PurchaseOrders = () => {
     }
   };
 
-  const handleViewPO = async (poId) => {
-    toggleExpandPO(poId);
-  };
-
   const handleEditPO = async (poId) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -326,27 +314,135 @@ const PurchaseOrders = () => {
     }
   };
 
+  const columns = [
+    {
+      label: 'PO Number',
+      key: 'po_number',
+      sortable: true,
+      render: (val, row) => <span className="font-bold text-slate-900">{val || `PO-${String(row.id).padStart(4, '0')}`}</span>
+    },
+    {
+      label: 'Vendor',
+      key: 'vendor_name',
+      sortable: true,
+      render: (val) => <span className="font-medium text-slate-700">{val}</span>
+    },
+    {
+      label: 'Total Amount',
+      key: 'total_amount',
+      sortable: true,
+      render: (val) => <span className="font-bold text-indigo-600">{formatCurrency(val)}</span>
+    },
+    {
+      label: 'Expected Delivery',
+      key: 'expected_delivery_date',
+      sortable: true,
+      render: (val) => <span className="text-slate-500">{formatDate(val)}</span>
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      sortable: true,
+      render: (val) => (
+        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold tracking-wider border ${poStatusColors[val]?.badge}`}>
+          {poStatusColors[val]?.label?.toUpperCase() || val?.toUpperCase()}
+        </span>
+      )
+    },
+    {
+      label: 'Items',
+      key: 'items_count',
+      className: 'text-center',
+      render: (val) => <span className="text-slate-400 italic text-xs">{val || 0} items</span>
+    },
+    {
+      label: 'Actions',
+      key: 'id',
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => handleEditPO(row.id)}
+            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 shadow-sm"
+            title="Edit PO"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => handleDeletePO(row.id)}
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 shadow-sm"
+            title="Delete PO"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      )
+    }
+  ];
+
+  const renderExpandedRow = (po) => (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mx-4">
+      <table className="w-full text-xs">
+        <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] font-bold tracking-wider">
+          <tr>
+            <th className="px-4 py-2 text-left">Description</th>
+            <th className="px-4 py-2 text-left">Material</th>
+            <th className="px-4 py-2 text-center">Qty</th>
+            <th className="px-4 py-2 text-right">Unit Rate</th>
+            <th className="px-4 py-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {po.items && po.items.length > 0 ? (
+            po.items.map((item, idx) => (
+              <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                <td className="px-4 py-2">
+                  <p className="font-medium text-slate-900">{item.description}</p>
+                  {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
+                </td>
+                <td className="px-4 py-2 text-slate-600">{item.material_name || '—'}</td>
+                <td className="px-4 py-2 text-center font-bold">{item.quantity} {item.unit || 'NOS'}</td>
+                <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.unit_rate)}</td>
+                <td className="px-4 py-2 text-right font-bold text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="5" className="px-4 py-6 text-center text-slate-400 italic">No items found for this PO</td>
+            </tr>
+          )}
+        </tbody>
+        {po.items && po.items.length > 0 && (
+          <tfoot className="bg-slate-50/50">
+            <tr>
+              <td colSpan="4" className="px-4 py-2 text-right font-bold text-slate-500">Total Amount:</td>
+              <td className="px-4 py-2 text-right font-black text-indigo-600 text-sm">
+                {formatCurrency(po.total_amount)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      <Card title="Purchase Orders" subtitle="Create and manage vendor purchase orders from quotations">
-        <div className="flex gap-4 justify-between items-center mb-6">
-          <div className="flex-1 relative">
-            <span className="absolute left-3 top-2.5 text-slate-400">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </span>
-            <input
-              type="text"
-              placeholder="Search PO number or vendor..."
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
+      <DataTable
+        columns={columns}
+        data={pos}
+        loading={loading}
+        searchPlaceholder="Search PO number or vendor..."
+        renderExpanded={renderExpandedRow}
+        actions={
           <div className="flex gap-2">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm  hover:bg-emerald-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -354,7 +450,7 @@ const PurchaseOrders = () => {
               Create PO
             </button>
             <button
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm  hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -362,143 +458,8 @@ const PurchaseOrders = () => {
               Export
             </button>
           </div>
-        </div>
-
-        {loading ? (
-          <p className="text-sm text-slate-400">Loading purchase orders...</p>
-        ) : pos.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500 mb-3">No purchase orders yet</p>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm  hover:bg-slate-800"
-            >
-              + Create PO from Quote
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
-                <tr>
-                  <th className="px-4 py-3 text-left ">PO Number</th>
-                  <th className="px-4 py-3 text-left ">Vendor</th>
-                  <th className="px-4 py-3 text-left ">Total Amount</th>
-                  <th className="px-4 py-3 text-left ">Expected Delivery</th>
-                  <th className="px-4 py-3 text-left ">Status</th>
-                  <th className="px-4 py-3 text-left ">Items</th>
-                  <th className="px-4 py-3 text-right ">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pos.map((po) => {
-                  const isExpanded = expandedPOs[po.id];
-                  return (
-                    <React.Fragment key={`po-group-${po.id}`}>
-                      <tr 
-                        className={`border-t border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer ${isExpanded ? 'bg-slate-50' : ''}`}
-                        onClick={() => toggleExpandPO(po.id)}
-                      >
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </span>
-                            <span className="font-medium text-slate-900">{po.po_number || `PO-${String(po.id).padStart(4, '0')}`}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-slate-600">{po.vendor_name}</td>
-                        <td className="px-4 py-4 text-slate-900 text-xs font-bold">{formatCurrency(po.total_amount)}</td>
-                        <td className="px-4 py-4 text-slate-600 text-xs">{formatDate(po.expected_delivery_date)}</td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold tracking-wider border ${poStatusColors[po.status]?.badge}`}>
-                            {poStatusColors[po.status]?.label?.toUpperCase() || po.status?.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-slate-500 text-xs italic">{po.items_count || 0} items</td>
-                        <td className="px-4 py-4 text-right">
-                          <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                            <button
-                              onClick={() => handleEditPO(po.id)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 shadow-sm"
-                              title="Edit PO"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleDeletePO(po.id)}
-                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 shadow-sm"
-                              title="Delete PO"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan="7" className="px-8 py-4 bg-slate-50/50">
-                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                              <table className="w-full text-xs">
-                                <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] font-bold tracking-wider">
-                                  <tr>
-                                    <th className="px-4 py-2 text-left">Description</th>
-                                    <th className="px-4 py-2 text-left">Material</th>
-                                    <th className="px-4 py-2 text-center">Qty</th>
-                                    <th className="px-4 py-2 text-right">Unit Rate</th>
-                                    <th className="px-4 py-2 text-right">Total</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {po.items && po.items.length > 0 ? (
-                                    po.items.map((item, idx) => (
-                                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-4 py-2">
-                                          <p className="font-medium text-slate-900">{item.description}</p>
-                                          {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
-                                        </td>
-                                        <td className="px-4 py-2 text-slate-600">{item.material_name || '—'}</td>
-                                        <td className="px-4 py-2 text-center font-bold">{item.quantity} {item.unit || 'NOS'}</td>
-                                        <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.unit_rate)}</td>
-                                        <td className="px-4 py-2 text-right font-bold text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
-                                      </tr>
-                                    ))
-                                  ) : (
-                                    <tr>
-                                      <td colSpan="5" className="px-4 py-6 text-center text-slate-400 italic">No items found for this PO</td>
-                                    </tr>
-                                  )}
-                                </tbody>
-                                {po.items && po.items.length > 0 && (
-                                  <tfoot className="bg-slate-50/50">
-                                    <tr>
-                                      <td colSpan="4" className="px-4 py-2 text-right font-bold text-slate-500">Total Amount:</td>
-                                      <td className="px-4 py-2 text-right font-black text-indigo-600 text-sm">
-                                        {formatCurrency(po.total_amount)}
-                                      </td>
-                                    </tr>
-                                  </tfoot>
-                                )}
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+        }
+      />
 
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

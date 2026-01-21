@@ -453,12 +453,12 @@ const GRNProcessing = () => {
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left ">GRN ID</th>
-                  <th className="px-4 py-3 text-left ">PO Number</th>
-                  <th className="px-4 py-3 text-left ">Receipt Ref</th>
-                  <th className="px-4 py-3 text-left ">GRN Date</th>
+                  <th className="p-2 text-left ">GRN ID</th>
+                  <th className="p-2 text-left ">PO Number</th>
+                  <th className="p-2 text-left ">Receipt Ref</th>
+                  <th className="p-2 text-left ">GRN Date</th>
                   <th className="px-4 py-3 text-right ">Received Qty</th>
-                  <th className="px-4 py-3 text-left ">Status</th>
+                  <th className="p-2 text-left ">Status</th>
                   <th className="px-4 py-3 text-right ">Actions</th>
                 </tr>
               </thead>
@@ -618,7 +618,7 @@ const GRNProcessing = () => {
 
               {poItems.length > 0 && (
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                  <div className="bg-slate-50 p-2 border-b border-slate-200">
                     <h3 className="text-slate-900 text-xs">PO Items - Enter Accepted Quantities</h3>
                     <p className="text-xs text-slate-500 mt-1">Enter how much you accepted. Status shows: APPROVED (match), SHORTAGE (less), OVERAGE (more)</p>
                   </div>
@@ -744,13 +744,13 @@ const GRNProcessing = () => {
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
                     <tr>
-                      <th className="px-4 py-3 text-left ">Material</th>
-                      <th className="px-4 py-3 text-left ">Type</th>
+                      <th className="p-2 text-left ">Material</th>
+                      <th className="p-2 text-left ">Type</th>
                       <th className="px-4 py-3 text-center ">PO Qty</th>
                       <th className="px-4 py-3 text-center ">Received</th>
                       <th className="px-4 py-3 text-center ">Accepted</th>
                       <th className="px-4 py-3 text-center ">Rejected</th>
-                      <th className="px-4 py-3 text-left ">Status</th>
+                      <th className="p-2 text-left ">Status</th>
                       <th className="px-4 py-3 text-right ">Actions</th>
                     </tr>
                   </thead>

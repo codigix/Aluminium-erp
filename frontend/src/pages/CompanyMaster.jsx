@@ -316,7 +316,7 @@ const CompanyMaster = ({
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-4 py-3 text-left">
+                  <th className="p-2 text-left">
                     <input
                       type="checkbox"
                       checked={selectedRows.size === companies.length && companies.length > 0}
@@ -324,11 +324,11 @@ const CompanyMaster = ({
                       className="w-4 h-4 rounded border-slate-300"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left text-xs  text-slate-700  tracking-wide">Company Name</th>
-                  <th className="px-4 py-3 text-left text-xs  text-slate-700  tracking-wide">Type</th>
-                  <th className="px-4 py-3 text-left text-xs  text-slate-700  tracking-wide">City</th>
-                  <th className="px-4 py-3 text-left text-xs  text-slate-700  tracking-wide">GSTIN</th>
-                  <th className="px-4 py-3 text-left text-xs  text-slate-700  tracking-wide">Status</th>
+                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">Company Name</th>
+                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">Type</th>
+                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">City</th>
+                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">GSTIN</th>
+                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">Status</th>
                   <th className="px-4 py-3 text-right text-xs  text-slate-700  tracking-wide">Actions</th>
                 </tr>
               </thead>

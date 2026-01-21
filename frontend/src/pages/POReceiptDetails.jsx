@@ -183,7 +183,7 @@ const POReceiptDetails = () => {
                   <table className="w-full text-xs">
                     <thead className="bg-slate-100 text-slate-600 ">
                       <tr>
-                        <th className="px-4 py-3 text-left ">Description</th>
+                        <th className="p-2 text-left ">Description</th>
                         <th className="px-4 py-3 text-center ">Qty</th>
                         <th className="px-4 py-3 text-right ">Rate</th>
                         <th className="px-4 py-3 text-right ">Amount</th>

@@ -27,6 +27,10 @@ const inventoryDashboardRoutes = require('./routes/inventoryDashboardRoutes');
 const workstationRoutes = require('./routes/workstationRoutes');
 const operationRoutes = require('./routes/operationRoutes');
 const productionPlanRoutes = require('./routes/productionPlanRoutes');
+const materialRequirementsRoutes = require('./routes/materialRequirementsRoutes');
+const workOrderRoutes = require('./routes/workOrderRoutes');
+const jobCardRoutes = require('./routes/jobCardRoutes');
+const materialIssueRoutes = require('./routes/materialIssueRoutes');
 const grnService = require('./services/grnService');
 const qcService = require('./services/qcInspectionsService');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
@@ -68,6 +72,10 @@ app.use('/api/inventory', authenticate, inventoryDashboardRoutes);
 app.use('/api/workstations', authenticate, workstationRoutes);
 app.use('/api/operations', authenticate, operationRoutes);
 app.use('/api/production-plans', authenticate, productionPlanRoutes);
+app.use('/api/material-requirements', authenticate, materialRequirementsRoutes);
+app.use('/api/work-orders', authenticate, workOrderRoutes);
+app.use('/api/job-cards', authenticate, jobCardRoutes);
+app.use('/api/material-issues', authenticate, materialIssueRoutes);
 app.use('/api/dashboard', authenticate, dashboardRoutes);
 
 app.get('/api/grn-stats', authenticate, async (req, res) => {

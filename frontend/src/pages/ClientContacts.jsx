@@ -9,10 +9,10 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
               <tr>
-                <th className="px-4 py-3 text-left ">Company</th>
-                <th className="px-4 py-3 text-left ">Primary Contact</th>
-                <th className="px-4 py-3 text-left ">Contact No</th>
-                <th className="px-4 py-3 text-left ">Status</th>
+                <th className="p-2 text-left ">Company</th>
+                <th className="p-2 text-left ">Primary Contact</th>
+                <th className="p-2 text-left ">Contact No</th>
+                <th className="p-2 text-left ">Status</th>
                 <th className="px-4 py-3 text-right ">Actions</th>
               </tr>
             </thead>
