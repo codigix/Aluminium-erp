@@ -3,6 +3,7 @@ const router = express.Router();
 const bomController = require('../controllers/bomController');
 const { authenticate } = require('../middleware/authMiddleware');
 
+router.get('/approved', authenticate, bomController.getApprovedBOMs);
 router.get('/items/:itemId', authenticate, bomController.getItemMaterials);
 router.post('/items/:itemId/materials', authenticate, bomController.addItemMaterial);
 router.post('/items/:itemId/components', authenticate, bomController.addComponent);

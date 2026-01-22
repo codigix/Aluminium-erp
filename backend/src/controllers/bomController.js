@@ -111,6 +111,15 @@ const createBOMRequest = async (req, res, next) => {
   }
 };
 
+const getApprovedBOMs = async (req, res, next) => {
+  try {
+    const boms = await bomService.getApprovedBOMs();
+    res.json(boms);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getItemMaterials,
   addItemMaterial,
@@ -123,5 +132,6 @@ module.exports = {
   deleteOperation,
   deleteScrap,
   getBOMBySalesOrder,
+  getApprovedBOMs,
   createBOMRequest
 };

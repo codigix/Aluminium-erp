@@ -1559,6 +1559,7 @@ function App() {
                     getPoPdfUrl={getPoPdfUrl}
                     onSendOrder={handleSendOrderToDesign}
                     showSalesOrderForm={showSalesOrderForm}
+                    onCreate={setShowSalesOrderForm}
                     salesOrderForm={salesOrderForm}
                     onFieldChange={handleSalesOrderFieldChange}
                     onSubmit={handleCreateSalesOrder}
