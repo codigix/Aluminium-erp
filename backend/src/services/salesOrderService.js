@@ -98,8 +98,81 @@ const createSalesOrder = async (customerPoId, companyId, projectName, drawingReq
       if (item.materials && Array.isArray(item.materials)) {
         for (const mat of item.materials) {
           await connection.execute(
-            'INSERT INTO sales_order_item_materials (sales_order_item_id, material_name, material_type, qty_per_pc, uom) VALUES (?, ?, ?, ?, ?)',
-            [salesOrderItemId, mat.materialName, mat.materialType, mat.qtyPerPc, mat.uom]
+            `INSERT INTO sales_order_item_materials 
+             (sales_order_item_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              salesOrderItemId, 
+              mat.material_name || mat.materialName || null, 
+              mat.material_type || mat.materialType || null, 
+              mat.item_group || mat.itemGroup || null,
+              mat.qty_per_pc || mat.qtyPerPc || mat.qty || 0, 
+              mat.uom || null,
+              mat.rate || 0,
+              mat.warehouse || null,
+              mat.operation || null
+            ]
+          );
+        }
+      }
+
+      // If item has components, insert them too
+      if (item.components && Array.isArray(item.components)) {
+        for (const comp of item.components) {
+          await connection.execute(
+            `INSERT INTO sales_order_item_components 
+             (sales_order_item_id, component_code, description, quantity, uom, rate, loss_percent, notes) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              salesOrderItemId,
+              comp.component_code || comp.componentCode || null,
+              comp.description || null,
+              comp.quantity || 0,
+              comp.uom || null,
+              comp.rate || 0,
+              comp.loss_percent || comp.lossPercent || 0,
+              comp.notes || null
+            ]
+          );
+        }
+      }
+
+      // If item has operations, insert them too
+      if (item.operations && Array.isArray(item.operations)) {
+        for (const op of item.operations) {
+          await connection.execute(
+            `INSERT INTO sales_order_item_operations 
+             (sales_order_item_id, operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              salesOrderItemId,
+              op.operation_name || op.operationName || null,
+              op.workstation || null,
+              op.cycle_time_min || op.cycleTimeMin || 0,
+              op.setup_time_min || op.setupTimeMin || 0,
+              op.hourly_rate || op.hourlyRate || 0,
+              op.operation_type || op.operationType || null,
+              op.target_warehouse || op.targetWarehouse || null
+            ]
+          );
+        }
+      }
+
+      // If item has scrap, insert them too
+      if (item.scrap && Array.isArray(item.scrap)) {
+        for (const s of item.scrap) {
+          await connection.execute(
+            `INSERT INTO sales_order_item_scrap 
+             (sales_order_item_id, item_code, item_name, input_qty, loss_percent, rate) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              salesOrderItemId,
+              s.item_code || s.itemCode || null,
+              s.item_name || s.itemName || null,
+              s.input_qty || s.inputQty || 0,
+              s.loss_percent || s.lossPercent || 0,
+              s.rate || 0
+            ]
           );
         }
       }

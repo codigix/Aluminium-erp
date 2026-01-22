@@ -63,7 +63,7 @@ const MaterialInputTable = ({ materials = [], onAdd, onDelete }) => {
           {materials.map((mat, i) => (
             <tr key={i}>
               <td className="px-4 py-2 text-slate-900 font-medium">{mat.material_name}</td>
-              <td className="px-4 py-2 text-right ">{mat.qty}</td>
+              <td className="px-4 py-2 text-right ">{mat.qty || mat.qty_per_pc || 0}</td>
               <td className="px-4 py-2 text-slate-500">{mat.uom}</td>
               <td className="px-4 py-2 text-right">
                 <button 
@@ -138,6 +138,7 @@ const SalesOrders = ({
   onSendOrder,
   onDeleteOrder,
   showSalesOrderForm,
+  onCreate,
   salesOrderForm,
   onFieldChange,
   onSubmit,
@@ -151,43 +152,100 @@ const SalesOrders = ({
   fieldInputClass
 }) => {
   const [expandedItems, setExpandedItems] = useState({})
+  const [showBomModal, setShowBomModal] = useState(false)
+  const [availableBoms, setAvailableBoms] = useState([])
+  const [bomLoading, setBomLoading] = useState(false)
   const list = Array.isArray(orders) ? orders : []
+
+  const fetchAvailableBoms = async () => {
+    try {
+      setBomLoading(true)
+      const token = localStorage.getItem('authToken')
+      const response = await fetch(`${API_BASE}/bom/approved`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (!response.ok) throw new Error('Failed to fetch BOMs')
+      const data = await response.json()
+      setAvailableBoms(data)
+      setShowBomModal(true)
+    } catch (err) {
+      console.error(err)
+      alert('Error fetching BOMs: ' + err.message)
+    } finally {
+      setBomLoading(false)
+    }
+  }
+
+  const handleSelectBom = async (bom) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      const response = await fetch(`${API_BASE}/bom/items/${bom.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (!response.ok) throw new Error('Failed to fetch BOM details')
+      const bomDetails = await response.json()
+
+      // Check if we have an item with the same drawing number in our list
+      const existingItemIdx = soItems.findIndex(item => 
+        item.drawing_no?.toLowerCase() === bom.drawing_no?.toLowerCase() ||
+        item.item_code?.toLowerCase() === bom.item_code?.toLowerCase()
+      )
+
+      if (existingItemIdx !== -1) {
+        // Update existing item
+        const newItems = [...soItems]
+        newItems[existingItemIdx] = {
+          ...newItems[existingItemIdx],
+          materials: bomDetails.materials || [],
+          components: bomDetails.components || [],
+          operations: bomDetails.operations || [],
+          scrap: bomDetails.scrap || [],
+          description: bom.description || newItems[existingItemIdx].description
+        }
+        setSoItems(newItems)
+      } else {
+        // Add as a new item
+        const newItem = {
+          item_code: bom.item_code,
+          drawing_no: bom.drawing_no,
+          description: bom.description,
+          quantity: bom.quantity,
+          unit: bom.unit,
+          rate: 0,
+          materials: bomDetails.materials || [],
+          components: bomDetails.components || [],
+          operations: bomDetails.operations || [],
+          scrap: bomDetails.scrap || []
+        }
+        setSoItems([...soItems, newItem])
+      }
+
+      setShowBomModal(false)
+      
+      // If company is not set, set it from the BOM
+      if (!salesOrderForm.companyId && bom.company_id) {
+        onFieldChange('companyId', bom.company_id)
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Error selecting BOM: ' + err.message)
+    }
+  }
 
   const columns = [
     {
-      label: 'Client / Order ID',
+      label: <input type="checkbox" className="rounded border-slate-300" />,
+      key: 'checkbox',
+      className: 'w-10',
+      render: () => <input type="checkbox" className="rounded border-slate-300" />
+    },
+    {
+      label: 'Customer Name',
       key: 'company_name',
       sortable: true,
-      render: (val, row) => (
-        <div>
-          <p className="text-slate-900 font-bold">{val || '—'}</p>
-          <p className="text-[10px] text-indigo-600 font-mono">{formatOrderCode(row.id)}</p>
-        </div>
+      render: (val) => (
+        <p className="text-slate-900 font-bold">{val || '—'}</p>
       )
-    },
-    {
-      label: 'Date',
-      key: 'po_date',
-      sortable: true,
-      render: (val) => <span className="text-slate-600 text-xs">{formatDate(val)}</span>
-    },
-    {
-      label: 'PO Number',
-      key: 'po_number',
-      sortable: true,
-      render: (val) => <span className="text-slate-600 text-xs">{val || '—'}</span>
-    },
-    {
-      label: 'Net Value',
-      key: 'po_net_total',
-      sortable: true,
-      render: (val, row) => <span className="text-slate-900 font-medium">{!Number.isNaN(Number(val)) ? formatCurrency(val, row.po_currency) : '—'}</span>
-    },
-    {
-      label: 'Priority',
-      key: 'production_priority',
-      sortable: true,
-      render: (val) => <span className="text-xs text-slate-600">{formatPriority(val)}</span>
     },
     {
       label: 'Status',
@@ -202,6 +260,18 @@ const SalesOrders = ({
           </span>
         )
       }
+    },
+    {
+      label: 'Delivery Date',
+      key: 'target_dispatch_date',
+      sortable: true,
+      render: (val) => <span className="text-slate-600 text-xs">{formatDate(val)}</span>
+    },
+    {
+      label: 'ID',
+      key: 'id',
+      sortable: true,
+      render: (val) => <span className="text-[10px] text-indigo-600 font-mono">{formatOrderCode(val)}</span>
     },
     {
       label: 'Actions',
@@ -346,11 +416,11 @@ const SalesOrders = ({
     return (
       <div className="space-y-8">
         
-        <Card id="new-sales-order" title="Create New Sales Order" subtitle="Workflow Intake">
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* --- Section 1: Customer Selection & Details --- */}
-            <div className="space-y-5">
-              <h3 className="text-xs  text-slate-400  tracking-[0.2em] mb-4">Customer Details</h3>
+        <Card id="new-sales-order" title="Sales Order" subtitle="Workflow Intake">
+          <div className="grid gap-10 lg:grid-cols-2 p-6">
+            {/* --- Section 1: Customer Details --- */}
+            <div className="space-y-6">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Customer Details</h3>
               
               <FormControl label="Company *">
                 <select
@@ -368,18 +438,18 @@ const SalesOrders = ({
                 </select>
               </FormControl>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 <FormControl label="Customer Type">
                   <input
                     readOnly
-                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed`}
+                    className={`${fieldInputClass} bg-white text-slate-500`}
                     value={selectedCompany?.customer_type || '—'}
                   />
                 </FormControl>
                 <FormControl label="Currency">
                   <input
                     readOnly
-                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed`}
+                    className={`${fieldInputClass} bg-white text-slate-500`}
                     value={selectedCompany?.currency || '—'}
                   />
                 </FormControl>
@@ -388,15 +458,15 @@ const SalesOrders = ({
               <FormControl label="GSTIN">
                 <input
                   readOnly
-                  className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed `}
+                  className={`${fieldInputClass} bg-white text-slate-500`}
                   value={selectedCompany?.gstin || '—'}
                 />
               </FormControl>
             </div>
 
-            {/* --- Section 2: PO Selection & Details --- */}
-            <div className="space-y-5">
-              <h3 className="text-xs  text-slate-400  tracking-[0.2em] mb-4">Purchase Order Information</h3>
+            {/* --- Section 2: Purchase Order Information --- */}
+            <div className="space-y-6">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Purchase Order Information</h3>
               
               <FormControl label="Customer PO *">
                 <select
@@ -412,18 +482,18 @@ const SalesOrders = ({
                 </select>
               </FormControl>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 <FormControl label="PO Date">
                   <input
                     readOnly
-                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed`}
+                    className={`${fieldInputClass} bg-white text-slate-500`}
                     value={selectedPoForSo ? formatDate(selectedPoForSo.po_date) : '—'}
                   />
                 </FormControl>
                 <FormControl label="PO Total">
                   <input
                     readOnly
-                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed `}
+                    className={`${fieldInputClass} bg-white text-slate-500`}
                     value={selectedPoForSo ? formatCurrency(selectedPoForSo.net_total, selectedPoForSo.currency) : '—'}
                   />
                 </FormControl>
@@ -432,22 +502,22 @@ const SalesOrders = ({
               <FormControl label="Payment Terms">
                 <input
                   readOnly
-                  className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed`}
+                  className={`${fieldInputClass} bg-white text-slate-500`}
                   value={selectedPoForSo?.payment_terms || '—'}
                 />
               </FormControl>
             </div>
 
             {/* --- Section 3: Project & Production Setup --- */}
-            <div className="col-span-full border-t border-slate-100 pt-6 mt-2">
-              <h3 className="text-xs  text-slate-400  tracking-[0.2em] mb-6">Production & Project Setup</h3>
-              <div className="grid gap-5 lg:grid-cols-3">
+            <div className="col-span-full pt-10 mt-4">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2 mb-8">Production & Project Setup</h3>
+              <div className="grid gap-8 lg:grid-cols-3">
                 <FormControl label="Project / Job Code">
                   <input
-                    readOnly
-                    className={`${fieldInputClass} bg-slate-50 text-slate-500 cursor-not-allowed  `}
-                    value={salesOrderForm.projectName || '—'}
-                    placeholder="Auto-filled from PO"
+                    className={fieldInputClass}
+                    value={salesOrderForm.projectName || ''}
+                    onChange={e => onFieldChange('projectName', e.target.value)}
+                    placeholder="—"
                   />
                 </FormControl>
 
@@ -473,15 +543,15 @@ const SalesOrders = ({
                 </FormControl>
               </div>
 
-              <div className="flex items-center gap-4 mt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
+              <div className="flex items-center gap-4 mt-10">
+                <label className="flex items-center gap-3 cursor-pointer group">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                    className="w-5 h-5 rounded border-slate-300 text-slate-900 focus:ring-slate-900 transition-all cursor-pointer"
                     checked={salesOrderForm.drawingRequired}
                     onChange={e => onFieldChange('drawingRequired', e.target.checked)}
                   />
-                  <span className="text-sm  text-slate-700">Drawing Required</span>
+                  <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">Drawing Required</span>
                 </label>
               </div>
             </div>
@@ -497,7 +567,24 @@ const SalesOrders = ({
               <div className="col-span-full mt-6 ">
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                   <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                    <h4 className="text-[10px]  text-slate-400  tracking-[0.2em]">Review Items from {selectedPoForSo.po_number}</h4>
+                    <div className="flex items-center gap-4">
+                      <h4 className="text-[10px]  text-slate-400  tracking-[0.2em]">Review Items from {selectedPoForSo.po_number}</h4>
+                      <button 
+                        type="button"
+                        onClick={fetchAvailableBoms}
+                        disabled={bomLoading}
+                        className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-full transition-colors flex items-center gap-1.5"
+                      >
+                        {bomLoading ? (
+                          <div className="w-3 h-3 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                          </svg>
+                        )}
+                        Fetch Approved BOM
+                      </button>
+                    </div>
                     <span className="text-[10px]  text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full ">
                       {soItems?.length || 0} Items
                     </span>
@@ -513,6 +600,7 @@ const SalesOrders = ({
                           <th className="px-5 py-3 text-right ">Rate</th>
                           <th className="px-5 py-3 text-right ">Basic Amount</th>
                           <th className="px-5 py-3 text-right  w-[120px]">BOM</th>
+                          <th className="px-5 py-3 text-right w-12"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -551,13 +639,38 @@ const SalesOrders = ({
                                     expandedItems[idx] ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                   }`}
                                 >
-                                  {expandedItems[idx] ? 'Close' : 'Add Materials'}
+                                  {expandedItems[idx] ? (
+                                    <span className="flex items-center gap-1.5">
+                                      {item.materials?.length > 0 ? 'Edit Mat.' : 'Close'}
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1.5">
+                                      {item.materials?.length > 0 ? (
+                                        <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg> BOM Loaded</>
+                                      ) : 'Add Materials'}
+                                    </span>
+                                  )}
+                                </button>
+                              </td>
+                              <td className="p-2 text-right">
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm('Remove this item?')) {
+                                      setSoItems(soItems.filter((_, i) => i !== idx))
+                                    }
+                                  }}
+                                  className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
                                 </button>
                               </td>
                             </tr>
                             {expandedItems[idx] && (
                               <tr className="bg-slate-50/30 border-none">
-                                <td colSpan="7" className="px-5 pb-4">
+                                <td colSpan="8" className="px-5 pb-4">
                                   <MaterialInputTable 
                                     materials={item.materials} 
                                     onAdd={(mat) => {
@@ -639,20 +752,34 @@ const SalesOrders = ({
 
   return (
     <>
-    <h1 className="text-xl text-slate-900 mb-1">Sales Orders</h1>
-    <p className="text-slate-600 text-xs">Manage all sales order</p>
+    <div className="flex justify-between items-center mb-6">
+      <div>
+        <h1 className="text-xl text-slate-900 mb-1">Sales Orders</h1>
+        <p className="text-slate-600 text-xs">Manage all sales order</p>
+      </div>
+      <button 
+        onClick={() => onCreate && onCreate(true)}
+        className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm flex items-center gap-2"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Create Sales Order
+      </button>
+    </div>
 
       {!loading && hasOrders ? (
         <div className="overflow-x-auto">
           <table className="w-full text-xs bg-white">
             <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3 text-left">Client / Order ID</th>
-                <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">PO Number</th>
-                <th className="px-4 py-3 text-left">Net Value</th>
-                <th className="px-4 py-3 text-left">Priority</th>
+                <th className="px-4 py-3 text-left w-10">
+                  <input type="checkbox" className="rounded border-slate-300" />
+                </th>
+                <th className="px-4 py-3 text-left">Customer Name</th>
                 <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Delivery Date</th>
+                <th className="px-4 py-3 text-left">ID</th>
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
@@ -672,6 +799,9 @@ const SalesOrders = ({
                       className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${isExpanded ? 'bg-slate-50' : ''}`}
                       onClick={() => setExpandedItems(prev => ({ ...prev, [order.id]: !prev[order.id] }))}
                     >
+                      <td className="px-4 py-3 align-middle" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" className="rounded border-slate-300" />
+                      </td>
                       <td className="px-4 py-3 align-middle">
                         <div className="flex items-center gap-2">
                           <span className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
@@ -679,25 +809,8 @@ const SalesOrders = ({
                               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                             </svg>
                           </span>
-                          <div>
-                            <p className="text-slate-900 font-bold">{order.company_name || '—'}</p>
-                            <p className="text-[10px] text-indigo-600 font-mono">{formatOrderCode(order.id)}</p>
-                          </div>
+                          <p className="text-slate-900 font-bold">{order.company_name || '—'}</p>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 align-middle text-xs">
-                        {formatDate(order.po_date)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 align-middle text-xs">
-                        {order.po_number || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-900 font-medium align-middle">
-                        {hasNetValue ? formatCurrency(netValue, order.po_currency) : '—'}
-                      </td>
-                      <td className="px-4 py-3 align-middle">
-                        <span className="text-xs text-slate-600">
-                          {formatPriority(order.production_priority)}
-                        </span>
                       </td>
                       <td className="px-4 py-3 align-middle">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${badgeClasses}`}>
@@ -708,6 +821,12 @@ const SalesOrders = ({
                             <span className="font-bold text-amber-800">Reason:</span> {order.rejection_reason}
                           </div>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 align-middle text-xs">
+                        {formatDate(order.target_dispatch_date)}
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <p className="text-[10px] text-indigo-600 font-mono">{formatOrderCode(order.id)}</p>
                       </td>
                       <td className="px-4 py-3 align-middle">
                         <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
@@ -766,7 +885,7 @@ const SalesOrders = ({
                     </tr>
                     {isExpanded && (
                       <tr>
-                        <td colSpan="7" className="px-8 py-4 bg-slate-50/50">
+                        <td colSpan="6" className="px-8 py-4 bg-slate-50/50">
                           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                             <table className="w-full text-xs">
                               <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] font-bold tracking-wider">
@@ -849,6 +968,63 @@ const SalesOrders = ({
             </button>
           </div>
         )
+      )}
+
+      {showBomModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col border border-slate-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Approved Templates</h3>
+                <p className="text-xs text-slate-500">Select a pre-approved BOM to clone into this Sales Order</p>
+              </div>
+              <button onClick={() => setShowBomModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {availableBoms.length === 0 ? (
+                  <div className="col-span-full py-12 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    No approved BOM templates found.
+                  </div>
+                ) : (
+                  availableBoms.map(bom => (
+                    <div 
+                      key={bom.id} 
+                      onClick={() => handleSelectBom(bom)}
+                      className="group p-4 border border-slate-200 rounded-2xl hover:border-indigo-500 hover:bg-indigo-50/30 transition-all cursor-pointer relative overflow-hidden text-left"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">
+                          {bom.drawing_no}
+                        </span>
+                        <span className="text-[10px] text-slate-400">{formatDate(bom.created_at)}</span>
+                      </div>
+                      <h4 className="font-bold text-slate-900 text-sm mb-1 group-hover:text-indigo-600 transition-colors">{bom.description}</h4>
+                      <div className="flex gap-4 text-[10px] text-slate-500">
+                        <span>Qty: <strong>{bom.quantity} {bom.unit}</strong></span>
+                        <span>Customer: <strong>{bom.company_name}</strong></span>
+                      </div>
+                      <div className="absolute top-1/2 -right-4 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-hover:right-4 transition-all">
+                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button onClick={() => setShowBomModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">Close</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

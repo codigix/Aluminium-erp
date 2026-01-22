@@ -152,6 +152,32 @@ const createBOMRequest = async (bomData) => {
   }
 };
 
+const getApprovedBOMs = async () => {
+  const [rows] = await pool.query(`
+    SELECT DISTINCT
+      soi.id,
+      soi.item_code,
+      soi.drawing_no,
+      soi.description,
+      soi.unit,
+      soi.quantity,
+      c.company_name,
+      so.project_name,
+      so.id as sales_order_id
+    FROM sales_order_items soi
+    JOIN sales_orders so ON soi.sales_order_id = so.id
+    JOIN companies c ON so.company_id = c.id
+    WHERE so.status IN ('BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED')
+    AND (
+      EXISTS (SELECT 1 FROM sales_order_item_materials WHERE sales_order_item_id = soi.id)
+      OR EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id)
+      OR EXISTS (SELECT 1 FROM sales_order_item_operations WHERE sales_order_item_id = soi.id)
+    )
+    ORDER BY soi.created_at DESC
+  `);
+  return rows;
+};
+
 module.exports = {
   getItemMaterials,
   getItemComponents,
@@ -167,5 +193,6 @@ module.exports = {
   deleteOperation,
   deleteScrap,
   getBOMBySalesOrder,
+  getApprovedBOMs,
   createBOMRequest
 };
