@@ -1,14 +1,15 @@
 const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
-const listSalesOrders = async () => {
+const listSalesOrders = async (includeWithoutPo = false) => {
+  const whereClause = includeWithoutPo ? '' : 'WHERE so.customer_po_id IS NOT NULL';
   const [rows] = await pool.query(
     `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-     WHERE so.customer_po_id IS NOT NULL
+     ${whereClause}
      ORDER BY so.created_at DESC`
   );
   

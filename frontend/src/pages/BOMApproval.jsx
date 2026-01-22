@@ -19,7 +19,7 @@ const BOMApproval = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders`, {
+      const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -158,8 +158,8 @@ const BOMApproval = () => {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm text-slate-900">{order.po_number || 'N/A'}</div>
-                      <div className="text-[10px] text-slate-500">SO-{String(order.id).padStart(4, '0')}</div>
+                      <div className="text-sm font-bold text-slate-900">{order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : `SO-${order.id}`)}</div>
+                      <div className="text-[10px] text-slate-500">Sales Order Ref</div>
                     </td>
                     <td className="p-2 whitespace-nowrap">
                       <div className="text-sm font-medium text-slate-900">{order.company_name}</div>
@@ -212,7 +212,7 @@ const BOMApproval = () => {
             <div className="relative bg-white rounded-2xl shadow-xl max-w-5xl w-full overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div>
-                  <h3 className="text-sm text-slate-900">BOM Details: PO {selectedOrder?.po_number}</h3>
+                  <h3 className="text-sm font-bold text-slate-900">BOM Details: {selectedOrder?.po_number || (selectedOrder?.customer_po_id ? `PO-${selectedOrder.customer_po_id}` : `SO-${selectedOrder?.id}`)}</h3>
                   <p className="text-xs text-slate-500">{selectedOrder?.company_name} • {selectedOrder?.project_name}</p>
                 </div>
                 <button onClick={() => setShowDetails(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
@@ -228,18 +228,10 @@ const BOMApproval = () => {
                 ) : (
                   <div className="space-y-6">
                     {/* Summary Bar */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                         <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-bold">Total Drawings</div>
-                        <div className="text-xl font-bold text-slate-900">{orderItems.length}</div>
-                      </div>
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                        <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-bold">Active Items</div>
-                        <div className="text-xl font-bold text-emerald-600">{orderItems.filter(i => i.status !== 'REJECTED').length}</div>
-                      </div>
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                        <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-bold">Rejected</div>
-                        <div className="text-xl font-bold text-rose-600">{orderItems.filter(i => i.status === 'REJECTED').length}</div>
+                        <div className="text-xl font-bold text-slate-900">{orderItems.filter(i => i.status !== 'REJECTED').length}</div>
                       </div>
                       <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                         <div className="text-[10px] text-indigo-400 mb-1 tracking-wider uppercase font-bold">Total Est. Cost</div>
@@ -258,6 +250,7 @@ const BOMApproval = () => {
                             return total + (mat + comp + labor - scrap);
                           }, 0).toFixed(2)}
                         </div>
+                        <p className="text-[8px] text-indigo-400 mt-1">* Estimated cost excludes rejected items as they have no BOM analysis.</p>
                       </div>
                     </div>
 
@@ -267,7 +260,9 @@ const BOMApproval = () => {
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm text-slate-900">{item.item_code || item.drawing_no}</span>
+                              {item.status !== 'REJECTED' && (
+                                <span className="text-sm text-slate-900">{item.item_code || item.drawing_no}</span>
+                              )}
                               {item.status === 'REJECTED' && (
                                 <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
                                   Rejected
@@ -349,7 +344,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">No materials defined</td></tr>
+                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No materials defined'}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -385,7 +380,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="4" className="px-4 py-4 text-center text-xs text-slate-400 italic">No components defined</td></tr>
+                              <tr><td colSpan="4" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No components defined'}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -430,7 +425,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">No operations defined</td></tr>
+                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No operations defined'}</td></tr>
                             )}
                           </tbody>
                         </table>

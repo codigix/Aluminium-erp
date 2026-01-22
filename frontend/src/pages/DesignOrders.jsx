@@ -100,7 +100,7 @@ const DesignOrders = () => {
   };
 
   const groupedIncoming = incomingOrders.reduce((acc, order) => {
-    const poKey = order.po_number || 'NO-PO';
+    const poKey = order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : 'NO-PO');
     const companyKey = order.company_name || 'Unknown';
     const key = `${companyKey}_${poKey}`;
 
@@ -759,18 +759,19 @@ const DesignOrders = () => {
       order.company_name?.toLowerCase().includes(searchLower) ||
       order.project_name?.toLowerCase().includes(searchLower) ||
       order.drawing_no?.toLowerCase().includes(searchLower) ||
-      ((order.po_number === 'NO-PO' ? 'DR-' : 'SO-') + String(order.sales_order_id).padStart(4, '0')).toLowerCase().includes(searchLower)
+      ((!order.po_number || order.po_number === 'NO-PO') ? 'DR-' : 'SO-').toLowerCase().includes(searchLower)
     );
   });
 
   const groupedActive = filteredOrders.reduce((acc, order) => {
-    const poKey = order.po_number || 'NO-PO';
+    const poKey = order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : 'NO-PO');
     const companyKey = order.company_name || 'Unknown';
     const groupKey = `${companyKey}_${poKey}`;
 
     if (!acc[groupKey]) {
       acc[groupKey] = {
         po_number: poKey,
+        customer_po_id: order.customer_po_id,
         company_name: companyKey,
         orders: []
       };
@@ -941,7 +942,7 @@ const DesignOrders = () => {
                             <div className="flex flex-col">
                               <span className="font-bold text-slate-900 text-xs">{group.company_name}</span>
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-slate-500 font-medium">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
+                                <span className="text-[10px] text-slate-500 font-bold">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
                               </div>
                             </div>
                           </td>
