@@ -205,13 +205,9 @@ const Quotations = () => {
       if (response.ok) {
         const items = await response.json();
         
-        // Flatten materials into line items for the RFQ, excluding rejected items, excluding rejected items
+        // Flatten materials into line items for the RFQ
         const materialItems = [];
         items.forEach(item => {
-          if (item.status === 'REJECTED') return;
-          
-          if (item.status === 'REJECTED') return;
-          
           if (item.materials && item.materials.length > 0) {
             item.materials.forEach(mat => {
               materialItems.push({
