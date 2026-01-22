@@ -2,7 +2,7 @@ const pool = require('../config/db');
 
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
-    `SELECT wo.*, so.project_name, soi.item_code, soi.description, w.workstation_name
+    `SELECT wo.*, so.project_name, soi.item_code, soi.description, soi.status as item_status, w.workstation_name
      FROM work_orders wo
      JOIN sales_orders so ON wo.sales_order_id = so.id
      JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
@@ -21,6 +21,15 @@ const createWorkOrder = async (data) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    // 0. Check if item is rejected
+    const [itemRows] = await connection.query(
+      'SELECT status FROM sales_order_items WHERE id = ?',
+      [salesOrderItemId]
+    );
+    if (itemRows.length > 0 && itemRows[0].status === 'Rejected') {
+      throw new Error('Cannot create Work Order for a rejected drawing/item.');
+    }
 
     // 1. Create the Work Order
     const [result] = await connection.execute(

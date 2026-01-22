@@ -1,14 +1,15 @@
 const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
-const listSalesOrders = async () => {
+const listSalesOrders = async (includeWithoutPo = false) => {
+  const whereClause = includeWithoutPo ? '' : 'WHERE so.customer_po_id IS NOT NULL';
   const [rows] = await pool.query(
     `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-     WHERE so.customer_po_id IS NOT NULL
+     ${whereClause}
      ORDER BY so.created_at DESC`
   );
   
@@ -50,6 +51,7 @@ const getIncomingOrders = async (departmentCode) => {
      LEFT JOIN (
        SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit, status as item_status, rejection_reason as item_rejection_reason
        FROM sales_order_items
+       WHERE status != 'REJECTED' OR status IS NULL
      ) soi ON soi.sales_order_id = so.id
      WHERE (${whereClause}) AND so.request_accepted = 0
      ORDER BY so.created_at DESC`;
@@ -87,9 +89,22 @@ const createSalesOrder = async (customerPoId, companyId, projectName, drawingReq
 
     for (const item of orderItems) {
       const [itemResult] = await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [salesOrderId, item.item_code, item.drawing_no, item.revision_no, item.description, item.quantity, item.unit, item.rate, item.delivery_date, item.tax_value || 0]
+        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status, rejection_reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          salesOrderId, 
+          item.item_code, 
+          item.drawing_no, 
+          item.revision_no, 
+          item.description, 
+          item.quantity, 
+          item.unit, 
+          item.rate, 
+          item.delivery_date, 
+          item.tax_value || 0,
+          item.status || (item.item_status) || 'PENDING',
+          item.rejection_reason || (item.item_rejection_reason) || null
+        ]
       );
 
       const salesOrderItemId = itemResult.insertId;

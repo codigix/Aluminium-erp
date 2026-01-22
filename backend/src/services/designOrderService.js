@@ -10,6 +10,7 @@ const listDesignOrders = async () => {
       do.completion_date,
       do.created_at,
       so.id as sales_order_id,
+      so.customer_po_id,
       so.project_name,
       so.target_dispatch_date,
       c.company_name,
@@ -18,13 +19,14 @@ const listDesignOrders = async () => {
       soi.id as item_id,
       soi.drawing_no,
       soi.description,
+      soi.status as item_status,
       soi.quantity as total_quantity
     FROM design_orders do
     JOIN sales_orders so ON do.sales_order_id = so.id
     JOIN sales_order_items soi ON soi.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-    WHERE so.request_accepted = 1
+    WHERE so.request_accepted = 1 AND (soi.status != 'REJECTED' OR soi.status IS NULL)
     ORDER BY do.created_at DESC
   `);
   return rows;

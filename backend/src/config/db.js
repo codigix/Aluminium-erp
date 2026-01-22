@@ -503,7 +503,7 @@ const ensureQuotationRequestTables = async () => {
         sales_order_id INT NOT NULL,
         sales_order_item_id INT NULL,
         company_id INT NOT NULL,
-        status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING',
         total_amount DECIMAL(14, 2) DEFAULT 0,
         notes TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -558,12 +558,12 @@ const ensureQuotationRequestStatus = async () => {
     const [columns] = await connection.query("SHOW COLUMNS FROM quotation_requests LIKE 'status'");
     if (columns.length > 0) {
       const type = columns[0].Type;
-      if (!type.includes('APPROVAL')) {
+      if (!type.includes('APPROVAL') || !type.includes('ACCEPTED')) {
         await connection.query(`
           ALTER TABLE quotation_requests 
-          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED') DEFAULT 'PENDING'
+          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING'
         `);
-        console.log('Quotation Request status updated with APPROVAL');
+        console.log('Quotation Request status updated with APPROVAL and ACCEPTED');
       }
     }
   } catch (error) {

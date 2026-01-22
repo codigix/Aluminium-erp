@@ -77,8 +77,11 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
     const quote = quotation[0];
 
     const [items] = await connection.query(
-      'SELECT * FROM quotation_items WHERE quotation_id = ?',
-      [quotationId]
+      `SELECT qi.*, soi.status as sales_order_item_status 
+       FROM quotation_items qi
+       LEFT JOIN sales_order_items soi ON (qi.drawing_no = soi.drawing_no OR qi.item_code = soi.item_code) AND soi.sales_order_id = ?
+       WHERE qi.quotation_id = ?`,
+      [quote.sales_order_id, quotationId]
     );
 
     let poNumber = manualPoNumber;
@@ -121,13 +124,18 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
     );
 
     const poId = result.insertId;
+    let actualTotalAmount = 0;
 
     if (items.length > 0) {
       for (const item of items) {
+        if (item.sales_order_item_status === 'Rejected') continue;
+
         // Inherit tax amounts from quotation if available, otherwise default to 0
         const cgstAmount = item.cgst_amount || 0;
         const sgstAmount = item.sgst_amount || 0;
-        const totalAmount = item.total_amount || (parseFloat(item.amount || 0) + parseFloat(cgstAmount) + parseFloat(sgstAmount));
+        const totalItemAmount = item.total_amount || (parseFloat(item.amount || 0) + parseFloat(cgstAmount) + parseFloat(sgstAmount));
+        
+        actualTotalAmount += totalItemAmount;
 
         await connection.execute(
           `INSERT INTO purchase_order_items (
@@ -148,13 +156,21 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
             cgstAmount,
             item.sgst_percent || 0,
             sgstAmount,
-            totalAmount,
+            totalItemAmount,
             item.material_name || null,
             item.material_type || null,
             item.drawing_no || null
           ]
         );
       }
+    }
+
+    // Update PO with actual total amount if items were skipped
+    if (actualTotalAmount !== quote.total_amount) {
+      await connection.execute(
+        'UPDATE purchase_orders SET total_amount = ? WHERE id = ?',
+        [actualTotalAmount, poId]
+      );
     }
 
     const [grnResult] = await connection.execute(
@@ -252,24 +268,27 @@ const getPurchaseOrderById = async (poId) => {
   
   const [items] = await pool.query(
     `SELECT 
-      id,
-      item_code,
-      description,
-      quantity,
-      unit,
-      unit_rate,
-      amount,
-      cgst_percent,
-      cgst_amount,
-      sgst_percent,
-      sgst_amount,
-      total_amount,
-      material_name,
-      material_type,
-      drawing_no,
-      accepted_quantity
-     FROM purchase_order_items 
-     WHERE purchase_order_id = ?`,
+      poi.id,
+      poi.item_code,
+      poi.description,
+      poi.quantity,
+      poi.unit,
+      poi.unit_rate,
+      poi.amount,
+      poi.cgst_percent,
+      poi.cgst_amount,
+      poi.sgst_percent,
+      poi.sgst_amount,
+      poi.total_amount,
+      poi.material_name,
+      poi.material_type,
+      poi.drawing_no,
+      poi.accepted_quantity,
+      soi.status as sales_order_item_status
+     FROM purchase_order_items poi
+     LEFT JOIN purchase_orders po ON po.id = poi.purchase_order_id
+     LEFT JOIN sales_order_items soi ON (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) AND soi.sales_order_id = po.sales_order_id
+     WHERE poi.purchase_order_id = ?`,
     [poId]
   );
 

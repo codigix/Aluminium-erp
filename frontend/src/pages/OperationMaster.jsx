@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Modal, DataTable, Badge, FormControl } from '../components/ui.jsx';
+import { Card, Modal, DataTable, Badge, FormControl, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';

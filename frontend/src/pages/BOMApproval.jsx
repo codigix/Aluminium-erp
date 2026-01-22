@@ -19,7 +19,7 @@ const BOMApproval = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders`, {
+      const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -145,7 +145,7 @@ const BOMApproval = () => {
               <tr>
                 <th className="p-2 text-left text-xs  text-slate-500 ">PO / SO Ref</th>
                 <th className="p-2 text-left text-xs  text-slate-500 ">Customer / Project</th>
-                <th className="p-2text-center text-xs  text-slate-500 ">Status</th>
+                <th className="p-2 text-center text-xs  text-slate-500 ">Status</th>
                 <th className="p-2 text-right text-xs  text-slate-500 ">Actions</th>
               </tr>
             </thead>
@@ -158,8 +158,8 @@ const BOMApproval = () => {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm text-slate-900">{order.po_number || 'N/A'}</div>
-                      <div className="text-[10px] text-slate-500">SO-{String(order.id).padStart(4, '0')}</div>
+                      <div className="text-sm font-bold text-slate-900">{order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : `SO-${order.id}`)}</div>
+                      <div className="text-[10px] text-slate-500">Sales Order Ref</div>
                     </td>
                     <td className="p-2 whitespace-nowrap">
                       <div className="text-sm font-medium text-slate-900">{order.company_name}</div>
@@ -212,7 +212,7 @@ const BOMApproval = () => {
             <div className="relative bg-white rounded-2xl shadow-xl max-w-5xl w-full overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div>
-                  <h3 className="text-sm text-slate-900">BOM Details: PO {selectedOrder?.po_number}</h3>
+                  <h3 className="text-sm font-bold text-slate-900">BOM Details: {selectedOrder?.po_number || (selectedOrder?.customer_po_id ? `PO-${selectedOrder.customer_po_id}` : `SO-${selectedOrder?.id}`)}</h3>
                   <p className="text-xs text-slate-500">{selectedOrder?.company_name} • {selectedOrder?.project_name}</p>
                 </div>
                 <button onClick={() => setShowDetails(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
@@ -226,17 +226,87 @@ const BOMApproval = () => {
                 {detailsLoading ? (
                   <div className="py-12 text-center text-slate-500">Loading details...</div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-6">
+                    {/* Summary Bar */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-bold">Total Drawings</div>
+                        <div className="text-xl font-bold text-slate-900">{orderItems.filter(i => i.status !== 'REJECTED').length}</div>
+                      </div>
+                      <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                        <div className="text-[10px] text-indigo-400 mb-1 tracking-wider uppercase font-bold">Total Est. Cost</div>
+                        <div className="text-xl font-bold text-indigo-600">
+                          ₹{orderItems.reduce((total, item) => {
+                            if (item.status === 'REJECTED') return total;
+                            const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
+                            const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
+                            const labor = item.operations?.reduce((sum, o) => {
+                              const cycle = parseFloat(o.cycle_time_min || 0);
+                              const setup = parseFloat(o.setup_time_min || 0);
+                              const rate = parseFloat(o.hourly_rate || 0);
+                              return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                            }, 0) || 0;
+                            const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
+                            return total + (mat + comp + labor - scrap);
+                          }, 0).toFixed(2)}
+                        </div>
+                        <p className="text-[8px] text-indigo-400 mt-1">* Estimated cost excludes rejected items as they have no BOM analysis.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
                     {orderItems.map((item) => (
                       <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden">
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
                           <div>
-                            <span className="text-sm text-slate-900">{item.item_code}</span>
-                            <span className="mx-2 text-slate-300">|</span>
-                            <span className="text-xs text-slate-600">{item.description}</span>
+                            <div className="flex items-center gap-2">
+                              {item.status !== 'REJECTED' && (
+                                <span className="text-sm text-slate-900">{item.item_code || item.drawing_no}</span>
+                              )}
+                              {item.status === 'REJECTED' && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
+                                  Rejected
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-slate-600">{item.description}</span>
+                              {item.status === 'REJECTED' && item.rejection_reason && (
+                                <>
+                                  <span className="mx-2 text-slate-300">|</span>
+                                  <span className="text-[10px] text-rose-500 italic">Reason: {item.rejection_reason}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-xs  text-slate-500">
-                            QTY: {item.quantity} {item.unit}
+                          <div className="flex items-center gap-6">
+                            <div className="text-right">
+                              <div className="text-[9px] text-slate-400 uppercase tracking-wider">Cost / Unit</div>
+                              <div className="text-xs font-semibold text-slate-700">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.operations?.reduce((sum, o) => {
+                                       const cycle = parseFloat(o.cycle_time_min || 0);
+                                       const setup = parseFloat(o.setup_time_min || 0);
+                                       const rate = parseFloat(o.hourly_rate || 0);
+                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                     }, 0) - 
+                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0) / parseFloat(item.quantity || 1)).toFixed(2)}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[9px] text-indigo-400 uppercase tracking-wider font-bold">Total Cost</div>
+                              <div className="text-sm font-bold text-indigo-600">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.operations?.reduce((sum, o) => {
+                                       const cycle = parseFloat(o.cycle_time_min || 0);
+                                       const setup = parseFloat(o.setup_time_min || 0);
+                                       const rate = parseFloat(o.hourly_rate || 0);
+                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                     }, 0) - 
+                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0).toFixed(2)}</div>
+                            </div>
+                            <div className="text-xs  text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                              QTY: {item.quantity} {item.unit}
+                            </div>
                           </div>
                         </div>
                         
@@ -274,7 +344,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">No materials defined</td></tr>
+                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No materials defined'}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -310,7 +380,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="4" className="px-4 py-4 text-center text-xs text-slate-400 italic">No components defined</td></tr>
+                              <tr><td colSpan="4" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No components defined'}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -355,7 +425,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">No operations defined</td></tr>
+                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No operations defined'}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -425,6 +495,7 @@ const BOMApproval = () => {
                         </div>
                       </div>
                     ))}
+                    </div>
 
                     {/* Overall Order Summary Breakdown */}
                     <div className="mt-8 flex justify-end">

@@ -369,8 +369,8 @@ const WorkOrder = () => {
                 >
                   <option value="">Choose an item...</option>
                   {selectedOrderDetails.items.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.item_code} - {item.description} (Qty: {item.quantity} {item.unit})
+                    <option key={item.id} value={item.id} disabled={item.status === 'Rejected'}>
+                      {item.item_code} - {item.description} (Qty: {item.quantity} {item.unit}) {item.status === 'Rejected' ? '[REJECTED]' : ''}
                     </option>
                   ))}
                 </select>

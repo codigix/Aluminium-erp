@@ -401,7 +401,14 @@ const PurchaseOrders = () => {
             po.items.map((item, idx) => (
               <tr key={idx} className="hover:bg-slate-50 transition-colors">
                 <td className="px-4 py-2">
-                  <p className="font-medium text-slate-900">{item.description}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-slate-900">{item.description}</p>
+                    {item.sales_order_item_status === 'Rejected' && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 animate-pulse uppercase border border-rose-200">
+                        Rejected Drawing
+                      </span>
+                    )}
+                  </div>
                   {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
                 </td>
                 <td className="px-4 py-2 text-slate-600">{item.material_name || '—'}</td>

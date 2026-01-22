@@ -14,7 +14,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
     if (!isOpen) {
       setSearchTerm(selectedOption ? selectedOption[labelField] : (value || ''));
     }
-  }, [value, selectedOption, isOpen]);
+  }, [value, selectedOption, isOpen, labelField]);
 
   const filteredOptions = options.filter(opt => 
     opt[labelField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -111,10 +111,14 @@ const BOMFormPage = () => {
     scrap: false,
     costing: false
   });
+  const [showAllDrawings, setShowAllDrawings] = useState(false);
+  const [drawingFilter, setDrawingFilter] = useState('');
 
   // Form States
   const [productForm, setProductForm] = useState({
     itemGroup: 'FG',
+    itemCode: '',
+    drawingNo: '',
     uom: 'Kg',
     revision: '1',
     description: '',
@@ -125,10 +129,22 @@ const BOMFormPage = () => {
 
   const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '' });
   const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '' });
-  const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: 60, setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
+  const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
+  const [approvedDrawings, setApprovedDrawings] = useState([]);
 
-  const itemId = window.location.pathname.split('/').filter(Boolean).pop();
+  const pathSegments = window.location.pathname.split('/').filter(Boolean);
+  const itemId = pathSegments.length > 1 ? pathSegments.pop() : null;
+
+  const getItemGroupFromMaterialType = (type) => {
+    const t = (type || '').toLowerCase();
+    if (t === 'fg') return 'FG';
+    if (t.includes('finished') && !t.includes('semi')) return 'FG';
+    if (t.includes('semi')) return 'SFG';
+    if (t.includes('sub assembly') || t.includes('sub-assembly')) return 'Sub Assembly';
+    if (t.includes('assembly') && !t.includes('sub')) return 'Assembly';
+    return 'FG';
+  };
 
   const toggleSection = (section) => {
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -139,30 +155,43 @@ const BOMFormPage = () => {
       if (showLoading) setLoading(true);
       const token = localStorage.getItem('authToken');
       
-      // Fetch Item Details
-      const itemResponse = await fetch(`${API_BASE}/sales-orders/items/${itemId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!itemResponse.ok) throw new Error('Failed to fetch item details');
-      const itemData = await itemResponse.json();
-      setSelectedItem(itemData);
-      setProductForm(prev => ({
-        ...prev,
-        description: itemData.description || '',
-        uom: itemData.unit || 'Kg',
-        itemGroup: itemData.item_group || 'FG',
-        isActive: itemData.is_active !== 0,
-        isDefault: itemData.is_default !== 0,
-        quantity: itemData.quantity || 1
-      }));
+      if (itemId && itemId !== 'bom-form') {
+        // Fetch Item Details
+        const itemResponse = await fetch(`${API_BASE}/sales-orders/items/${itemId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!itemResponse.ok) throw new Error('Failed to fetch item details');
+        const itemData = await itemResponse.json();
+        setSelectedItem(itemData);
 
-      // Fetch BOM Details
-      const bomResponse = await fetch(`${API_BASE}/bom/items/${itemId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!bomResponse.ok) throw new Error('Failed to fetch BOM details');
-      const bomData = await bomResponse.json();
-      setBomData(bomData);
+        // Auto-set drawing filter if item has a drawing
+        if (itemData.drawing_no && itemData.drawing_no !== 'N/A') {
+          setDrawingFilter(itemData.drawing_no);
+        }
+
+        // Fetch BOM Details
+        const bomResponse = await fetch(`${API_BASE}/bom/items/${itemId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!bomResponse.ok) throw new Error('Failed to fetch BOM details');
+        const bomData = await bomResponse.json();
+        setBomData(bomData);
+      } else {
+        // Fetch All Approved Drawings for Selection
+        const drawingsResponse = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (drawingsResponse.ok) {
+          const drawingsData = await drawingsResponse.json();
+          // Flatten items from all orders
+          const allItems = drawingsData.flatMap(order => (order.items || []).map(item => ({
+            ...item,
+            company_name: order.company_name,
+            po_number: order.po_number
+          })));
+          setApprovedDrawings(allItems);
+        }
+      }
 
       // Fetch Workstations
       const wsResponse = await fetch(`${API_BASE}/workstations`, {
@@ -198,9 +227,7 @@ const BOMFormPage = () => {
   }, [itemId]);
 
   useEffect(() => {
-    if (itemId) {
-      fetchData();
-    }
+    fetchData();
   }, [itemId, fetchData]);
 
   const handleAddSectionItem = async (section, formData, setFormState, initialForm) => {
@@ -217,7 +244,7 @@ const BOMFormPage = () => {
         if (stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && selectedItem?.drawing_no && stockItem.drawing_no !== selectedItem.drawing_no) {
           const confirm = await Swal.fire({
             title: 'Drawing Mismatch',
-            text: `This material is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem.drawing_no}. Continue?`,
+            text: `This material is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem?.drawing_no || 'N/A'}. Continue?`,
             icon: 'warning',
             showCancelButton: true
           });
@@ -239,7 +266,7 @@ const BOMFormPage = () => {
         if (stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && selectedItem?.drawing_no && stockItem.drawing_no !== selectedItem.drawing_no) {
           const confirm = await Swal.fire({
             title: 'Drawing Mismatch',
-            text: `This component is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem.drawing_no}. Continue?`,
+            text: `This component is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem?.drawing_no || 'N/A'}. Continue?`,
             icon: 'warning',
             showCancelButton: true
           });
@@ -254,7 +281,7 @@ const BOMFormPage = () => {
         if (!payload.operationName || payload.hourlyRate === '') {
           throw new Error('Operation Name and Hourly Rate are required');
         }
-        payload.cycleTimeMin = parseFloat(payload.cycleTimeMin) || 60;
+        payload.cycleTimeMin = parseFloat(payload.cycleTimeMin) || 0;
         payload.setupTimeMin = parseFloat(payload.setupTimeMin) || 0;
         payload.hourlyRate = parseFloat(payload.hourlyRate) || 0;
         payload.operation_name = payload.operationName;
@@ -271,7 +298,7 @@ const BOMFormPage = () => {
         if (stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && selectedItem?.drawing_no && stockItem.drawing_no !== selectedItem.drawing_no) {
           const confirm = await Swal.fire({
             title: 'Drawing Mismatch',
-            text: `This scrap item is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem.drawing_no}. Continue?`,
+            text: `This scrap item is linked to drawing ${stockItem.drawing_no}, but the product drawing is ${selectedItem?.drawing_no || 'N/A'}. Continue?`,
             icon: 'warning',
             showCancelButton: true
           });
@@ -319,6 +346,32 @@ const BOMFormPage = () => {
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     }
+  };
+
+  const resetForm = () => {
+    setProductForm({
+      itemGroup: 'FG',
+      itemCode: '',
+      drawingNo: '',
+      uom: 'Kg',
+      revision: '1',
+      description: '',
+      isActive: true,
+      isDefault: false,
+      quantity: 1
+    });
+    setBomData({
+      materials: [],
+      components: [],
+      operations: [],
+      scrap: []
+    });
+    setSelectedItem(null);
+    setDrawingFilter('');
+    setMaterialForm({ materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '' });
+    setComponentForm({ componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '' });
+    setOperationForm({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
+    setScrapForm({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
   };
 
   const handleCreateBOM = async () => {
@@ -369,6 +422,7 @@ const BOMFormPage = () => {
 
       await response.json();
       Swal.fire('Success', 'BOM created successfully', 'success').then(() => {
+        resetForm();
         navigate('/bom-creation');
       });
     } catch (error) {
@@ -401,8 +455,8 @@ const BOMFormPage = () => {
   const operationsCost = bomData.operations.reduce((sum, o) => {
     const hourlyRate = parseFloat(o.hourly_rate || 0);
     const setupTime = parseFloat(o.setup_time_min || 0);
-    const cycleTime = parseFloat(o.cycle_time_min || 60); // Default to 60 as per user request for 1hr base
-    return sum + (setupTime / (cycleTime || 60) * hourlyRate);
+    const cycleTime = parseFloat(o.cycle_time_min || 0);
+    return sum + (((cycleTime + setupTime) / 60) * hourlyRate);
   }, 0);
 
   const totalBOMCost = materialCostAfterScrap + operationsCost;
@@ -410,7 +464,7 @@ const BOMFormPage = () => {
   const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100)), 0);
 
   if (loading) return <div className="p-8 text-center text-slate-500">Loading Item Details...</div>;
-  if (!selectedItem) return <div className="p-8 text-center text-red-500">Item not found</div>;
+  if (itemId && itemId !== 'bom-form' && !selectedItem) return <div className="p-8 text-center text-red-500">Item not found</div>;
 
   return (
     <div className="bg-slate-50 min-h-screen">
@@ -420,8 +474,19 @@ const BOMFormPage = () => {
           <div className="flex items-center gap-2 text-slate-900">
             <span className="p-2 bg-amber-100 rounded-lg text-amber-600">📙</span>
             <div>
-              <h1 className="text-xl font-bold">Create BOM</h1>
-              <p className="text-[10px] text-slate-400 font-bold  tracking-wider">Create BOM</p>
+              <h1 className="text-xl font-bold flex items-center gap-3">
+                Create BOM
+                {selectedItem?.status === 'REJECTED' && (
+                  <span className="px-2 py-1 rounded text-[10px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
+                    Rejected Drawing
+                  </span>
+                )}
+              </h1>
+              <p className="text-[10px] text-slate-400 font-bold  tracking-wider">
+                {selectedItem?.status === 'REJECTED' && selectedItem?.rejection_reason 
+                  ? `Reason: ${selectedItem.rejection_reason}` 
+                  : 'Configure bill of materials'}
+              </p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -449,22 +514,168 @@ const BOMFormPage = () => {
           </div>
           {!collapsedSections.productInfo && (
             <div className="">
+              <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100 mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Quick Filter by Drawing</label>
+                  <SearchableSelect
+                    placeholder="Search Drawing No..."
+                    options={[...new Set(stockItems
+                      .map(i => i.drawing_no)
+                      .filter(d => d && d !== 'N/A')
+                    )].sort().map(d => ({ label: d, value: d }))}
+                    value={drawingFilter}
+                    onChange={(e) => setDrawingFilter(e.target.value)}
+                  />
+                  <p className="text-[9px] text-slate-400">Filters Product Name and Item Code below</p>
+                </div>
+                {drawingFilter && (
+                  <div className="flex items-end pb-1">
+                    <button 
+                      onClick={() => setDrawingFilter('')}
+                      className="text-[10px] font-bold text-rose-500 hover:text-rose-600 flex items-center gap-1"
+                    >
+                      ✕ Clear Drawing Filter
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500">Product Name *</label>
-                  <select className="w-full p-2 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                    <option>{selectedItem.description} {selectedItem.drawing_no ? `(${selectedItem.drawing_no})` : ''}</option>
-                  </select>
+                  <SearchableSelect
+                    placeholder="Select Product"
+                    options={stockItems
+                      .filter(item => {
+                        // If drawing filter is active, only show items for that drawing
+                        // If no drawing filter, show FG, SFG, Sub-Assembly, and Assembly
+                        if (drawingFilter) {
+                          return item.drawing_no === drawingFilter;
+                        }
+                        const type = (item.material_type || '').toLowerCase();
+                        const isMainProduct = type.includes('finished') || type.includes('assembly') || type.includes('semi') || type.includes('sfg') || type === 'fg' || type.includes('fg');
+                        return isMainProduct;
+                      })
+                      .map(item => {
+                        const newGroup = getItemGroupFromMaterialType(item.material_type);
+                        const labelType = newGroup === 'FG' ? 'Finished Good (FG)' : 
+                                        newGroup === 'SFG' ? 'SFG' : 
+                                        newGroup === 'Sub Assembly' ? 'Sub-Assembly' : 
+                                        newGroup === 'Assembly' ? 'Assembly' : (item.material_type || 'Item');
+                        
+                        return {
+                          label: item.material_name,
+                          value: item.material_name,
+                          subLabel: `[${labelType}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                        };
+                      })}
+                    value={productForm.description}
+                    onChange={(e) => {
+                      const item = stockItems.find(i => i.material_name === e.target.value);
+                      if (item) {
+                        const newGroup = getItemGroupFromMaterialType(item.material_type);
+                        const isAssembly = ['Sub Assembly', 'Assembly'].includes(newGroup);
+                        
+                        // Strict state update - no merging of old FG/Drawing data
+                        const updatedForm = {
+                          ...productForm, // Keep global flags like isActive
+                          description: item.material_name,
+                          itemCode: item.item_code,
+                          itemGroup: newGroup,
+                          drawingNo: item.drawing_no || '',
+                          quantity: isAssembly ? 1 : (item.quantity || 1),
+                          uom: item.unit || (isAssembly ? 'Nos' : 'Kg'),
+                          revision: '1'
+                        };
+
+                        setProductForm(updatedForm);
+                        setSelectedItem({
+                          ...item,
+                          item_group: newGroup,
+                          drawing_no: item.drawing_no || '',
+                          quantity: updatedForm.quantity
+                        });
+                      } else {
+                        setProductForm({...productForm, description: e.target.value});
+                      }
+                    }}
+                    subLabelField="subLabel"
+                  />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500">Item Code *</label>
-                  <select className="w-full p-2 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                    <option>{selectedItem.item_code} {selectedItem.drawing_no && selectedItem.drawing_no !== selectedItem.item_code ? `[Drg: ${selectedItem.drawing_no}]` : ''}</option>
-                  </select>
+                  <SearchableSelect
+                    placeholder="Select Item Code"
+                    options={stockItems
+                      .filter(item => {
+                        // If drawing filter is active, only show items for that drawing
+                        // If no drawing filter, show FG, SFG, Sub-Assembly, and Assembly
+                        if (drawingFilter) {
+                          return item.drawing_no === drawingFilter;
+                        }
+                        const type = (item.material_type || '').toLowerCase();
+                        const isMainProduct = type.includes('finished') || type.includes('assembly') || type.includes('semi') || type.includes('sfg') || type === 'fg' || type.includes('fg');
+                        return isMainProduct;
+                      })
+                      .map(item => {
+                        const newGroup = getItemGroupFromMaterialType(item.material_type);
+                        const labelType = newGroup === 'FG' ? 'Finished Good (FG)' : 
+                                        newGroup === 'SFG' ? 'SFG' : 
+                                        newGroup === 'Sub Assembly' ? 'Sub-Assembly' : 
+                                        newGroup === 'Assembly' ? 'Assembly' : (item.material_type || 'Item');
+                        
+                        return {
+                          label: item.item_code,
+                          value: item.item_code,
+                          subLabel: `${item.material_name} [${labelType}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                        };
+                      })}
+                    value={productForm.itemCode}
+                    onChange={(e) => {
+                      const item = stockItems.find(i => i.item_code === e.target.value);
+                      if (item) {
+                        const newGroup = getItemGroupFromMaterialType(item.material_type);
+                        const isAssembly = ['Sub Assembly', 'Assembly'].includes(newGroup);
+
+                        const updatedForm = {
+                          ...productForm,
+                          itemCode: item.item_code,
+                          description: item.material_name,
+                          itemGroup: newGroup,
+                          drawingNo: item.drawing_no || '',
+                          quantity: isAssembly ? 1 : (item.quantity || 1),
+                          uom: item.unit || (isAssembly ? 'Nos' : 'Kg'),
+                          revision: '1'
+                        };
+
+                        setProductForm(updatedForm);
+                        setSelectedItem({
+                          ...item,
+                          item_group: newGroup,
+                          drawing_no: item.drawing_no || '',
+                          quantity: updatedForm.quantity
+                        });
+                      } else {
+                        setProductForm({...productForm, itemCode: e.target.value});
+                      }
+                    }}
+                    subLabelField="subLabel"
+                  />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500">Item Group</label>
-                  <select className="w-full p-2 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" value={productForm.itemGroup} onChange={(e) => setProductForm({...productForm, itemGroup: e.target.value})}>
+                  <select 
+                    className="w-full p-2 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" 
+                    value={productForm.itemGroup} 
+                    onChange={(e) => {
+                      const newGroup = e.target.value;
+                      const isAssembly = ['Sub Assembly', 'Assembly'].includes(newGroup);
+                      setProductForm({
+                        ...productForm, 
+                        itemGroup: newGroup,
+                        quantity: isAssembly ? 1 : productForm.quantity
+                      });
+                    }}
+                  >
                     <option value="FG">FG</option>
                     <option value="SFG">SFG</option>
                     <option value="Sub Assembly">Sub Assembly</option>
@@ -473,7 +684,16 @@ const BOMFormPage = () => {
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500">Base Quantity (For Cost/Unit) *</label>
-                  <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" placeholder="Enter finished product quantity" step="0.01" min="0.01" value={productForm.quantity} onChange={(e) => setProductForm({...productForm, quantity: e.target.value})} />
+                  <input 
+                    type="number" 
+                    className={`w-full p-2 border border-slate-200 rounded-md text-xs font-medium transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${['Sub Assembly', 'Assembly'].includes(productForm.itemGroup) ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-600'}`}
+                    placeholder="Enter finished product quantity" 
+                    step="0.01" 
+                    min="0.01" 
+                    value={productForm.quantity} 
+                    disabled={['Sub Assembly', 'Assembly'].includes(productForm.itemGroup)}
+                    onChange={(e) => setProductForm({...productForm, quantity: e.target.value})} 
+                  />
                   <p className="text-[9px] text-slate-400 mt-1">💡 This is used to calculate Cost Per Unit = Total BOM Cost ÷ Base Quantity</p>
                 </div>
                 <div className="space-y-1">
@@ -487,6 +707,12 @@ const BOMFormPage = () => {
                   <label className="text-xs text-slate-500">Revision</label>
                   <input type="text" className="w-full p-2 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" value={productForm.revision} onChange={(e) => setProductForm({...productForm, revision: e.target.value})} />
                 </div>
+                {['FG', 'SFG', 'Sub Assembly', 'Assembly'].includes(productForm.itemGroup) && productForm.drawingNo && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500">Drawing No</label>
+                    <input type="text" disabled className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-bold text-blue-600" value={productForm.drawingNo} />
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Description</label>
@@ -542,16 +768,36 @@ const BOMFormPage = () => {
           {!collapsedSections.components && (
             <div className="">
               <div className="bg-blue-50/30 p-4 rounded-md border border-blue-100 mb-4">
-                <p className="text-xs  text-blue-600  mb-3 flex items-center gap-1">
-                  <span>+</span> Add Component
-                </p>
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-xs  text-blue-600 flex items-center gap-1">
+                    <span>+</span> Add Component
+                  </p>
+                  <label className="flex items-center gap-2 cursor-pointer group bg-white px-2 py-1 rounded border border-blue-100 shadow-sm">
+                    <input 
+                      type="checkbox" 
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
+                      checked={showAllDrawings} 
+                      onChange={(e) => setShowAllDrawings(e.target.checked)} 
+                    />
+                    <span className="text-[10px] font-bold text-slate-600 group-hover:text-blue-600 transition-colors">Show All Drawings</span>
+                  </label>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs  text-slate-500  ml-1">Component Code *</label>
                     <SearchableSelect
                       placeholder="Select Component"
                       options={stockItems
-                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .filter(item => {
+                          // Components are usually SFG, Sub Assembly, or Assembly
+                          const type = (item.material_type || '').toLowerCase();
+                          const isComponent = type.includes('semi') || type.includes('assembly') || type.includes('finished');
+                          if (!isComponent) return false;
+
+                          if (showAllDrawings) return true;
+                          const productDrawing = selectedItem?.drawing_no || productForm.drawingNo;
+                          return !productDrawing || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === productDrawing;
+                        })
                         .map(item => ({
                           label: `${item.item_code} - ${item.material_name}`,
                           value: item.item_code,
@@ -682,14 +928,39 @@ const BOMFormPage = () => {
           {!collapsedSections.materials && (
             <div className="">
               <div className="bg-emerald-50/30 p-4 rounded-md border border-emerald-100 mb-4">
-                <p className="text-[10px] font-black text-emerald-600  mb-3">+ Add Raw Material</p>
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-[10px] font-black text-emerald-600">+ Add Raw Material</p>
+                  <label className="flex items-center gap-2 cursor-pointer group bg-white px-2 py-1 rounded border border-emerald-100 shadow-sm">
+                    <input 
+                      type="checkbox" 
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" 
+                      checked={showAllDrawings} 
+                      onChange={(e) => setShowAllDrawings(e.target.checked)} 
+                    />
+                    <span className="text-[10px] font-bold text-slate-600 group-hover:text-emerald-600 transition-colors">Show All Drawings</span>
+                  </label>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs  text-slate-500  ml-1">Item Name *</label>
                     <SearchableSelect
                       placeholder="Select Material"
                       options={stockItems
-                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .filter(item => {
+                          // Type Filter
+                          const type = (item.material_type || '').toLowerCase();
+                          const targetGroup = (materialForm.itemGroup || '').toLowerCase();
+                          
+                          if (targetGroup === 'raw material') {
+                            if (!type.includes('raw')) return false;
+                          } else if (targetGroup === 'sub assembly') {
+                            if (!type.includes('sub assembly')) return false;
+                          }
+
+                          if (showAllDrawings) return true;
+                          const productDrawing = selectedItem?.drawing_no || productForm.drawingNo;
+                          return !productDrawing || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === productDrawing;
+                        })
                         .map(item => ({
                           label: item.material_name,
                           value: item.material_name,
@@ -813,7 +1084,7 @@ const BOMFormPage = () => {
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center text-white text-sm">⚙️</div>
               <div>
-                <h4 className="text-sm  text-slate-800">Operations</h4>
+                <h4 className="text-sm  text-slate-800">4️⃣ Operations (PROCESS ROUTING)</h4>
                 <p className="text-[10px] text-slate-400 font-medium ">{bomData.operations.length} • ₹{operationsCost.toFixed(2)}</p>
               </div>
             </div>
@@ -824,7 +1095,7 @@ const BOMFormPage = () => {
                   if (collapsedSections.operations) {
                     toggleSection('operations');
                   } else {
-                    handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: 60, setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
+                    handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
                   }
                 }}
                 className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition-colors flex items-center gap-1 whitespace-nowrap"
@@ -838,8 +1109,29 @@ const BOMFormPage = () => {
             </div>
           </div>
           {!collapsedSections.operations && (
-            <div className="">
+            <div className="p-4 pt-0">
               <div className="bg-purple-50/30 p-4 rounded-md border border-purple-100 mb-4">
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-purple-700">This defines how the part is made</p>
+                  <p className="text-[10px] text-purple-500">Add operations in correct sequence 👇</p>
+                </div>
+                
+                <div className="bg-white/50 p-3 rounded border border-purple-100 mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Cost Formula:</p>
+                    <code className="text-[10px] bg-slate-100 p-2 rounded block text-slate-700">
+                      Operation Cost = ((Cycle + Setup) / 60) × Hourly Rate
+                    </code>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">🔒 System Rule</p>
+                    <p className="text-[10px] text-slate-600 leading-relaxed">
+                      Operations auto-create Work Orders. Target warehouse controls material movement 
+                      <span className="font-bold text-purple-600 mx-1 text-[9px]">RM → WIP → FG</span>
+                    </p>
+                  </div>
+                </div>
+
                 <p className="text-[10px] font-black text-purple-600  mb-3">+ Add Operation</p>
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
                   <div className="flex flex-col gap-1">
@@ -859,7 +1151,6 @@ const BOMFormPage = () => {
                             ...operationForm,
                             operationName: e.target.value,
                             workstation: op.workstation_code || op.workstation || '',
-                            cycleTimeMin: op.std_time || 60,
                             hourlyRate: op.hourly_rate || 0
                           });
                         } else {
@@ -893,7 +1184,7 @@ const BOMFormPage = () => {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs  text-slate-500  ml-1">Standard Cycle Time (min)</label>
-                    <input type="number" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="60" step="0.01" value={operationForm.cycleTimeMin} onChange={(e) => setOperationForm({...operationForm, cycleTimeMin: e.target.value})} />
+                    <input type="number" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="Enter cycle time" step="0.01" value={operationForm.cycleTimeMin} onChange={(e) => setOperationForm({...operationForm, cycleTimeMin: e.target.value})} />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs  text-slate-500  ml-1">Setup Reference Time (min)</label>
@@ -904,9 +1195,9 @@ const BOMFormPage = () => {
                     <input type="number" className="px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="0" step="0.01" value={operationForm.hourlyRate} onChange={(e) => setOperationForm({...operationForm, hourlyRate: e.target.value})} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs  text-slate-500  ml-1">Est. Setup Cost (₹)</label>
-                    <input type="text" readOnly className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" value={((parseFloat(operationForm.setupTimeMin || 0) / (parseFloat(operationForm.cycleTimeMin || 60) || 60)) * parseFloat(operationForm.hourlyRate || 0)).toFixed(2)} />
-                    <p className="text-[8px] text-slate-400 mt-0.5">Calculated: (Setup / Cycle) * Rate</p>
+                    <label className="text-xs  text-slate-500  ml-1">Est. Operation Cost (₹)</label>
+                    <input type="text" readOnly className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-purple-600" value={(((parseFloat(operationForm.cycleTimeMin || 0) + parseFloat(operationForm.setupTimeMin || 0)) / 60) * parseFloat(operationForm.hourlyRate || 0)).toFixed(2)} />
+                    <p className="text-[8px] text-slate-400 mt-0.5">Calculated: ((Cycle + Setup) / 60) * Rate</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -926,7 +1217,7 @@ const BOMFormPage = () => {
                     </select>
                   </div>
                   <div className="flex flex-col justify-end">
-                    <button onClick={() => handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: 60, setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' })} className="p-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-lg shadow-purple-100">+ Add</button>
+                    <button onClick={() => handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' })} className="p-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-lg shadow-purple-100">+ Add</button>
                   </div>
                 </div>
               </div>
@@ -939,18 +1230,18 @@ const BOMFormPage = () => {
                         <th className="p-2 text-center text-xs text-slate-400 ">Std Cycle</th>
                         <th className="p-2 text-center text-xs text-slate-400 ">Setup Ref</th>
                         <th className="p-2 text-center text-xs text-slate-400 ">Rate/hr</th>
-                        <th className="p-2 text-center text-xs text-slate-400 ">Chargeable Time</th>
-                        <th className="p-2 text-center text-xs text-slate-400 ">Setup Cost</th>
+                        <th className="p-2 text-center text-xs text-slate-400 ">Total Time</th>
+                        <th className="p-2 text-center text-xs text-slate-400 ">Op. Cost</th>
                         <th className="p-2 text-right text-xs text-slate-400 ">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {bomData.operations.map((o) => {
-                        const cycleTime = parseFloat(o.cycle_time_min || 60);
+                        const cycleTime = parseFloat(o.cycle_time_min || 0);
                         const setupTime = parseFloat(o.setup_time_min || 0);
                         const hourlyRate = parseFloat(o.hourly_rate || 0);
-                        const chargeableTime = (setupTime / (cycleTime || 60)) * 60;
-                        const operationCost = (setupTime / (cycleTime || 60)) * hourlyRate;
+                        const totalTimeMin = cycleTime + setupTime;
+                        const operationCost = (totalTimeMin / 60) * hourlyRate;
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/50">
                             <td className="p-2 text-xs font-medium text-slate-700">
@@ -960,7 +1251,7 @@ const BOMFormPage = () => {
                             <td className="p-2 text-xs text-center">{cycleTime}m</td>
                             <td className="p-2 text-xs text-center">{setupTime}m</td>
                             <td className="p-2 text-xs text-center">₹{hourlyRate.toFixed(2)}</td>
-                            <td className="p-2 text-xs text-center text-blue-600 font-medium">{chargeableTime.toFixed(1)}m</td>
+                            <td className="p-2 text-xs text-center text-blue-600 font-medium">{totalTimeMin.toFixed(1)}m</td>
                             <td className="p-2 text-xs text-center font-bold text-purple-600">₹{operationCost.toFixed(2)}</td>
                             <td className="p-2 text-right">
                               <button onClick={() => handleDeleteSectionItem('operations', o.id)} className="text-red-400 hover:text-red-600">🗑️</button>
@@ -1012,7 +1303,18 @@ const BOMFormPage = () => {
           {!collapsedSections.scrap && (
             <div className="">
               <div className="bg-orange-50/30 p-4 rounded-md border border-orange-100 mb-4">
-                <p className="text-xs  text-orange-600  mb-3">+ Add Scrap</p>
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-xs  text-orange-600"><span>+</span> Add Scrap</p>
+                  <label className="flex items-center gap-2 cursor-pointer group bg-white px-2 py-1 rounded border border-orange-100 shadow-sm">
+                    <input 
+                      type="checkbox" 
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500" 
+                      checked={showAllDrawings} 
+                      onChange={(e) => setShowAllDrawings(e.target.checked)} 
+                    />
+                    <span className="text-[10px] font-bold text-slate-600 group-hover:text-orange-600 transition-colors">Show All Drawings</span>
+                  </label>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs  text-slate-500  ml-1">Item Code *</label>
@@ -1023,7 +1325,11 @@ const BOMFormPage = () => {
                     <SearchableSelect
                       placeholder="Select Item"
                       options={stockItems
-                        .filter(item => !selectedItem?.drawing_no || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === selectedItem.drawing_no)
+                        .filter(item => {
+                          if (showAllDrawings) return true;
+                          const productDrawing = selectedItem?.drawing_no || productForm.drawingNo;
+                          return !productDrawing || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === productDrawing;
+                        })
                         .map(item => ({
                           label: item.material_name,
                           value: item.material_name,
@@ -1140,9 +1446,9 @@ const BOMFormPage = () => {
                   <p className="text-[10px] text-blue-400 font-medium mt-1">(Components - Scrap)</p>
                 </div>
                 <div className="p-4 bg-purple-50 rounded-md border border-purple-100">
-                  <p className="text-xs text-purple-600  mb-1">Operation Setup Cost / FG</p>
+                  <p className="text-xs text-purple-600  mb-1">Operation Process Cost / FG</p>
                   <p className="text-2xl font-black text-purple-900">₹{operationsCost.toFixed(2)}</p>
-                  <p className="text-[10px] text-purple-400 font-medium mt-1">Based on Setup/Cycle * Rate</p>
+                  <p className="text-[10px] text-purple-400 font-medium mt-1">Based on (Cycle + Setup) / 60 * Rate</p>
                 </div>
                 <div className="p-4 bg-emerald-50 rounded-md border border-emerald-100">
                   <p className="text-xs text-emerald-600  mb-1">Total Cost / FG</p>
@@ -1170,7 +1476,7 @@ const BOMFormPage = () => {
                     <span className="text-xs font-black text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors text-purple-600">
-                    <span className="text-xs font-medium">Setup Cost / FG (Dynamic):</span>
+                    <span className="text-xs font-medium">Process Cost / FG (Dynamic):</span>
                     <span className="text-xs font-bold text-purple-900">₹{operationsCost.toFixed(2)}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center bg-amber-50/50">

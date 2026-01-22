@@ -43,7 +43,7 @@ const SalesOrderRow = ({ order, onAction, actionLoading }) => {
           {formatOrderCode(order.id)}
           {rejectedItems.length > 0 && (
             <div className="mt-1">
-              <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[8px] font-bold uppercase">
+              <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded text-[8px] font-bold uppercase animate-pulse border border-rose-200">
                 {rejectedItems.length} Item(s) Rejected
               </span>
             </div>
