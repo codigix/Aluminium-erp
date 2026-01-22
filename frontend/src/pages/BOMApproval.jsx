@@ -145,7 +145,7 @@ const BOMApproval = () => {
               <tr>
                 <th className="p-2 text-left text-xs  text-slate-500 ">PO / SO Ref</th>
                 <th className="p-2 text-left text-xs  text-slate-500 ">Customer / Project</th>
-                <th className="p-2text-center text-xs  text-slate-500 ">Status</th>
+                <th className="p-2 text-center text-xs  text-slate-500 ">Status</th>
                 <th className="p-2 text-right text-xs  text-slate-500 ">Actions</th>
               </tr>
             </thead>
@@ -500,6 +500,7 @@ const BOMApproval = () => {
                         </div>
                       </div>
                     ))}
+                    </div>
 
                     {/* Overall Order Summary Breakdown */}
                     <div className="mt-8 flex justify-end">
