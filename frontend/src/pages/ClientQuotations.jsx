@@ -73,7 +73,7 @@ const ClientQuotations = () => {
             company_name: quote.company_name,
             company_id: quote.company_id,
             created_at: quote.created_at,
-            status: quote.status,
+            status: 'SENT', // Default status for group
             total_amount: 0,
             quotes: []
           };
@@ -81,6 +81,22 @@ const ClientQuotations = () => {
         grouped[key].quotes.push(quote);
         if (quote.status !== 'REJECTED') {
           grouped[key].total_amount += parseFloat(quote.total_amount) || 0;
+        }
+      });
+      
+      // Post-process groups to determine status
+      Object.values(grouped).forEach(group => {
+        const hasRejected = group.quotes.some(q => q.status === 'REJECTED');
+        const hasAccepted = group.quotes.some(q => q.status !== 'REJECTED');
+        
+        if (hasAccepted && hasRejected) {
+          group.status = 'PARTIAL';
+        } else if (hasRejected && !hasAccepted) {
+          group.status = 'REJECTED';
+        } else if (group.quotes.every(q => q.status === 'APPROVED')) {
+          group.status = 'APPROVED';
+        } else {
+          group.status = 'SENT';
         }
       });
       
@@ -390,8 +406,7 @@ const ClientQuotations = () => {
                   <tbody className="bg-white divide-y divide-slate-100">
                     {Object.entries(groupedByClient).map(([clientName, clientData]) => {
                       const totalItems = clientData.orders.reduce((sum, order) => {
-                        const activeItemsCount = (order.items || []).filter(item => item.status !== 'REJECTED').length;
-                        return sum + activeItemsCount;
+                        return sum + (order.items?.length || 0);
                       }, 0);
                       return (
                         <React.Fragment key={clientName}>
@@ -467,7 +482,7 @@ const ClientQuotations = () => {
                                                   <div className="text-slate-900 text-xs">{item.drawing_no || 'N/A'}</div>
                                                   {item.status === 'REJECTED' && (
                                                     <div className="flex flex-col gap-1">
-                                                      <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[8px] font-bold uppercase w-fit">Rejected</span>
+                                                      <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black uppercase w-fit animate-pulse">Rejected</span>
                                                       {item.rejection_reason && (
                                                         <span className="text-[9px] text-red-600 italic leading-tight">
                                                           Reason: {item.rejection_reason}
@@ -580,8 +595,10 @@ const ClientQuotations = () => {
                             </td>
                             <td className="p-2 text-xs text-slate-500">{new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                             <td className="p-2">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px]  ${
-                                group.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                group.status === 'SENT' ? 'bg-blue-100 text-blue-700' : 
+                                group.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 
+                                group.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
                                 group.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 
                                 'bg-slate-100 text-slate-700'
                               }`}>
@@ -625,7 +642,7 @@ const ClientQuotations = () => {
                                                 <div className="text-slate-900 text-[11px] font-medium">{q.drawing_no || '—'}</div>
                                                 {q.status === 'REJECTED' && (
                                                   <div className="flex flex-col gap-0.5">
-                                                    <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[8px] font-bold uppercase w-fit">Rejected</span>
+                                                    <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black uppercase w-fit animate-pulse">Rejected</span>
                                                     {q.rejection_reason && (
                                                       <span className="text-[9px] text-red-600 italic leading-tight">
                                                         Reason: {q.rejection_reason}
