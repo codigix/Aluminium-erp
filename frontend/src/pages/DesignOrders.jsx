@@ -886,13 +886,14 @@ const DesignOrders = () => {
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
                   <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Status</th>
                   <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
                 {incomingLoading ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-6 text-center">
+                    <td colSpan="7" className="px-4 py-6 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-xs text-slate-600 font-semibold">Checking for new requests...</span>
@@ -901,7 +902,7 @@ const DesignOrders = () => {
                   </tr>
                 ) : incomingOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center">
+                    <td colSpan="7" className="px-4 py-8 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <p className="text-xs text-slate-500 font-semibold">No incoming design requests</p>
@@ -958,6 +959,9 @@ const DesignOrders = () => {
                           <td className="px-4 py-3 text-center">
                             <span className="text-slate-400 text-[10px]">Total: {group.orders.reduce((sum, o) => sum + (Number(o.item_qty) || 1), 0)}</span>
                           </td>
+                          <td className="px-4 py-3">
+                            <span className="text-slate-400 text-[10px]">Pending</span>
+                          </td>
                           <td className="px-4 py-3 text-right flex gap-2 justify-end">
                              <button
                                onClick={(e) => {
@@ -981,7 +985,7 @@ const DesignOrders = () => {
                         </tr>
                         {/* Group Items */}
                         {isExpanded && group.orders.map((order) => (
-                          <tr key={order.id} className={`transition-colors text-[11px] border-b border-slate-50 bg-white/50 ${selectedIncomingOrders.has(order.id) ? 'bg-blue-50' : 'hover:bg-blue-50/20'}`}>
+                          <tr key={order.id} className={`transition-colors text-[11px] border-b border-slate-50 ${order.item_status === 'REJECTED' ? 'bg-red-50/50' : 'bg-white/50'} ${selectedIncomingOrders.has(order.id) ? 'bg-blue-50' : 'hover:bg-blue-50/20'}`}>
                             <td className="px-4 py-2.5 pl-8">
                               <input
                                 type="checkbox"
@@ -1003,7 +1007,14 @@ const DesignOrders = () => {
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-2.5 font-bold text-indigo-600">{order.drawing_no || '—'}</td>
+                            <td className="px-4 py-2.5 font-bold text-indigo-600">
+                              <div className="flex items-center gap-2">
+                                {order.drawing_no || '—'}
+                                {order.item_status === 'REJECTED' && (
+                                  <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black animate-pulse">REJECTED</span>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-4 py-2.5">
                               <div className="flex flex-col">
                                 <span className="text-slate-600 italic">{order.item_description || 'No description'}</span>
@@ -1011,6 +1022,20 @@ const DesignOrders = () => {
                             </td>
                             <td className="px-4 py-2.5 text-center font-bold text-slate-900">
                               {order.item_qty || 1}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              {order.item_status && order.item_status !== 'PENDING' ? (
+                                <div className="flex flex-col gap-0.5 items-start">
+                                  <StatusBadge status={order.item_status} />
+                                  {order.item_status === 'REJECTED' && order.item_rejection_reason && (
+                                    <span className="text-[9px] text-red-500 italic leading-tight">
+                                      {order.item_rejection_reason}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400">Pending</span>
+                              )}
                             </td>
                             <td className="px-4 py-2.5 whitespace-nowrap text-right flex gap-1 justify-end">
                               <button 
@@ -1082,7 +1107,7 @@ const DesignOrders = () => {
               <tbody className="bg-white divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center">
+                    <td colSpan="7" className="px-4 py-8 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-xs text-slate-600 font-semibold">Loading design orders...</span>
@@ -1091,7 +1116,7 @@ const DesignOrders = () => {
                   </tr>
                 ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center">
+                    <td colSpan="7" className="px-4 py-8 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         <p className="text-xs text-slate-500 font-semibold">No tasks match your search</p>

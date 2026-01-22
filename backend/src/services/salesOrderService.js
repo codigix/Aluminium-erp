@@ -216,6 +216,12 @@ const approveDesignAndCreateQuotation = async (salesOrderId) => {
       ['DESIGN_APPROVED', 'SALES', salesOrderId]
     );
     
+    // Mark non-rejected items as ACCEPTED
+    await connection.execute(
+      "UPDATE sales_order_items SET status = 'ACCEPTED' WHERE sales_order_id = ? AND (status IS NULL OR status = 'PENDING')",
+      [salesOrderId]
+    );
+    
     await connection.commit();
     return true;
   } catch (error) {
@@ -308,6 +314,12 @@ const bulkApproveDesigns = async (orderIds) => {
     await connection.execute(
       `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id IN (${placeholders})`,
       ['DESIGN_APPROVED', 'SALES', ...orderIds]
+    );
+    
+    // Mark non-rejected items as ACCEPTED for all orders
+    await connection.execute(
+      `UPDATE sales_order_items SET status = 'ACCEPTED' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING')`,
+      orderIds
     );
     
     await connection.commit();

@@ -6,7 +6,7 @@ const getQuotationRequests = async (req, res, next) => {
   try {
     const { status } = req.query;
     let query = `
-      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.notes, qr.created_at,
+      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.notes, qr.created_at, qr.rejection_reason,
              so.project_name, c.company_name, cp.po_number,
              COALESCE(soi.drawing_no, '—') as drawing_no,
              COALESCE(soi.description, so.project_name) as item_description,
@@ -129,8 +129,8 @@ const rejectQuotationRequest = async (req, res, next) => {
     const { reason } = req.body;
     
     await pool.execute(
-      'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-      ['REJECTED', id]
+      'UPDATE quotation_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+      ['REJECTED', reason || null, id]
     );
 
     res.json({ message: 'Quotation request rejected' });
@@ -157,9 +157,9 @@ const sendQuotationViaEmail = async (req, res, next) => {
         try {
           const lineTotal = (item.quotedPrice || 0) * (item.quantity || 1);
           const [result] = await connection.execute(
-            `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, total_amount, notes, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-            [item.orderId, item.salesOrderItemId || null, clientId, 'PENDING', lineTotal, notes || null]
+            `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, total_amount, rejection_reason, notes, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [item.orderId, item.salesOrderItemId || null, clientId, item.status || 'PENDING', lineTotal, item.rejection_reason || null, notes || null]
           );
           resolve(result.insertId);
         } catch (error) {

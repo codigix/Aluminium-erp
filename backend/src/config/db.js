@@ -520,7 +520,8 @@ const ensureQuotationRequestTables = async () => {
     const requiredColumns = [
       { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'notes', definition: 'TEXT NULL' },
-      { name: 'sales_order_item_id', definition: 'INT NULL' }
+      { name: 'sales_order_item_id', definition: 'INT NULL' },
+      { name: 'rejection_reason', definition: 'TEXT NULL' }
     ];
     
     const missing = requiredColumns.filter(c => !existing.has(c.name));
