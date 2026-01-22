@@ -205,9 +205,13 @@ const Quotations = () => {
       if (response.ok) {
         const items = await response.json();
         
-        // Flatten materials into line items for the RFQ
+        // Flatten materials into line items for the RFQ, excluding rejected items, excluding rejected items
         const materialItems = [];
         items.forEach(item => {
+          if (item.status === 'REJECTED') return;
+          
+          if (item.status === 'REJECTED') return;
+          
           if (item.materials && item.materials.length > 0) {
             item.materials.forEach(mat => {
               materialItems.push({
@@ -771,7 +775,21 @@ const Quotations = () => {
           {q.items && q.items.length > 0 ? (
             q.items.map((item, idx) => (
               <tr key={idx} className="hover:bg-white transition-colors">
-                <td className="px-4 py-3 font-medium text-slate-900">{item.drawing_no || item.item_code || '—'}</td>
+                <td className="px-4 py-3 font-medium text-slate-900">
+                  <div className="flex items-center gap-2">
+                    {item.drawing_no || item.item_code || '—'}
+                    {item.status === 'REJECTED' && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
+                        Rejected
+                      </span>
+                    )}
+                  </div>
+                  {item.status === 'REJECTED' && item.rejection_reason && (
+                    <div className="text-[10px] text-rose-500 mt-0.5 italic">
+                      Reason: {item.rejection_reason}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-slate-600">{item.description || '—'}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-col">
@@ -824,7 +842,7 @@ const Quotations = () => {
             <p className="text-sm text-slate-500 font-medium">Manage and compare vendor quotes</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+       <div className="flex items-center gap-3">
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
@@ -841,7 +859,7 @@ const Quotations = () => {
         <div className="flex gap-2 p-1 bg-slate-50 rounded-xl w-fit border border-slate-100">
           <button
             onClick={() => setActiveTab('sent')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition ${
               activeTab === 'sent'
                 ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
                 : 'text-slate-500 hover:text-slate-700'
@@ -849,6 +867,7 @@ const Quotations = () => {
           >
             Sent Requests (RFQ)
           </button>
+          
           <button
             onClick={() => setActiveTab('received')}
             className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${
@@ -918,7 +937,7 @@ const Quotations = () => {
           <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-md text-slate-900 text-xs">
+               <h3 className="text-md text-slate-900 text-xs">
                   {activeTab === 'sent' ? 'Create Quote Request (RFQ)' : 'Record Vendor Quote'}
                 </h3>
                 {activeTab !== 'sent' && (
@@ -1066,7 +1085,7 @@ const Quotations = () => {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Select Project</label>
+                     <label className="block text-sm font-medium text-slate-700 mb-1">Select Project</label>
                       <select
                         value={recordData.projectId}
                         onChange={(e) => handleRecordProjectChange(e.target.value)}
@@ -1095,7 +1114,6 @@ const Quotations = () => {
                       </select>
                     </div>
                   </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                       <label className="block text-xs  text-slate-500  tracking-wider mb-1">Total Amount (₹)</label>
@@ -1146,7 +1164,7 @@ const Quotations = () => {
                             </tr>
                           ) : (
                             recordData.items.map((item, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50/50">
+                              <tr key={idx} className="hover:bg-slate-50">
                                 <td className="px-3 py-2">
                                   <input
                                     type="text"
@@ -1208,7 +1226,7 @@ const Quotations = () => {
                                     ✕
                                   </button>
                                 </td>
-                              </tr>
+                             </tr>
                             ))
                           )}
                         </tbody>
@@ -1307,7 +1325,6 @@ const Quotations = () => {
                 />
                 <label htmlFor="attachPDF" className="text-sm text-slate-700">Attach Quotation PDF</label>
               </div>
-
               <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
                 <button
                   type="button"
@@ -1323,7 +1340,7 @@ const Quotations = () => {
                   Send Email
                 </button>
               </div>
-            </form>
+           </form>
           </div>
         </div>
       )}
@@ -1335,11 +1352,11 @@ const Quotations = () => {
               <h3 className="text-md text-slate-900 text-xs">Edit Quotation</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
-
+            
             <form onSubmit={handleEditQuotation} className="">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Vendor</label>
+                 <label className="block text-sm font-medium text-slate-700 mb-1">Vendor</label>
                   <select
                     value={editFormData.vendorId}
                     onChange={(e) => setEditFormData({...editFormData, vendorId: e.target.value})}
@@ -1378,14 +1395,13 @@ const Quotations = () => {
                     + Add Item
                   </button>
                 </div>
-
                 {editFormData.items.length === 0 ? (
                   <p className="text-xs text-slate-500 p-4 text-center border border-dashed border-slate-200 rounded">
                     No items added yet.
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wider">
+                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wide">
                       <div className="col-span-2">Drawing No</div>
                       <div className="col-span-3">Description</div>
                       <div className="col-span-3">Material Name</div>

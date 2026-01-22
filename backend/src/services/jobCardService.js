@@ -2,9 +2,10 @@ const pool = require('../config/db');
 
 const listJobCards = async () => {
   const [rows] = await pool.query(
-    `SELECT jc.*, wo.wo_number, o.operation_name, w.workstation_name, u.username as operator_name
+    `SELECT jc.*, wo.wo_number, o.operation_name, w.workstation_name, u.username as operator_name, soi.status as item_status
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
+     JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
@@ -17,6 +18,19 @@ const createJobCard = async (data) => {
   const { 
     workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks 
   } = data;
+
+  // Check if item is rejected
+  const [itemRows] = await pool.query(
+    `SELECT soi.status 
+     FROM work_orders wo
+     JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     WHERE wo.id = ?`,
+    [workOrderId]
+  );
+
+  if (itemRows.length > 0 && itemRows[0].status === 'Rejected') {
+    throw new Error('Cannot create Job Card for a rejected drawing/item.');
+  }
 
   const [result] = await pool.execute(
     `INSERT INTO job_cards 

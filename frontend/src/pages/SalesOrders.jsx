@@ -905,7 +905,7 @@ const SalesOrders = ({
                                         {item.drawing_no || 'N/A'}
                                         {item.status === 'REJECTED' && (
                                           <div className="flex flex-col gap-1 mt-1">
-                                            <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[8px] font-bold uppercase w-fit">Rejected</span>
+                                            <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black uppercase w-fit animate-pulse">Rejected</span>
                                             {item.rejection_reason && (
                                               <span className="text-[9px] text-red-600 italic leading-tight">
                                                 Reason: {item.rejection_reason}

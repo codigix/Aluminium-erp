@@ -27,15 +27,33 @@ const CustomerPO = ({
           company_name: quote.company_name,
           company_id: quote.company_id,
           created_at: quote.created_at,
-          status: quote.status,
+          status: 'SENT', 
           total_amount: 0,
           quotes: []
         }
       }
       grouped[key].quotes.push(quote)
-      grouped[key].total_amount += parseFloat(quote.total_amount) || 0
+      if (quote.status !== 'REJECTED') {
+        grouped[key].total_amount += parseFloat(quote.total_amount) || 0
+      }
     })
-    return Object.values(grouped)
+
+    // Post-process groups to determine batch status
+    Object.values(grouped).forEach(group => {
+      const activeQuotes = group.quotes.filter(q => q.status !== 'REJECTED');
+      
+      if (activeQuotes.length === 0) {
+        group.status = 'REJECTED';
+      } else if (activeQuotes.every(q => q.status === 'APPROVED' || q.status === 'COMPLETED' || q.status === 'PARTIAL')) {
+        group.status = 'COMPLETED';
+      } else if (activeQuotes.some(q => q.status === 'APPROVAL')) {
+        group.status = 'APPROVAL';
+      } else {
+        group.status = 'SENT';
+      }
+    });
+
+    return Object.values(grouped).filter(group => group.status !== 'REJECTED')
   }, [quotationRequests])
 
   return (
@@ -154,18 +172,26 @@ const CustomerPO = ({
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                      {group.quotes.map((item) => {
+                                      {group.quotes
+                                        .filter(item => item.status !== 'REJECTED')
+                                        .map((item) => {
                                         return (
-                                          <tr key={`quote-item-${item.id}`} className="hover:bg-slate-50">
-                                            <td className="p-2 text-slate-900">{item.drawing_no}</td>
-                                            <td className="p-2 text-slate-600">{item.item_description || '—'}</td>
-                                            <td className="p-2 text-center ">
-                                              {item.item_qty !== null ? Number(item.item_qty).toFixed(0) : '0'} {item.item_unit || 'NOS'}
-                                            </td>
-                                            <td className="p-2 text-right text-slate-900">
-                                              {formatCurrency(item.total_amount)}
-                                            </td>
-                                          </tr>
+                                          <React.Fragment key={`quote-item-${item.id}`}>
+                                            <tr className="hover:bg-slate-50">
+                                              <td className="p-2">
+                                                <div className="flex flex-col gap-1">
+                                                  <span className="text-slate-900 font-medium">{item.drawing_no}</span>
+                                                </div>
+                                              </td>
+                                              <td className="p-2 text-slate-600">{item.item_description || '—'}</td>
+                                              <td className="p-2 text-center ">
+                                                {item.item_qty !== null ? Number(item.item_qty).toFixed(0) : '0'} {item.item_unit || 'NOS'}
+                                              </td>
+                                              <td className="p-2 text-right text-slate-900">
+                                                {formatCurrency(item.total_amount)}
+                                              </td>
+                                            </tr>
+                                          </React.Fragment>
                                         );
                                       })}
                                     </tbody>
@@ -186,9 +212,9 @@ const CustomerPO = ({
                                   </table>
                                 </div>
                                 <div className="mt-3 flex justify-end gap-3">
-                                  {group.status === 'PENDING' && (
+                                  {['PENDING', 'SENT'].includes(group.status) && (
                                     <button
-                                      onClick={() => onSendToDesign(group.quotes)}
+                                      onClick={() => onSendToDesign(group.quotes.filter(q => q.status !== 'REJECTED'))}
                                       className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[0.65rem]  hover:bg-indigo-700 transition-colors  tracking-wider flex items-center gap-2"
                                     >
                                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

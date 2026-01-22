@@ -96,6 +96,7 @@ const getReadySalesOrderItems = async () => {
      JOIN sales_order_items soi ON so.id = soi.sales_order_id
      LEFT JOIN production_plan_items ppi ON soi.id = ppi.sales_order_item_id AND ppi.status != 'CANCELLED'
      WHERE so.status IN ('MATERIAL_READY', 'DESIGN_APPROVED', 'CREATED', 'DESIGN_IN_REVIEW', 'BOM_APPROVED')
+     AND soi.status != 'Rejected'
      GROUP BY soi.id
      HAVING already_planned_qty < total_qty
      ORDER BY so.production_priority DESC, so.created_at ASC`
@@ -111,6 +112,7 @@ const getProductionReadySalesOrders = async () => {
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
      WHERE so.status IN ('MATERIAL_READY', 'DESIGN_APPROVED', 'CREATED', 'DESIGN_IN_REVIEW', 'BOM_APPROVED')
+     AND soi.status != 'Rejected'
      ORDER BY so.created_at DESC`
   );
   return rows;

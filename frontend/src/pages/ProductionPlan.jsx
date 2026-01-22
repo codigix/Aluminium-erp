@@ -385,19 +385,32 @@ const ProductionPlan = () => {
                           <input 
                             type="checkbox" 
                             checked={isSelected}
+                            disabled={item.status === 'Rejected'}
                             onChange={() => toggleItemSelection({
                               ...item,
                               sales_order_item_id: salesOrderItemId,
                               sales_order_id: salesOrderId,
                               project_name: item.project_name || selectedOrderDetails?.project_name
                             })}
-                            className="rounded border-slate-300 text-indigo-600"
+                            className={`rounded border-slate-300 text-indigo-600 ${item.status === 'Rejected' ? 'opacity-50 cursor-not-allowed' : ''}`}
                           />
                         </td>
                         <td className="p-2 font-medium">{item.project_name || selectedOrderDetails?.project_name}</td>
                         <td className="p-2">
-                          <div className="text-[11px] font-bold text-indigo-600">{item.item_code}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-[11px] font-bold text-indigo-600">{item.item_code}</div>
+                            {item.status === 'Rejected' && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 animate-pulse uppercase border border-rose-200">
+                                Rejected Drawing
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-slate-500 truncate max-w-xs">{item.description}</div>
+                          {item.status === 'Rejected' && item.rejection_reason && (
+                            <div className="text-[9px] text-rose-500 mt-0.5 italic">
+                              Reason: {item.rejection_reason}
+                            </div>
+                          )}
                         </td>
                         <td className="p-2 text-center font-semibold text-slate-700">
                           {(item.total_qty || item.quantity) - (item.already_planned_qty || 0)} {item.unit}

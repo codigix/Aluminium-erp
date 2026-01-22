@@ -231,9 +231,23 @@ const BOMApproval = () => {
                       <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden">
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
                           <div>
-                            <span className="text-sm text-slate-900">{item.item_code}</span>
-                            <span className="mx-2 text-slate-300">|</span>
-                            <span className="text-xs text-slate-600">{item.description}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-slate-900">{item.item_code}</span>
+                              {item.status === 'REJECTED' && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
+                                  Rejected
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-slate-600">{item.description}</span>
+                              {item.status === 'REJECTED' && item.rejection_reason && (
+                                <>
+                                  <span className="mx-2 text-slate-300">|</span>
+                                  <span className="text-[10px] text-rose-500 italic">Reason: {item.rejection_reason}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
                           <div className="text-xs  text-slate-500">
                             QTY: {item.quantity} {item.unit}

@@ -17,6 +17,7 @@ const getMaterialRequirements = async () => {
     JOIN sales_orders so ON ppi.sales_order_id = so.id
     JOIN sales_order_item_materials m ON soi.id = m.sales_order_item_id
     WHERE ppi.status NOT IN ('COMPLETED', 'CANCELLED')
+    AND soi.status != 'Rejected'
     GROUP BY m.material_name, m.material_type, m.uom, so.project_name, soi.item_code, pp.plan_code
   `);
 
@@ -68,7 +69,7 @@ const getProjectMaterialRequirements = async (projectId) => {
     FROM sales_orders so
     JOIN sales_order_items soi ON so.id = soi.sales_order_id
     JOIN sales_order_item_materials m ON soi.id = m.sales_order_item_id
-    WHERE so.id = ?
+    WHERE so.id = ? AND soi.status != 'Rejected'
     GROUP BY m.material_name, m.material_type, m.uom, m.item_group
   `, [projectId]);
 

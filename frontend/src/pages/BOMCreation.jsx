@@ -319,8 +319,20 @@ const BOMCreation = () => {
                     {orderItems.map((item) => (
                       <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-2">
-                          <div className="text-xs text-slate-900">{item.item_code}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-xs text-slate-900">{item.item_code}</div>
+                            {item.status === 'REJECTED' && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
+                                Rejected
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-indigo-600 font-medium">DWG: {item.drawing_no || 'N/A'}</div>
+                          {item.status === 'REJECTED' && item.rejection_reason && (
+                            <div className="text-[10px] text-rose-500 mt-0.5 italic">
+                              Reason: {item.rejection_reason}
+                            </div>
+                          )}
                         </td>
                         <td className="p-2">
                           <div className="text-xs text-slate-600 max-w-sm line-clamp-1">{item.description}</div>

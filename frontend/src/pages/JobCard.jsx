@@ -232,7 +232,16 @@ const JobCard = () => {
       label: 'WO Reference',
       key: 'wo_number',
       sortable: true,
-      render: (val) => <span className="font-medium text-slate-800">{val}</span>
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-slate-800">{val}</span>
+          {row.item_status === 'Rejected' && (
+            <span className="w-fit px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 animate-pulse uppercase border border-rose-200 mt-1">
+              Rejected Drawing
+            </span>
+          )}
+        </div>
+      )
     },
     {
       label: 'Operation / Workstation',
@@ -282,7 +291,12 @@ const JobCard = () => {
           {row.status === 'PENDING' && (
             <button 
               onClick={() => handleUpdateStatus(row.id, 'IN_PROGRESS')}
-              className="text-emerald-600 hover:text-emerald-900 text-xs font-bold px-2 py-1 rounded hover:bg-emerald-50"
+              disabled={row.item_status === 'Rejected'}
+              className={`text-xs font-bold px-2 py-1 rounded ${
+                row.item_status === 'Rejected' 
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                  : 'text-emerald-600 hover:text-emerald-900 hover:bg-emerald-50'
+              }`}
             >
               Start
             </button>
