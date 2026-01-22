@@ -226,13 +226,48 @@ const BOMApproval = () => {
                 {detailsLoading ? (
                   <div className="py-12 text-center text-slate-500">Loading details...</div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-6">
+                    {/* Summary Bar */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-bold">Total Drawings</div>
+                        <div className="text-xl font-bold text-slate-900">{orderItems.length}</div>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-bold">Active Items</div>
+                        <div className="text-xl font-bold text-emerald-600">{orderItems.filter(i => i.status !== 'REJECTED').length}</div>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-bold">Rejected</div>
+                        <div className="text-xl font-bold text-rose-600">{orderItems.filter(i => i.status === 'REJECTED').length}</div>
+                      </div>
+                      <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                        <div className="text-[10px] text-indigo-400 mb-1 tracking-wider uppercase font-bold">Total Est. Cost</div>
+                        <div className="text-xl font-bold text-indigo-600">
+                          ₹{orderItems.reduce((total, item) => {
+                            if (item.status === 'REJECTED') return total;
+                            const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
+                            const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
+                            const labor = item.operations?.reduce((sum, o) => {
+                              const cycle = parseFloat(o.cycle_time_min || 0);
+                              const setup = parseFloat(o.setup_time_min || 0);
+                              const rate = parseFloat(o.hourly_rate || 0);
+                              return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                            }, 0) || 0;
+                            const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
+                            return total + (mat + comp + labor - scrap);
+                          }, 0).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
                     {orderItems.map((item) => (
                       <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden">
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm text-slate-900">{item.item_code}</span>
+                              <span className="text-sm text-slate-900">{item.item_code || item.drawing_no}</span>
                               {item.status === 'REJECTED' && (
                                 <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
                                   Rejected
@@ -249,8 +284,34 @@ const BOMApproval = () => {
                               )}
                             </div>
                           </div>
-                          <div className="text-xs  text-slate-500">
-                            QTY: {item.quantity} {item.unit}
+                          <div className="flex items-center gap-6">
+                            <div className="text-right">
+                              <div className="text-[9px] text-slate-400 uppercase tracking-wider">Cost / Unit</div>
+                              <div className="text-xs font-semibold text-slate-700">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.operations?.reduce((sum, o) => {
+                                       const cycle = parseFloat(o.cycle_time_min || 0);
+                                       const setup = parseFloat(o.setup_time_min || 0);
+                                       const rate = parseFloat(o.hourly_rate || 0);
+                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                     }, 0) - 
+                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0) / parseFloat(item.quantity || 1)).toFixed(2)}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[9px] text-indigo-400 uppercase tracking-wider font-bold">Total Cost</div>
+                              <div className="text-sm font-bold text-indigo-600">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.operations?.reduce((sum, o) => {
+                                       const cycle = parseFloat(o.cycle_time_min || 0);
+                                       const setup = parseFloat(o.setup_time_min || 0);
+                                       const rate = parseFloat(o.hourly_rate || 0);
+                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                     }, 0) - 
+                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0).toFixed(2)}</div>
+                            </div>
+                            <div className="text-xs  text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                              QTY: {item.quantity} {item.unit}
+                            </div>
                           </div>
                         </div>
                         

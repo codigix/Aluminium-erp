@@ -76,7 +76,9 @@ const BOMCreation = () => {
         });
         if (response.ok) {
           const data = await response.json();
-          allItems.push(...data);
+          // Filter out rejected items from BOM creation list
+          const activeItems = (data || []).filter(item => item.status !== 'REJECTED');
+          allItems.push(...activeItems);
         }
       }
       setOrderItems(allItems);
@@ -312,6 +314,7 @@ const BOMCreation = () => {
                       <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Order Qty</th>
                       <th className="p-2 text-left text-xs text-slate-500  tracking-wider">BOM Status</th>
                       <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Cost / Unit</th>
+                      <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Total Cost</th>
                       <th className="p-2 text-right text-[11px]  text-slate-500  tracking-wider">Action</th>
                     </tr>
                   </thead>
@@ -321,18 +324,8 @@ const BOMCreation = () => {
                         <td className="p-2">
                           <div className="flex items-center gap-2">
                             <div className="text-xs text-slate-900">{item.item_code}</div>
-                            {item.status === 'REJECTED' && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
-                                Rejected
-                              </span>
-                            )}
                           </div>
                           <div className="text-xs text-indigo-600 font-medium">DWG: {item.drawing_no || 'N/A'}</div>
-                          {item.status === 'REJECTED' && item.rejection_reason && (
-                            <div className="text-[10px] text-rose-500 mt-0.5 italic">
-                              Reason: {item.rejection_reason}
-                            </div>
-                          )}
                         </td>
                         <td className="p-2">
                           <div className="text-xs text-slate-600 max-w-sm line-clamp-1">{item.description}</div>
@@ -350,6 +343,9 @@ const BOMCreation = () => {
                         </td>
                         <td className="p-2 text-center">
                           <div className="text-xs text-slate-900">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <div className="text-xs font-bold text-indigo-600">₹{(parseFloat(item.bom_cost || 0) * parseFloat(item.quantity || 0)).toFixed(2)}</div>
                         </td>
                         <td className="p-2 text-right">
                           <div className="flex justify-end gap-2">

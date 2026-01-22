@@ -211,7 +211,7 @@ const Quotations = () => {
           if (item.materials && item.materials.length > 0) {
             item.materials.forEach(mat => {
               materialItems.push({
-                drawing_no: item.item_code || '', // Reference the parent drawing
+                drawing_no: item.drawing_no || item.item_code || '', // Use actual drawing number
                 description: item.description || '',
                 material_name: mat.material_name || '',
                 material_type: mat.material_type || '',
