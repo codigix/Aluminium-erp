@@ -420,10 +420,13 @@ CREATE TABLE IF NOT EXISTS workstations (
 
 CREATE TABLE IF NOT EXISTS po_receipts (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  po_number VARCHAR(100),
+  po_id INT NOT NULL,
   receipt_date DATE,
+  received_quantity DECIMAL(12, 3) DEFAULT 0,
   status VARCHAR(50),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS po_receipt_items (
