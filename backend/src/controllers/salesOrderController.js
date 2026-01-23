@@ -11,6 +11,25 @@ const listSalesOrders = async (req, res, next) => {
   }
 };
 
+const getSalesOrderById = async (req, res, next) => {
+  try {
+    const order = await salesOrderService.getSalesOrderById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Sales order not found' });
+    res.json(order);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateSalesOrder = async (req, res, next) => {
+  try {
+    await salesOrderService.updateSalesOrder(req.params.id, req.body);
+    res.json({ message: 'Sales order updated successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getIncomingOrders = async (req, res, next) => {
   try {
     const departmentCode = req.user?.department_code || req.query.department;
@@ -35,16 +54,7 @@ const getIncomingOrders = async (req, res, next) => {
 
 const createSalesOrder = async (req, res, next) => {
   try {
-    const { customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate, items } = req.body;
-    const orderId = await salesOrderService.createSalesOrder(
-      customerPoId,
-      companyId,
-      projectName,
-      drawingRequired || 0,
-      productionPriority || 'NORMAL',
-      targetDispatchDate,
-      items
-    );
+    const orderId = await salesOrderService.createSalesOrder(req.body);
     res.status(201).json({ id: orderId, message: 'Sales order created' });
   } catch (error) {
     next(error);
@@ -219,6 +229,8 @@ const updateSalesOrderItemStatus = async (req, res, next) => {
 
 module.exports = {
   listSalesOrders,
+  getSalesOrderById,
+  updateSalesOrder,
   getIncomingOrders,
   createSalesOrder,
   updateSalesOrderStatus,

@@ -223,7 +223,8 @@ const getApprovedBOMs = async () => {
       soi.quantity,
       c.company_name,
       so.project_name,
-      so.id as sales_order_id
+      so.id as sales_order_id,
+      soi.created_at
     FROM sales_order_items soi
     JOIN sales_orders so ON soi.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id

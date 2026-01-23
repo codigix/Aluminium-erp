@@ -4,6 +4,8 @@ const salesOrderController = require('../controllers/salesOrderController');
 
 router.get('/approved-drawings', salesOrderController.getApprovedDrawings);
 router.get('/incoming', salesOrderController.getIncomingOrders);
+router.get('/:id', salesOrderController.getSalesOrderById);
+router.put('/:id', salesOrderController.updateSalesOrder);
 router.get('/', salesOrderController.listSalesOrders);
 router.post('/', salesOrderController.createSalesOrder);
 router.post('/bulk/approve-designs', salesOrderController.bulkApproveDesigns);
