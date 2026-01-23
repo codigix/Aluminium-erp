@@ -46,7 +46,7 @@ const Vendors = () => {
     status: 'Active',
     email: '',
     phone: '',
-    address: '',
+    location: '',
     rating: 0
   });
 
@@ -99,6 +99,10 @@ const Vendors = () => {
     }
   };
 
+  const filteredVendors = (vendors || []).filter(v => 
+    filterStatus === 'All Vendors' || v.status === filterStatus
+  );
+
   const handleAddVendor = async (e) => {
     e.preventDefault();
     
@@ -132,7 +136,7 @@ const Vendors = () => {
         status: 'Active',
         email: '',
         phone: '',
-        address: '',
+        location: '',
         rating: 0
       });
       setShowForm(false);
@@ -499,11 +503,11 @@ const Vendors = () => {
                 </FormControl>
               </div>
 
-              <FormControl label="Address">
+              <FormControl label="Location/Address">
                 <textarea
-                  placeholder="Enter vendor address"
-                  value={formData.address}
-                  onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  placeholder="Enter vendor location or address"
+                  value={formData.location}
+                  onChange={(e) => setFormData({...formData, location: e.target.value})}
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs min-h-[80px]"
                 />
               </FormControl>
@@ -585,8 +589,8 @@ const Vendors = () => {
                       )}
                     </div>
                   </div>
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs  ${vendorStatusColors[vendor.status]?.badge}`}>
-                    {vendorStatusColors[vendor.status]?.label}
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs  ${(vendorStatusColors[vendor.status] || vendorStatusColors.ACTIVE).badge}`}>
+                    {(vendorStatusColors[vendor.status] || vendorStatusColors.ACTIVE).label}
                   </span>
                 </div>
 
