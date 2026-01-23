@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -58,7 +59,7 @@ const BOMCreation = () => {
         fetchClientItems(group);
       }
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setLoading(false);
     }
@@ -132,11 +133,11 @@ const BOMCreation = () => {
 
         if (!response.ok) throw new Error('Failed to delete BOM');
 
-        Swal.fire('Deleted!', 'BOM has been deleted.', 'success');
+        successToast('BOM has been deleted.');
         fetchOrders();
       }
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 

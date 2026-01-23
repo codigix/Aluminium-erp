@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -233,7 +234,7 @@ const BOMFormPage = () => {
         setStockItems(stockData);
       }
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -362,9 +363,9 @@ const BOMFormPage = () => {
       
       await fetchData(false);
       setFormState(initialForm);
-      Swal.fire('Success', `${section} added`, 'success');
+      successToast(`${section} added`);
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -378,9 +379,9 @@ const BOMFormPage = () => {
       if (!response.ok) throw new Error(`Failed to delete ${section}`);
       
       await fetchData(false);
-      Swal.fire('Deleted', `${section} removed`, 'success');
+      successToast(`${section} removed`);
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -458,12 +459,11 @@ const BOMFormPage = () => {
       }
 
       await response.json();
-      Swal.fire('Success', 'BOM created successfully', 'success').then(() => {
-        resetForm();
-        navigate('/bom-creation');
-      });
+      successToast('BOM created successfully');
+      resetForm();
+      navigate('/bom-creation');
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 

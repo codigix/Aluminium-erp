@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Modal, FormControl, DataTable, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -39,7 +40,7 @@ const DrawingMaster = () => {
       setDrawings(data);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'Failed to load drawing master', 'error');
+      errorToast('Failed to load drawing master');
     } finally {
       setLoading(false);
     }
@@ -258,7 +259,7 @@ const DrawingMaster = () => {
 
       if (!response.ok) throw new Error('Failed to update drawing');
       
-      Swal.fire('Success', 'Drawing updated successfully', 'success');
+      successToast('Drawing updated successfully');
       setShowEditModal(false);
       fetchDrawings();
       setExpandedRevisions(prev => {
@@ -268,7 +269,7 @@ const DrawingMaster = () => {
       });
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setSaveLoading(false);
     }
@@ -294,10 +295,10 @@ const DrawingMaster = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to delete drawing');
-        Swal.fire('Deleted!', 'Drawing has been deleted', 'success');
+        successToast('Drawing has been deleted');
         fetchDrawings();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setLoading(false);
       }

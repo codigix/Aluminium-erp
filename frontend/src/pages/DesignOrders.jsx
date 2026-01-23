@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast, infoToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -130,7 +131,7 @@ const DesignOrders = () => {
       setOrders(data);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setLoading(false);
     }
@@ -183,7 +184,7 @@ const DesignOrders = () => {
       
       setShowReviewModal(true);
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setReviewLoading(false);
     }
@@ -203,10 +204,10 @@ const DesignOrders = () => {
 
       if (!response.ok) throw new Error('Failed to update status');
       
-      Swal.fire('Success', `Design order status updated to ${status}`, 'success');
+      successToast(`Design order status updated to ${status}`);
       fetchOrders();
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -224,14 +225,14 @@ const DesignOrders = () => {
       
       if (!response.ok) throw new Error('Failed to approve design');
       
-      Swal.fire('Success', 'Design approved. Sent to Sales for quotation.', 'success');
+      successToast('Design approved. Sent to Sales for quotation.');
       setShowReviewModal(false);
       setReviewOrder(null);
       setReviewDetails([]);
       fetchOrders();
       fetchIncomingOrders();
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -247,7 +248,7 @@ const DesignOrders = () => {
 
   const submitRejection = async () => {
     if (!rejectData.reason) {
-      Swal.fire('Error', 'Please enter a rejection reason', 'error');
+      errorToast('Please enter a rejection reason');
       return;
     }
 
@@ -265,7 +266,7 @@ const DesignOrders = () => {
         
         if (!response.ok) throw new Error('Failed to reject design');
         
-        Swal.fire('Success', 'Design rejected and sent back to sales.', 'success');
+        successToast('Design rejected and sent back to sales.');
         setShowReviewModal(false);
       } else {
         const response = await fetch(`${API_BASE}/sales-orders/items/${rejectData.id}/status`, {
@@ -279,7 +280,7 @@ const DesignOrders = () => {
 
         if (!response.ok) throw new Error('Failed to reject item');
 
-        Swal.fire('Success', 'Item marked as rejected', 'success');
+        successToast('Item marked as rejected');
         
         setReviewDetails(prev => prev.map(item => 
           item.id === rejectData.id ? { ...item, status: 'REJECTED', rejection_reason: rejectData.reason } : item
@@ -291,7 +292,7 @@ const DesignOrders = () => {
       fetchOrders();
       fetchIncomingOrders();
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -340,10 +341,10 @@ const DesignOrders = () => {
 
         if (!response.ok) throw new Error('Failed to accept orders');
 
-        await Swal.fire('Success', 'Orders accepted and sent to Quotation page', 'success');
+        successToast('Orders accepted and sent to Quotation page');
         navigate('/client-quotations');
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setBulkOperationLoading(false);
       }
@@ -352,7 +353,7 @@ const DesignOrders = () => {
 
   const handleBulkApprove = async () => {
     if (selectedIncomingOrders.size === 0) {
-      Swal.fire('Info', 'Please select at least one order to approve', 'info');
+      infoToast('Please select at least one order to approve');
       return;
     }
 
@@ -380,11 +381,11 @@ const DesignOrders = () => {
 
         if (!response.ok) throw new Error('Failed to approve designs');
 
-        Swal.fire('Success', `${selectedIncomingOrders.size} designs approved and sent to Sales department.`, 'success');
+        successToast(`${selectedIncomingOrders.size} designs approved and sent to Sales department.`);
         setSelectedIncomingOrders(new Set());
         fetchIncomingOrders();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setBulkOperationLoading(false);
       }
@@ -393,7 +394,7 @@ const DesignOrders = () => {
 
   const handleBulkReject = async () => {
     if (selectedIncomingOrders.size === 0) {
-      Swal.fire('Info', 'Please select at least one order to reject', 'info');
+      infoToast('Please select at least one order to reject');
       return;
     }
 
@@ -423,11 +424,11 @@ const DesignOrders = () => {
 
         if (!response.ok) throw new Error('Failed to reject designs');
 
-        Swal.fire('Success', `${selectedIncomingOrders.size} designs rejected and sent back to Sales.`, 'success');
+        successToast(`${selectedIncomingOrders.size} designs rejected and sent back to Sales.`);
         setSelectedIncomingOrders(new Set());
         fetchIncomingOrders();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setBulkOperationLoading(false);
       }
@@ -450,7 +451,7 @@ const DesignOrders = () => {
       setOrderDetails(data);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'Failed to load order details', 'error');
+      errorToast('Failed to load order details');
     } finally {
       setDetailsLoading(false);
     }
@@ -468,7 +469,7 @@ const DesignOrders = () => {
   const handleMaterialSubmit = async (e) => {
     e.preventDefault();
     if (!materialFormData.itemCode || !materialFormData.itemName || !materialFormData.itemGroup) {
-      Swal.fire('Error', 'Please fill all required fields', 'error');
+      errorToast('Please fill all required fields');
       return;
     }
     
@@ -504,7 +505,7 @@ const DesignOrders = () => {
         });
       }
       
-      Swal.fire('Success', `Material ${isEditingMaterial ? 'updated' : 'created'} successfully`, 'success');
+      successToast(`Material ${isEditingMaterial ? 'updated' : 'created'} successfully`);
       fetchItemsList(materialFormData.drawingNo);
       const nextCode = !isEditingMaterial ? await fetchNextItemCode() : '';
       setTargetOrderItemId(null);
@@ -530,7 +531,7 @@ const DesignOrders = () => {
         materialGrade: ''
       });
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setIsSubmittingMaterial(false);
     }
@@ -680,10 +681,10 @@ const DesignOrders = () => {
 
         if (!response.ok) throw new Error('Failed to delete material');
 
-        Swal.fire('Deleted!', 'Material has been deleted.', 'success');
+        successToast('Material has been deleted.');
         fetchItemsList(materialFormData.drawingNo);
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       }
     }
   };
@@ -709,13 +710,13 @@ const DesignOrders = () => {
 
       if (!response.ok) throw new Error('Failed to update item drawing');
       
-      Swal.fire('Success', 'Item drawing updated', 'success');
+      successToast('Item drawing updated');
       setEditingItem(null);
       // Refresh details
       handleViewDetails(selectedOrder);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setItemSaveLoading(false);
     }
@@ -744,10 +745,10 @@ const DesignOrders = () => {
 
         if (!response.ok) throw new Error('Failed to delete order');
         
-        Swal.fire('Deleted!', 'Order has been deleted.', 'success');
+        successToast('Order has been deleted.');
         fetchOrders();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       }
     }
   };
@@ -1287,9 +1288,9 @@ const DesignOrders = () => {
           </div>
         </div>
       )}
-      </div>
+    </div>
 
-      {/* Details Modal */}
+    {/* Details Modal */}
       {showDetails && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 py-4">

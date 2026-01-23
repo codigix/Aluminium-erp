@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, DataTable, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast, warningToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -99,7 +100,7 @@ const GRNProcessing = () => {
       setExpandedItems(prev => ({ ...prev, [grnId]: Array.isArray(data.items) ? data.items : [] }));
     } catch (error) {
       console.error('Error fetching GRN items:', error);
-      Swal.fire('Error', 'Failed to load GRN items', 'error');
+      errorToast('Failed to load GRN items');
     } finally {
       setItemsLoading(prev => ({ ...prev, [grnId]: false }));
     }
@@ -140,11 +141,11 @@ const GRNProcessing = () => {
         ...prev,
         [grnId]: prev[grnId].filter(item => item.id !== itemId)
       }));
-      Swal.fire('Deleted', 'Item removed from GRN', 'success');
+      successToast('Item removed from GRN');
       fetchGRNs();
     } catch (error) {
       console.error('Error deleting item:', error);
-      Swal.fire('Error', 'Failed to delete item', 'error');
+      errorToast('Failed to delete item');
     }
   };
 
@@ -200,7 +201,7 @@ const GRNProcessing = () => {
       }
     } catch (error) {
       console.error('Error fetching PO details:', error);
-      Swal.fire('Error', 'Failed to fetch PO details', 'error');
+      errorToast('Failed to fetch PO details');
     }
   };
 
@@ -233,7 +234,7 @@ const GRNProcessing = () => {
       }
     } catch (error) {
       console.error('Error fetching receipt details:', error);
-      Swal.fire('Error', 'Failed to fetch receipt details', 'error');
+      errorToast('Failed to fetch receipt details');
     }
   };
 
@@ -294,7 +295,7 @@ const GRNProcessing = () => {
     e.preventDefault();
 
     if (!formData.poId || poItems.length === 0) {
-      Swal.fire('Error', 'Please select a PO with items', 'error');
+      errorToast('Please select a PO with items');
       return;
     }
 
@@ -330,7 +331,7 @@ const GRNProcessing = () => {
 
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
-      Swal.fire('Validation Error', 'Please fix errors in the form', 'error');
+      errorToast('Please fix errors in the form');
       return;
     }
 
@@ -360,7 +361,7 @@ const GRNProcessing = () => {
 
       const result = await response.json();
 
-      await Swal.fire('Success', `GRN created successfully (GRN ID: ${result.grn_id})`, 'success');
+      successToast(`GRN created successfully (GRN ID: ${result.grn_id})`);
 
       setShowModal(false);
       setFormData({
@@ -375,7 +376,7 @@ const GRNProcessing = () => {
       fetchGRNs();
     } catch (error) {
       console.error('Error creating GRN:', error);
-      Swal.fire('Error', error.message || 'Failed to create GRN', 'error');
+      errorToast(error.message || 'Failed to create GRN');
     } finally {
       setSubmitting(false);
     }
@@ -405,10 +406,10 @@ const GRNProcessing = () => {
 
       if (!response.ok) throw new Error('Failed to delete GRN');
 
-      Swal.fire('Success', 'GRN deleted successfully', 'success');
+      successToast('GRN deleted successfully');
       fetchGRNs();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to delete GRN', 'error');
+      errorToast(error.message || 'Failed to delete GRN');
     }
   };
 

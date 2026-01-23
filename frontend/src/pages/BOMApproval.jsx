@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -36,7 +37,7 @@ const BOMApproval = () => {
       }
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setLoading(false);
     }
@@ -62,7 +63,7 @@ const BOMApproval = () => {
       setOrderItems(data);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'Failed to load BOM details', 'error');
+      errorToast('Failed to load BOM details');
     } finally {
       setDetailsLoading(false);
     }
@@ -91,10 +92,10 @@ const BOMApproval = () => {
         });
 
         if (!response.ok) throw new Error('Failed to approve BOM');
-        Swal.fire('Approved!', 'BOM has been approved.', 'success');
+        successToast('BOM has been approved.');
         fetchOrders();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       }
     }
   };
