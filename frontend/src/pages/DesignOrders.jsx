@@ -165,6 +165,18 @@ const DesignOrders = () => {
     }
   }, [materialFormData.drawingNo, showAddMaterialModal]);
 
+  useEffect(() => {
+    const autoGenerateCode = async () => {
+      if (!isEditingMaterial && showAddMaterialModal && materialFormData.itemName && materialFormData.itemGroup && !materialFormData.itemCode) {
+        const nextCode = await fetchNextItemCode(materialFormData.itemName, materialFormData.itemGroup);
+        if (nextCode) {
+          setMaterialFormData(prev => ({ ...prev, itemCode: nextCode }));
+        }
+      }
+    };
+    autoGenerateCode();
+  }, [materialFormData.itemName, materialFormData.itemGroup, isEditingMaterial, showAddMaterialModal]);
+
   const handleViewOrder = async (order) => {
     try {
       setReviewLoading(true);
@@ -505,7 +517,6 @@ const DesignOrders = () => {
       
       Swal.fire('Success', `Material ${isEditingMaterial ? 'updated' : 'created'} successfully`, 'success');
       fetchItemsList(materialFormData.drawingNo);
-      const nextCode = !isEditingMaterial ? await fetchNextItemCode() : '';
       setTargetOrderItemId(null);
       setIsEditingMaterial(false);
       setEditingMaterialId(null);
@@ -515,7 +526,7 @@ const DesignOrders = () => {
         handleViewDetails(selectedOrder);
       }
       setMaterialFormData({
-        itemCode: isEditingMaterial ? materialFormData.itemCode : (nextCode || ''),
+        itemCode: '',
         itemName: '',
         itemGroup: '',
         defaultUom: 'Nos',
@@ -535,10 +546,10 @@ const DesignOrders = () => {
     }
   };
 
-  const fetchNextItemCode = async () => {
+  const fetchNextItemCode = async (itemName = '', itemGroup = '') => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/stock/items/next-code`, {
+      const response = await fetch(`${API_BASE}/stock/items/next-code?itemName=${encodeURIComponent(itemName)}&itemGroup=${encodeURIComponent(itemGroup)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -552,16 +563,11 @@ const DesignOrders = () => {
   };
 
   const openAddMaterialModal = async (item = null) => {
-    let nextCode = '';
-    if (!item || !item.item_code) {
-      nextCode = await fetchNextItemCode();
-    }
-
     if (item) {
       setTargetOrderItemId(item.item_id || item.id || null);
       setMaterialFormData({
-        itemCode: item.item_code || nextCode || '',
-        itemName: item.description || item.itemName || '',
+        itemCode: '',
+        itemName: '',
         itemGroup: '',
         defaultUom: item.unit || 'Nos',
         valuationRate: 0,
@@ -576,7 +582,7 @@ const DesignOrders = () => {
     } else {
       setTargetOrderItemId(null);
       setMaterialFormData({
-        itemCode: nextCode,
+        itemCode: '',
         itemName: '',
         itemGroup: '',
         defaultUom: 'Nos',
@@ -639,9 +645,8 @@ const DesignOrders = () => {
   };
 
   const handleClearMaterialForm = async () => {
-    const nextCode = await fetchNextItemCode();
     setMaterialFormData({
-      itemCode: nextCode || '',
+      itemCode: '',
       itemName: '',
       itemGroup: '',
       defaultUom: 'Nos',
@@ -1633,7 +1638,7 @@ const DesignOrders = () => {
                       <button
                         type="button"
                         onClick={async () => {
-                          const code = await fetchNextItemCode();
+                          const code = await fetchNextItemCode(materialFormData.itemName, materialFormData.itemGroup);
                           if (code) setMaterialFormData(prev => ({ ...prev, itemCode: code }));
                         }}
                         className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-bold transition-all border border-slate-200"

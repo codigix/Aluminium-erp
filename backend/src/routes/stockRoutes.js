@@ -5,7 +5,8 @@ const { authorizeByDepartment } = require('../middleware/authMiddleware');
 
 router.get('/items/next-code', async (req, res) => {
   try {
-    const itemCode = await stockService.generateItemCode();
+    const { itemName, itemGroup } = req.query;
+    const itemCode = await stockService.generateItemCode(itemName, itemGroup);
     res.json({ itemCode });
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });

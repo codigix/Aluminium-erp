@@ -463,19 +463,46 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
   }
 };
 
-const generateItemCode = async () => {
-  const [result] = await pool.query(
-    'SELECT item_code FROM stock_balance WHERE item_code LIKE "ITM-%" ORDER BY item_code DESC LIMIT 1'
-  );
+const generateItemCode = async (itemName, itemGroup) => {
+  let prefix = 'ITM';
+  const group = (itemGroup || '').toUpperCase();
   
-  if (result.length === 0) {
-    return 'ITM-0001';
+  if (group === 'FINISHED GOODS' || group === 'FG') {
+    prefix = 'FG';
+  } else if (group === 'RAW MATERIAL' || group === 'RM') {
+    prefix = 'RM';
+  } else if (group === 'SEMI FINISHED GOODS' || group === 'SFG') {
+    prefix = 'SFG';
+  } else if (group === 'SUB ASSEMBLY' || group === 'SA') {
+    prefix = 'SA';
+  } else if (group === 'ASSEMBLY' || group === 'ASSY') {
+    prefix = 'ASSY';
+  } else if (group) {
+    prefix = group.substring(0, 3).toUpperCase();
   }
 
-  const lastCode = result[0].item_code;
-  const currentNumber = parseInt(lastCode.split('-')[1]);
-  const nextNumber = currentNumber + 1;
-  return `ITM-${String(nextNumber).padStart(4, '0')}`;
+  // Clean item name for inclusion in code (alphanumeric only, max 10 chars)
+  const cleanName = itemName ? itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 10).toUpperCase() : 'ITEM';
+  const baseCode = `${prefix}-${cleanName}`;
+
+  // Find the highest sequence number for this base code
+  const [result] = await pool.query(
+    'SELECT item_code FROM stock_balance WHERE item_code LIKE ? ORDER BY item_code DESC LIMIT 1',
+    [`${baseCode}-%`]
+  );
+  
+  let nextNumber = 1;
+  if (result.length > 0) {
+    const lastCode = result[0].item_code;
+    const parts = lastCode.split('-');
+    const lastNumStr = parts[parts.length - 1];
+    const lastNumber = parseInt(lastNumStr);
+    if (!isNaN(lastNumber)) {
+      nextNumber = lastNumber + 1;
+    }
+  }
+
+  return `${baseCode}-${String(nextNumber).padStart(4, '0')}`;
 };
 
 const createItem = async (itemData) => {
@@ -484,8 +511,8 @@ const createItem = async (itemData) => {
     await connection.beginTransaction();
 
     let itemCode = itemData.itemCode;
-    if (!itemCode || itemCode.toLowerCase() === 'auto-generated') {
-      itemCode = await generateItemCode();
+    if (!itemCode || itemCode.toLowerCase() === 'auto-generated' || itemCode === '') {
+      itemCode = await generateItemCode(itemData.itemName, itemData.itemGroup);
     }
 
     const [existing] = await connection.query(
