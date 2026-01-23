@@ -120,6 +120,15 @@ const getApprovedBOMs = async (req, res, next) => {
   }
 };
 
+const deleteBOM = async (req, res, next) => {
+  try {
+    await bomService.deleteBOM(req.params.itemId);
+    res.json({ message: 'BOM deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getItemMaterials,
   addItemMaterial,
@@ -133,5 +142,6 @@ module.exports = {
   deleteScrap,
   getBOMBySalesOrder,
   getApprovedBOMs,
-  createBOMRequest
+  createBOMRequest,
+  deleteBOM
 };

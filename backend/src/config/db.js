@@ -124,7 +124,8 @@ const ensurePurchaseOrderItemColumns = async () => {
       { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
-      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' }
+      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
+      { name: 'drawing_id', definition: 'INT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -158,7 +159,8 @@ const ensureQuotationItemColumns = async () => {
     const requiredColumns = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
-      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' }
+      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
+      { name: 'drawing_id', definition: 'INT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -262,7 +264,8 @@ const ensurePoMaterialRequestColumns = async () => {
       { name: 'accepted_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
-      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' }
+      { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
+      { name: 'drawing_id', definition: 'INT NULL' }
     ];
 
     const missingItemCols = requiredItemCols.filter(c => !existingItemCols.has(c.name));
@@ -327,6 +330,7 @@ const ensureStockColumns = async () => {
       { name: 'weight_per_unit', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'weight_uom', definition: 'VARCHAR(20) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
+      { name: 'drawing_id', definition: 'INT NULL' },
       { name: 'revision', definition: 'VARCHAR(50) NULL' },
       { name: 'material_grade', definition: 'VARCHAR(100) NULL' },
       { name: 'unit', definition: 'VARCHAR(20) DEFAULT "Nos"' }
@@ -613,6 +617,7 @@ const ensureSalesOrderItemColumns = async () => {
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
+      { name: 'drawing_id', definition: 'INT NULL' },
       { name: 'revision_no', definition: 'VARCHAR(50) NULL' },
       { name: 'drawing_pdf', definition: 'VARCHAR(500) NULL' },
       { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },

@@ -111,20 +111,53 @@ const BOMCreation = () => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
   };
 
+  const handleDeleteBOM = async (itemId) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: "You want to delete this BOM? This action cannot be undone.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/bom/items/${itemId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to delete BOM');
+
+        Swal.fire('Deleted!', 'BOM has been deleted.', 'success');
+        fetchOrders();
+      }
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
+    }
+  };
+
   const totalDrawingsCount = orders.reduce((acc, group) => {
     const items = clientData[group.id]?.items || [];
     const uniqueDrawings = new Set(items.map(i => i.drawing_no || 'N/A'));
-    return acc + (uniqueDrawings.has('N/A') && items.filter(i => !i.drawing_no).length === 0 ? uniqueDrawings.size - 1 : uniqueDrawings.size);
+    return acc + uniqueDrawings.size;
   }, 0);
 
-  const readyPOsCount = orders.filter(group => {
-    const items = clientData[group.id]?.items || [];
-    return items.length > 0 && items.every(item => item.has_bom);
-  }).length;
-
   const totalItems = orders.reduce((acc, group) => acc + (clientData[group.id]?.items || []).length, 0);
-  const completedItems = orders.reduce((acc, group) => acc + (clientData[group.id]?.items || []).filter(i => i.has_bom).length, 0);
-  const completionPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+  const completedItemsCount = orders.reduce((acc, group) => acc + (clientData[group.id]?.items || []).filter(i => i.has_bom).length, 0);
+  const completionPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0;
+
+  const totalPageCost = orders.reduce((acc, group) => {
+    const items = clientData[group.id]?.items || [];
+    const groupCost = items.reduce((sum, item) => {
+      const itemQty = (item.quantity || item.total_quantity || 0);
+      return sum + (parseFloat(item.bom_cost || 0) * itemQty);
+    }, 0);
+    return acc + groupCost;
+  }, 0);
 
   return (
     <div className="bg-slate-50 min-h-screen">
@@ -182,8 +215,8 @@ const BOMCreation = () => {
           </div>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Ready for Submission</div>
-          <div className="text-xl font-black text-indigo-600">{readyPOsCount} POs</div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Total BOM Value</div>
+          <div className="text-xl font-black text-indigo-600">₹{totalPageCost.toFixed(2)}</div>
         </div>
       </div>
 
@@ -201,18 +234,40 @@ const BOMCreation = () => {
             const clientLoading = clientData[group.id]?.loading;
 
             const drawingGroups = items.reduce((acc, item) => {
-              const dwg = item.drawing_no || 'N/A';
-              if (!acc[dwg]) acc[dwg] = [];
-              acc[dwg].push(item);
+              const dwgNo = item.drawing_no || 'N/A';
+              const dwgId = item.drawing_id || 'no-id';
+              const key = dwgNo === 'N/A' ? `${dwgId}_${dwgNo}` : dwgNo; 
+              
+              if (!acc[key]) acc[key] = [];
+              
+              // Find existing item with same item_code in this drawing group
+              let existing = acc[key].find(i => i.item_code === item.item_code);
+              
+              if (existing) {
+                // If we found a duplicate, aggregate the status
+                // If ANY item has a BOM, the whole group (for this drawing/item_code) should show as completed
+                if (item.has_bom) {
+                  existing.has_bom = true;
+                  existing.bom_cost = item.bom_cost; // Update with the cost from the created BOM
+                  existing.id = item.id; // Link to the one that actually has the BOM
+                }
+                existing.total_quantity = (existing.total_quantity || existing.quantity || 0) + (item.quantity || 0);
+              } else {
+                acc[key].push({ ...item, total_quantity: item.quantity });
+              }
               return acc;
             }, {});
 
             const totalDrawings = Object.keys(drawingGroups).length;
             const completedDrawings = Object.values(drawingGroups).filter(items => items.every(i => i.has_bom)).length;
 
+            const poTotalCost = items.reduce((sum, item) => {
+              const itemQty = (item.quantity || item.total_quantity || 0);
+              return sum + (parseFloat(item.bom_cost || 0) * itemQty);
+            }, 0);
+
             return (
               <Card key={group.id} className="border-slate-200 shadow-sm overflow-hidden mb-4">
-                {/* Level 1: Client Accordion Header */}
                 <div 
                   className={`p-4 cursor-pointer hover:bg-slate-50 transition-all flex items-center justify-between ${isExpanded ? 'bg-slate-50 border-b border-slate-200' : ''}`}
                   onClick={() => toggleClient(group.id)}
@@ -237,6 +292,12 @@ const BOMCreation = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-6">
+                    {poTotalCost > 0 && (
+                      <div className="text-right">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Est. Cost</p>
+                        <p className="text-xs font-bold text-indigo-600">₹{poTotalCost.toFixed(2)}</p>
+                      </div>
+                    )}
                     <div className="text-right">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Drawing Coverage</p>
                       <p className="text-xs font-bold text-slate-700">{completedDrawings} / {totalDrawings} Drawings</p>
@@ -245,22 +306,28 @@ const BOMCreation = () => {
                   </div>
                 </div>
 
-                {/* Level 1 Body: Drawing List */}
                 {isExpanded && (
                   <div className="p-4 bg-white space-y-4">
                     {clientLoading ? (
                       <div className="p-8 text-center text-slate-400">Loading drawings...</div>
-                    ) : Object.entries(drawingGroups).map(([dwg, drawingItems]) => {
-                      const dwgKey = `${group.id}_${dwg}`;
+                    ) : Object.entries(drawingGroups).map(([key, drawingItems]) => {
+                      const dwg = drawingItems[0].drawing_no || 'N/A';
+                      const dwgKey = `${group.id}_${key}`;
                       const isDwgExpanded = expandedDrawings[dwgKey];
-                      const fgItem = drawingItems.find(i => (i.material_type || '').toLowerCase().includes('finished')) || drawingItems[0];
-                      const subAssemblies = drawingItems.filter(i => !(i.material_type || '').toLowerCase().includes('finished'));
-                      const fgBOMs = drawingItems.filter(i => (i.material_type || '').toLowerCase().includes('finished'));
+                      
+                      const completedItems = drawingItems.filter(i => i.has_bom);
+                      const pendingItems = drawingItems.filter(i => !i.has_bom);
+                      
+                      const fgItem = drawingItems.find(i => (i.item_group || i.material_type || '').toLowerCase().includes('fg') || (i.item_group || i.material_type || '').toLowerCase().includes('finished')) || drawingItems[0];
                       const isDwgCompleted = drawingItems.every(i => i.has_bom);
+
+                      const totalDwgCost = drawingItems.reduce((sum, item) => {
+                        const itemQty = (item.quantity || item.total_quantity || 0);
+                        return sum + (parseFloat(item.bom_cost || 0) * itemQty);
+                      }, 0);
 
                       return (
                         <div key={dwg} className="border border-slate-100 rounded-xl overflow-hidden shadow-sm bg-slate-50/30">
-                          {/* Level 2: Drawing Accordion Header */}
                           <div 
                             className={`p-4 cursor-pointer hover:bg-slate-100/50 transition-all flex items-center justify-between ${isDwgExpanded ? 'bg-slate-100/50 border-b border-slate-200' : ''}`}
                             onClick={() => toggleDrawing(dwgKey)}
@@ -288,7 +355,7 @@ const BOMCreation = () => {
                                 </div>
                                 <div>
                                   <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Order Qty</div>
-                                  <div className="text-sm font-bold text-slate-900">{fgItem.quantity} {fgItem.unit}</div>
+                                  <div className="text-sm font-bold text-slate-900">{(fgItem.quantity || fgItem.total_quantity || 0)} {fgItem.unit}</div>
                                 </div>
                               </div>
                             </div>
@@ -301,89 +368,139 @@ const BOMCreation = () => {
                             </div>
                           </div>
 
-                          {/* Level 2 Body: BOM Details */}
                           {isDwgExpanded && (
-                            <div className="p-4">
-                              {/* Summary info inside drawing */}
-                              <div className="flex gap-8 mb-4 px-2">
+                            <div className="p-4 space-y-6">
+                              <div className="flex gap-8 mb-4 px-2 bg-slate-100/50 p-3 rounded-xl border border-slate-100">
                                 <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sub-Assemblies :</span>
-                                  <span className="ml-2 text-xs font-bold text-slate-700">{subAssemblies.length}</span>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">BOMs Created :</span>
+                                  <span className="ml-2 text-xs font-bold text-slate-700">{completedItems.length}</span>
                                 </div>
                                 <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Final FG BOM :</span>
-                                  <span className="ml-2 text-xs font-bold text-slate-700">{fgBOMs.length}</span>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pending Items :</span>
+                                  <span className="ml-2 text-xs font-bold text-slate-700">{pendingItems.length}</span>
                                 </div>
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Overall Status :</span>
-                                  <span className={`ml-2 text-xs font-bold ${isDwgCompleted ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                    {isDwgCompleted ? 'ALL COMPLETED' : 'PENDING'}
-                                  </span>
-                                </div>
+                                {totalDwgCost > 0 && (
+                                  <div>
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Drawing Value :</span>
+                                    <span className="ml-2 text-sm font-black text-indigo-600">₹{totalDwgCost.toFixed(2)}</span>
+                                  </div>
+                                )}
                               </div>
 
-                              {/* BOM Details Table */}
-                              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                                <table className="min-w-full divide-y divide-slate-200">
-                                  <thead className="bg-slate-50">
-                                    <tr>
-                                      <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">BOM Type</th>
-                                      <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Item Code</th>
-                                      <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Item Name</th>
-                                      <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cost / Unit</th>
-                                      <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Cost</th>
-                                      <th className="px-6 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-100">
-                                    {subAssemblies.length > 0 && (
-                                      <>
-                                        <tr className="bg-slate-50/30">
-                                          <td colSpan="7" className="px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sub-Assemblies</td>
-                                        </tr>
-                                        {subAssemblies.map(item => (
-                                          <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-6 py-4 text-[11px] font-medium text-slate-500 uppercase">Sub-Assembly</td>
-                                            <td className="px-6 py-4 text-[11px] font-bold text-indigo-600">{item.item_code}</td>
-                                            <td className="px-6 py-4 text-[11px] text-slate-700 font-medium">{item.description}</td>
-                                            <td className="px-6 py-4 text-[11px] font-bold text-slate-900 text-right">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</td>
-                                            <td className="px-6 py-4 text-[11px] font-bold text-indigo-600 text-right">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</td>
-                                            <td className="px-6 py-4 text-center">
-                                              {item.has_bom ? (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600">Done</span>
-                                              ) : (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600">Pending</span>
-                                              )}
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </>
-                                    )}
-                                    {fgBOMs.length > 0 && (
-                                      <>
-                                        <tr className="bg-slate-50/30 border-t border-slate-100">
-                                          <td colSpan="6" className="px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Final FG</td>
-                                        </tr>
-                                        {fgBOMs.map(item => (
-                                          <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-6 py-4 text-[11px] font-medium text-slate-500 uppercase">Final FG</td>
-                                            <td className="px-6 py-4 text-[11px] font-bold text-indigo-600">{item.item_code}</td>
-                                            <td className="px-6 py-4 text-[11px] text-slate-700 font-medium">{item.description}</td>
-                                            <td className="px-6 py-4 text-[11px] font-bold text-slate-900 text-right">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</td>
-                                            <td className="px-6 py-4 text-[11px] font-bold text-indigo-600 text-right">₹{(parseFloat(item.bom_cost || 0) * parseFloat(fgItem.quantity)).toFixed(2)}</td>
-                                            <td className="px-6 py-4 text-center">
-                                              {item.has_bom ? (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600">Done</span>
-                                              ) : (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600">Pending</span>
-                                              )}
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </>
-                                    )}
-                                  </tbody>
-                                </table>
+                              <div className="flex flex-col gap-6">
+                                {/* Created BOMs Section */}
+                                {completedItems.length > 0 && (
+                                  <div className="space-y-3">
+                                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Created BOMs</h3>
+                                    <div className="flex flex-col gap-3">
+                                      {completedItems.map(item => (
+                                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-indigo-200 transition-all">
+                                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                            <div className="flex items-center gap-4">
+                                              <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                </svg>
+                                              </div>
+                                              <div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-xs font-bold text-slate-900">{item.item_code}</span>
+                                                  <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-bold uppercase">
+                                                    {item.item_group || item.material_type || 'Assembly'}
+                                                  </span>
+                                                </div>
+                                                <div className="text-[11px] text-slate-500 mt-0.5">{item.description}</div>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-8">
+                                              <div className="text-right pr-8 border-r border-slate-100">
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">BOM Cost</p>
+                                                <p className="text-sm font-black text-indigo-600">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</p>
+                                              </div>
+                                              <div className="text-right">
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Assembly</p>
+                                                <p className="text-xs font-bold text-emerald-600">COMPLETED</p>
+                                              </div>
+                                              <div className="text-right border-l border-slate-100 pl-8">
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Finished Good</p>
+                                                <p className="text-xs font-bold text-emerald-600">COMPLETED</p>
+                                              </div>
+                                              <div className="flex gap-2 ml-4">
+                                                <Link 
+                                                  to={`/bom-form/${item.id}`}
+                                                  className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                  title="Edit BOM"
+                                                >
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                                  </svg>
+                                                </Link>
+                                                <button 
+                                                  onClick={() => handleDeleteBOM(item.id)}
+                                                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                                  title="Delete BOM"
+                                                >
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                  </svg>
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Pending Items Section */}
+                                {pendingItems.length > 0 && (
+                                  <div className="space-y-3">
+                                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Pending BOM Creation</h3>
+                                    <div className="flex flex-col gap-3">
+                                      {pendingItems.map(item => (
+                                        <div key={item.id} className="bg-white border border-slate-200 border-dashed rounded-xl p-4 shadow-sm hover:border-amber-300 transition-all flex justify-between items-center">
+                                          <div className="flex items-center gap-4">
+                                            <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
+                                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                              </svg>
+                                            </div>
+                                            <div>
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-slate-900">{item.item_code}</span>
+                                                <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-600 rounded-full font-bold uppercase">
+                                                  {item.item_group || 'Assembly'}
+                                                </span>
+                                              </div>
+                                              <div className="text-[11px] text-slate-500 mt-0.5">{item.description}</div>
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-8">
+                                            <div className="text-right">
+                                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Assembly</p>
+                                              <p className="text-xs font-bold text-amber-600">PENDING</p>
+                                            </div>
+                                            <div className="text-right border-l border-slate-100 pl-8">
+                                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Finished Good</p>
+                                              <p className="text-xs font-bold text-amber-600 uppercase">Pending</p>
+                                            </div>
+                                            <div className="ml-4">
+                                              <Link 
+                                                to={`/bom-form/${item.id}`}
+                                                className="px-6 py-2 bg-white border border-indigo-600 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                                              >
+                                                + Create BOM
+                                              </Link>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}

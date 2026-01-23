@@ -127,6 +127,7 @@ const getStockBalance = async (drawingNo = null) => {
       weight_per_unit,
       weight_uom,
       drawing_no,
+      drawing_id,
       revision,
       material_grade,
       last_updated
@@ -171,6 +172,7 @@ const getStockBalance = async (drawingNo = null) => {
       weight_per_unit: balance.weight_per_unit,
       weight_uom: balance.weight_uom,
       drawing_no: balance.drawing_no,
+      drawing_id: balance.drawing_id,
       revision: balance.revision,
       material_grade: balance.material_grade,
       last_updated: balance.last_updated
@@ -182,7 +184,7 @@ const getStockBalance = async (drawingNo = null) => {
 
 const getStockBalanceByItem = async (itemCode) => {
   const [balance] = await pool.query(`
-    SELECT id, item_code, item_description, material_name, material_type, unit, last_updated FROM stock_balance WHERE item_code = ?
+    SELECT id, item_code, item_description, material_name, material_type, unit, drawing_no, drawing_id, last_updated FROM stock_balance WHERE item_code = ?
   `, [itemCode]);
 
   if (balance.length === 0) {
@@ -203,6 +205,8 @@ const getStockBalanceByItem = async (itemCode) => {
     item_description: balance[0].item_description,
     material_name: balance[0].material_name,
     material_type: balance[0].material_type,
+    drawing_no: balance[0].drawing_no,
+    drawing_id: balance[0].drawing_id,
     po_qty: poQty,
     received_qty: details.received_qty,
     accepted_qty: details.accepted_qty,
@@ -287,13 +291,15 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
     console.log(`[Stock] Creating entry for QC:${qcId}, GRN:${grnId}, Item:${itemCode}, Qty:${passQty}`);
 
     const [poItemRows] = await useConnection.query(
-      `SELECT material_name, material_type FROM purchase_order_items poi
+      `SELECT material_name, material_type, drawing_no, drawing_id FROM purchase_order_items poi
        JOIN grn_items gi ON poi.id = gi.po_item_id
        WHERE gi.id = ?`,
       [grnItemId]
     );
     const material_name = poItemRows[0]?.material_name || null;
     const material_type = poItemRows[0]?.material_type || null;
+    const drawing_no = poItemRows[0]?.drawing_no || null;
+    const drawing_id = poItemRows[0]?.drawing_id || null;
 
     const [existing] = await useConnection.query(
       `SELECT id FROM stock_ledger 
@@ -326,14 +332,14 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
       await useConnection.execute(
         `INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemCode, material_name, material_type, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
+        (item_code, material_name, material_type, drawing_no, drawing_id, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemCode, material_name, material_type, drawing_no, drawing_id, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
       );
 
       await useConnection.execute(
-        `UPDATE stock_balance SET current_balance = ?, material_name = ?, material_type = ?, last_updated = CURRENT_TIMESTAMP WHERE item_code = ?`,
-        [newBalance, material_name, material_type, itemCode]
+        `UPDATE stock_balance SET current_balance = ?, material_name = ?, material_type = ?, drawing_no = ?, drawing_id = ?, last_updated = CURRENT_TIMESTAMP WHERE item_code = ?`,
+        [newBalance, material_name, material_type, drawing_no, drawing_id, itemCode]
       );
       console.log(`[Stock] Created ledger entry and updated balance`);
     } else {
@@ -342,15 +348,15 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
       await useConnection.execute(
         `INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemCode, material_name, material_type, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
+        (item_code, material_name, material_type, drawing_no, drawing_id, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemCode, material_name, material_type, drawing_no, drawing_id, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
       );
 
       await useConnection.execute(
-        `INSERT INTO stock_balance (item_code, material_name, material_type, current_balance) VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE current_balance = VALUES(current_balance), material_name = VALUES(material_name), material_type = VALUES(material_type), last_updated = CURRENT_TIMESTAMP`,
-        [itemCode, material_name, material_type, newBalance]
+        `INSERT INTO stock_balance (item_code, material_name, material_type, drawing_no, drawing_id, current_balance) VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE current_balance = VALUES(current_balance), material_name = VALUES(material_name), material_type = VALUES(material_type), drawing_no = VALUES(drawing_no), drawing_id = VALUES(drawing_id), last_updated = CURRENT_TIMESTAMP`,
+        [itemCode, material_name, material_type, drawing_no, drawing_id, newBalance]
       );
       console.log(`[Stock] Created new balance and ledger entry`);
     }

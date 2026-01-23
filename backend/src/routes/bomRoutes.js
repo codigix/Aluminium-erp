@@ -18,4 +18,6 @@ router.delete('/scrap/:id', authenticate, bomController.deleteScrap);
 router.get('/sales-order/:salesOrderId', authenticate, bomController.getBOMBySalesOrder);
 router.post('/createRequest', authenticate, bomController.createBOMRequest);
 
+router.delete('/items/:itemId', authenticate, bomController.deleteBOM);
+
 module.exports = router;

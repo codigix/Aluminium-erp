@@ -764,6 +764,9 @@ const DesignOrders = () => {
   });
 
   const groupedActive = filteredOrders.reduce((acc, order) => {
+    // Filter out rejected items from "Design Tasks in Progress"
+    if (order.item_status === 'REJECTED') return acc;
+
     const poKey = order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : 'NO-PO');
     const companyKey = order.company_name || 'Unknown';
     const groupKey = `${companyKey}_${poKey}`;
@@ -1187,8 +1190,24 @@ const DesignOrders = () => {
                                 <span className="text-slate-400 italic">Pending</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">{order.drawing_no || '—'}</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-slate-500 italic">{order.description || 'No description'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">
+                              <div className="flex items-center gap-2">
+                                {order.drawing_no || '—'}
+                                {order.item_status === 'REJECTED' && (
+                                  <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black animate-pulse">REJECTED</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-slate-500 italic">
+                              <div className="flex flex-col">
+                                <span>{order.description || 'No description'}</span>
+                                {order.item_status === 'REJECTED' && order.item_rejection_reason && (
+                                  <span className="text-[9px] text-red-500 font-bold mt-1">
+                                    Reason: {order.item_rejection_reason}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-4 py-3 whitespace-nowrap text-center font-bold text-slate-900">{order.total_quantity || 0}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <select
