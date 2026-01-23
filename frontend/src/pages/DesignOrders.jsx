@@ -318,12 +318,17 @@ const DesignOrders = () => {
     if (!orderIds || orderIds.length === 0) return;
 
     const result = await Swal.fire({
-      title: 'Accept & Send to Quotation',
-      text: `Are you sure you want to accept all ${orderIds.length} items and send them to the Client Quotation page?`,
-      icon: 'question',
+      title: '<span class="text-lg font-semibold">Accept & Send to Quotation</span>',
+      html: `<span class="text-sm text-gray-600">Are you sure you want to accept all ${orderIds.length} items and send them to the Client Quotation page?</span>`,
       showCancelButton: true,
       confirmButtonColor: '#10b981',
-      confirmButtonText: 'Yes, Accept All'
+      confirmButtonText: 'Yes, Accept All',
+      width: '400px',
+      padding: '1rem',
+      customClass: {
+        confirmButton: 'text-sm px-4 py-2',
+        cancelButton: 'text-sm px-4 py-2'
+      }
     });
 
     if (result.isConfirmed) {
