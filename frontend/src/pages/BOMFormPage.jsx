@@ -582,33 +582,51 @@ const BOMFormPage = () => {
                   <label className="text-xs text-slate-500">Product Name *</label>
                   <SearchableSelect
                     placeholder="Select Product"
-                    options={approvedDrawings
-                      .filter(item => {
-                        if (drawingFilter) {
-                          return item.drawing_no === drawingFilter;
-                        }
-                        return true;
-                      })
-                      .map(item => ({
+                    options={[
+                      ...approvedDrawings.map(item => ({
                         label: item.material_name || item.description,
-                        value: item.id,
+                        value: `order_${item.id}`,
+                        id: item.id,
+                        source: 'order',
+                        drawing_no: item.drawing_no,
                         subLabel: `[${item.item_group || 'Item'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-                      }))}
-                    value={selectedItem?.id}
+                      })),
+                      ...stockItems.map(item => ({
+                        label: item.material_name || item.item_description,
+                        value: `stock_${item.id}`,
+                        id: item.id,
+                        source: 'stock',
+                        drawing_no: item.drawing_no,
+                        subLabel: `[${item.material_type || 'Stock'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                      }))
+                    ].filter(opt => {
+                      if (drawingFilter) {
+                        return opt.drawing_no === drawingFilter;
+                      }
+                      return true;
+                    })}
+                    value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
                     disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => {
-                      const item = approvedDrawings.find(i => String(i.id) === String(e.target.value));
+                      const [source, id] = e.target.value.split('_');
+                      let item;
+                      if (source === 'order') {
+                        item = approvedDrawings.find(i => String(i.id) === String(id));
+                      } else {
+                        item = stockItems.find(i => String(i.id) === String(id));
+                      }
                       
                       if (item) {
-                        setSelectedItem(item);
+                        const enrichedItem = { ...item, source };
+                        setSelectedItem(enrichedItem);
                         setProductForm(prev => ({
                           ...prev,
-                          description: item.material_name || item.description,
+                          description: item.material_name || item.description || item.item_description,
                           itemCode: item.item_code,
-                          itemGroup: item.item_group || getItemGroupFromMaterialType(item.material_type),
+                          itemGroup: item.item_group || item.material_type || getItemGroupFromMaterialType(item.material_type),
                           drawingNo: item.drawing_no || '',
                           drawing_id: item.drawing_id || '',
-                          uom: item.unit || 'Kg',
+                          uom: item.unit || item.uom || 'Kg',
                           revision: item.revision_no || item.revision || '1',
                           quantity: item.quantity || 1
                         }));
@@ -621,24 +639,41 @@ const BOMFormPage = () => {
                   <label className="text-xs text-slate-500">Item Code *</label>
                   <SearchableSelect
                     placeholder="Select Item Code"
-                    options={approvedDrawings
-                      .filter(item => {
-                        if (drawingFilter) {
-                          return item.drawing_no === drawingFilter;
-                        }
-                        return true;
-                      })
-                      .map(item => ({
+                    options={[
+                      ...approvedDrawings.map(item => ({
                         label: item.item_code,
-                        value: item.id,
+                        value: `order_${item.id}`,
+                        id: item.id,
+                        source: 'order',
+                        drawing_no: item.drawing_no,
                         subLabel: `${item.material_name || item.description} [${item.item_group || 'Item'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-                      }))}
-                    value={selectedItem?.id}
+                      })),
+                      ...stockItems.map(item => ({
+                        label: item.item_code,
+                        value: `stock_${item.id}`,
+                        id: item.id,
+                        source: 'stock',
+                        drawing_no: item.drawing_no,
+                        subLabel: `${item.material_name || item.item_description} [${item.material_type || 'Stock'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                      }))
+                    ].filter(opt => {
+                      if (drawingFilter) {
+                        return opt.drawing_no === drawingFilter;
+                      }
+                      return true;
+                    })}
+                    value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
                     disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => {
-                      const item = approvedDrawings.find(i => String(i.id) === String(e.target.value));
+                      const [source, id] = e.target.value.split('_');
+                      let item;
+                      if (source === 'order') {
+                        item = approvedDrawings.find(i => String(i.id) === String(id));
+                      } else {
+                        item = stockItems.find(i => String(i.id) === String(id));
+                      }
                       if (item) {
-                        setSelectedItem(item);
+                        setSelectedItem({ ...item, source });
                       }
                     }}
                     subLabelField="subLabel"
