@@ -12,9 +12,12 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
 
   useEffect(() => {
     if (!isOpen) {
-      setSearchTerm(selectedOption ? selectedOption[labelField] : (value || ''));
+      const newVal = selectedOption ? selectedOption[labelField] : (value || '');
+      if (searchTerm !== newVal) {
+        setSearchTerm(newVal);
+      }
     }
-  }, [value, selectedOption, isOpen, labelField]);
+  }, [value, selectedOption, isOpen, labelField, searchTerm]);
 
   const filteredOptions = options.filter(opt => {
     const search = String(searchTerm || '').toLowerCase();
@@ -556,13 +559,76 @@ const BOMFormPage = () => {
                   <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Quick Filter by Drawing</label>
                   <SearchableSelect
                     placeholder="Search Drawing No..."
-                    options={[...new Set(approvedDrawings
-                      .map(i => i.drawing_no)
-                      .filter(d => d && d !== 'N/A')
+                    options={[...new Set([
+                      ...approvedDrawings.map(i => i.drawing_no),
+                      ...stockItems.map(i => i.drawing_no)
+                    ].filter(d => d && d !== 'N/A')
                     )].sort().map(d => ({ label: d, value: d }))}
                     value={drawingFilter}
-                    disabled={!!itemId && itemId !== 'bom-form'}
-                    onChange={(e) => setDrawingFilter(e.target.value)}
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      setDrawingFilter(val);
+                      if (val) {
+                        // Find latest item from approved drawings first
+                        let item = approvedDrawings.find(i => i.drawing_no === val);
+                        let source = 'order';
+                        if (!item) {
+                          item = stockItems.find(i => i.drawing_no === val);
+                          source = 'stock';
+                        }
+                        
+                        if (item) {
+                          // Populate product form fields
+                          setProductForm(prev => ({
+                            ...prev,
+                            description: item.material_name || item.description || item.item_description,
+                            itemCode: item.item_code,
+                            itemGroup: item.item_group || item.material_type || getItemGroupFromMaterialType(item.material_type),
+                            drawingNo: item.drawing_no || '',
+                            drawing_id: item.drawing_id || '',
+                            uom: item.unit || item.uom || 'Kg',
+                            revision: item.revision_no || item.revision || '1',
+                            quantity: item.quantity || 1
+                          }));
+
+                          // If we are on a new BOM form, only link if it's a valid order item
+                          if (!itemId || itemId === 'bom-form') {
+                            if (source === 'order') {
+                              setSelectedItem({ ...item, source });
+                            } else {
+                              // If it's a stock item, we just use it as a metadata template
+                              // The user MUST still select a target Sales Order Item from the dropdowns below
+                              setSelectedItem(null);
+                            }
+                          }
+
+                          // Fetch and populate BOM data from this item (Template)
+                          try {
+                            const token = localStorage.getItem('authToken');
+                            const response = await fetch(`${API_BASE}/bom/items/${item.id}`, {
+                              headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (response.ok) {
+                              const data = await response.json();
+                              if (data.materials?.length || data.components?.length || data.operations?.length) {
+                                setBomData(data);
+                                Swal.fire({
+                                  title: 'BOM Details Populated',
+                                  text: `Imported from Drawing ${val}`,
+                                  icon: 'success',
+                                  toast: true,
+                                  position: 'top-end',
+                                  timer: 3000,
+                                  showConfirmButton: false
+                                });
+                              }
+                            }
+                          } catch (err) {
+                            console.error('Drawing Template Fetch Error:', err);
+                          }
+                        }
+                      }
+                    }}
                   />
                   <p className="text-[9px] text-slate-400">Filters Product Name and Item Code below</p>
                 </div>
@@ -590,14 +656,6 @@ const BOMFormPage = () => {
                         source: 'order',
                         drawing_no: item.drawing_no,
                         subLabel: `[${item.item_group || 'Item'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-                      })),
-                      ...stockItems.map(item => ({
-                        label: item.material_name || item.item_description,
-                        value: `stock_${item.id}`,
-                        id: item.id,
-                        source: 'stock',
-                        drawing_no: item.drawing_no,
-                        subLabel: `[${item.material_type || 'Stock'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
                       }))
                     ].filter(opt => {
                       if (drawingFilter) {
@@ -609,12 +667,9 @@ const BOMFormPage = () => {
                     disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => {
                       const [source, id] = e.target.value.split('_');
-                      let item;
-                      if (source === 'order') {
-                        item = approvedDrawings.find(i => String(i.id) === String(id));
-                      } else {
-                        item = stockItems.find(i => String(i.id) === String(id));
-                      }
+                      if (source !== 'order') return;
+                      
+                      const item = approvedDrawings.find(i => String(i.id) === String(id));
                       
                       if (item) {
                         const enrichedItem = { ...item, source };
@@ -647,14 +702,6 @@ const BOMFormPage = () => {
                         source: 'order',
                         drawing_no: item.drawing_no,
                         subLabel: `${item.material_name || item.description} [${item.item_group || 'Item'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-                      })),
-                      ...stockItems.map(item => ({
-                        label: item.item_code,
-                        value: `stock_${item.id}`,
-                        id: item.id,
-                        source: 'stock',
-                        drawing_no: item.drawing_no,
-                        subLabel: `${item.material_name || item.item_description} [${item.material_type || 'Stock'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
                       }))
                     ].filter(opt => {
                       if (drawingFilter) {
@@ -666,12 +713,8 @@ const BOMFormPage = () => {
                     disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => {
                       const [source, id] = e.target.value.split('_');
-                      let item;
-                      if (source === 'order') {
-                        item = approvedDrawings.find(i => String(i.id) === String(id));
-                      } else {
-                        item = stockItems.find(i => String(i.id) === String(id));
-                      }
+                      if (source !== 'order') return;
+                      const item = approvedDrawings.find(i => String(i.id) === String(id));
                       if (item) {
                         setSelectedItem({ ...item, source });
                       }
@@ -827,7 +870,7 @@ const BOMFormPage = () => {
                         setComponentForm({
                           ...componentForm,
                           componentCode: e.target.value,
-                          rate: item ? (item.valuation_rate || 0) : componentForm.rate,
+                          rate: item ? (item.valuation_rate || item.selling_rate || 0) : componentForm.rate,
                           uom: item ? (item.unit || 'Kg') : componentForm.uom
                         });
                       }}
@@ -990,7 +1033,7 @@ const BOMFormPage = () => {
                         setMaterialForm({
                           ...materialForm,
                           materialName: e.target.value,
-                          rate: item ? (item.valuation_rate || 0) : materialForm.rate,
+                          rate: item ? (item.valuation_rate || item.selling_rate || 0) : materialForm.rate,
                           uom: item ? (item.unit || 'Kg') : materialForm.uom
                         });
                       }}
@@ -1360,7 +1403,7 @@ const BOMFormPage = () => {
                           ...scrapForm,
                           itemName: e.target.value,
                           itemCode: item ? item.item_code : scrapForm.itemCode,
-                          rate: item ? (item.valuation_rate || 0) : scrapForm.rate
+                          rate: item ? (item.valuation_rate || item.selling_rate || 0) : scrapForm.rate
                         });
                       }}
                       subLabelField="subLabel"

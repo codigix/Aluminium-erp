@@ -910,6 +910,7 @@ const DesignOrders = () => {
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Client Name</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Group</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
                   <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
@@ -1034,6 +1035,15 @@ const DesignOrders = () => {
                                 )}
                               </div>
                             </td>
+                            <td className="px-4 py-2.5">
+                              {order.item_group ? (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-medium">
+                                  {order.item_group}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-[10px] italic">Not Set</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 font-bold text-indigo-600">
                               <div className="flex items-center gap-2">
                                 {order.drawing_no || '—'}
@@ -1135,6 +1145,7 @@ const DesignOrders = () => {
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Customer</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Group</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
                   <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
@@ -1145,7 +1156,7 @@ const DesignOrders = () => {
               <tbody className="bg-white divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="7" className="px-4 py-8 text-center">
+                    <td colSpan="8" className="px-4 py-8 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-xs text-slate-600 font-semibold">Loading design orders...</span>
@@ -1154,7 +1165,7 @@ const DesignOrders = () => {
                   </tr>
                 ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-4 py-8 text-center">
+                    <td colSpan="8" className="px-4 py-8 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         <p className="text-xs text-slate-500 font-semibold">No tasks match your search</p>
@@ -1224,6 +1235,15 @@ const DesignOrders = () => {
                                 <span className="text-slate-400 italic">Pending</span>
                               )}
                             </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {order.item_group ? (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-medium">
+                                  {order.item_group}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-[10px] italic">Not Set</span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">
                               <div className="flex items-center gap-2">
                                 {order.drawing_no || '—'}
@@ -1249,9 +1269,9 @@ const DesignOrders = () => {
                                 onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
                                 className={`text-xs font-semibold rounded px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${getStatusColor(order.status)}`}
                               >
-                                <option value="DRAFT">DRAFT</option>
-                                <option value="IN_DESIGN">IN_DESIGN</option>
-                                <option value="COMPLETED">COMPLETED</option>
+                                <option value="DRAFT">Draft</option>
+                                <option value="IN_DESIGN">In progress</option>
+                                <option value="COMPLETED">Completed</option>
                               </select>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-right">
@@ -1494,10 +1514,20 @@ const DesignOrders = () => {
                     {reviewDetails.map((item) => (
                       <div key={item.id} className="p-3 bg-slate-50 rounded border border-slate-200">
                         <div className="flex justify-between items-start mb-2">
-                          <div className="grid grid-cols-3 gap-3 text-sm flex-1">
+                          <div className="grid grid-cols-4 gap-3 text-sm flex-1">
                             <div>
                               <span className="text-xs text-slate-500">Drawing No</span>
                               <p className="font-semibold text-slate-900 text-xs">{item.drawing_no || '—'}</p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-slate-500">Group</span>
+                              <p className="font-semibold text-slate-900 text-xs">
+                                {item.item_group ? (
+                                  <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px]">
+                                    {item.item_group}
+                                  </span>
+                                ) : '—'}
+                              </p>
                             </div>
                             <div>
                               <span className="text-xs text-slate-500">Revision</span>
