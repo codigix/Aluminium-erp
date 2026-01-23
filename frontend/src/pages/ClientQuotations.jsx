@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -43,7 +44,7 @@ const ClientQuotations = () => {
       setGroupedByClient(grouped);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setLoading(false);
     }
@@ -160,7 +161,7 @@ const ClientQuotations = () => {
     if (!clientData) return;
 
     if (!clientData.email) {
-      Swal.fire('Error', 'Client email is required to send quotation', 'error');
+      errorToast('Client email is required to send quotation');
       return;
     }
 
@@ -176,7 +177,7 @@ const ClientQuotations = () => {
 
     const hasPrices = allItems.some(item => item.status !== 'REJECTED' && prices[item.id] && parseFloat(prices[item.id]) > 0);
     if (!hasPrices) {
-      Swal.fire('Error', 'Please enter quote prices for at least one item', 'error');
+      errorToast('Please enter quote prices for at least one item');
       return;
     }
 
@@ -244,7 +245,7 @@ const ClientQuotations = () => {
           ? 'Quotation sent to client via email with PDF attachment' 
           : 'Quotation created successfully (email pending)';
         
-        await Swal.fire('Success', successMessage, 'success');
+        successToast(successMessage);
         setExpandedClientName(null);
         setQuotePricesMap(prev => ({
           ...prev,
@@ -258,7 +259,7 @@ const ClientQuotations = () => {
           fetchSentQuotations();
         }
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setSendingClientName(null);
       }
@@ -306,7 +307,7 @@ const ClientQuotations = () => {
           }
         }
 
-        Swal.fire('Success', `Deleted ${deleteCount} approved orders`, 'success');
+        successToast(`Deleted ${deleteCount} approved orders`);
         setExpandedClientName(null);
         setQuotePricesMap(prev => ({
           ...prev,
@@ -314,7 +315,7 @@ const ClientQuotations = () => {
         }));
         fetchApprovedOrders();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       }
     }
   };

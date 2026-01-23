@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Modal, DataTable, StatusBadge, FormControl } from '../components/ui.jsx';
 import { Plus, Search, RefreshCw, Filter, FileText, Send } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { successToast, errorToast, warningToast, infoToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -109,7 +110,7 @@ const CustomerDrawing = () => {
       setDrawings(data);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'Failed to load customer drawings', 'error');
+      errorToast('Failed to load customer drawings');
     } finally {
       setLoading(false);
     }
@@ -158,7 +159,7 @@ const CustomerDrawing = () => {
       setApprovedGroupedByClient(grouped);
     } catch (error) {
       console.error('Fetch approved drawings error:', error);
-      Swal.fire('Error', 'Failed to load approved drawings', 'error');
+      errorToast('Failed to load approved drawings');
     } finally {
       setApprovedLoading(false);
     }
@@ -202,19 +203,19 @@ const CustomerDrawing = () => {
 
   const handleCreateQuotation = async () => {
     if (!selectedApprovedClient || selectedApprovedItems.length === 0) {
-      Swal.fire('Error', 'Please select a client and items', 'error');
+      errorToast('Please select a client and items');
       return;
     }
 
     const hasPrices = selectedApprovedItems.some(item => quotePrices[item.id] && quotePrices[item.id] > 0);
     if (!hasPrices) {
-      Swal.fire('Error', 'Please enter quote prices for at least one item', 'error');
+      errorToast('Please enter quote prices for at least one item');
       return;
     }
 
     const clientData = approvedGroupedByClient[selectedApprovedClient];
     if (!clientData.email) {
-      Swal.fire('Error', 'Client email address not available. Cannot create quotation.', 'error');
+      errorToast('Client email address not available. Cannot create quotation.');
       return;
     }
 
@@ -269,7 +270,7 @@ const CustomerDrawing = () => {
 
         if (!response.ok) throw new Error('Failed to create quotation');
         
-        Swal.fire('Success', 'Quotation created and sent to client', 'success');
+        successToast('Quotation created and sent to client');
         setShowApprovedDrawings(false);
         setSelectedApprovedClient(null);
         setSelectedApprovedItems([]);
@@ -278,7 +279,7 @@ const CustomerDrawing = () => {
         fetchApprovedDrawings();
       } catch (error) {
         console.error(error);
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setCreatingQuotation(false);
       }
@@ -357,7 +358,7 @@ const CustomerDrawing = () => {
       setRevisions(data);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'Failed to load revisions', 'error');
+      errorToast('Failed to load revisions');
     } finally {
       setRevisionsLoading(false);
     }
@@ -395,12 +396,12 @@ const CustomerDrawing = () => {
 
       if (!response.ok) throw new Error('Failed to update drawing');
       
-      Swal.fire('Success', 'Customer drawing updated successfully', 'success');
+      successToast('Customer drawing updated successfully');
       setShowEditModal(false);
       fetchDrawings(searchTerm);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setSaveLoading(false);
     }
@@ -507,12 +508,12 @@ const CustomerDrawing = () => {
     const isExcel = fileExt === 'XLSX' || fileExt === 'XLS';
     
     if (!drawingData.file) {
-      Swal.fire('Missing Info', 'Drawing File is mandatory', 'warning');
+      warningToast('Drawing File is mandatory');
       return null;
     }
     
     if (!isExcel && !drawingData.drawing_no) {
-      Swal.fire('Missing Info', 'Drawing Number is mandatory', 'warning');
+      warningToast('Drawing Number is mandatory');
       return null;
     }
 
@@ -571,16 +572,16 @@ const CustomerDrawing = () => {
   const handleAddDrawing = async (e) => {
     e.preventDefault();
     if (!newDrawing.client_name) {
-      return Swal.fire('Missing Info', 'Client Name is mandatory', 'warning');
+      return warningToast('Client Name is mandatory');
     }
 
     try {
       setLoading(true);
       if (uploadMode === 'bulk') {
-        if (!newDrawing.file) return Swal.fire('Missing Info', 'Excel File is mandatory', 'warning');
+        if (!newDrawing.file) return warningToast('Excel File is mandatory');
         const result = await saveSingleDrawing(newDrawing, false);
         if (result) {
-          Swal.fire('Success', result.isExcelUpload ? `${result.count} Excel drawings imported successfully` : 'Drawing added successfully', 'success');
+          successToast(result.isExcelUpload ? `${result.count} Excel drawings imported successfully` : 'Drawing added successfully');
           setNewDrawing({
             client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: ''
           });
@@ -595,17 +596,17 @@ const CustomerDrawing = () => {
         }
         
         if (successCount > 0) {
-          Swal.fire('Success', `${successCount} drawings added successfully`, 'success');
+          successToast(`${successCount} drawings added successfully`);
           setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
           setClientLocked(true);
         } else {
-          Swal.fire('Warning', 'No drawings were added. Please fill in Drawing # and select a file for at least one row.', 'warning');
+          warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
         }
       }
       fetchDrawings();
       fetchRequirements();
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setLoading(false);
     }
@@ -640,7 +641,7 @@ const CustomerDrawing = () => {
 
       if (recentDrawings.length > 0) {
         await shareDrawingsBulkAPI(recentDrawings.map(d => d.id));
-        Swal.fire('Success', `All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`, 'success');
+        successToast(`All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`);
         setLastUploadedDrawings([]);
         setShowFormModal(false);
         fetchDrawings();
@@ -648,7 +649,7 @@ const CustomerDrawing = () => {
       }
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -656,7 +657,7 @@ const CustomerDrawing = () => {
     const unsharedDrawings = groupedDrawings[clientName].filter(d => !d.status || d.status !== 'SHARED');
     
     if (unsharedDrawings.length === 0) {
-      Swal.fire('Info', 'All drawings for this client are already shared.', 'info');
+      infoToast('All drawings for this client are already shared.');
       return;
     }
 
@@ -673,11 +674,11 @@ const CustomerDrawing = () => {
       try {
         setLoading(true);
         await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.id));
-        Swal.fire('Success', `All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer as a single request`, 'success');
+        successToast(`All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer as a single request`);
         fetchDrawings();
         fetchRequirements();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setLoading(false);
       }
@@ -696,19 +697,19 @@ const CustomerDrawing = () => {
 
       if (!response.ok) throw new Error('Share failed');
       
-      Swal.fire('Success', 'Drawing saved and sent to Design Engineer for review and approval', 'success');
+      successToast('Drawing saved and sent to Design Engineer for review and approval');
       fetchDrawings();
       fetchRequirements();
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
   const handleAddAndSendToDesign = async (e) => {
     e.preventDefault();
     if (!newDrawing.client_name) {
-      return Swal.fire('Missing Info', 'Client Name is mandatory', 'warning');
+      return warningToast('Client Name is mandatory');
     }
 
     try {
@@ -732,7 +733,7 @@ const CustomerDrawing = () => {
         }
         if (successIds.length > 0) {
           await shareDrawingsBulkAPI(successIds);
-          Swal.fire('Success', `${successIds.length} drawings added and sent to Design Engineering as a single request`, 'success');
+          successToast(`${successIds.length} drawings added and sent to Design Engineering as a single request`);
           setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
           setClientLocked(true);
           setShowFormModal(false);
@@ -741,7 +742,7 @@ const CustomerDrawing = () => {
       fetchDrawings();
       fetchRequirements();
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setLoading(false);
     }
@@ -759,12 +760,12 @@ const CustomerDrawing = () => {
 
       if (!response.ok) throw new Error('Share failed');
       
-      Swal.fire('Shared', 'Drawing shared with Engineering Department', 'success');
+      successToast('Drawing shared with Engineering Department');
       fetchDrawings(searchTerm);
       fetchRequirements();
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -789,10 +790,10 @@ const CustomerDrawing = () => {
           }
         });
         if (!response.ok) throw new Error('Delete failed');
-        Swal.fire('Deleted!', 'Drawing has been deleted.', 'success');
+        successToast('Drawing has been deleted.');
         fetchDrawings();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       }
     }
   };
@@ -827,14 +828,14 @@ const CustomerDrawing = () => {
         const failed = results.filter(r => !r.ok);
 
         if (failed.length === 0) {
-          Swal.fire('Deleted!', `All drawings for ${clientName} have been deleted.`, 'success');
+          successToast(`All drawings for ${clientName} have been deleted.`);
           fetchDrawings();
         } else {
-          Swal.fire('Partial Error', `${failed.length} drawings failed to delete.`, 'warning');
+          warningToast(`${failed.length} drawings failed to delete.`);
           fetchDrawings();
         }
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setLoading(false);
       }

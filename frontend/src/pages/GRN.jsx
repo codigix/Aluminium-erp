@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -113,7 +114,7 @@ const GRN = () => {
     e.preventDefault();
 
     if (!formData.poNumber || !formData.receivedQuantity) {
-      Swal.fire('Error', 'Please fill in required fields', 'error');
+      errorToast('Please fill in required fields');
       return;
     }
 
@@ -135,7 +136,7 @@ const GRN = () => {
 
       if (!response.ok) throw new Error('Failed to create GRN');
 
-      await Swal.fire('Success', 'GRN created successfully', 'success');
+      successToast('GRN created successfully');
       setShowModal(false);
       setFormData({
         poNumber: '',
@@ -146,7 +147,7 @@ const GRN = () => {
       fetchGRNs();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to create GRN', 'error');
+      errorToast(error.message || 'Failed to create GRN');
     }
   };
 
@@ -184,12 +185,12 @@ const GRN = () => {
 
       if (!response.ok) throw new Error('Failed to update GRN');
 
-      await Swal.fire('Success', 'GRN updated successfully', 'success');
+      successToast('GRN updated successfully');
       setShowEditModal(false);
       fetchGRNs();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to update GRN', 'error');
+      errorToast(error.message || 'Failed to update GRN');
     }
   };
 
@@ -218,11 +219,11 @@ const GRN = () => {
 
       if (!response.ok) throw new Error('Failed to delete GRN');
 
-      await Swal.fire('Success', 'GRN deleted successfully', 'success');
+      successToast('GRN deleted successfully');
       fetchGRNs();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to delete GRN', 'error');
+      errorToast(error.message || 'Failed to delete GRN');
     }
   };
 
