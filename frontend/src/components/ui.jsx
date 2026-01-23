@@ -15,7 +15,7 @@ export const Card = ({ id, title, subtitle, action, children }) => (
   </div>
 )
 
-export const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true }) => {
+export const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
@@ -49,24 +49,26 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
       <div className="relative">
         <input
           type="text"
-          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-900"
+          className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
           placeholder={placeholder}
           value={searchTerm}
           onChange={(e) => {
+            if (disabled) return;
             setSearchTerm(e.target.value);
             setIsOpen(true);
             if (allowCustom) {
               onChange({ target: { value: e.target.value } });
             }
           }}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => !disabled && setIsOpen(true)}
+          disabled={disabled}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
           {isOpen ? '▲' : '▼'}
         </div>
       </div>
       
-      {isOpen && (
+      {isOpen && !disabled && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 flex flex-col overflow-hidden">
           <div className="overflow-y-auto flex-1">
             {filteredOptions.length > 0 ? (

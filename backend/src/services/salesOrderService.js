@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
-const listSalesOrders = async (includeWithoutPo = false) => {
+const listSalesOrders = async (includeWithoutPo = true) => {
   const whereClause = includeWithoutPo ? '' : 'WHERE so.customer_po_id IS NOT NULL';
   const [rows] = await pool.query(
     `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
@@ -25,6 +25,31 @@ const listSalesOrders = async (includeWithoutPo = false) => {
   }
   
   return rows;
+};
+
+const getSalesOrderById = async (id) => {
+  const [rows] = await pool.query(
+    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+            COALESCE(ct.phone, ct.name) as contact_person, ct.email as email_address, ct.phone as contact_phone,
+            c.contact_email, c.contact_mobile
+     FROM sales_orders so
+     LEFT JOIN companies c ON c.id = so.company_id
+     LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     LEFT JOIN contacts ct ON ct.company_id = so.company_id AND ct.contact_type = 'PRIMARY'
+     WHERE so.id = ?`,
+    [id]
+  );
+  
+  if (rows.length === 0) return null;
+  const order = rows[0];
+
+  const [items] = await pool.query(
+    'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
+    [order.id]
+  );
+  order.items = items;
+  
+  return order;
 };
 
 const getIncomingOrders = async (departmentCode) => {
@@ -64,15 +89,49 @@ const getIncomingOrders = async (departmentCode) => {
   return rows;
 };
 
-const createSalesOrder = async (customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate, items) => {
+const createSalesOrder = async (orderData) => {
+  const { 
+    customerPoId, 
+    companyId, 
+    projectName, 
+    drawingRequired = 0, 
+    productionPriority = 'NORMAL', 
+    targetDispatchDate, 
+    items,
+    cgst_rate = 0,
+    sgst_rate = 0,
+    profit_margin = 0,
+    bom_id = null,
+    warehouse = null,
+    status = 'CREATED'
+  } = orderData;
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
     const [result] = await connection.execute(
-      `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted)
-       VALUES (?, ?, ?, ?, ?, ?, 'CREATED', 'DESIGN_ENG', 0)`,
-      [customerPoId, companyId, projectName, drawingRequired, productionPriority, targetDispatchDate]
+      `INSERT INTO sales_orders (
+        customer_po_id, company_id, project_name, drawing_required, 
+        production_priority, target_dispatch_date, status, 
+        current_department, request_accepted, cgst_rate, 
+        sgst_rate, profit_margin, bom_id, warehouse
+      )
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?)`,
+      [
+        customerPoId || null, 
+        companyId, 
+        projectName || null, 
+        drawingRequired, 
+        productionPriority, 
+        targetDispatchDate || null, 
+        status,
+        cgst_rate,
+        sgst_rate,
+        profit_margin,
+        bom_id,
+        warehouse
+      ]
     );
 
     const salesOrderId = result.insertId;
@@ -197,6 +256,92 @@ const createSalesOrder = async (customerPoId, companyId, projectName, drawingReq
 
     await connection.commit();
     return salesOrderId;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const updateSalesOrder = async (id, orderData) => {
+  const { 
+    companyId, 
+    projectName, 
+    drawingRequired, 
+    productionPriority, 
+    targetDispatchDate, 
+    items,
+    cgst_rate,
+    sgst_rate,
+    profit_margin,
+    bom_id,
+    warehouse,
+    status
+  } = orderData;
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    await connection.execute(
+      `UPDATE sales_orders SET 
+        company_id = ?, 
+        project_name = ?, 
+        drawing_required = ?, 
+        production_priority = ?, 
+        target_dispatch_date = ?, 
+        status = ?, 
+        cgst_rate = ?, 
+        sgst_rate = ?, 
+        profit_margin = ?, 
+        bom_id = ?, 
+        warehouse = ?,
+        updated_at = NOW()
+       WHERE id = ?`,
+      [
+        companyId, 
+        projectName || null, 
+        drawingRequired || 0, 
+        productionPriority || 'NORMAL', 
+        targetDispatchDate || null, 
+        status,
+        cgst_rate || 0,
+        sgst_rate || 0,
+        profit_margin || 0,
+        bom_id || null,
+        warehouse || null,
+        id
+      ]
+    );
+
+    // Update items - for simplicity, delete and re-insert if provided
+    if (items && items.length > 0) {
+      await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [id]);
+      
+      for (const item of items) {
+        await connection.execute(
+          `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id, 
+            item.item_code, 
+            item.drawing_no || null, 
+            item.revision_no || null, 
+            item.description, 
+            item.quantity, 
+            item.unit || 'NOS', 
+            item.rate, 
+            item.delivery_date || null, 
+            item.tax_value || 0,
+            item.status || 'PENDING'
+          ]
+        );
+      }
+    }
+
+    await connection.commit();
+    return true;
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -790,6 +935,8 @@ const updateSalesOrderItem = async (itemId, data) => {
 
 module.exports = {
   listSalesOrders,
+  getSalesOrderById,
+  updateSalesOrder,
   getIncomingOrders,
   createSalesOrder,
   updateSalesOrderStatus,

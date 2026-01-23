@@ -108,53 +108,9 @@ const createCustomerPo = async payload => {
       );
     }
 
-    const [salesOrderResult] = await connection.execute(
-      `INSERT INTO sales_orders
-        (customer_po_id, company_id, project_name, drawing_required, production_priority,
-         target_dispatch_date, status, current_department, request_accepted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ,
-      [
-        customerPoId,
-        companyId,
-        payload.projectName || null,
-        payload.drawingRequired ? 1 : 0,
-        payload.productionPriority || 'NORMAL',
-        payload.targetDispatchDate || null,
-        'CREATED',
-        'SALES',
-        0
-      ]
-    );
-
-    const salesOrderId = salesOrderResult.insertId;
-
-    for (const item of items) {
-      await connection.execute(
-        `INSERT INTO sales_order_items
-          (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status, rejection_reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ,
-        [
-          salesOrderId,
-          item.itemCode || null,
-          item.drawingNo || null,
-          item.revisionNo || null,
-          item.description,
-          item.quantity,
-          item.unit || 'NOS',
-          item.rate,
-          item.deliveryDate || null,
-          item.cgstAmount + item.sgstAmount + item.igstAmount,
-          item.status || 'PENDING',
-          item.rejection_reason || null
-        ]
-      );
-    }
-
     await connection.commit();
 
-    return { customerPoId, salesOrderId, totals };
+    return { customerPoId, totals };
   } catch (error) {
     await connection.rollback();
     throw error;

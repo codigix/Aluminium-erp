@@ -129,15 +129,6 @@ const createContactForm = () => ({
   contactType: 'PRIMARY'
 })
 
-const createSalesOrderForm = () => ({
-  companyId: '',
-  customerPoId: '',
-  projectName: '',
-  drawingRequired: false,
-  productionPriority: 'NORMAL',
-  targetDispatchDate: ''
-})
-
 const mapContactToForm = contact => ({
   name: contact?.name || '',
   designation: contact?.designation || '',
@@ -246,64 +237,14 @@ function App() {
   const [showCreatePanel, setShowCreatePanel] = useState(false)
   const [showWorkstationForm, setShowWorkstationForm] = useState(false)
   const [showOperationForm, setShowOperationForm] = useState(false)
-  const [showSalesOrderForm, setShowSalesOrderForm] = useState(false)
-  const [customerPos, setCustomerPos] = useState([])
-  const [customerPosLoading, setCustomerPosLoading] = useState(false)
   const [quotationRequests, setQuotationRequests] = useState([])
   const [quotationRequestsLoading, setQuotationRequestsLoading] = useState(false)
   const [poQuotePrices, setPoQuotePrices] = useState({})
-  const [salesOrders, setSalesOrders] = useState([])
-  const [salesOrdersLoading, setSalesOrdersLoading] = useState(false)
   const [poDetailDrawerOpen, setPoDetailDrawerOpen] = useState(false)
   const [poDetailLoading, setPoDetailLoading] = useState(false)
-  const [poItemsLoading, setPoItemsLoading] = useState(false)
   const [poDetail, setPoDetail] = useState(null)
   const [poDetailError, setPoDetailError] = useState('')
   const [, setSelectedPoId] = useState(null)
-
-  const [salesOrderForm, setSalesOrderForm] = useState(createSalesOrderForm)
-  const [selectedPoForSo, setSelectedPoForSo] = useState(null)
-  const [soItems, setSoItems] = useState([])
-
-  const handleSalesOrderFieldChange = (field, value) => {
-    setSalesOrderForm(prev => ({ ...prev, [field]: value }))
-  }
-
-  const resetSalesOrderForm = useCallback(() => {
-    setSalesOrderForm(createSalesOrderForm())
-    setSelectedPoForSo(null)
-    setSoItems([])
-    setShowSalesOrderForm(false)
-  }, [])
-
-  const handleCreateSalesOrder = async () => {
-    if (!salesOrderForm.companyId || !salesOrderForm.customerPoId) {
-      showToast('Company and Customer PO are required')
-      return
-    }
-    setSalesOrdersLoading(true)
-    try {
-      await apiRequest('/sales-orders', {
-        method: 'POST',
-        body: {
-          customerPoId: salesOrderForm.customerPoId,
-          companyId: salesOrderForm.companyId,
-          projectName: salesOrderForm.projectName,
-          drawingRequired: salesOrderForm.drawingRequired,
-          productionPriority: salesOrderForm.productionPriority,
-          targetDispatchDate: salesOrderForm.targetDispatchDate,
-          items: soItems
-        }
-      })
-      showToast('Sales Order created successfully')
-      resetSalesOrderForm()
-      await loadSalesOrders()
-    } catch (error) {
-      showToast(error.message)
-    } finally {
-      setSalesOrdersLoading(false)
-    }
-  }
 
   const showToast = useCallback(message => {
     if (toastTimeout.current) {
@@ -345,81 +286,6 @@ function App() {
     }
     return res.json()
   }, [token, showToast])
-
-  useEffect(() => {
-    const fetchPoDetails = async () => {
-      if (!salesOrderForm.customerPoId) {
-        setSelectedPoForSo(null)
-        return
-      }
-      setPoItemsLoading(true)
-      try {
-        const data = await apiRequest(`/customer-pos/${salesOrderForm.customerPoId}`)
-        setSelectedPoForSo(data)
-        setSoItems((data.items || []).map(item => ({
-          ...item,
-          drawing_no: item.item_code || '',
-          materials: []
-        })))
-        
-        // Autofill fields based on PO data
-        setSalesOrderForm(prev => {
-          const formatDateForInput = (dateInput) => {
-            if (!dateInput) return ''
-            const d = new Date(dateInput)
-            if (Number.isNaN(d.getTime())) return ''
-            const year = d.getFullYear()
-            const month = String(d.getMonth() + 1).padStart(2, '0')
-            const day = String(d.getDate()).padStart(2, '0')
-            return `${year}-${month}-${day}`
-          }
-
-          let targetDate = ''
-          if (data.items && data.items.length > 0) {
-            // Find the earliest delivery date among items
-            const dates = data.items
-              .map(item => item.delivery_date)
-              .filter(Boolean)
-              .sort()
-            if (dates.length > 0) {
-              targetDate = formatDateForInput(dates[0])
-            }
-          }
-          
-          // Fallback to PO Date if items don't have dates
-          if (!targetDate && data.po_date) {
-            targetDate = formatDateForInput(data.po_date)
-          }
-
-          // Try to extract project name from remarks if available, otherwise use PO Number
-          let extractedProject = data.project_name || ''
-          if (!extractedProject && data.remarks) {
-            const projectMatch = data.remarks.match(/Project[:\s]+([^,\n.]+)/i)
-            if (projectMatch) {
-              extractedProject = projectMatch[1].trim()
-            }
-          }
-          
-          // Fallback to PO Number if still empty
-          if (!extractedProject) {
-            extractedProject = data.po_number || ''
-          }
-
-          return {
-            ...prev,
-            projectName: extractedProject,
-            targetDispatchDate: targetDate || prev.targetDispatchDate || ''
-          }
-        })
-      } catch (error) {
-        showToast('Failed to fetch PO details: ' + error.message)
-        setSelectedPoForSo(null)
-      } finally {
-        setPoItemsLoading(false)
-      }
-    }
-    fetchPoDetails()
-  }, [salesOrderForm.customerPoId, apiRequest, showToast])
 
   const performLogin = useCallback(async (email, password) => {
     setLoginLoading(true)
@@ -630,21 +496,6 @@ function App() {
       }
     }
   }, [token, user, allowedModules, activeModule, navigate])
-
-  const handleSendOrderToDesign = useCallback(async (orderId) => {
-    try {
-      setSalesOrdersLoading(true)
-      await apiRequest(`/sales-orders/${orderId}/send-to-design`, {
-        method: 'POST'
-      })
-      showToast('Order sent to Design Engineering')
-      await loadSalesOrders()
-    } catch (error) {
-      showToast(error.message)
-    } finally {
-      setSalesOrdersLoading(false)
-    }
-  }, [apiRequest, loadSalesOrders, showToast])
 
   useEffect(() => {
     if (activeModule !== 'company-master') {
@@ -957,28 +808,6 @@ function App() {
       showToast(error.message)
     }
   }
-
-
-
-  const handleViewPoDetail = useCallback(async customerPoId => {
-    if (!customerPoId) {
-      return
-    }
-    setPoDetailDrawerOpen(true)
-    setPoDetail(null)
-    setPoDetailError('')
-    setPoDetailLoading(true)
-    setSelectedPoId(customerPoId)
-    try {
-      const data = await apiRequest(`/customer-pos/${customerPoId}`)
-      setPoDetail(data)
-    } catch (error) {
-      setPoDetailError(error.message)
-      showToast(error.message)
-    } finally {
-      setPoDetailLoading(false)
-    }
-  }, [apiRequest, showToast])
 
   const handleUpdateQuotationRates = async (items) => {
     try {
@@ -1551,27 +1380,7 @@ function App() {
                 )}
 
                 {activeModule === 'sales-order' && (
-                  <SalesOrders
-                    orders={salesOrders}
-                    loading={salesOrdersLoading}
-                    onRefresh={loadSalesOrders}
-                    onViewPo={handleViewPoDetail}
-                    getPoPdfUrl={getPoPdfUrl}
-                    onSendOrder={handleSendOrderToDesign}
-                    showSalesOrderForm={showSalesOrderForm}
-                    onCreate={setShowSalesOrderForm}
-                    salesOrderForm={salesOrderForm}
-                    onFieldChange={handleSalesOrderFieldChange}
-                    onSubmit={handleCreateSalesOrder}
-                    onResetForm={resetSalesOrderForm}
-                    companies={companies}
-                    customerPos={customerPos}
-                    selectedPoForSo={selectedPoForSo}
-                    soItems={soItems}
-                    setSoItems={setSoItems}
-                    customerPosLoading={customerPosLoading}
-                    fieldInputClass={fieldInputClass}
-                  />
+                  <SalesOrders />
                 )}
 
                 {activeModule === 'incoming-orders' && (

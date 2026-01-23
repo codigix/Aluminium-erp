@@ -89,7 +89,7 @@ const getReadySalesOrderItems = async () => {
   // Items that are approved and ready for production
   // We can filter by status like 'MATERIAL_READY', 'DESIGN_APPROVED', 'CREATED' (if no drawing required)
   const [rows] = await pool.query(
-    `SELECT so.id as sales_order_id, so.project_name, so.production_priority,
+    `SELECT so.id as sales_order_id, so.project_name, so.production_priority, so.created_at,
             soi.id as sales_order_item_id, soi.item_code, soi.description, soi.quantity as total_qty, soi.unit,
             COALESCE(SUM(ppi.planned_qty), 0) as already_planned_qty
      FROM sales_orders so
@@ -106,7 +106,7 @@ const getReadySalesOrderItems = async () => {
 
 const getProductionReadySalesOrders = async () => {
   const [rows] = await pool.query(
-    `SELECT DISTINCT so.id, so.project_name, cp.po_number, c.company_name
+    `SELECT DISTINCT so.id, so.project_name, cp.po_number, c.company_name, so.created_at
      FROM sales_orders so
      JOIN sales_order_items soi ON so.id = soi.sales_order_id
      LEFT JOIN companies c ON so.company_id = c.id

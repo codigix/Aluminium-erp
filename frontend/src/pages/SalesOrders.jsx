@@ -1,838 +1,670 @@
-import React, { useState } from 'react'
-import { Card, FormControl, DataTable } from '../components/ui.jsx'
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+import React, { useState, useEffect } from 'react';
+import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect } from '../components/ui.jsx';
+import Swal from 'sweetalert2';
 
-const formatDate = (date) => {
-  if (!date) return '—'
-  return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-}
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-const formatCurrency = (value, currency = 'INR') => {
-  if (!value || isNaN(value)) return '—'
-  const validCurrency = currency && ['USD', 'EUR', 'INR', 'GBP'].includes(currency.toUpperCase()) ? currency.toUpperCase() : 'INR'
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: validCurrency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
+const warehouseOptions = [
+  { value: 'RM', label: 'Raw Material Warehouse' },
+  { value: 'WIP', label: 'Production Issue (WIP)' },
+  { value: 'FG', label: 'Finished Goods' },
+  { value: 'SUB', label: 'Subcontract Store' },
+  { value: 'REJECT', label: 'Rejected Store' }
+];
 
-const formatOrderCode = (id) => {
-  return `SO-${String(id).padStart(4, '0')}`
-}
+const SalesOrders = () => {
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'form'
+  const [formMode, setFormMode] = useState('create'); // 'create', 'edit', 'view'
+  const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [boms, setBoms] = useState([]);
 
-const formatStatus = (s) => {
-  if (!s) return 'DRAFT'
-  return s.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')
-}
+  const initialFormState = {
+    series: 'Auto-generated',
+    orderDate: new Date().toISOString().split('T')[0],
+    deliveryDate: '',
+    orderType: 'Sales',
+    customerId: '',
+    customerEmail: '',
+    customerPhone: '',
+    bomId: '',
+    orderQuantity: 1,
+    warehouse: '',
+    status: 'Draft',
+    cgstRate: 9,
+    sgstRate: 9,
+    profitMargin: 0,
+    items: []
+  };
 
-const formatPriority = (p) => {
-  if (!p) return 'NORMAL'
-  return p.toUpperCase()
-}
+  const [formData, setFormData] = useState(initialFormState);
 
-const statusStyles = {
-  DRAFT: 'bg-slate-100 border-slate-200 text-slate-600',
-  CREATED: 'bg-blue-50 border-blue-200 text-blue-600',
-  DESIGN_IN_REVIEW: 'bg-indigo-50 border-indigo-200 text-indigo-600',
-  DESIGN_APPROVED: 'bg-emerald-50 border-emerald-200 text-emerald-600',
-  DESIGN_QUERY: 'bg-amber-50 border-amber-200 text-amber-600',
-  PROCUREMENT_IN_PROGRESS: 'bg-purple-50 border-purple-200 text-purple-600',
-  MATERIAL_PURCHASE_IN_PROGRESS: 'bg-orange-50 border-orange-200 text-orange-600',
-  MATERIAL_READY: 'bg-cyan-50 border-cyan-200 text-cyan-600',
-  IN_PRODUCTION: 'bg-red-50 border-red-200 text-red-600',
-  PRODUCTION_COMPLETED: 'bg-lime-50 border-lime-200 text-lime-600',
-}
+  useEffect(() => {
+    fetchOrders();
+    fetchCompanies();
+    fetchBoms();
+  }, []);
 
-const MaterialInputTable = ({ materials = [], onAdd, onDelete }) => {
-  const [newMat, setNewMat] = useState({ material_name: '', qty: '', uom: 'Kg' })
-
-  return (
-    <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
-      <table className="w-full text-[10px]">
-        <thead className="bg-slate-50 text-slate-500  ">
-          <tr>
-            <th className="px-4 py-2 text-left">Material Name</th>
-            <th className="px-4 py-2 text-right w-20">Qty</th>
-            <th className="px-4 py-2 text-left w-20">UOM</th>
-            <th className="px-4 py-2 text-right w-16">Action</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {materials.map((mat, i) => (
-            <tr key={i}>
-              <td className="px-4 py-2 text-slate-900 font-medium">{mat.material_name}</td>
-              <td className="px-4 py-2 text-right ">{mat.qty || mat.qty_per_pc || 0}</td>
-              <td className="px-4 py-2 text-slate-500">{mat.uom}</td>
-              <td className="px-4 py-2 text-right">
-                <button 
-                  onClick={() => onDelete(i)} 
-                  className="p-1 text-rose-500 hover:bg-rose-50 rounded transition-colors"
-                  title="Delete"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </td>
-            </tr>
-          ))}
-          <tr className="bg-slate-50/50">
-            <td className="px-4 py-2">
-              <input 
-                className="w-full bg-transparent border-none focus:ring-0 p-0 text-[10px]"
-                placeholder="New Material..."
-                value={newMat.material_name}
-                onChange={e => setNewMat({...newMat, material_name: e.target.value})}
-              />
-            </td>
-            <td className="px-4 py-2 text-right">
-              <input 
-                className="w-full bg-transparent border-none focus:ring-0 p-0 text-[10px] text-right"
-                placeholder="0"
-                value={newMat.qty}
-                onChange={e => setNewMat({...newMat, qty: e.target.value})}
-              />
-            </td>
-            <td className="px-4 py-2">
-              <select 
-                className="w-full bg-transparent border-none focus:ring-0 p-0 text-[10px]"
-                value={newMat.uom}
-                onChange={e => setNewMat({...newMat, uom: e.target.value})}
-              >
-                <option value="Kg">Kg</option>
-                <option value="Nos">Nos</option>
-                <option value="Mtr">Mtr</option>
-              </select>
-            </td>
-            <td className="px-4 py-2 text-right">
-              <button 
-                onClick={() => {
-                  if (newMat.material_name && newMat.qty) {
-                    onAdd(newMat)
-                    setNewMat({ material_name: '', qty: '', uom: 'Kg' })
-                  }
-                }}
-                className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                title="Add Material"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
-                </svg>
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-const SalesOrders = ({ 
-  orders, 
-  loading, 
-  onRefresh, 
-  onViewPo, 
-  getPoPdfUrl, 
-  onSendOrder,
-  onDeleteOrder,
-  showSalesOrderForm,
-  onCreate,
-  salesOrderForm,
-  onFieldChange,
-  onSubmit,
-  onResetForm,
-  companies,
-  customerPos,
-  selectedPoForSo,
-  soItems,
-  setSoItems,
-  customerPosLoading,
-  fieldInputClass
-}) => {
-  const [showBomModal, setShowBomModal] = useState(false)
-  const [availableBoms, setAvailableBoms] = useState([])
-  const [bomLoading, setBomLoading] = useState(false)
-  const list = Array.isArray(orders) ? orders : []
-
-  const fetchAvailableBoms = async () => {
+  const fetchOrders = async () => {
     try {
-      setBomLoading(true)
-      const token = localStorage.getItem('authToken')
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOrders(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/companies`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCompanies(data);
+      }
+    } catch (err) {
+      console.error('Error fetching companies:', err);
+    }
+  };
+
+  const fetchBoms = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/bom/approved`, {
         headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (!response.ok) throw new Error('Failed to fetch BOMs')
-      const data = await response.json()
-      setAvailableBoms(data)
-      setShowBomModal(true)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBoms(data);
+      }
     } catch (err) {
-      console.error(err)
-      alert('Error fetching BOMs: ' + err.message)
-    } finally {
-      setBomLoading(false)
+      console.error('Error fetching boms:', err);
     }
-  }
+  };
 
-  const handleSelectBom = async (bom) => {
+  const handleAddOrder = () => {
+    setFormData(initialFormState);
+    setFormMode('create');
+    setViewMode('form');
+  };
+
+  const handleEditOrder = async (order) => {
     try {
-      const token = localStorage.getItem('authToken')
-      const response = await fetch(`${API_BASE}/bom/items/${bom.id}`, {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/${order.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (!response.ok) throw new Error('Failed to fetch BOM details')
-      const bomDetails = await response.json()
-
-      // Check if we have an item with the same drawing number in our list
-      const existingItemIdx = soItems.findIndex(item => 
-        item.drawing_no?.toLowerCase() === bom.drawing_no?.toLowerCase() ||
-        item.item_code?.toLowerCase() === bom.item_code?.toLowerCase()
-      )
-
-      if (existingItemIdx !== -1) {
-        // Update existing item
-        const newItems = [...soItems]
-        newItems[existingItemIdx] = {
-          ...newItems[existingItemIdx],
-          materials: bomDetails.materials || [],
-          components: bomDetails.components || [],
-          operations: bomDetails.operations || [],
-          scrap: bomDetails.scrap || [],
-          description: bom.description || newItems[existingItemIdx].description
-        }
-        setSoItems(newItems)
-      } else {
-        // Add as a new item
-        const newItem = {
-          item_code: bom.item_code,
-          drawing_no: bom.drawing_no,
-          description: bom.description,
-          quantity: bom.quantity,
-          unit: bom.unit,
-          rate: 0,
-          materials: bomDetails.materials || [],
-          components: bomDetails.components || [],
-          operations: bomDetails.operations || [],
-          scrap: bomDetails.scrap || []
-        }
-        setSoItems([...soItems, newItem])
-      }
-
-      setShowBomModal(false)
-      
-      // If company is not set, set it from the BOM
-      if (!salesOrderForm.companyId && bom.company_id) {
-        onFieldChange('companyId', bom.company_id)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setFormData({
+          ...initialFormState,
+          id: data.id,
+          series: `SO-${String(data.id).padStart(4, '0')}`,
+          orderDate: data.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+          deliveryDate: data.target_dispatch_date || '',
+          orderType: 'Sales',
+          customerId: data.company_id || '',
+          customerEmail: data.contact_email || data.customer_email || '',
+          customerPhone: data.contact_mobile || data.customer_phone || '',
+          bomId: data.bom_id || '',
+          orderQuantity: data.items?.[0]?.quantity || 1,
+          warehouse: data.warehouse || '',
+          status: data.status || 'Draft',
+          cgstRate: data.cgst_rate || 0,
+          sgstRate: data.sgst_rate || 0,
+          profitMargin: data.profit_margin || 0,
+          items: data.items || []
+        });
+        setFormMode('edit');
+        setViewMode('form');
       }
     } catch (err) {
-      console.error(err)
-      alert('Error selecting BOM: ' + err.message)
+      console.error('Error fetching order details:', err);
+      Swal.fire('Error', 'Failed to fetch order details', 'error');
     }
-  }
+  };
+
+  const handleViewOrder = async (order) => {
+    await handleEditOrder(order);
+    setFormMode('view');
+  };
+
+  const handleDeleteOrder = async (id) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/sales-orders/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          Swal.fire('Deleted!', 'Order has been deleted.', 'success');
+          fetchOrders();
+        } else {
+          throw new Error('Failed to delete order');
+        }
+      } catch (err) {
+        Swal.fire('Error', err.message, 'error');
+      }
+    }
+  };
+
+  const handleSaveOrder = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const method = formMode === 'create' ? 'POST' : 'PUT';
+      const url = formMode === 'create' ? `${API_BASE}/sales-orders` : `${API_BASE}/sales-orders/${formData.id}`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          companyId: formData.customerId,
+          targetDispatchDate: formData.deliveryDate,
+          status: formData.status,
+          items: formData.items,
+          cgst_rate: formData.cgstRate,
+          sgst_rate: formData.sgstRate,
+          profit_margin: formData.profitMargin,
+          bom_id: formData.bomId,
+          warehouse: formData.warehouse
+        })
+      });
+
+      if (response.ok) {
+        Swal.fire('Success', `Order ${formMode === 'create' ? 'created' : 'updated'} successfully`, 'success');
+        setViewMode('list');
+        fetchOrders();
+      } else {
+        const errData = await response.json();
+        throw new Error(errData.message || 'Failed to save order');
+      }
+    } catch (err) {
+      Swal.fire('Error', err.message, 'error');
+    }
+  };
+
+  const handleBomChange = async (bomId) => {
+    if (!bomId) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/bom/items/${bomId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const bomDetails = await response.json();
+        const selectedBom = boms.find(b => String(b.id) === String(bomId));
+        
+        let totalRate = 0;
+        if (bomDetails.materials) {
+            totalRate += bomDetails.materials.reduce((sum, m) => sum + (Number(m.qty_per_pc || 0) * Number(m.rate || 0)), 0);
+        }
+        if (bomDetails.components) {
+            totalRate += bomDetails.components.reduce((sum, c) => sum + (Number(c.quantity || 0) * Number(c.rate || 0)), 0);
+        }
+        if (bomDetails.operations) {
+            totalRate += bomDetails.operations.reduce((sum, o) => sum + (Number(o.hourly_rate || 0) * (Number(o.cycle_time_min || 0) / 60)), 0);
+        }
+
+        const items = [{
+          item_code: selectedBom.item_code,
+          description: selectedBom.description,
+          type: 'Finished Good',
+          quantity: formData.orderQuantity,
+          rate: totalRate || 0,
+          amount: (totalRate || 0) * formData.orderQuantity
+        }];
+
+        setFormData(prev => ({
+          ...prev,
+          bomId,
+          items
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching BOM details:', err);
+    }
+  };
 
   const columns = [
     {
-      label: <input type="checkbox" className="rounded border-slate-300" />,
-      key: 'checkbox',
-      className: 'w-10',
-      render: () => <input type="checkbox" className="rounded border-slate-300" />
+      label: 'Order No',
+      key: 'id',
+      sortable: true,
+      render: (val) => <span className="font-mono text-indigo-600">SO-{String(val).padStart(4, '0')}</span>
     },
     {
-      label: 'Customer Name',
+      label: 'Customer',
       key: 'company_name',
       sortable: true,
-      render: (val) => (
-        <p className="text-slate-900 font-bold">{val || '—'}</p>
-      )
+      render: (val) => <span className="font-bold text-slate-900">{val}</span>
     },
     {
-      label: 'Status',
-      key: 'status',
+      label: 'Order Date',
+      key: 'created_at',
       sortable: true,
-      render: (val) => {
-        const normalizedStatus = (val || 'DRAFT').toUpperCase()
-        const badgeClasses = statusStyles[normalizedStatus] || 'bg-slate-100 border-slate-200 text-slate-600'
-        return (
-          <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${badgeClasses}`}>
-            {formatStatus(val).toUpperCase()}
-          </span>
-        )
-      }
+      render: (val) => <span>{new Date(val).toLocaleDateString()}</span>
     },
     {
       label: 'Delivery Date',
       key: 'target_dispatch_date',
       sortable: true,
-      render: (val) => <span className="text-slate-600 text-xs">{formatDate(val)}</span>
+      render: (val) => <span>{val ? new Date(val).toLocaleDateString() : '—'}</span>
     },
     {
-      label: 'ID',
-      key: 'id',
+      label: 'Status',
+      key: 'status',
       sortable: true,
-      render: (val) => <span className="text-[10px] text-indigo-600 font-mono">{formatOrderCode(val)}</span>
+      render: (val) => <StatusBadge status={val} />
     },
     {
       label: 'Actions',
-      key: 'id',
+      key: 'actions',
       className: 'text-right',
-      render: (_, order) => {
-        const normalizedStatus = (order.status || 'DRAFT').toUpperCase()
-        const canViewPo = typeof onViewPo === 'function' && Boolean(order.customer_po_id)
-        const soPdfUrl = `${API_BASE}/sales-orders/${order.id}/pdf`
-        
-        return (
-          <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
-            {canViewPo && (
-              <button
-                type="button"
-                className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-white shadow-sm transition"
-                onClick={() => onViewPo(order.customer_po_id)}
-                title="View PO Details"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                </svg>
-              </button>
-            )}
-            {normalizedStatus === 'CREATED' && typeof onSendOrder === 'function' && (
-              <button
-                type="button"
-                className="p-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm"
-                onClick={() => onSendOrder(order.id)}
-                title="Send Order"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
-            )}
-            {soPdfUrl && (
-              <a
-                href={soPdfUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="p-1.5 rounded-lg border border-indigo-200 text-indigo-500 hover:bg-indigo-50 transition shadow-sm"
-                title="View Sales Order PDF"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </a>
-            )}
-            {typeof onDeleteOrder === 'function' && (
-              <button
-                type="button"
-                onClick={() => onDeleteOrder(order.id)}
-                className="p-1.5 rounded-lg border border-rose-100 text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition shadow-sm"
-                title="Delete Order"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            )}
-          </div>
-        )
-      }
+      render: (_, row) => (
+        <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
+          <button onClick={() => handleViewOrder(row)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors" title="View">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          </button>
+          <button onClick={() => handleEditOrder(row)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-amber-600 transition-colors" title="Edit">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </button>
+          <button onClick={() => handleDeleteOrder(row.id)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-600 transition-colors" title="Delete">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </div>
+      )
     }
   ];
 
-  const renderExpandedRow = (order) => (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mx-4">
-      <table className="w-full text-xs">
-        <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] font-bold tracking-wider">
-          <tr>
-            <th className="px-4 py-2 text-left">Drawing No</th>
-            <th className="px-4 py-2 text-left">Description</th>
-            <th className="px-4 py-2 text-center">Qty</th>
-            <th className="px-4 py-2 text-right">Unit Rate</th>
-            <th className="px-4 py-2 text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {order.items && order.items.length > 0 ? (
-            order.items.map((item, idx) => (
-              <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                <td className="px-4 py-2 font-mono text-indigo-600">{item.drawing_no || 'N/A'}</td>
-                <td className="px-4 py-2 text-slate-600">{item.description}</td>
-                <td className="px-4 py-2 text-center font-bold">{item.quantity} {item.unit}</td>
-                <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.rate, order.po_currency)}</td>
-                <td className="px-4 py-2 text-right font-bold text-slate-900">{formatCurrency(item.quantity * item.rate, order.po_currency)}</td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="5" className="px-4 py-6 text-center text-slate-400 italic">No items found for this order</td>
-            </tr>
-          )}
-        </tbody>
-        {order.items && order.items.length > 0 && (
-          <tfoot className="bg-slate-50/50">
-            <tr>
-              <td colSpan="4" className="px-4 py-2 text-right font-bold text-slate-500">Total Amount:</td>
-              <td className="px-4 py-2 text-right font-black text-indigo-600 text-sm">
-                {formatCurrency(Number(order.po_net_total), order.po_currency)}
-              </td>
-            </tr>
-          </tfoot>
-        )}
-      </table>
-    </div>
-  );
-
-  // Group orders by company to support "Single Request" view
-  const groupedOrders = list.reduce((acc, order) => {
-    const key = order.company_id || 'unassigned'
-    if (!acc[key]) {
-      acc[key] = {
-        ...order,
-        all_items: [...(order.items || [])],
-        all_pos: [order.po_number],
-        total_net_value: Number(order.po_net_total) || 0,
-        order_count: 1
-      }
-    } else {
-      acc[key].all_items = [...acc[key].all_items, ...(order.items || [])]
-      if (order.po_number && !acc[key].all_pos.includes(order.po_number)) {
-        acc[key].all_pos.push(order.po_number)
-      }
-      acc[key].total_net_value += Number(order.po_net_total) || 0
-      acc[key].order_count += 1
-      // Keep the most recent status/priority or similar logic if needed
-    }
-    return acc
-  }, {})
-
-  const displayList = Object.values(groupedOrders)
-  const hasOrders = displayList.length > 0
-
-  if (showSalesOrderForm) {
-    const filteredPos = (customerPos || []).filter(po => String(po.company_id) === String(salesOrderForm.companyId))
-    const selectedCompany = (companies || []).find(c => String(c.id) === String(salesOrderForm.companyId))
-
+  if (viewMode === 'list') {
     return (
-      <div className="space-y-8">
-        
-        <Card id="new-sales-order" title="Sales Order" subtitle="Workflow Intake">
-          <div className="grid gap-10 lg:grid-cols-2 p-6">
-            {/* --- Section 1: Customer Details --- */}
-            <div className="space-y-6">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Customer Details</h3>
-              
-              <FormControl label="Company *">
-                <select
-                  className={fieldInputClass}
-                  value={salesOrderForm.companyId}
-                  onChange={e => {
-                    onFieldChange('companyId', e.target.value)
-                    onFieldChange('customerPoId', '')
-                  }}
-                >
-                  <option value="">Select Company</option>
-                  {(companies || []).map(c => (
-                    <option key={c.id} value={c.id}>{c.company_name}</option>
-                  ))}
-                </select>
-              </FormControl>
-
-              <div className="grid grid-cols-2 gap-6">
-                <FormControl label="Customer Type">
-                  <input
-                    readOnly
-                    className={`${fieldInputClass} bg-white text-slate-500`}
-                    value={selectedCompany?.customer_type || '—'}
-                  />
-                </FormControl>
-                <FormControl label="Currency">
-                  <input
-                    readOnly
-                    className={`${fieldInputClass} bg-white text-slate-500`}
-                    value={selectedCompany?.currency || '—'}
-                  />
-                </FormControl>
-              </div>
-
-              <FormControl label="GSTIN">
-                <input
-                  readOnly
-                  className={`${fieldInputClass} bg-white text-slate-500`}
-                  value={selectedCompany?.gstin || '—'}
-                />
-              </FormControl>
-            </div>
-
-            {/* --- Section 2: Purchase Order Information --- */}
-            <div className="space-y-6">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Purchase Order Information</h3>
-              
-              <FormControl label="Customer PO *">
-                <select
-                  className={fieldInputClass}
-                  value={salesOrderForm.customerPoId}
-                  onChange={e => onFieldChange('customerPoId', e.target.value)}
-                  disabled={!salesOrderForm.companyId}
-                >
-                  <option value="">Select Customer PO</option>
-                  {filteredPos.map(po => (
-                    <option key={po.id} value={po.id}>{po.po_number} ({formatDate(po.po_date)})</option>
-                  ))}
-                </select>
-              </FormControl>
-
-              <div className="grid grid-cols-2 gap-6">
-                <FormControl label="PO Date">
-                  <input
-                    readOnly
-                    className={`${fieldInputClass} bg-white text-slate-500`}
-                    value={selectedPoForSo ? formatDate(selectedPoForSo.po_date) : '—'}
-                  />
-                </FormControl>
-                <FormControl label="PO Total">
-                  <input
-                    readOnly
-                    className={`${fieldInputClass} bg-white text-slate-500`}
-                    value={selectedPoForSo ? formatCurrency(selectedPoForSo.net_total, selectedPoForSo.currency) : '—'}
-                  />
-                </FormControl>
-              </div>
-
-              <FormControl label="Payment Terms">
-                <input
-                  readOnly
-                  className={`${fieldInputClass} bg-white text-slate-500`}
-                  value={selectedPoForSo?.payment_terms || '—'}
-                />
-              </FormControl>
-            </div>
-
-            {/* --- Section 3: Project & Production Setup --- */}
-            <div className="col-span-full pt-10 mt-4">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2 mb-8">Production & Project Setup</h3>
-              <div className="grid gap-8 lg:grid-cols-3">
-                <FormControl label="Project / Job Code">
-                  <input
-                    className={fieldInputClass}
-                    value={salesOrderForm.projectName || ''}
-                    onChange={e => onFieldChange('projectName', e.target.value)}
-                    placeholder="—"
-                  />
-                </FormControl>
-
-                <FormControl label="Production Priority">
-                  <select
-                    className={fieldInputClass}
-                    value={salesOrderForm.productionPriority}
-                    onChange={e => onFieldChange('productionPriority', e.target.value)}
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="NORMAL">Normal</option>
-                    <option value="HIGH">High</option>
-                  </select>
-                </FormControl>
-
-                <FormControl label="Target Dispatch Date">
-                  <input
-                    type="date"
-                    className={fieldInputClass}
-                    value={salesOrderForm.targetDispatchDate}
-                    onChange={e => onFieldChange('targetDispatchDate', e.target.value)}
-                  />
-                </FormControl>
-              </div>
-
-              <div className="flex items-center gap-4 mt-10">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    className="w-5 h-5 rounded border-slate-300 text-slate-900 focus:ring-slate-900 transition-all cursor-pointer"
-                    checked={salesOrderForm.drawingRequired}
-                    onChange={e => onFieldChange('drawingRequired', e.target.checked)}
-                  />
-                  <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">Drawing Required</span>
-                </label>
-              </div>
-            </div>
-
-            {customerPosLoading && (
-              <div className="col-span-full py-8 flex flex-col items-center justify-center gap-3 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 mt-4">
-                <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
-                <p className="text-xs  text-slate-400  tracking-widest">Fetching PO Details...</p>
-              </div>
-            )}
-
-            {selectedPoForSo && !customerPosLoading && (
-              <div className="col-span-full mt-6 ">
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                      <h4 className="text-[10px]  text-slate-400  tracking-[0.2em]">Review Items from {selectedPoForSo.po_number}</h4>
-                      <button 
-                        type="button"
-                        onClick={fetchAvailableBoms}
-                        disabled={bomLoading}
-                        className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-full transition-colors flex items-center gap-1.5"
-                      >
-                        {bomLoading ? (
-                          <div className="w-3 h-3 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                        ) : (
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                          </svg>
-                        )}
-                        Fetch Approved BOM
-                      </button>
-                    </div>
-                    <span className="text-[10px]  text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full ">
-                      {soItems?.length || 0} Items
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-slate-50/30 text-slate-400  tracking-wider border-b border-slate-100">
-                        <tr>
-                          <th className="px-5 py-3 text-left ">Description</th>
-                          <th className="px-5 py-3 text-left  w-[180px]">Drawing No</th>
-                          <th className="px-5 py-3 text-right ">Qty</th>
-                          <th className="px-5 py-3 text-left ">Unit</th>
-                          <th className="px-5 py-3 text-right ">Rate</th>
-                          <th className="px-5 py-3 text-right ">Basic Amount</th>
-                          <th className="px-5 py-3 text-right  w-[120px]">BOM</th>
-                          <th className="px-5 py-3 text-right w-12"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {(soItems || []).map((item, idx) => (
-                          <React.Fragment key={`so-item-wrapper-${idx}`}>
-                            <tr className="hover:bg-slate-50/50 transition-colors">
-                              <td className="p-2">
-                                <p className="text-slate-900 text-xs">{item.description}</p>
-                                {item.item_code && <p className="text-[10px] text-slate-400 mt-0.5">{item.item_code}</p>}
-                              </td>
-                              <td className="p-2">
-                                <input 
-                                  className="w-full p-1.5 border border-slate-200 rounded text-[11px] font-mono focus:ring-1 focus:ring-slate-900 focus:outline-none"
-                                  value={item.drawing_no || ''}
-                                  onChange={e => {
-                                    const newItems = [...soItems]
-                                    newItems[idx] = { ...newItems[idx], drawing_no: e.target.value }
-                                    setSoItems(newItems)
-                                  }}
-                                  placeholder="Enter Drawing #"
-                                />
-                              </td>
-                              <td className="p-2 text-right text-slate-900 ">{item.quantity}</td>
-                              <td className="p-2 text-slate-500 font-medium">{item.unit}</td>
-                              <td className="p-2 text-right text-slate-600 font-medium">
-                                {formatCurrency(item.rate, selectedPoForSo.currency)}
-                              </td>
-                              <td className="p-2 text-right text-slate-900 ">
-                                {formatCurrency(item.basic_amount || (item.quantity * item.rate), selectedPoForSo.currency)}
-                              </td>
-                              <td className="p-2 text-right">
-                                <button 
-                                  type="button"
-                                  onClick={() => setExpandedItems(prev => ({...prev, [idx]: !prev[idx]}))}
-                                  className={`px-3 py-1.5 rounded-lg text-[10px]   transition-all ${
-                                    expandedItems[idx] ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                  }`}
-                                >
-                                  {expandedItems[idx] ? (
-                                    <span className="flex items-center gap-1.5">
-                                      {item.materials?.length > 0 ? 'Edit Mat.' : 'Close'}
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center gap-1.5">
-                                      {item.materials?.length > 0 ? (
-                                        <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg> BOM Loaded</>
-                                      ) : 'Add Materials'}
-                                    </span>
-                                  )}
-                                </button>
-                              </td>
-                              <td className="p-2 text-right">
-                                <button 
-                                  type="button"
-                                  onClick={() => {
-                                    if (window.confirm('Remove this item?')) {
-                                      setSoItems(soItems.filter((_, i) => i !== idx))
-                                    }
-                                  }}
-                                  className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </td>
-                            </tr>
-                            {expandedItems[idx] && (
-                              <tr className="bg-slate-50/30 border-none">
-                                <td colSpan="8" className="px-5 pb-4">
-                                  <MaterialInputTable 
-                                    materials={item.materials} 
-                                    onAdd={(mat) => {
-                                      const newItems = [...soItems]
-                                      newItems[idx] = { 
-                                        ...newItems[idx], 
-                                        materials: [...(newItems[idx].materials || []), mat] 
-                                      }
-                                      setSoItems(newItems)
-                                    }}
-                                    onDelete={(matIdx) => {
-                                      const newItems = [...soItems]
-                                      newItems[idx] = { 
-                                        ...newItems[idx], 
-                                        materials: (newItems[idx].materials || []).filter((_, i) => i !== matIdx) 
-                                      }
-                                      setSoItems(newItems)
-                                    }}
-                                  />
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="p-2 bg-slate-900 flex justify-between items-center">
-                    <div className="flex gap-6">
-                      <div className="space-y-0.5">
-                        <p className="text-[9px]  text-slate-400  tracking-widest">Subtotal</p>
-                        <p className="text-sm  text-white">{formatCurrency(selectedPoForSo.subtotal, selectedPoForSo.currency)}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-[9px]  text-slate-400  tracking-widest">Tax Total</p>
-                        <p className="text-sm  text-white">{formatCurrency(selectedPoForSo.tax_total, selectedPoForSo.currency)}</p>
-                      </div>
-                    </div>
-                    <div className="text-right space-y-0.5">
-                      <p className="text-[9px]  text-indigo-400  tracking-widest">Net Payable</p>
-                      <p className="text-lg font-black text-white">{formatCurrency(selectedPoForSo.net_total, selectedPoForSo.currency)}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
-                  <svg className="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    <strong>Auto-sync Active:</strong> All items, quantities, and tax configurations listed above will be automatically synchronized into the new Sales Order. Ensure the details match your requirements before proceeding.
-                  </p>
-                </div>
-              </div>
-            )}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Sales Orders</h1>
+            <p className="text-sm text-slate-500">Manage your sales orders and production workflow</p>
           </div>
+          <button 
+            onClick={handleAddOrder}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-bold"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Sales Order
+          </button>
+        </div>
 
-          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
-            <button
-              type="button"
-              className="px-5 py-2.5 rounded-2xl border border-slate-200 text-slate-600 text-sm  hover:border-slate-300"
-              onClick={onResetForm}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="px-5 py-2.5 rounded-2xl bg-slate-900 text-white text-sm  shadow-sm hover:bg-slate-800 disabled:opacity-60"
-              onClick={onSubmit}
-              disabled={loading}
-            >
-              {loading ? 'Creating...' : 'Create Sales Order'}
-            </button>
-          </div>
-        </Card>
+        <DataTable 
+          columns={columns}
+          data={orders}
+          loading={loading}
+          searchPlaceholder="Search sales orders..."
+        />
       </div>
-    )
+    );
   }
 
+  // Form View
+  const selectedBom = boms.find(b => String(b.id) === String(formData.bomId));
+  const subTotal = formData.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const costWithProfit = subTotal * (1 + (formData.profitMargin / 100));
+  const gstAmount = costWithProfit * ((formData.cgstRate + formData.sgstRate) / 100);
+  const totalAmount = costWithProfit + gstAmount;
+
   return (
-    <>
-    <div className="flex justify-between items-center mb-6">
-      <div>
-        <h1 className="text-xl text-slate-900 mb-1">Sales Orders</h1>
-        <p className="text-slate-600 text-xs">Manage all sales order</p>
-      </div>
-      <button 
-        onClick={() => onCreate && onCreate(true)}
-        className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm flex items-center gap-2"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-        </svg>
-        Create Sales Order
-      </button>
-    </div>
-
-      <DataTable 
-        columns={columns}
-        data={list}
-        loading={loading}
-        renderExpanded={renderExpandedRow}
-        searchPlaceholder="Search sales orders..."
-      />
-
-      {showBomModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col border border-slate-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Approved Templates</h3>
-                <p className="text-xs text-slate-500">Select a pre-approved BOM to clone into this Sales Order</p>
-              </div>
-              <button onClick={() => setShowBomModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+    <div className="space-y-6 pb-20">
+      <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm sticky top-0 z-10">
+        <button 
+          onClick={() => setViewMode('list')}
+          className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+        </button>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 rounded-lg">
+                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-              </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {availableBoms.length === 0 ? (
-                  <div className="col-span-full py-12 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                    No approved BOM templates found.
-                  </div>
-                ) : (
-                  availableBoms.map(bom => (
-                    <div 
-                      key={bom.id} 
-                      onClick={() => handleSelectBom(bom)}
-                      className="group p-4 border border-slate-200 rounded-2xl hover:border-indigo-500 hover:bg-indigo-50/30 transition-all cursor-pointer relative overflow-hidden text-left"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-bold tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">
-                          {bom.drawing_no}
-                        </span>
-                        <span className="text-[10px] text-slate-400">{formatDate(bom.created_at)}</span>
-                      </div>
-                      <h4 className="font-bold text-slate-900 text-sm mb-1 group-hover:text-indigo-600 transition-colors">{bom.description}</h4>
-                      <div className="flex gap-4 text-[10px] text-slate-500">
-                        <span>Qty: <strong>{bom.quantity} {bom.unit}</strong></span>
-                        <span>Customer: <strong>{bom.company_name}</strong></span>
-                      </div>
-                      <div className="absolute top-1/2 -right-4 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-hover:right-4 transition-all">
-                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button onClick={() => setShowBomModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">Close</button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">{formMode === 'create' ? 'New Sales Order' : formMode === 'edit' ? 'Edit Sales Order' : 'View Sales Order'}</h1>
+              <p className="text-xs text-slate-500">Create and configure sales orders</p>
             </div>
           </div>
         </div>
-      )}
-    </>
-  )
-}
+        <div className="flex items-center gap-3">
+           <button 
+              onClick={() => setViewMode('list')}
+              className="px-6 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors font-bold"
+            >
+              Cancel
+            </button>
+            {formMode !== 'view' && (
+              <button 
+                onClick={handleSaveOrder}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-bold shadow-lg shadow-indigo-200"
+              >
+                {formMode === 'create' ? 'Save Sales Order' : 'Update Sales Order'}
+              </button>
+            )}
+        </div>
+      </div>
 
-export default SalesOrders
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Order Information */}
+          <Card title="Order Information" subtitle="Basic details about the order">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
+              <FormControl label="Series">
+                <input 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-500" 
+                  value={formData.series} 
+                  disabled 
+                />
+              </FormControl>
+              <FormControl label="Order Date *">
+                <input 
+                  type="date" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.orderDate}
+                  onChange={(e) => setFormData({...formData, orderDate: e.target.value})}
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+              <FormControl label="Delivery Date">
+                <input 
+                  type="date" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.deliveryDate}
+                  onChange={(e) => setFormData({...formData, deliveryDate: e.target.value})}
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+              <FormControl label="Order Type">
+                <select 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.orderType}
+                  onChange={(e) => setFormData({...formData, orderType: e.target.value})}
+                  disabled={formMode === 'view'}
+                >
+                  <option value="Sales">Sales</option>
+                  <option value="Internal">Internal</option>
+                </select>
+              </FormControl>
+            </div>
+          </Card>
+
+          {/* Customer Details */}
+          <Card title="Customer Details" subtitle="Customer contact information">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+              <FormControl label="Customer *">
+                <SearchableSelect 
+                  options={companies.map(c => ({ value: c.id, label: c.company_name }))}
+                  value={formData.customerId}
+                  onChange={(e) => {
+                    const company = companies.find(c => String(c.id) === String(e.target.value));
+                    setFormData({
+                      ...formData, 
+                      customerId: e.target.value,
+                      customerEmail: company?.contact_email || '',
+                      customerPhone: company?.contact_mobile || ''
+                    });
+                  }}
+                  placeholder="Select customer..."
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+              <FormControl label="Email">
+                <input 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.customerEmail}
+                  onChange={(e) => setFormData({...formData, customerEmail: e.target.value})}
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+              <FormControl label="Phone">
+                <input 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.customerPhone}
+                  onChange={(e) => setFormData({...formData, customerPhone: e.target.value})}
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+            </div>
+          </Card>
+
+          {/* BOM & Inventory */}
+          <Card title="BOM & Inventory" subtitle="Production template and storage">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+              <FormControl label="Select BOM *">
+                <SearchableSelect 
+                  options={boms.map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
+                  value={formData.bomId}
+                  onChange={(e) => handleBomChange(e.target.value)}
+                  placeholder="Select warehouse..."
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+              <FormControl label="Order Quantity *">
+                <input 
+                  type="number"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.orderQuantity}
+                  onChange={(e) => {
+                    const newQty = Number(e.target.value);
+                    const newItems = formData.items.map(item => ({
+                        ...item,
+                        quantity: newQty,
+                        amount: newQty * item.rate
+                    }));
+                    setFormData({...formData, orderQuantity: newQty, items: newItems});
+                  }}
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+              <FormControl label="Warehouse">
+                <select 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.warehouse}
+                  onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
+                  disabled={formMode === 'view'}
+                >
+                  <option value="">Select warehouse...</option>
+                  {warehouseOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </FormControl>
+            </div>
+          </Card>
+
+          {/* BOM Details Table */}
+          {selectedBom && (
+            <Card title="BOM Details" subtitle="Items included in selected BOM">
+              <div className="p-4 bg-blue-50/50 rounded-xl mb-4 border border-blue-100 flex items-center gap-4">
+                <div className="p-3 bg-white rounded-xl shadow-sm border border-blue-100">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">Finished Goods <span className="text-slate-400 font-normal ml-1">(1)</span></p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Product: <span className="font-bold text-slate-700">{selectedBom.description}</span></p>
+                  <p className="text-[10px] text-indigo-600 font-mono">BOM ID: {selectedBom.drawing_no}</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-bold">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Item Code</th>
+                      <th className="px-4 py-3 text-left">Type</th>
+                      <th className="px-4 py-3 text-center w-24">Qty</th>
+                      <th className="px-4 py-3 text-right">Rate</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {formData.items.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-3 font-mono text-indigo-600">{item.item_code}</td>
+                        <td className="px-4 py-3 text-slate-500">{item.type}</td>
+                        <td className="px-4 py-3 text-center">
+                          <input 
+                            type="number" 
+                            className="w-16 text-center border-none bg-transparent focus:ring-0 p-0 font-bold" 
+                            value={item.quantity}
+                            onChange={(e) => {
+                                const newItems = [...formData.items];
+                                newItems[idx].quantity = Number(e.target.value);
+                                newItems[idx].amount = newItems[idx].quantity * newItems[idx].rate;
+                                setFormData({...formData, items: newItems});
+                            }}
+                            disabled={formMode === 'view'}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-600">₹ {item.rate.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-emerald-600">₹ {item.amount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          {/* Order Status & Taxes */}
+          <Card title="Order Status & Taxes">
+            <div className="space-y-4 p-4">
+              <FormControl label="Status">
+                <select 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  disabled={formMode === 'view'}
+                >
+                  <option value="Draft">Draft</option>
+                  <option value="Active">Active</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </FormControl>
+              <div className="grid grid-cols-2 gap-4">
+                <FormControl label="CGST Rate (%)">
+                  <input 
+                    type="number"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                    value={formData.cgstRate}
+                    onChange={(e) => setFormData({...formData, cgstRate: Number(e.target.value)})}
+                    disabled={formMode === 'view'}
+                  />
+                </FormControl>
+                <FormControl label="SGST Rate (%)">
+                  <input 
+                    type="number"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                    value={formData.sgstRate}
+                    onChange={(e) => setFormData({...formData, sgstRate: Number(e.target.value)})}
+                    disabled={formMode === 'view'}
+                  />
+                </FormControl>
+              </div>
+              <FormControl label="Profit Margin (%)">
+                <input 
+                  type="number"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.profitMargin}
+                  onChange={(e) => setFormData({...formData, profitMargin: Number(e.target.value)})}
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+            </div>
+          </Card>
+
+          {/* Price Summary */}
+          <Card title="Cost Breakdown">
+            <div className="space-y-3 p-4">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Finished Goods Total Cost (Unit):</span>
+                <span className="font-bold text-slate-700">₹ {subTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Finished Goods Cost × Sales Quantity ({formData.orderQuantity}):</span>
+                <span className="font-bold text-slate-700">₹ {(subTotal * formData.orderQuantity).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs pt-3 border-t border-slate-100">
+                <span className="text-slate-500">Cost with Profit:</span>
+                <span className="font-bold text-slate-700">₹ {costWithProfit.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">GST ({formData.cgstRate + formData.sgstRate}%):</span>
+                <span className="font-bold text-slate-700">₹ {gstAmount.toFixed(2)}</span>
+              </div>
+              <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
+                <div>
+                   <p className="text-sm font-bold text-slate-900">Sales Order Price:</p>
+                </div>
+                <div className="text-right">
+                   <p className="text-2xl font-black text-emerald-600">₹ {totalAmount.toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Bottom Actions */}
+      <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">
+        <button 
+          onClick={() => setViewMode('list')}
+          className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-bold flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+          Back
+        </button>
+        {formMode !== 'view' && (
+          <button 
+            onClick={handleSaveOrder}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-bold shadow-lg shadow-indigo-200 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+            Save Sales Order
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default SalesOrders;
