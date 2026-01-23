@@ -664,10 +664,16 @@ const CustomerDrawing = () => {
     const result = await Swal.fire({
       title: 'Send to Design?',
       text: `Send all ${unsharedDrawings.length} unshared drawings to Design Department for review?`,
-      icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Yes, send all',
-      confirmButtonColor: '#10b981'
+      confirmButtonColor: '#10b981',
+      width: '350px',
+      customClass: {
+        title: 'text-lg',
+        htmlContainer: 'text-sm',
+        confirmButton: 'text-sm',
+        cancelButton: 'text-sm'
+      }
     });
 
     if (result.isConfirmed) {
