@@ -104,6 +104,7 @@ const ClientQuotations = () => {
       setSentQuotations(Object.values(grouped));
     } catch (error) {
       console.error(error);
+      errorToast(error.message || 'Failed to fetch sent quotations');
     } finally {
       setLoading(false);
     }

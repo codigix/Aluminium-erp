@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card } from '../components/ui.jsx';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -62,7 +63,7 @@ const POReceiptDetails = () => {
         fetchPOItems(data.po_id, token);
       }
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to load receipt details', 'error');
+      errorToast(error.message || 'Failed to load receipt details');
     } finally {
       setLoading(false);
     }
@@ -92,13 +93,13 @@ const POReceiptDetails = () => {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        Swal.fire('Success', 'PDF downloaded successfully', 'success');
+        successToast('PDF downloaded successfully');
       } else {
-        Swal.fire('Error', 'Failed to download PDF', 'error');
+        errorToast('Failed to download PDF');
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      Swal.fire('Error', 'Failed to download PDF', 'error');
+      errorToast('Failed to download PDF');
     } finally {
       setExporting(false);
     }

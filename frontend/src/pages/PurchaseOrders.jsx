@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -182,17 +183,17 @@ const PurchaseOrders = () => {
     e.preventDefault();
 
     if (!formData.poNumber) {
-      Swal.fire('Error', 'Please enter a PO Number', 'error');
+      errorToast('Please enter a PO Number');
       return;
     }
 
     if (!formData.quotationId) {
-      Swal.fire('Error', 'Please select a quotation', 'error');
+      errorToast('Please select a quotation');
       return;
     }
 
     if (!formData.expectedDeliveryDate) {
-      Swal.fire('Error', 'Please select an expected delivery date', 'error');
+      errorToast('Please select an expected delivery date');
       return;
     }
 
@@ -214,7 +215,7 @@ const PurchaseOrders = () => {
 
       if (!response.ok) throw new Error('Failed to create PO');
 
-      await Swal.fire('Success', 'Purchase Order created successfully', 'success');
+      successToast('Purchase Order created successfully');
       setShowCreateModal(false);
       setPoItems([]);
       setFormData({ quotationId: '', projectName: '', quoteNumber: '', poNumber: '', vendorName: '', expectedDeliveryDate: '', notes: '' });
@@ -222,7 +223,7 @@ const PurchaseOrders = () => {
       fetchStats();
       fetchApprovedQuotations();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to create PO', 'error');
+      errorToast(error.message || 'Failed to create PO');
     }
   };
 
@@ -247,7 +248,7 @@ const PurchaseOrders = () => {
       });
       setShowEditModal(true);
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to load PO details', 'error');
+      errorToast(error.message || 'Failed to load PO details');
     }
   };
 
@@ -272,12 +273,12 @@ const PurchaseOrders = () => {
 
       if (!response.ok) throw new Error('Failed to update PO');
 
-      await Swal.fire('Success', 'Purchase Order updated successfully', 'success');
+      successToast('Purchase Order updated successfully');
       setShowEditModal(false);
       fetchPOs();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to update PO', 'error');
+      errorToast(error.message || 'Failed to update PO');
     }
   };
 
@@ -306,11 +307,11 @@ const PurchaseOrders = () => {
 
       if (!response.ok) throw new Error('Failed to delete PO');
 
-      await Swal.fire('Success', 'Purchase Order deleted successfully', 'success');
+      successToast('Purchase Order deleted successfully');
       fetchPOs();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to delete PO', 'error');
+      errorToast(error.message || 'Failed to delete PO');
     }
   };
 

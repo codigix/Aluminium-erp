@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Modal, FormControl, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -103,7 +104,7 @@ const Vendors = () => {
     e.preventDefault();
     
     if (!formData.vendorName.trim()) {
-      Swal.fire('Error', 'Vendor name is required', 'error');
+      errorToast('Vendor name is required');
       return;
     }
 
@@ -123,7 +124,7 @@ const Vendors = () => {
 
       if (!response.ok) throw new Error('Failed to create vendor');
 
-      await Swal.fire('Success', 'Vendor added successfully', 'success');
+      successToast('Vendor added successfully');
       setFormData({
         vendorName: '',
         contactPerson: '',
@@ -139,7 +140,7 @@ const Vendors = () => {
       fetchVendors();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to add vendor', 'error');
+      errorToast(error.message || 'Failed to add vendor');
     }
   };
 
@@ -167,17 +168,17 @@ const Vendors = () => {
 
       if (!response.ok) throw new Error('Failed to delete vendor');
 
-      await Swal.fire('Success', 'Vendor deleted successfully', 'success');
+      successToast('Vendor deleted successfully');
       fetchVendors();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to delete vendor', 'error');
+      errorToast(error.message || 'Failed to delete vendor');
     }
   };
 
   const handleExportList = () => {
     if (vendors.length === 0) {
-      Swal.fire('Info', 'No vendors to export', 'info');
+      errorToast('No vendors to export');
       return;
     }
 

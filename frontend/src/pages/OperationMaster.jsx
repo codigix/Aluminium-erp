@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, DataTable, Badge, FormControl, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -51,7 +52,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       setOperations(data);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'Failed to load operations', 'error');
+      errorToast('Failed to load operations');
     } finally {
       setLoading(false);
     }
@@ -114,12 +115,12 @@ const OperationMaster = ({ showForm, setShowForm }) => {
         throw new Error(errorData.message || 'Failed to save operation');
       }
 
-      Swal.fire('Success', `Operation ${isEditing ? 'updated' : 'created'} successfully`, 'success');
+      successToast(`Operation ${isEditing ? 'updated' : 'created'} successfully`);
       setShowForm(false);
       resetForm();
       fetchOperations();
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -176,10 +177,10 @@ const OperationMaster = ({ showForm, setShowForm }) => {
           body: JSON.stringify({ ...op, is_active: newStatus })
         });
         if (!response.ok) throw new Error('Failed to update status');
-        Swal.fire('Updated!', `Operation has been ${newStatus ? 'enabled' : 'disabled'}.`, 'success');
+        successToast(`Operation has been ${newStatus ? 'enabled' : 'disabled'}.`);
         fetchOperations();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       }
     }
   };
@@ -204,10 +205,10 @@ const OperationMaster = ({ showForm, setShowForm }) => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to delete operation');
-        Swal.fire('Deleted!', 'Operation has been deleted successfully', 'success');
+        successToast('Operation has been deleted successfully');
         fetchOperations();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       } finally {
         setLoading(false);
       }

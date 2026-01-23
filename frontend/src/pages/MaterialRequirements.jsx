@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, StatusBadge, FormControl, Modal, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -37,7 +38,7 @@ const MaterialRequirements = () => {
       }
     } catch (error) {
       console.error('Error:', error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,7 @@ const MaterialRequirements = () => {
 
   const handleIssueSubmit = async (e) => {
     e.preventDefault();
-    if (!issueData.workOrderId) return Swal.fire('Error', 'Please select a work order', 'error');
+    if (!issueData.workOrderId) return errorToast('Please select a work order');
     
     try {
       const token = localStorage.getItem('authToken');
@@ -98,15 +99,15 @@ const MaterialRequirements = () => {
       });
 
       if (response.ok) {
-        Swal.fire('Success', 'Material issued successfully', 'success');
+        successToast('Material issued successfully');
         setIsIssueModalOpen(false);
         fetchRequirements();
       } else {
         const err = await response.json();
-        Swal.fire('Error', err.error || 'Failed to issue material', 'error');
+        errorToast(err.error || 'Failed to issue material');
       }
     } catch (error) {
-      Swal.fire('Error', 'Network error', 'error');
+      errorToast('Network error');
     }
   };
 

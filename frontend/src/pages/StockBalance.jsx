@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -72,10 +73,10 @@ const StockBalance = () => {
 
         if (!response.ok) throw new Error('Failed to delete stock balance');
 
-        await Swal.fire('Deleted!', 'Stock balance has been removed.', 'success');
+        successToast('Stock balance has been removed');
         fetchStockBalance();
       } catch (error) {
-        Swal.fire('Error', error.message || 'Failed to delete balance', 'error');
+        errorToast(error.message || 'Failed to delete balance');
       }
     }
   };

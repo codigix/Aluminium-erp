@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -53,6 +54,7 @@ const StockLedger = () => {
       setLedger(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching ledger:', error);
+      errorToast(error.message || 'Failed to load stock ledger');
       setLedger([]);
     } finally {
       setLoading(false);
@@ -88,10 +90,10 @@ const StockLedger = () => {
 
         if (!response.ok) throw new Error('Failed to delete ledger entry');
 
-        await Swal.fire('Deleted!', 'Ledger entry has been deleted.', 'success');
+        successToast('Ledger entry has been deleted.');
         fetchLedger({ itemCode, startDate, endDate });
       } catch (error) {
-        Swal.fire('Error', error.message || 'Failed to delete entry', 'error');
+        errorToast(error.message || 'Failed to delete entry');
       }
     }
   };
@@ -100,7 +102,7 @@ const StockLedger = () => {
     e.preventDefault();
 
     if (!formData.itemCode || !formData.quantity) {
-      Swal.fire('Error', 'Item Code and Quantity are required', 'error');
+      errorToast('Item Code and Quantity are required');
       return;
     }
 
@@ -124,7 +126,7 @@ const StockLedger = () => {
 
       if (!response.ok) throw new Error('Failed to add ledger entry');
 
-      await Swal.fire('Success', 'Ledger entry added successfully', 'success');
+      successToast('Ledger entry added successfully');
       setShowModal(false);
       setFormData({
         itemCode: '',
@@ -136,7 +138,7 @@ const StockLedger = () => {
       });
       fetchLedger({ itemCode, startDate, endDate });
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to add ledger entry', 'error');
+      errorToast(error.message || 'Failed to add ledger entry');
     }
   };
 

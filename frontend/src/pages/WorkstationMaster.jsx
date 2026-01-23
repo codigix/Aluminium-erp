@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, StatusBadge, FormControl, Modal, DataTable, Badge } from '../components/ui.jsx';
 import { Search, Plus, RefreshCw, Edit2, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -44,7 +45,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       setWorkstations(data);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'Failed to load workstations', 'error');
+      errorToast('Failed to load workstations');
     } finally {
       setLoading(false);
     }
@@ -103,12 +104,12 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
         throw new Error(errorData.message || 'Failed to save workstation');
       }
 
-      Swal.fire('Success', `Workstation ${isEditing ? 'updated' : 'created'} successfully`, 'success');
+      successToast(`Workstation ${isEditing ? 'updated' : 'created'} successfully`);
       resetForm();
       fetchWorkstations();
       setShowForm(false);
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     }
   };
 
@@ -176,10 +177,10 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to delete workstation');
-        Swal.fire('Deleted!', 'Workstation has been deleted.', 'success');
+        successToast('Workstation has been deleted.');
         fetchWorkstations();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       }
     }
   };

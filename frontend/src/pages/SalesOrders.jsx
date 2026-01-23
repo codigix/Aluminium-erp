@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -132,7 +133,7 @@ const SalesOrders = () => {
       }
     } catch (err) {
       console.error('Error fetching order details:', err);
-      Swal.fire('Error', 'Failed to fetch order details', 'error');
+      errorToast('Failed to fetch order details');
     }
   };
 
@@ -160,13 +161,13 @@ const SalesOrders = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
-          Swal.fire('Deleted!', 'Order has been deleted.', 'success');
+          successToast('Order has been deleted');
           fetchOrders();
         } else {
           throw new Error('Failed to delete order');
         }
       } catch (err) {
-        Swal.fire('Error', err.message, 'error');
+        errorToast(err.message);
       }
     }
   };
@@ -197,7 +198,7 @@ const SalesOrders = () => {
       });
 
       if (response.ok) {
-        Swal.fire('Success', `Order ${formMode === 'create' ? 'created' : 'updated'} successfully`, 'success');
+        successToast(`Order ${formMode === 'create' ? 'created' : 'updated'} successfully`);
         setViewMode('list');
         fetchOrders();
       } else {
@@ -205,7 +206,7 @@ const SalesOrders = () => {
         throw new Error(errData.message || 'Failed to save order');
       }
     } catch (err) {
-      Swal.fire('Error', err.message, 'error');
+      errorToast(err.message);
     }
   };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -149,15 +150,15 @@ const WorkOrder = () => {
       });
 
       if (response.ok) {
-        Swal.fire('Success', 'Work Order created successfully', 'success');
+        successToast('Work Order created successfully');
         setIsModalOpen(false);
         fetchWorkOrders();
       } else {
         const error = await response.json();
-        Swal.fire('Error', error.error || 'Failed to create Work Order', 'error');
+        errorToast(error.error || 'Failed to create Work Order');
       }
     } catch (error) {
-      Swal.fire('Error', 'Network error', 'error');
+      errorToast('Network error');
     }
   };
 
