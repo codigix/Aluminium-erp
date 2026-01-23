@@ -11,6 +11,7 @@ const DesignOrders = () => {
   const [incomingOrders, setIncomingOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [incomingLoading, setIncomingLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('incoming'); // 'incoming' or 'progress'
   const [searchTerm, setSearchTerm] = useState('');
   
   // Details Modal State
@@ -806,18 +807,23 @@ const DesignOrders = () => {
       <div className="max-w-7xl mx-auto">
         {/* HEADER SECTION */}
         <div className="mb-4">
-          <div className="flex justify-between items-center mb-3 gap-4">
+          <div className="flex justify-between items-end mb-3 gap-4">
             <div>
               <h1 className="text-xl text-slate-900">Design Engineering Hub</h1>
               <p className="text-xs text-slate-600">Review customer drawings and create technical specifications</p>
             </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => { fetchOrders(); fetchIncomingOrders(); }}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-1"
+            <div className="flex bg-slate-200 p-1 rounded-xl">
+              <button
+                onClick={() => setActiveTab('incoming')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === 'incoming' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                Refresh
+                Incoming Requests
+              </button>
+              <button
+                onClick={() => setActiveTab('progress')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === 'progress' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                In Progress
               </button>
             </div>
           </div>
@@ -830,28 +836,40 @@ const DesignOrders = () => {
               </svg>
             </div>
             <p className="text-xs text-blue-900 font-medium">
-              Review incoming drawings, accept design requests, and manage technical specifications for all orders.
+              {activeTab === 'incoming' 
+                ? 'Review incoming drawings from sales and accept them for design engineering review.'
+                : 'Manage active design tasks, create technical specifications, and track progress of approved drawings.'}
             </p>
           </div>
         </div>
 
         {/* INCOMING REQUESTS SECTION */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200 mb-4">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 border-b border-blue-700">
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                  📥 Incoming Design Requests
-                </h2>
-                <p className="text-blue-100 text-xs">Customer drawings ready for design engineering review</p>
+        {activeTab === 'incoming' && (
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200 mb-4">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 border-b border-blue-700">
+              <div className="flex justify-between items-center mb-3">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    📥 Incoming Design Requests
+                  </h2>
+                  <p className="text-blue-100 text-xs">Customer drawings ready for design engineering review</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={fetchIncomingOrders}
+                    disabled={incomingLoading}
+                    className="px-3 py-1.5 bg-white rounded text-xs text-blue-600 shadow-sm transition-colors disabled:opacity-50 font-bold"
+                  >
+                    ↻ Refresh
+                  </button>
+                  {incomingOrders.length > 0 && (
+                    <span className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs font-bold">
+                      {incomingOrders.length}
+                    </span>
+                  )}
+                </div>
               </div>
-              {incomingOrders.length > 0 && (
-                <span className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs font-bold">
-                  {incomingOrders.length}
-                </span>
-              )}
-            </div>
             {selectedIncomingOrders.size > 0 && (
               <div className="flex items-center gap-2 pt-2 border-t border-blue-400">
                 <span className="text-white text-xs font-semibold">
@@ -1068,37 +1086,48 @@ const DesignOrders = () => {
             </table>
           </div>
         </div>
+      )}
 
         {/* ACTIVE DESIGN TASKS SECTION */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200">
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 border-b border-purple-700">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    🎨 Design Tasks in Progress
-                  </h2>
-                  <p className="text-purple-100 text-xs">Manage active design orders and technical specifications</p>
+        {activeTab === 'progress' && (
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200">
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 border-b border-purple-700">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                      🎨 Design Tasks in Progress
+                    </h2>
+                    <p className="text-purple-100 text-xs">Manage active design orders and technical specifications</p>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search tasks..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="bg-white/10 border border-white/20 text-white placeholder-purple-200 text-xs rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
+                    />
+                    <svg className="w-3.5 h-3.5 text-purple-200 absolute right-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                  </div>
                 </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search tasks..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-white/10 border border-white/20 text-white placeholder-purple-200 text-xs rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
-                  />
-                  <svg className="w-3.5 h-3.5 text-purple-200 absolute right-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={fetchOrders}
+                    disabled={loading}
+                    className="px-3 py-1.5 bg-white rounded text-xs text-purple-600 shadow-sm transition-colors disabled:opacity-50 font-bold"
+                  >
+                    ↻ Refresh
+                  </button>
+                  {orders.length > 0 && (
+                    <span className="px-3 py-1 bg-white text-purple-600 rounded-full text-xs font-bold">
+                      {filteredOrders.length} {filteredOrders.length !== orders.length ? `of ${orders.length}` : ''}
+                    </span>
+                  )}
                 </div>
               </div>
-              {orders.length > 0 && (
-                <span className="px-3 py-1 bg-white text-purple-600 rounded-full text-xs font-bold">
-                  {filteredOrders.length} {filteredOrders.length !== orders.length ? `of ${orders.length}` : ''}
-                </span>
-              )}
             </div>
-          </div>
         
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100">
@@ -1262,6 +1291,7 @@ const DesignOrders = () => {
             </table>
           </div>
         </div>
+      )}
       </div>
 
       {/* Details Modal */}
