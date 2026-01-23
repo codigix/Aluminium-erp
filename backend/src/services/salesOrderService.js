@@ -5,10 +5,13 @@ const listSalesOrders = async (includeWithoutPo = false) => {
   const whereClause = includeWithoutPo ? '' : 'WHERE so.customer_po_id IS NOT NULL';
   const [rows] = await pool.query(
     `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+            COALESCE(ct.phone, ct.name) as contact_person, ct.email as email_address, ct.phone as contact_phone,
+            (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     LEFT JOIN contacts ct ON ct.company_id = so.company_id AND ct.contact_type = 'PRIMARY'
      ${whereClause}
      ORDER BY so.created_at DESC`
   );
@@ -51,7 +54,6 @@ const getIncomingOrders = async (departmentCode) => {
      LEFT JOIN (
        SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit, status as item_status, rejection_reason as item_rejection_reason
        FROM sales_order_items
-       WHERE status != 'REJECTED' OR status IS NULL
      ) soi ON soi.sales_order_id = so.id
      WHERE (${whereClause}) AND so.request_accepted = 0
      ORDER BY so.created_at DESC`;
@@ -499,8 +501,10 @@ const getOrderTimeline = async salesOrderId => {
     [salesOrderId]
   );
   
-  // Fetch materials, components, operations, and scrap for each item to show in BOM creation and other lists
-  for (const item of items) {
+  const allTimelineItems = [...items];
+
+  // Fetch materials, components, operations, and scrap for each item
+  for (const item of allTimelineItems) {
     const [materials] = await pool.query(
       'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
       [item.id]
@@ -544,10 +548,10 @@ const getOrderTimeline = async salesOrderId => {
     
     const totalOrderCost = matCost + compCost + laborCost - scrapRecovery;
     item.bom_cost = orderQty > 0 ? totalOrderCost / orderQty : 0;
-    item.has_bom = materials.length > 0 || components.length > 0 || operations.length > 0;
+    item.has_bom = (materials.length > 0 || components.length > 0 || operations.length > 0);
   }
   
-  return items;
+  return allTimelineItems;
 };
 
 const generateSalesOrderPDF = async (salesOrderId) => {

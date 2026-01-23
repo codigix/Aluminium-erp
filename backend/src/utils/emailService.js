@@ -24,19 +24,26 @@ const createTransporter = () => {
 
 const generateQuotationHTML = (clientName, items, totalAmount, notes) => {
   const itemsHTML = (items || [])
-    .map((item, idx) => `
+    .map((item, idx) => {
+      const isRejected = item.status === 'REJECTED';
+      const unitPrice = isRejected ? '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : `₹${(item.quotedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      const totalLine = isRejected ? '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : `₹${((item.quantity || 1) * (item.quotedPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      
+      return `
       <tr>
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${idx + 1}</td>
         <td style="padding: 10px; border: 1px solid #000;">
           <div style="font-weight: bold;">${item.drawing_no || '—'}</div>
           ${item.description ? `<div style="font-size: 11px; color: #333; margin-top: 4px;">${item.description}</div>` : ''}
+          ${isRejected ? `<div style="font-size: 10px; color: #dc2626; margin-top: 4px; font-weight: bold;">Reason: ${item.rejection_reason || 'Not specified'}</div>` : ''}
         </td>
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${item.quantity || 1}</td>
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${item.unit || 'Nos'}</td>
-        <td style="padding: 10px; border: 1px solid #000; text-align: right;">₹${(item.quotedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-        <td style="padding: 10px; border: 1px solid #000; text-align: right; font-weight: bold;">₹${((item.quantity || 1) * (item.quotedPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: right;">${unitPrice}</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: right; font-weight: bold;">${totalLine}</td>
       </tr>
-    `)
+    `;
+    })
     .join('');
 
   const html = `

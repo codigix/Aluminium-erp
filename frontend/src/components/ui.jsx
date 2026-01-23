@@ -20,18 +20,18 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
 
-  const selectedOption = options.find(opt => opt[valueField] === value);
+  const selectedOption = options.find(opt => String(opt[valueField]) === String(value));
 
   useEffect(() => {
     if (!isOpen) {
       setSearchTerm(selectedOption ? selectedOption[labelField] : (value || ''));
     }
-  }, [value, selectedOption, isOpen]);
+  }, [value, selectedOption, isOpen, labelField]);
 
   const filteredOptions = options.filter(opt => 
-    opt[labelField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    opt[valueField]?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (subLabelField && opt[subLabelField]?.toLowerCase().includes(searchTerm.toLowerCase()))
+    String(opt[labelField] || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(opt[valueField] || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (subLabelField && String(opt[subLabelField] || '').toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
               filteredOptions.map((opt, idx) => (
                 <div
                   key={idx}
-                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${opt[valueField] === value ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
+                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${String(opt[valueField]) === String(value) ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
                   onClick={() => {
                     onChange({ target: { value: opt[valueField] } });
                     setSearchTerm(opt[labelField]);

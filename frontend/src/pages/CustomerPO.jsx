@@ -173,6 +173,7 @@ const CustomerPO = ({
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                       {group.quotes
+                                        .filter(item => item.status !== 'REJECTED')
                                         .map((item) => {
                                         return (
                                           <React.Fragment key={`quote-item-${item.id}`}>
@@ -181,11 +182,6 @@ const CustomerPO = ({
                                                 <div className="flex flex-col gap-1">
                                                   <div className="flex items-center gap-2">
                                                     <span className="text-slate-900 font-medium">{item.drawing_no}</span>
-                                                    {item.status === 'REJECTED' && (
-                                                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 uppercase">
-                                                        Rejected
-                                                      </span>
-                                                    )}
                                                   </div>
                                                 </div>
                                               </td>

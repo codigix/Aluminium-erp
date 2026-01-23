@@ -36,9 +36,38 @@ const CustomerDrawing = () => {
   const [saveLoading, setSaveLoading] = useState(false);
 
   const requirementColumns = [
-    { label: 'Client', key: 'client_name', sortable: true },
-    { label: 'Drawing No', key: 'drawing_no', sortable: true },
-    { label: 'Contact', key: 'contact_person' },
+    { 
+      label: 'Client', 
+      key: 'client_name', 
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-slate-900">{val || row.company_name || '—'}</span>
+        </div>
+      )
+    },
+    { 
+      label: 'Drawing No', 
+      key: 'drawing_no', 
+      sortable: true,
+      render: (val) => (
+        <div className="max-w-[250px] max-h-[60px] overflow-y-auto text-[10px] leading-relaxed pr-2 text-slate-500" title={val}>
+          {val}
+        </div>
+      )
+    },
+    { 
+      label: 'Contact', 
+      key: 'contact_person',
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-slate-900">{row.contact_phone || val || '—'}</span>
+          {row.contact_phone && val && val !== row.contact_phone && (
+            <span className="text-[10px] text-slate-500">{val}</span>
+          )}
+        </div>
+      )
+    },
     { label: 'Email', key: 'email_address' },
     { 
       label: 'Status', 

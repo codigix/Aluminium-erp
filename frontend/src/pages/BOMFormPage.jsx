@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
-const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true }) => {
+const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
 
-  const selectedOption = options.find(opt => opt[valueField] === value);
+  const selectedOption = options.find(opt => String(opt[valueField]) === String(value));
 
   useEffect(() => {
     if (!isOpen) {
@@ -16,11 +16,14 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
     }
   }, [value, selectedOption, isOpen, labelField]);
 
-  const filteredOptions = options.filter(opt => 
-    opt[labelField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    opt[valueField]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (subLabelField && opt[subLabelField]?.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredOptions = options.filter(opt => {
+    const search = String(searchTerm || '').toLowerCase();
+    return (
+      String(opt[labelField] || '').toLowerCase().includes(search) ||
+      String(opt[valueField] || '').toLowerCase().includes(search) ||
+      (subLabelField && String(opt[subLabelField] || '').toLowerCase().includes(search))
+    );
+  });
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -37,20 +40,22 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
       <div className="relative">
         <input
           type="text"
-          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-900"
+          disabled={disabled}
+          className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium ${disabled ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-900'}`}
           placeholder={placeholder}
           value={searchTerm}
           onChange={(e) => {
+            if (disabled) return;
             setSearchTerm(e.target.value);
             setIsOpen(true);
             if (allowCustom) {
               onChange({ target: { value: e.target.value } });
             }
           }}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => !disabled && setIsOpen(true)}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
-          {isOpen ? '▲' : '▼'}
+          {!disabled && (isOpen ? '▲' : '▼')}
         </div>
       </div>
       
@@ -61,7 +66,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
               filteredOptions.map((opt, idx) => (
                 <div
                   key={idx}
-                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${opt[valueField] === value ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
+                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${String(opt[valueField]) === String(value) ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
                   onClick={() => {
                     onChange({ target: { value: opt[valueField] } });
                     setSearchTerm(opt[labelField]);
@@ -119,6 +124,7 @@ const BOMFormPage = () => {
     itemGroup: 'FG',
     itemCode: '',
     drawingNo: '',
+    drawing_id: '',
     uom: 'Kg',
     revision: '1',
     description: '',
@@ -155,35 +161,42 @@ const BOMFormPage = () => {
       if (showLoading) setLoading(true);
       const token = localStorage.getItem('authToken');
       
-      if (itemId && itemId !== 'bom-form') {
-        // Fetch Item Details
-        const itemResponse = await fetch(`${API_BASE}/sales-orders/items/${itemId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!itemResponse.ok) throw new Error('Failed to fetch item details');
-        const itemData = await itemResponse.json();
-        setSelectedItem(itemData);
+      const effectiveId = itemId && itemId !== 'bom-form' ? itemId : selectedItem?.id;
 
-        // Auto-set drawing filter if item has a drawing
-        if (itemData.drawing_no && itemData.drawing_no !== 'N/A') {
-          setDrawingFilter(itemData.drawing_no);
+      if (effectiveId) {
+        // If we have an ID but not selectedItem data (initial load from URL)
+        if (!selectedItem || selectedItem.id !== effectiveId) {
+          const itemResponse = await fetch(`${API_BASE}/sales-orders/items/${effectiveId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (itemResponse.ok) {
+            const itemData = await itemResponse.json();
+            setSelectedItem(itemData);
+            if (itemData.drawing_no && itemData.drawing_no !== 'N/A') {
+              setDrawingFilter(itemData.drawing_no);
+            }
+          }
         }
 
         // Fetch BOM Details
-        const bomResponse = await fetch(`${API_BASE}/bom/items/${itemId}`, {
+        const bomResponse = await fetch(`${API_BASE}/bom/items/${effectiveId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!bomResponse.ok) throw new Error('Failed to fetch BOM details');
-        const bomData = await bomResponse.json();
-        setBomData(bomData);
-      } else {
+        if (bomResponse.ok) {
+          const bomData = await bomResponse.json();
+          setBomData(bomData);
+        } else if (bomResponse.status === 404) {
+          setBomData({ materials: [], components: [], operations: [], scrap: [] });
+        }
+      }
+
+      if (!itemId || itemId === 'bom-form') {
         // Fetch All Approved Drawings for Selection
         const drawingsResponse = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (drawingsResponse.ok) {
           const drawingsData = await drawingsResponse.json();
-          // Flatten items from all orders
           const allItems = drawingsData.flatMap(order => (order.items || []).map(item => ({
             ...item,
             company_name: order.company_name,
@@ -224,14 +237,37 @@ const BOMFormPage = () => {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [itemId]);
+  }, [itemId, selectedItem]);
 
   useEffect(() => {
     fetchData();
   }, [itemId, fetchData]);
 
+  // Sync productForm with selectedItem when it changes (e.g. after initial load)
+  useEffect(() => {
+    if (selectedItem) {
+      setProductForm(prev => ({
+        ...prev,
+        itemCode: selectedItem.item_code || selectedItem.itemCode || prev.itemCode,
+        description: selectedItem.material_name || selectedItem.description || prev.description,
+        itemGroup: selectedItem.item_group || getItemGroupFromMaterialType(selectedItem.material_type) || prev.itemGroup,
+        drawingNo: selectedItem.drawing_no || prev.drawingNo,
+        drawing_id: selectedItem.drawing_id || prev.drawing_id,
+        quantity: selectedItem.quantity || prev.quantity,
+        uom: selectedItem.unit || selectedItem.uom || prev.uom,
+        revision: selectedItem.revision_no || selectedItem.revision || prev.revision
+      }));
+    }
+  }, [selectedItem]);
+
   const handleAddSectionItem = async (section, formData, setFormState, initialForm) => {
     try {
+      const effectiveItemId = itemId && itemId !== 'bom-form' ? itemId : selectedItem?.id;
+      
+      if (!effectiveItemId) {
+        throw new Error('Please select a Product/Item first before adding details.');
+      }
+
       const token = localStorage.getItem('authToken');
       const payload = { ...formData };
 
@@ -313,7 +349,7 @@ const BOMFormPage = () => {
         payload.loss_percent = payload.lossPercent;
       }
 
-      const response = await fetch(`${API_BASE}/bom/items/${itemId}/${section}`, {
+      const response = await fetch(`${API_BASE}/bom/items/${effectiveItemId}/${section}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(payload)
@@ -353,6 +389,7 @@ const BOMFormPage = () => {
       itemGroup: 'FG',
       itemCode: '',
       drawingNo: '',
+      drawing_id: '',
       uom: 'Kg',
       revision: '1',
       description: '',
@@ -519,11 +556,12 @@ const BOMFormPage = () => {
                   <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Quick Filter by Drawing</label>
                   <SearchableSelect
                     placeholder="Search Drawing No..."
-                    options={[...new Set(stockItems
+                    options={[...new Set(approvedDrawings
                       .map(i => i.drawing_no)
                       .filter(d => d && d !== 'N/A')
                     )].sort().map(d => ({ label: d, value: d }))}
                     value={drawingFilter}
+                    disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => setDrawingFilter(e.target.value)}
                   />
                   <p className="text-[9px] text-slate-400">Filters Product Name and Item Code below</p>
@@ -544,58 +582,36 @@ const BOMFormPage = () => {
                   <label className="text-xs text-slate-500">Product Name *</label>
                   <SearchableSelect
                     placeholder="Select Product"
-                    options={stockItems
+                    options={approvedDrawings
                       .filter(item => {
-                        // If drawing filter is active, only show items for that drawing
-                        // If no drawing filter, show FG, SFG, Sub-Assembly, and Assembly
                         if (drawingFilter) {
                           return item.drawing_no === drawingFilter;
                         }
-                        const type = (item.material_type || '').toLowerCase();
-                        const isMainProduct = type.includes('finished') || type.includes('assembly') || type.includes('semi') || type.includes('sfg') || type === 'fg' || type.includes('fg');
-                        return isMainProduct;
+                        return true;
                       })
-                      .map(item => {
-                        const newGroup = getItemGroupFromMaterialType(item.material_type);
-                        const labelType = newGroup === 'FG' ? 'Finished Good (FG)' : 
-                                        newGroup === 'SFG' ? 'SFG' : 
-                                        newGroup === 'Sub Assembly' ? 'Sub-Assembly' : 
-                                        newGroup === 'Assembly' ? 'Assembly' : (item.material_type || 'Item');
-                        
-                        return {
-                          label: item.material_name,
-                          value: item.material_name,
-                          subLabel: `[${labelType}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-                        };
-                      })}
-                    value={productForm.description}
+                      .map(item => ({
+                        label: item.material_name || item.description,
+                        value: item.id,
+                        subLabel: `[${item.item_group || 'Item'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                      }))}
+                    value={selectedItem?.id}
+                    disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => {
-                      const item = stockItems.find(i => i.material_name === e.target.value);
+                      const item = approvedDrawings.find(i => String(i.id) === String(e.target.value));
+                      
                       if (item) {
-                        const newGroup = getItemGroupFromMaterialType(item.material_type);
-                        const isAssembly = ['Sub Assembly', 'Assembly'].includes(newGroup);
-                        
-                        // Strict state update - no merging of old FG/Drawing data
-                        const updatedForm = {
-                          ...productForm, // Keep global flags like isActive
-                          description: item.material_name,
+                        setSelectedItem(item);
+                        setProductForm(prev => ({
+                          ...prev,
+                          description: item.material_name || item.description,
                           itemCode: item.item_code,
-                          itemGroup: newGroup,
+                          itemGroup: item.item_group || getItemGroupFromMaterialType(item.material_type),
                           drawingNo: item.drawing_no || '',
-                          quantity: isAssembly ? 1 : (item.quantity || 1),
-                          uom: item.unit || (isAssembly ? 'Nos' : 'Kg'),
-                          revision: '1'
-                        };
-
-                        setProductForm(updatedForm);
-                        setSelectedItem({
-                          ...item,
-                          item_group: newGroup,
-                          drawing_no: item.drawing_no || '',
-                          quantity: updatedForm.quantity
-                        });
-                      } else {
-                        setProductForm({...productForm, description: e.target.value});
+                          drawing_id: item.drawing_id || '',
+                          uom: item.unit || 'Kg',
+                          revision: item.revision_no || item.revision || '1',
+                          quantity: item.quantity || 1
+                        }));
                       }
                     }}
                     subLabelField="subLabel"
@@ -605,57 +621,24 @@ const BOMFormPage = () => {
                   <label className="text-xs text-slate-500">Item Code *</label>
                   <SearchableSelect
                     placeholder="Select Item Code"
-                    options={stockItems
+                    options={approvedDrawings
                       .filter(item => {
-                        // If drawing filter is active, only show items for that drawing
-                        // If no drawing filter, show FG, SFG, Sub-Assembly, and Assembly
                         if (drawingFilter) {
                           return item.drawing_no === drawingFilter;
                         }
-                        const type = (item.material_type || '').toLowerCase();
-                        const isMainProduct = type.includes('finished') || type.includes('assembly') || type.includes('semi') || type.includes('sfg') || type === 'fg' || type.includes('fg');
-                        return isMainProduct;
+                        return true;
                       })
-                      .map(item => {
-                        const newGroup = getItemGroupFromMaterialType(item.material_type);
-                        const labelType = newGroup === 'FG' ? 'Finished Good (FG)' : 
-                                        newGroup === 'SFG' ? 'SFG' : 
-                                        newGroup === 'Sub Assembly' ? 'Sub-Assembly' : 
-                                        newGroup === 'Assembly' ? 'Assembly' : (item.material_type || 'Item');
-                        
-                        return {
-                          label: item.item_code,
-                          value: item.item_code,
-                          subLabel: `${item.material_name} [${labelType}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-                        };
-                      })}
-                    value={productForm.itemCode}
+                      .map(item => ({
+                        label: item.item_code,
+                        value: item.id,
+                        subLabel: `${item.material_name || item.description} [${item.item_group || 'Item'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                      }))}
+                    value={selectedItem?.id}
+                    disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => {
-                      const item = stockItems.find(i => i.item_code === e.target.value);
+                      const item = approvedDrawings.find(i => String(i.id) === String(e.target.value));
                       if (item) {
-                        const newGroup = getItemGroupFromMaterialType(item.material_type);
-                        const isAssembly = ['Sub Assembly', 'Assembly'].includes(newGroup);
-
-                        const updatedForm = {
-                          ...productForm,
-                          itemCode: item.item_code,
-                          description: item.material_name,
-                          itemGroup: newGroup,
-                          drawingNo: item.drawing_no || '',
-                          quantity: isAssembly ? 1 : (item.quantity || 1),
-                          uom: item.unit || (isAssembly ? 'Nos' : 'Kg'),
-                          revision: '1'
-                        };
-
-                        setProductForm(updatedForm);
-                        setSelectedItem({
-                          ...item,
-                          item_group: newGroup,
-                          drawing_no: item.drawing_no || '',
-                          quantity: updatedForm.quantity
-                        });
-                      } else {
-                        setProductForm({...productForm, itemCode: e.target.value});
+                        setSelectedItem(item);
                       }
                     }}
                     subLabelField="subLabel"
