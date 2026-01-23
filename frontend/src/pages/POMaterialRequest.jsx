@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -62,10 +63,10 @@ const POMaterialRequest = () => {
 
         if (!response.ok) throw new Error(`Failed to ${actionText.toLowerCase()} PO`);
         
-        Swal.fire('Success', `PO ${actionText.toLowerCase()}ed successfully`, 'success');
+        successToast(`PO ${actionText.toLowerCase()}ed successfully`);
         fetchRequests();
       } catch (error) {
-        Swal.fire('Error', error.message, 'error');
+        errorToast(error.message);
       }
     }
   };

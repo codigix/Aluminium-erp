@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, DataTable, StatusBadge, Modal, FormControl } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -50,6 +51,7 @@ const POReceipts = () => {
       setReceipts(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching receipts:', error);
+      errorToast(error.message || 'Failed to load receipts');
       setReceipts([]);
     } finally {
       setLoading(false);
@@ -143,7 +145,7 @@ const POReceipts = () => {
     e.preventDefault();
 
     if (!formData.poId) {
-      Swal.fire('Error', 'Please select a purchase order', 'error');
+      errorToast('Please select a purchase order');
       return;
     }
 
@@ -166,13 +168,13 @@ const POReceipts = () => {
 
       if (!response.ok) throw new Error('Failed to create receipt');
 
-      await Swal.fire('Success', 'PO Receipt created successfully', 'success');
+      successToast('PO Receipt created successfully');
       setShowCreateModal(false);
       setFormData({ poId: '', receiptDate: new Date().toISOString().split('T')[0], receivedQuantity: '', notes: '', items: [] });
       fetchReceipts();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to create receipt', 'error');
+      errorToast(error.message || 'Failed to create receipt');
     }
   };
 
@@ -197,7 +199,7 @@ const POReceipts = () => {
       });
       setShowEditModal(true);
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to load receipt details', 'error');
+      errorToast(error.message || 'Failed to load receipt details');
     }
   };
 
@@ -222,12 +224,12 @@ const POReceipts = () => {
 
       if (!response.ok) throw new Error('Failed to update receipt');
 
-      await Swal.fire('Success', 'PO Receipt updated successfully', 'success');
+      successToast('PO Receipt updated successfully');
       setShowEditModal(false);
       fetchReceipts();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to update receipt', 'error');
+      errorToast(error.message || 'Failed to update receipt');
     }
   };
 
@@ -256,11 +258,11 @@ const POReceipts = () => {
 
       if (!response.ok) throw new Error('Failed to delete receipt');
 
-      await Swal.fire('Success', 'PO Receipt deleted successfully', 'success');
+      successToast('PO Receipt deleted successfully');
       fetchReceipts();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to delete receipt', 'error');
+      errorToast(error.message || 'Failed to delete receipt');
     }
   };
 
@@ -282,7 +284,7 @@ const POReceipts = () => {
       }, 1000);
     } catch (error) {
       console.error('Error opening PDF:', error);
-      Swal.fire('Error', 'Failed to open PDF', 'error');
+      errorToast('Failed to open PDF');
     }
   };
 

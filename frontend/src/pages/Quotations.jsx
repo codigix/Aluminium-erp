@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -346,7 +347,7 @@ const Quotations = () => {
     e.preventDefault();
 
     if (!formData.vendorId) {
-      Swal.fire('Error', 'Vendor is required', 'error');
+      errorToast('Vendor is required');
       return;
     }
 
@@ -367,7 +368,7 @@ const Quotations = () => {
 
       if (!response.ok) throw new Error('Failed to create quotation');
 
-      await Swal.fire('Success', 'Quotation created successfully', 'success');
+      successToast('Quotation created successfully');
       setShowCreateModal(false);
       setFormData({
         vendorId: '',
@@ -379,7 +380,7 @@ const Quotations = () => {
       fetchQuotations();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to create quotation', 'error');
+      errorToast(error.message || 'Failed to create quotation');
     }
   };
 
@@ -387,7 +388,7 @@ const Quotations = () => {
     e.preventDefault();
 
     if (!recordData.quotationId) {
-      Swal.fire('Error', 'Select a project and vendor to identify the quotation', 'error');
+      errorToast('Select a project and vendor to identify the quotation');
       return;
     }
 
@@ -419,13 +420,13 @@ const Quotations = () => {
         body: JSON.stringify({ status: 'RECEIVED' })
       });
 
-      await Swal.fire('Success', 'Quote details recorded successfully', 'success');
+      successToast('Quote details recorded successfully');
       setShowCreateModal(false);
       setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, validUntil: '', items: [], notes: '' });
       fetchQuotations();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to record quote', 'error');
+      errorToast(error.message || 'Failed to record quote');
     }
   };
 
@@ -459,11 +460,11 @@ const Quotations = () => {
 
       if (!response.ok) throw new Error('Failed to approve quote');
 
-      await Swal.fire('Success', 'Quote approved successfully', 'success');
+      successToast('Quote approved successfully');
       fetchQuotations();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to approve quote', 'error');
+      errorToast(error.message || 'Failed to approve quote');
     }
   };
 
@@ -494,11 +495,11 @@ const Quotations = () => {
         throw new Error(errData.error || 'Failed to delete quotation');
       }
 
-      await Swal.fire('Success', 'Quotation deleted successfully', 'success');
+      successToast('Quotation deleted successfully');
       fetchQuotations();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to delete quotation', 'error');
+      errorToast(error.message || 'Failed to delete quotation');
     }
   };
 
@@ -518,7 +519,7 @@ const Quotations = () => {
     e.preventDefault();
 
     if (!emailData.to) {
-      Swal.fire('Error', 'Recipient email is required', 'error');
+      errorToast('Recipient email is required');
       return;
     }
 
@@ -549,13 +550,13 @@ const Quotations = () => {
         body: JSON.stringify({ status: 'SENT' })
       });
 
-      await Swal.fire('Success', 'Email sent to vendor successfully', 'success');
+      successToast('Email sent to vendor successfully');
       setShowEmailModal(false);
       setEmailData({ to: '', subject: '', message: '', attachPDF: true });
       fetchQuotations();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to send email', 'error');
+      errorToast(error.message || 'Failed to send email');
     }
   };
 
@@ -600,12 +601,12 @@ const Quotations = () => {
 
       if (!response.ok) throw new Error('Failed to update quotation');
 
-      await Swal.fire('Success', 'Quotation updated successfully', 'success');
+      successToast('Quotation updated successfully');
       setShowEditModal(false);
       fetchQuotations();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to update quotation', 'error');
+      errorToast(error.message || 'Failed to update quotation');
     }
   };
 

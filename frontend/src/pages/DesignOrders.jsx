@@ -636,14 +636,7 @@ const DesignOrders = () => {
       // drawingNo and revision are usually kept from the current order context
       materialGrade: item.material_grade || ''
     }));
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: 'success',
-      title: 'Material details copied!',
-      showConfirmButton: false,
-      timer: 2000
-    });
+    successToast('Material details copied!');
   };
 
   const handleClearMaterialForm = async () => {

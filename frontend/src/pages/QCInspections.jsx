@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 import { 
   Plus,
   Eye,
@@ -139,7 +140,7 @@ const QCInspections = () => {
     e.preventDefault();
 
     if (!formData.grnId || !formData.passQuantity) {
-      Swal.fire('Error', 'Please fill in required fields', 'error');
+      errorToast('Please fill in required fields');
       return;
     }
 
@@ -163,12 +164,7 @@ const QCInspections = () => {
 
       if (!response.ok) throw new Error('Failed to create QC Inspection');
 
-      await Swal.fire({
-        title: 'Success',
-        text: 'QC Inspection created successfully',
-        icon: 'success',
-        confirmButtonColor: '#4f46e5'
-      });
+      successToast('QC Inspection created successfully');
       setShowModal(false);
       setFormData({
         grnId: '',
@@ -181,7 +177,7 @@ const QCInspections = () => {
       fetchQCInspections();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to create QC Inspection', 'error');
+      errorToast(error.message || 'Failed to create QC Inspection');
     }
   };
 
@@ -224,17 +220,12 @@ const QCInspections = () => {
         throw new Error(errorData.message || 'Failed to update QC Inspection');
       }
 
-      await Swal.fire({
-        title: 'Updated',
-        text: 'Inspection status updated successfully',
-        icon: 'success',
-        confirmButtonColor: '#4f46e5'
-      });
+      successToast('Inspection status updated successfully');
       setShowEditModal(false);
       fetchQCInspections();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to update QC Inspection', 'error');
+      errorToast(error.message || 'Failed to update QC Inspection');
     }
   };
 
@@ -264,16 +255,11 @@ const QCInspections = () => {
 
       if (!response.ok) throw new Error('Failed to delete QC Inspection');
 
-      await Swal.fire({
-        title: 'Deleted',
-        text: 'QC Inspection has been removed',
-        icon: 'success',
-        confirmButtonColor: '#4f46e5'
-      });
+      successToast('QC Inspection has been removed');
       fetchQCInspections();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to delete QC Inspection', 'error');
+      errorToast(error.message || 'Failed to delete QC Inspection');
     }
   };
 

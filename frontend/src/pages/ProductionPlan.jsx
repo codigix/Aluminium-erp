@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -147,7 +148,7 @@ const ProductionPlan = () => {
       }
     } catch (error) {
       console.error('Error fetching SO details:', error);
-      Swal.fire('Error', 'Failed to fetch sales order details', 'error');
+      errorToast('Failed to fetch sales order details');
     }
   };
 
@@ -191,7 +192,7 @@ const ProductionPlan = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (newPlan.items.length === 0) {
-      Swal.fire('Error', 'Please select at least one item', 'error');
+      errorToast('Please select at least one item');
       return;
     }
 
@@ -207,15 +208,15 @@ const ProductionPlan = () => {
       });
 
       if (response.ok) {
-        Swal.fire('Success', 'Production plan created successfully', 'success');
+        successToast('Production plan created successfully');
         setIsModalOpen(false);
         fetchPlans();
       } else {
         const error = await response.json();
-        Swal.fire('Error', error.message || 'Failed to create production plan', 'error');
+        errorToast(error.message || 'Failed to create production plan');
       }
     } catch (error) {
-      Swal.fire('Error', 'An unexpected error occurred', 'error');
+      errorToast('An unexpected error occurred');
     }
   };
 

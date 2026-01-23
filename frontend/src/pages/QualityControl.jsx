@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 import { 
   Archive, 
   Shield, 
@@ -147,7 +148,7 @@ const QualityControl = () => {
     e.preventDefault();
 
     if (!grnFormData.poNumber || !grnFormData.receivedQuantity) {
-      Swal.fire('Error', 'Please fill in required fields', 'error');
+      errorToast('Please fill in required fields');
       return;
     }
 
@@ -169,12 +170,7 @@ const QualityControl = () => {
 
       if (!response.ok) throw new Error('Failed to create GRN');
 
-      await Swal.fire({
-        title: 'Success',
-        text: 'GRN created successfully',
-        icon: 'success',
-        confirmButtonColor: '#4f46e5'
-      });
+      successToast('GRN created successfully');
       setShowGRNModal(false);
       setGrnFormData({
         poNumber: '',
@@ -185,7 +181,7 @@ const QualityControl = () => {
       fetchGRNs();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to create GRN', 'error');
+      errorToast(error.message || 'Failed to create GRN');
     }
   };
 
@@ -193,7 +189,7 @@ const QualityControl = () => {
     e.preventDefault();
 
     if (!qcFormData.grnId || !qcFormData.passQuantity) {
-      Swal.fire('Error', 'Please fill in required fields', 'error');
+      errorToast('Please fill in required fields');
       return;
     }
 
@@ -217,12 +213,7 @@ const QualityControl = () => {
 
       if (!response.ok) throw new Error('Failed to create QC Inspection');
 
-      await Swal.fire({
-        title: 'Success',
-        text: 'QC Inspection created successfully',
-        icon: 'success',
-        confirmButtonColor: '#4f46e5'
-      });
+      successToast('QC Inspection created successfully');
       setShowQCModal(false);
       setQcFormData({
         grnId: '',
@@ -235,7 +226,7 @@ const QualityControl = () => {
       fetchQCInspections();
       fetchStats();
     } catch (error) {
-      Swal.fire('Error', error.message || 'Failed to create QC Inspection', 'error');
+      errorToast(error.message || 'Failed to create QC Inspection');
     }
   };
 

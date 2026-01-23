@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FormControl, StatusBadge } from '../components/ui';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -39,7 +40,7 @@ const WarehouseAllocation = () => {
       setAllocationData(initialData);
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setLoading(false);
     }
@@ -59,12 +60,12 @@ const WarehouseAllocation = () => {
     const data = allocationData[item.grn_item_id];
     
     if (!data.target_warehouse) {
-      Swal.fire('Error', 'Please select a target warehouse', 'error');
+      errorToast('Please select a target warehouse');
       return;
     }
 
     if (parseFloat(data.allocate_qty) <= 0 || parseFloat(data.allocate_qty) > item.pending_allocation_qty) {
-      Swal.fire('Error', 'Invalid allocation quantity', 'error');
+      errorToast('Invalid allocation quantity');
       return;
     }
 
@@ -90,10 +91,10 @@ const WarehouseAllocation = () => {
         throw new Error(error.message || 'Allocation failed');
       }
 
-      Swal.fire('Success', 'Material allocated successfully', 'success');
+      successToast('Material allocated successfully');
       fetchPendingAllocations();
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      errorToast(error.message);
     } finally {
       setAllocatingId(null);
     }

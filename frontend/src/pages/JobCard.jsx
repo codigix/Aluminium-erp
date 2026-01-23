@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -146,11 +147,11 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        Swal.fire('Updated', `Job Card status: ${status}`, 'success');
+        successToast(`Job Card status: ${status}`);
         fetchJobCards();
       }
     } catch (error) {
-      Swal.fire('Error', 'Failed to update status', 'error');
+      errorToast('Failed to update status');
     }
   };
 
@@ -172,12 +173,12 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        Swal.fire('Success', 'Progress logged successfully', 'success');
+        successToast('Progress logged successfully');
         setIsProgressModalOpen(false);
         fetchJobCards();
       }
     } catch (error) {
-      Swal.fire('Error', 'Failed to log progress', 'error');
+      errorToast('Failed to log progress');
     }
   };
 
@@ -209,15 +210,15 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        Swal.fire('Success', 'Job Card created successfully', 'success');
+        successToast('Job Card created successfully');
         setIsModalOpen(false);
         fetchJobCards();
       } else {
         const error = await response.json();
-        Swal.fire('Error', error.error || 'Failed to create Job Card', 'error');
+        errorToast(error.error || 'Failed to create Job Card');
       }
     } catch (error) {
-      Swal.fire('Error', 'Network error', 'error');
+      errorToast('Network error');
     }
   };
 
