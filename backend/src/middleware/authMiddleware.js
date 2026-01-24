@@ -18,7 +18,7 @@ exports.authenticate = (req, res, next) => {
 };
 
 exports.authorize = (requiredPermissions = []) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     try {
       if (!req.user) {
         return res.status(401).json({ error: 'User not authenticated' });
@@ -28,26 +28,44 @@ exports.authorize = (requiredPermissions = []) => {
         return next();
       }
 
+      // Bypass for SYS_ADMIN (Check token first, then DB as fallback)
+      if (req.user.role === 'SYS_ADMIN') {
+        return next();
+      }
+
       const query = `
         SELECT p.code FROM role_permissions rp
         JOIN permissions p ON rp.permission_id = p.id
-        WHERE rp.role_id = ? AND p.code IN (?)
+        WHERE rp.role_id = ?
       `;
 
-      db.query(query, [req.user.role_id, requiredPermissions], (err, results) => {
-        if (err) {
-          return res.status(500).json({ error: 'Database error' });
-        }
+      const [results] = await db.query(query, [req.user.role_id]);
+      
+      const userPermissions = results && Array.isArray(results) ? results.map(r => r.code) : [];
+      
+      // Fallback: Check if role is SYS_ADMIN via DB if not in token
+      const [roleCheck] = await db.query('SELECT code FROM roles WHERE id = ?', [req.user.role_id]);
+      if (roleCheck.length > 0 && roleCheck[0].code === 'SYS_ADMIN') {
+        return next();
+      }
 
-        const userPermissions = results.map(r => r.code);
-        const hasPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
-
-        if (!hasPermission) {
-          return res.status(403).json({ error: 'Insufficient permissions' });
-        }
-
-        next();
+      console.log('[DEBUG] Auth check:', {
+        userId: req.user.id,
+        roleId: req.user.role_id,
+        role: req.user.role,
+        requiredPermissions
       });
+      
+      console.log('[DEBUG] User permissions count:', results?.length);
+      console.log('[DEBUG] User permissions:', userPermissions);
+      const hasPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
+
+      if (!hasPermission) {
+        console.log(`Permission denied for user ${req.user.id} (Role: ${req.user.role_id}). Required: ${requiredPermissions}, User has: ${userPermissions}`);
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      next();
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -93,3 +111,8 @@ exports.authorizeByDocumentStatus = (statusRules = {}) => {
     }
   };
 };
+
+exports.blockInProduction = (req, res, next) => {
+  next();
+};
+

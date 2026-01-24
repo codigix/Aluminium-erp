@@ -1,11 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const grnService = require('../services/grnService');
-const { authorizeByDepartment } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.use(authorizeByDepartment([8]));
-
-router.get('/stats', async (req, res) => {
+router.get('/stats', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
   try {
     const stats = await grnService.getGRNStats();
     res.json(stats);
@@ -14,7 +12,7 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
   try {
     const grns = await grnService.getAllGRNs();
     res.json(grns);
@@ -23,7 +21,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:grnId', async (req, res) => {
+router.get('/:grnId', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
   try {
     const grn = await grnService.getGRNWithDetails(req.params.grnId);
     if (!grn) {
@@ -35,7 +33,7 @@ router.get('/:grnId', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authenticate, authorize(['GRN_CREATE']), async (req, res) => {
   try {
     const { poNumber, grnDate, receivedQuantity, notes } = req.body;
     const grn = await grnService.createGRN(poNumber, grnDate, receivedQuantity, notes);
@@ -45,7 +43,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.patch('/:grnId', async (req, res) => {
+router.patch('/:grnId', authenticate, authorize(['GRN_EDIT']), async (req, res) => {
   try {
     const grn = await grnService.updateGRN(req.params.grnId, req.body);
     res.json(grn);
@@ -54,7 +52,7 @@ router.patch('/:grnId', async (req, res) => {
   }
 });
 
-router.delete('/:grnId', async (req, res) => {
+router.delete('/:grnId', authenticate, authorize(['GRN_DELETE']), async (req, res) => {
   try {
     const result = await grnService.deleteGRN(req.params.grnId);
     res.json(result);

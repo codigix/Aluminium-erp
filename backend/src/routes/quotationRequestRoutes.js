@@ -1,14 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const quotationRequestController = require('../controllers/quotationRequestController');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/', quotationRequestController.getQuotationRequests);
-router.post('/send', quotationRequestController.sendQuotationViaEmail);
-router.post('/batch-approve', quotationRequestController.batchApproveQuotationRequests);
-router.post('/batch-send-to-design', quotationRequestController.batchSendToDesign);
-router.post('/:id/approve', quotationRequestController.approveQuotationRequest);
-router.post('/:id/reject', quotationRequestController.rejectQuotationRequest);
-router.put('/batch-update-rates', quotationRequestController.updateQuotationRates);
-router.delete('/:id', quotationRequestController.deleteQuotationRequest);
+router.use(authenticate);
+
+router.get('/', authorize(['PO_VIEW']), quotationRequestController.getQuotationRequests);
+router.post('/send', authorize(['PO_EDIT']), quotationRequestController.sendQuotationViaEmail);
+router.post('/batch-approve', authorize(['PO_EDIT']), quotationRequestController.batchApproveQuotationRequests);
+router.post('/batch-send-to-design', authorize(['PO_EDIT']), quotationRequestController.batchSendToDesign);
+router.post('/:id/approve', authorize(['PO_EDIT']), quotationRequestController.approveQuotationRequest);
+router.post('/:id/reject', authorize(['PO_EDIT']), quotationRequestController.rejectQuotationRequest);
+router.put('/batch-update-rates', authorize(['PO_EDIT']), quotationRequestController.updateQuotationRates);
+router.delete('/:id', authorize(['PO_EDIT']), quotationRequestController.deleteQuotationRequest);
 
 module.exports = router;

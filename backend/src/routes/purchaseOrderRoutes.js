@@ -2,14 +2,16 @@ const express = require('express');
 const router = express.Router();
 const purchaseOrderController = require('../controllers/purchaseOrderController');
 
-router.get('/material-requests', purchaseOrderController.getPOMaterialRequests);
-router.post('/:poId/store-acceptance', purchaseOrderController.handleStoreAcceptance);
-router.get('/preview/:quotationId', purchaseOrderController.previewPurchaseOrder);
-router.post('/', purchaseOrderController.createPurchaseOrder);
-router.get('/stats', purchaseOrderController.getPurchaseOrderStats);
-router.get('/', purchaseOrderController.getPurchaseOrders);
-router.get('/:poId', purchaseOrderController.getPurchaseOrderById);
-router.patch('/:poId', purchaseOrderController.updatePurchaseOrder);
-router.delete('/:poId', purchaseOrderController.deletePurchaseOrder);
+const { authorize } = require('../middleware/authMiddleware');
+
+router.get('/material-requests', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPOMaterialRequests);
+router.post('/:poId/store-acceptance', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.handleStoreAcceptance);
+router.get('/preview/:quotationId', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.previewPurchaseOrder);
+router.post('/', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.createPurchaseOrder);
+router.get('/stats', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrderStats);
+router.get('/', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrders);
+router.get('/:poId', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrderById);
+router.patch('/:poId', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.updatePurchaseOrder);
+router.delete('/:poId', authorize(['PURCHASE_ORDER_DELETE']), purchaseOrderController.deletePurchaseOrder);
 
 module.exports = router;

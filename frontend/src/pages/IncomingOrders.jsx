@@ -172,7 +172,7 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
   };
 
   return (
-    <Card id="incoming-orders" title="Incoming Orders" subtitle="Accept or reject incoming sales orders from upstream departments">
+    <Card id="incoming-orders" title="Incoming Orders" subtitle="Accept or reject incoming sales orders from upstream departments" className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />

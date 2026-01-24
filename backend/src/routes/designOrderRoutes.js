@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const designOrderController = require('../controllers/designOrderController');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/', authenticate, designOrderController.listDesignOrders);
-router.patch('/:id/status', authenticate, designOrderController.updateStatus);
-router.delete('/:id', authenticate, designOrderController.deleteOrder);
+router.get('/', authenticate, authorize(['DESIGN_VIEW']), designOrderController.listDesignOrders);
+router.patch('/:id/status', authenticate, authorize(['DESIGN_MANAGE']), designOrderController.updateStatus);
+router.delete('/:id', authenticate, authorize(['DESIGN_MANAGE']), designOrderController.deleteOrder);
 
 module.exports = router;

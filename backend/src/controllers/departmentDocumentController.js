@@ -101,18 +101,25 @@ exports.getUserAccessDashboard = async (req, res) => {
 
 exports.getAccessLogs = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { limit = 100, offset = 0 } = req.query;
+    const { limit = 100, offset = 0, userId } = req.query;
 
-    const query = `
-      SELECT * FROM document_access_logs 
-      WHERE user_id = ?
-      ORDER BY timestamp DESC
-      LIMIT ? OFFSET ?
+    let query = `
+      SELECT l.*, u.username, u.first_name, u.last_name 
+      FROM document_access_logs l
+      LEFT JOIN users u ON l.user_id = u.id
     `;
+    const params = [];
+
+    if (userId) {
+      query += ` WHERE l.user_id = ?`;
+      params.push(userId);
+    }
+
+    query += ` ORDER BY l.timestamp DESC LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), parseInt(offset));
 
     const db = require('../config/db');
-    const [results] = await db.query(query, [userId, parseInt(limit), parseInt(offset)]);
+    const [results] = await db.query(query, params);
 
     res.json({
       logs: results,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-export const Card = ({ id, title, subtitle, action, children }) => (
-  <div id={id} >
+export const Card = ({ id, title, subtitle, action, children, className = '' }) => (
+  <div id={id} className={className}>
     {(title || subtitle || action) && (
       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between p-2 border-b border-slate-100/80 rounded-t-[32px]">
         <div>

@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const warehouseAllocationController = require('../controllers/warehouseAllocationController');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/pending', authenticate, warehouseAllocationController.getPendingAllocations);
-router.post('/allocate', authenticate, warehouseAllocationController.allocateWarehouse);
+router.use(authenticate);
+
+router.get('/pending', authorize(['STOCK_VIEW']), warehouseAllocationController.getPendingAllocations);
+router.post('/allocate', authorize(['STOCK_MANAGE']), warehouseAllocationController.allocateWarehouse);
 
 module.exports = router;

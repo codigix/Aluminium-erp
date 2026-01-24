@@ -24,6 +24,19 @@ exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (parseInt(req.user.id) !== parseInt(id) && !['SYS_ADMIN'].includes(req.user.role)) {
+      // Check if user has USER_MANAGE permission instead of just hardcoding SYS_ADMIN
+      const [permCheck] = await db.query(`
+        SELECT p.code FROM role_permissions rp
+        JOIN permissions p ON rp.permission_id = p.id
+        WHERE rp.role_id = ? AND p.code = 'USER_MANAGE'
+      `, [req.user.role_id]);
+
+      if (permCheck.length === 0) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
     const query = `
       SELECT u.*, d.name as department_name, r.name as role_name
       FROM users u
@@ -58,7 +71,31 @@ exports.getUserById = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { first_name, last_name, email, phone, department_id, role_id, status } = req.body;
+    let { first_name, last_name, email, phone, department_id, role_id, status } = req.body;
+
+    let hasManagePermission = ['SYS_ADMIN'].includes(req.user.role);
+    if (!hasManagePermission) {
+      const [permCheck] = await db.query(`
+        SELECT p.code FROM role_permissions rp
+        JOIN permissions p ON rp.permission_id = p.id
+        WHERE rp.role_id = ? AND p.code = 'USER_MANAGE'
+      `, [req.user.role_id]);
+      hasManagePermission = permCheck.length > 0;
+    }
+
+    if (parseInt(req.user.id) !== parseInt(id) && !hasManagePermission) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // If updating themselves but without manage permission, restrict sensitive fields
+    if (parseInt(req.user.id) === parseInt(id) && !hasManagePermission) {
+      const [current] = await db.query('SELECT department_id, role_id, status FROM users WHERE id = ?', [id]);
+      if (current.length === 0) return res.status(404).json({ error: 'User not found' });
+      
+      department_id = current[0].department_id;
+      role_id = current[0].role_id;
+      status = current[0].status;
+    }
 
     const query = `
       UPDATE users 
@@ -86,6 +123,10 @@ exports.changePassword = async (req, res) => {
   try {
     const { id } = req.params;
     const { oldPassword, newPassword } = req.body;
+
+    if (parseInt(req.user.id) !== parseInt(id)) {
+       return res.status(403).json({ error: 'You can only change your own password' });
+    }
 
     if (!oldPassword || !newPassword) {
       return res.status(400).json({ error: 'Old and new password required' });

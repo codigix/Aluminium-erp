@@ -1019,9 +1019,28 @@ const ensureWorkOrderTables = async () => {
   }
 };
 
+const ensureSeed = async () => {
+  let connection;
+  try {
+    const seedPath = path.resolve(__dirname, '../../../database/seed-data.sql');
+    const seedSql = await fs.promises.readFile(seedPath, 'utf8');
+    if (!seedSql.trim()) return;
+    connection = await pool.getConnection();
+    await connection.query(seedSql);
+    console.log('Database seed data synchronized');
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error('Database seed sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
+  await ensureSeed();
   await ensureCustomerPoColumns();
   await ensurePurchaseOrderItemColumns();
   await ensureQuotationItemColumns();

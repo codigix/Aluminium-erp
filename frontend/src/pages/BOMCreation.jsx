@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const isProd = import.meta.env.PROD;
 
 const BOMCreation = () => {
   const [orders, setOrders] = useState([]);

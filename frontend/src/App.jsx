@@ -52,8 +52,8 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const MODULE_IDS = ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card']
-const DEFAULT_MODULE = 'customer-drawing'
+const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card']
+const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -144,15 +144,22 @@ const getContactStatusActionLabel = status => {
 }
 
 const DEPARTMENT_MODULES = {
-  SALES: ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
-  DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form'],
-  PRODUCTION: ['incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card'],
-  QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
-  SHIPMENT: ['incoming-orders'],
-  ACCOUNTS: [],
-  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
-  PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
-  ADMIN: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card']
+  SALES: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'dashboard'],
+  DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet', 'dashboard'],
+  PRODUCTION: ['project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'routing-operations', 'process-sheet', 'dashboard'],
+  QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
+  SHIPMENT: ['incoming-orders', 'dashboard'],
+  ACCOUNTS: ['dashboard'],
+  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation', 'dashboard'],
+  PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
+  ADMIN: [
+    'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations',
+    'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet',
+    'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card',
+    'quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
+    'inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation',
+    'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'dashboard'
+  ]
 }
 
 function App() {
@@ -161,7 +168,8 @@ function App() {
   
   const getActiveModuleFromPath = () => {
     const path = location.pathname.replace(/\/$/, '') || '/'
-    const modulePath = path.split('/')[1] || DEFAULT_MODULE
+    if (path === '/') return 'dashboard'
+    const modulePath = path.split('/')[1]
     return MODULE_IDS.includes(modulePath) ? modulePath : DEFAULT_MODULE
   }
   
@@ -198,6 +206,15 @@ function App() {
   const allowedModules = useMemo(() => {
     return user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
   }, [user?.department_code])
+
+  useEffect(() => {
+    if (token && user && activeModule === 'dashboard') {
+      const firstFunctionalModule = allowedModules.find(m => m !== 'dashboard')
+      if (firstFunctionalModule) {
+        navigate(`/${firstFunctionalModule}`, { replace: true })
+      }
+    }
+  }, [token, user, activeModule, allowedModules, navigate])
 
   const [authMode, setAuthMode] = useState('login')
   const [loginEmail, setLoginEmail] = useState('')
@@ -884,6 +901,7 @@ function App() {
   const isReadOnly = drawerMode === 'view'
 
   const iconMap = {
+    'building': Building2,
     'clipboard': ClipboardList,
     'document': FileText,
     'package': Package,
@@ -908,6 +926,8 @@ function App() {
   }
 
   const allNavigationItems = [
+    { label: 'Company Master', moduleId: 'company-master', icon: 'building' },
+    { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'handshake' },
     { label: 'Client Requirements ', moduleId: 'customer-drawing', icon: 'clipboard' },
     { label: 'Client Quotations', moduleId: 'client-quotations', icon: 'clipboard' },
     { label: 'Customer PO', moduleId: 'customer-po', icon: 'document' },
@@ -919,7 +939,7 @@ function App() {
     { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings', indent: true },
     { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'chart', indent: true },
     { label: 'BOM Approval', moduleId: 'bom-approval', icon: 'check', indent: true },
-    { label: 'Production Control', isGroup: true, isDisabled: true, groupId: 'production-group' },
+    { label: 'Production Control', isGroup: true, groupId: 'production-group' },
     { label: 'Project Requests', moduleId: 'project-requests', icon: 'clipboard', indent: true },
     { label: 'Material Requirements', moduleId: 'material-requirements', icon: 'package', indent: true },
     { label: 'Production Plan', moduleId: 'production-plan', icon: 'chart', indent: true },
@@ -927,19 +947,19 @@ function App() {
     { label: 'Job Card', moduleId: 'job-card', icon: 'clipboard', indent: true },
     { label: 'Workstations', moduleId: 'workstation-master', icon: 'factory', indent: true },
     { label: 'Operations', moduleId: 'operation-master', icon: 'settings', indent: true },
-    { label: 'Vendor Management', isGroup: true, isDisabled: true, groupId: 'vendor-group' },
+    { label: 'Vendor Management', isGroup: true, groupId: 'vendor-group' },
     { label: 'Vendors', moduleId: 'vendors', icon: 'handshake', indent: true },
     { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: 'message', indent: true },
     { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'cart', indent: true },
     { label: 'PO Receipts', moduleId: 'po-receipts', icon: 'inbox', indent: true },
-    { label: 'Inventory Management', isGroup: true, isDisabled: true, groupId: 'inventory-group' },
+    { label: 'Inventory Management', isGroup: true, groupId: 'inventory-group' },
     { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', icon: 'chart', indent: true },
     { label: 'PO Material Request', moduleId: 'po-material-request', icon: 'clipboard', indent: true },
     { label: 'GRN Processing', moduleId: 'grn', icon: 'refresh', indent: true },
     { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book', indent: true },
     { label: 'Stock Balance', moduleId: 'stock-balance', icon: 'scale', indent: true },
     { label: 'Warehouse Allocation', moduleId: 'warehouse-allocation', icon: 'factory', indent: true },
-    { label: 'Quality Assurance', isGroup: true, isDisabled: true, groupId: 'quality-group' },
+    { label: 'Quality Assurance', isGroup: true, groupId: 'quality-group' },
     { label: 'Quality Dashboard', moduleId: 'quality-dashboard', icon: 'trending', indent: true },
     { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
     { label: 'In-Process QC', moduleId: 'in-process-qc', icon: 'search', indent: true },
@@ -1337,6 +1357,12 @@ function App() {
           <div className="flex-1 p-3">
             {location.pathname.startsWith('/receipt-details/') ? (
               <POReceiptDetails />
+            ) : !allowedModules.includes(activeModule) && user.department_code !== 'ADMIN' ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                <XCircle className="w-16 h-16 mb-4 text-rose-500" />
+                <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
+                <p>You don't have permission to access this module.</p>
+              </div>
             ) : (
               <>
                 {toast && (

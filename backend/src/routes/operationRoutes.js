@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const operationService = require('../services/operationService');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, authorize(['PROD_VIEW']), async (req, res) => {
   try {
     const operations = await operationService.getAllOperations();
     res.json(operations);
@@ -12,7 +12,7 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-router.get('/next-code', authenticate, async (req, res) => {
+router.get('/next-code', authenticate, authorize(['PROD_VIEW']), async (req, res) => {
   try {
     const nextCode = await operationService.generateOperationCode();
     res.json({ nextCode });
@@ -21,7 +21,7 @@ router.get('/next-code', authenticate, async (req, res) => {
   }
 });
 
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
   try {
     const operation = await operationService.createOperation(req.body);
     res.status(201).json(operation);
@@ -30,7 +30,7 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
   try {
     const operation = await operationService.updateOperation(req.params.id, req.body);
     res.json(operation);
@@ -39,7 +39,7 @@ router.put('/:id', authenticate, async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
   try {
     await operationService.deleteOperation(req.params.id);
     res.json({ success: true });

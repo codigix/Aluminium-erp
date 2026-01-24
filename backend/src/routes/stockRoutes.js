@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const stockService = require('../services/stockService');
-const { authorizeByDepartment } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/items/next-code', async (req, res) => {
+router.get('/items/next-code', authenticate, authorize(['STOCK_VIEW']), async (req, res) => {
   try {
     const { itemName, itemGroup } = req.query;
     const itemCode = await stockService.generateItemCode(itemName, itemGroup);
@@ -13,9 +13,7 @@ router.get('/items/next-code', async (req, res) => {
   }
 });
 
-router.use(authorizeByDepartment([8, 2, 9]));
-
-router.post('/items', async (req, res) => {
+router.post('/items', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
   try {
     const result = await stockService.createItem(req.body);
     res.status(201).json(result);
@@ -24,7 +22,7 @@ router.post('/items', async (req, res) => {
   }
 });
 
-router.put('/items/:id', async (req, res) => {
+router.put('/items/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
   try {
     const result = await stockService.updateItem(req.params.id, req.body);
     res.json(result);
@@ -33,7 +31,7 @@ router.put('/items/:id', async (req, res) => {
   }
 });
 
-router.delete('/items/:id', async (req, res) => {
+router.delete('/items/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
   try {
     const result = await stockService.deleteStockBalance(req.params.id);
     res.json(result);
@@ -42,7 +40,7 @@ router.delete('/items/:id', async (req, res) => {
   }
 });
 
-router.get('/ledger', async (req, res) => {
+router.get('/ledger', authenticate, authorize(['STOCK_VIEW']), async (req, res) => {
   try {
     const { itemCode, startDate, endDate } = req.query;
     const ledger = await stockService.getStockLedger(itemCode, startDate, endDate);
@@ -52,7 +50,7 @@ router.get('/ledger', async (req, res) => {
   }
 });
 
-router.get('/balance', async (req, res) => {
+router.get('/balance', authenticate, authorize(['STOCK_VIEW']), async (req, res) => {
   try {
     const { drawingNo } = req.query;
     const balances = await stockService.getStockBalance(drawingNo);
@@ -62,7 +60,7 @@ router.get('/balance', async (req, res) => {
   }
 });
 
-router.get('/balance/:itemCode', async (req, res) => {
+router.get('/balance/:itemCode', authenticate, authorize(['STOCK_VIEW']), async (req, res) => {
   try {
     const balance = await stockService.getStockBalanceByItem(req.params.itemCode);
     if (!balance) {
@@ -74,7 +72,7 @@ router.get('/balance/:itemCode', async (req, res) => {
   }
 });
 
-router.post('/ledger/entry', async (req, res) => {
+router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
   try {
     const { itemCode, transactionType, quantity, refDocType, refDocId, refDocNumber, remarks } = req.body;
     const userId = req.user?.id;
@@ -101,7 +99,7 @@ router.post('/ledger/entry', async (req, res) => {
   }
 });
 
-router.delete('/ledger/:id', async (req, res) => {
+router.delete('/ledger/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
   try {
     await stockService.deleteStockLedgerEntry(req.params.id);
     res.json({ success: true });
@@ -110,7 +108,7 @@ router.delete('/ledger/:id', async (req, res) => {
   }
 });
 
-router.delete('/balance/:id', async (req, res) => {
+router.delete('/balance/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
   try {
     await stockService.deleteStockBalance(req.params.id);
     res.json({ success: true });

@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const materialIssueController = require('../controllers/materialIssueController');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.use(authenticate);
 
-router.get('/', materialIssueController.listMaterialIssues);
-router.get('/:id', materialIssueController.getMaterialIssueById);
-router.post('/', materialIssueController.createMaterialIssue);
+router.get('/', authorize(['PROD_VIEW']), materialIssueController.listMaterialIssues);
+router.get('/:id', authorize(['PROD_VIEW']), materialIssueController.getMaterialIssueById);
+router.post('/', authorize(['PROD_MANAGE']), materialIssueController.createMaterialIssue);
 
 module.exports = router;

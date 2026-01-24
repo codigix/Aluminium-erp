@@ -1,16 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const productionPlanController = require('../controllers/productionPlanController');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.use(authenticate);
 
-router.get('/', productionPlanController.listProductionPlans);
-router.get('/next-code', productionPlanController.getNextPlanCode);
-router.get('/ready-items', productionPlanController.getReadySalesOrderItems);
-router.get('/ready-orders', productionPlanController.getProductionReadySalesOrders);
-router.get('/sales-order/:id', productionPlanController.getSalesOrderFullDetails);
-router.get('/:id', productionPlanController.getProductionPlanById);
-router.post('/', productionPlanController.createProductionPlan);
+router.get('/', authorize(['PROD_VIEW']), productionPlanController.listProductionPlans);
+router.get('/next-code', authorize(['PROD_VIEW']), productionPlanController.getNextPlanCode);
+router.get('/ready-items', authorize(['PROD_VIEW']), productionPlanController.getReadySalesOrderItems);
+router.get('/ready-orders', authorize(['PROD_VIEW']), productionPlanController.getProductionReadySalesOrders);
+router.get('/sales-order/:id', authorize(['PROD_VIEW']), productionPlanController.getSalesOrderFullDetails);
+router.get('/:id', authorize(['PROD_VIEW']), productionPlanController.getProductionPlanById);
+router.post('/', authorize(['PROD_MANAGE']), productionPlanController.createProductionPlan);
 
 module.exports = router;

@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const workstationService = require('../services/workstationService');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/', async (req, res) => {
+router.use(authenticate);
+
+router.get('/', authorize(['PROD_VIEW']), async (req, res) => {
   try {
     const workstations = await workstationService.getAllWorkstations();
     res.json(workstations);
@@ -11,7 +14,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/next-code', async (req, res) => {
+router.get('/next-code', authorize(['PROD_VIEW']), async (req, res) => {
   try {
     const nextCode = await workstationService.generateWorkstationCode();
     res.json({ nextCode });
@@ -20,7 +23,7 @@ router.get('/next-code', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authorize(['PROD_MANAGE']), async (req, res) => {
   try {
     const workstation = await workstationService.createWorkstation(req.body);
     res.status(201).json(workstation);
@@ -29,7 +32,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', authorize(['PROD_MANAGE']), async (req, res) => {
   try {
     const workstation = await workstationService.updateWorkstation(req.params.id, req.body);
     res.json(workstation);
@@ -38,7 +41,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authorize(['PROD_MANAGE']), async (req, res) => {
   try {
     await workstationService.deleteWorkstation(req.params.id);
     res.json({ success: true });

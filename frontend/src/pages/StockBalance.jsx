@@ -81,6 +81,13 @@ const StockBalance = () => {
     }
   };
 
+  const getStatusColor = (val) => {
+    const amount = parseFloat(val || 0);
+    if (amount <= 0) return { indicator: 'bg-rose-500', text: 'text-rose-600' };
+    if (amount < 10) return { indicator: 'bg-amber-500', text: 'text-amber-600' };
+    return { indicator: 'bg-emerald-500', text: 'text-emerald-600' };
+  };
+
   const columns = [
     {
       label: 'Item Code',

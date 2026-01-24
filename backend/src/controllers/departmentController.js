@@ -3,12 +3,10 @@ const db = require('../config/db');
 exports.getAllDepartments = async (req, res) => {
   try {
     const query = `
-      SELECT d.*, COUNT(u.id) as user_count
-      FROM departments d
-      LEFT JOIN users u ON d.id = u.department_id
-      WHERE d.status = 'ACTIVE'
-      GROUP BY d.id
-      ORDER BY d.name
+      SELECT id, name
+      FROM departments
+      WHERE status = 'ACTIVE'
+      ORDER BY name
     `;
 
     const [results] = await db.query(query);

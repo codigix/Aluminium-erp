@@ -1,11 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const qcService = require('../services/qcInspectionsService');
-const { authorizeByDepartment } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.use(authorizeByDepartment([5, 8]));
-
-router.get('/stats', async (req, res) => {
+router.get('/stats', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
     const stats = await qcService.getQCStats();
     res.json(stats);
@@ -14,7 +12,7 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
     const qcs = await qcService.getAllQCs();
     res.json(qcs);
@@ -23,7 +21,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:qcId', async (req, res) => {
+router.get('/:qcId', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
     const qc = await qcService.getQCWithDetails(req.params.qcId);
     if (!qc) {
@@ -37,7 +35,7 @@ router.get('/:qcId', async (req, res) => {
   }
 });
 
-router.get('/:qcId/items', async (req, res) => {
+router.get('/:qcId/items', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
     const items = await qcService.getQCItems(req.params.qcId);
     res.json(items);
@@ -46,7 +44,7 @@ router.get('/:qcId/items', async (req, res) => {
   }
 });
 
-router.patch('/items/:qcItemId', async (req, res) => {
+router.patch('/items/:qcItemId', authenticate, authorize(['QC_EDIT']), async (req, res) => {
   try {
     const item = await qcService.updateQCItem(req.params.qcItemId, req.body);
     res.json(item);
@@ -55,7 +53,7 @@ router.patch('/items/:qcItemId', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authenticate, authorize(['QC_CREATE']), async (req, res) => {
   try {
     const { grnId, inspectionDate, passQuantity, failQuantity, defects, remarks } = req.body;
     const qc = await qcService.createQC(grnId, inspectionDate, passQuantity, failQuantity, defects, remarks);
@@ -65,7 +63,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.patch('/:qcId', async (req, res) => {
+router.patch('/:qcId', authenticate, authorize(['QC_EDIT']), async (req, res) => {
   try {
     const qc = await qcService.updateQC(req.params.qcId, req.body);
     res.json(qc);
@@ -74,7 +72,7 @@ router.patch('/:qcId', async (req, res) => {
   }
 });
 
-router.delete('/:qcId', async (req, res) => {
+router.delete('/:qcId', authenticate, authorize(['QC_EDIT']), async (req, res) => {
   try {
     const result = await qcService.deleteQC(req.params.qcId);
     res.json(result);

@@ -10,7 +10,8 @@ const generateToken = (user) => {
       email: user.email,
       department_id: user.department_id,
       department_code: user.department_code,
-      role_id: user.role_id
+      role_id: user.role_id,
+      role: user.role_code || user.role
     },
     process.env.JWT_SECRET || 'your-secret-key',
     { expiresIn: '24h' }
@@ -59,7 +60,7 @@ exports.login = async (req, res) => {
     }
 
     const query = `
-      SELECT u.*, d.name as department_name, d.code as department_code, r.name as role_name 
+      SELECT u.*, d.name as department_name, d.code as department_code, r.name as role_name, r.code as role_code
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       LEFT JOIN roles r ON u.role_id = r.id
@@ -95,6 +96,7 @@ exports.login = async (req, res) => {
         department_code: user.department_code,
         role_id: user.role_id,
         role_name: user.role_name,
+        role_code: user.role_code,
         phone: user.phone
       }
     });
@@ -123,7 +125,7 @@ exports.getProfile = async (req, res) => {
     const userId = req.user.id;
 
     const query = `
-      SELECT u.*, d.name as department_name, d.code as department_code, r.name as role_name 
+      SELECT u.*, d.name as department_name, d.code as department_code, r.name as role_name, r.code as role_code
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       LEFT JOIN roles r ON u.role_id = r.id
@@ -148,6 +150,7 @@ exports.getProfile = async (req, res) => {
       department_code: user.department_code,
       role_id: user.role_id,
       role_name: user.role_name,
+      role_code: user.role_code,
       phone: user.phone
     });
   } catch (error) {
