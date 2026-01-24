@@ -283,6 +283,36 @@ const ensurePoMaterialRequestColumns = async () => {
   }
 };
 
+const ensurePoReceiptColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM po_receipts');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'po_id', definition: 'INT NOT NULL' },
+      { name: 'received_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'notes', definition: 'TEXT NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE po_receipts ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('PO Receipt columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('PO Receipt column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureStockColumns = async () => {
   let connection;
   try {
@@ -950,6 +980,7 @@ const bootstrapDatabase = async () => {
   await ensurePurchaseOrderItemColumns();
   await ensureQuotationItemColumns();
   await ensurePoReceiptItemTable();
+  await ensurePoReceiptColumns();
   await ensureGrnColumns();
   await ensurePoMaterialRequestColumns();
   await ensureStockColumns();

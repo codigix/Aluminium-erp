@@ -176,13 +176,13 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
     const [grnResult] = await connection.execute(
       `INSERT INTO grns (po_number, grn_date, received_quantity, status, notes)
        VALUES (?, ?, ?, ?, ?)` ,
-      [poNumber, new Date(), 0, 'PENDING', null]
+      [poNumber, new Date().toISOString().split('T')[0], 0, 'PENDING', null]
     );
 
     await connection.execute(
       `INSERT INTO qc_inspections (grn_id, inspection_date, pass_quantity, fail_quantity, status, defects, remarks)
        VALUES (?, ?, ?, ?, ?, ?, ?)` ,
-      [grnResult.insertId, new Date(), 0, 0, 'PENDING', null, null]
+      [grnResult.insertId, new Date().toISOString().split('T')[0], 0, 0, 'PENDING', null, null]
     );
 
     if (quote.sales_order_id) {

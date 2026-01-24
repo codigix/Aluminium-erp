@@ -24,9 +24,12 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
 
   useEffect(() => {
     if (!isOpen) {
-      setSearchTerm(selectedOption ? selectedOption[labelField] : (value || ''));
+      const newVal = selectedOption ? selectedOption[labelField] : (value || '');
+      if (searchTerm !== newVal) {
+        setSearchTerm(newVal);
+      }
     }
-  }, [value, selectedOption, isOpen, labelField]);
+  }, [value, selectedOption, isOpen, labelField, searchTerm]);
 
   const filteredOptions = options.filter(opt => 
     String(opt[labelField] || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

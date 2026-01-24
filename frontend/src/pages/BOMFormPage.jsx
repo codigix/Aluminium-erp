@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
@@ -13,9 +13,12 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
 
   useEffect(() => {
     if (!isOpen) {
-      setSearchTerm(selectedOption ? selectedOption[labelField] : (value || ''));
+      const newVal = selectedOption ? selectedOption[labelField] : (value || '');
+      if (searchTerm !== newVal) {
+        setSearchTerm(newVal);
+      }
     }
-  }, [value, selectedOption, isOpen, labelField]);
+  }, [value, selectedOption, isOpen, labelField, searchTerm]);
 
   const filteredOptions = options.filter(opt => {
     const search = String(searchTerm || '').toLowerCase();
@@ -140,6 +143,32 @@ const BOMFormPage = () => {
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
 
+  const drawingOptions = useMemo(() => {
+    const drawingMap = new Map();
+    
+    // Process approved drawings
+    approvedDrawings.forEach(i => {
+      if (i.drawing_no && i.drawing_no !== 'N/A') {
+        if (!drawingMap.has(i.drawing_no)) {
+          drawingMap.set(i.drawing_no, i.material_name || i.description || i.item_description);
+        }
+      }
+    });
+
+    // Process stock items
+    stockItems.forEach(i => {
+      if (i.drawing_no && i.drawing_no !== 'N/A') {
+        if (!drawingMap.has(i.drawing_no)) {
+          drawingMap.set(i.drawing_no, i.material_name || i.description || i.item_description);
+        }
+      }
+    });
+
+    return Array.from(drawingMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([no, name]) => ({ label: no, value: no, subLabel: name }));
+  }, [approvedDrawings, stockItems]);
+
   const pathSegments = window.location.pathname.split('/').filter(Boolean);
   const itemId = pathSegments.length > 1 ? pathSegments.pop() : null;
 
@@ -161,6 +190,16 @@ const BOMFormPage = () => {
     try {
       if (showLoading) setLoading(true);
       const token = localStorage.getItem('authToken');
+
+      // Fetch Stock Items (Raw Materials) FIRST so we have latest rates
+      const stockResponse = await fetch(`${API_BASE}/stock/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      let latestStockItems = [];
+      if (stockResponse.ok) {
+        latestStockItems = await stockResponse.json();
+        setStockItems(latestStockItems);
+      }
       
       const effectiveId = itemId && itemId !== 'bom-form' ? itemId : selectedItem?.id;
 
@@ -184,8 +223,38 @@ const BOMFormPage = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (bomResponse.ok) {
-          const bomData = await bomResponse.json();
-          setBomData(bomData);
+          const data = await bomResponse.json();
+          
+          // Sync rates with latest stock data
+          if (data.materials) {
+            data.materials = data.materials.map(m => {
+              const s = latestStockItems.find(si => si.material_name === m.material_name);
+              if (s) {
+                return { ...m, rate: s.valuation_rate > 0 ? s.valuation_rate : (s.selling_rate || 0) };
+              }
+              return m;
+            });
+          }
+          if (data.components) {
+            data.components = data.components.map(c => {
+              const s = latestStockItems.find(si => si.item_code === c.component_code);
+              if (s) {
+                return { ...c, rate: s.valuation_rate > 0 ? s.valuation_rate : (s.selling_rate || 0) };
+              }
+              return c;
+            });
+          }
+          if (data.scrap) {
+            data.scrap = data.scrap.map(sc => {
+              const s = latestStockItems.find(si => si.item_code === sc.item_code);
+              if (s) {
+                return { ...sc, rate: s.valuation_rate > 0 ? s.valuation_rate : (s.selling_rate || 0) };
+              }
+              return sc;
+            });
+          }
+
+          setBomData(data);
         } else if (bomResponse.status === 404) {
           setBomData({ materials: [], components: [], operations: [], scrap: [] });
         }
@@ -225,14 +294,6 @@ const BOMFormPage = () => {
         setOperationsList(opsData);
       }
 
-      // Fetch Stock Items (Raw Materials)
-      const stockResponse = await fetch(`${API_BASE}/stock/balance`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (stockResponse.ok) {
-        const stockData = await stockResponse.json();
-        setStockItems(stockData);
-      }
     } catch (error) {
       errorToast(error.message);
     } finally {
@@ -556,13 +617,12 @@ const BOMFormPage = () => {
                   <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Quick Filter by Drawing</label>
                   <SearchableSelect
                     placeholder="Search Drawing No..."
-                    options={[...new Set(approvedDrawings
-                      .map(i => i.drawing_no)
-                      .filter(d => d && d !== 'N/A')
-                    )].sort().map(d => ({ label: d, value: d }))}
+                    options={drawingOptions}
+                    subLabelField="subLabel"
                     value={drawingFilter}
-                    disabled={!!itemId && itemId !== 'bom-form'}
-                    onChange={(e) => setDrawingFilter(e.target.value)}
+                    onChange={(e) => {
+                      setDrawingFilter(e.target.value);
+                    }}
                   />
                   <p className="text-[9px] text-slate-400">Filters Product Name and Item Code below</p>
                 </div>
@@ -589,32 +649,35 @@ const BOMFormPage = () => {
                         id: item.id,
                         source: 'order',
                         drawing_no: item.drawing_no,
+                        item_group: item.item_group || item.material_type,
                         subLabel: `[${item.item_group || 'Item'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
                       })),
                       ...stockItems.map(item => ({
-                        label: item.material_name || item.item_description,
+                        label: item.material_name,
                         value: `stock_${item.id}`,
                         id: item.id,
                         source: 'stock',
                         drawing_no: item.drawing_no,
+                        item_group: item.material_type,
                         subLabel: `[${item.material_type || 'Stock'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
                       }))
                     ].filter(opt => {
+                      const group = (opt.item_group || '').toLowerCase();
+                      const isFinishedOrSub = group.includes('finished') || group.includes('sub') || group.includes('assembly') || group === 'fg' || group === 'sfg';
+                      
                       if (drawingFilter) {
-                        return opt.drawing_no === drawingFilter;
+                        return String(opt.drawing_no) === String(drawingFilter) && isFinishedOrSub;
                       }
-                      return true;
+                      return isFinishedOrSub;
                     })}
                     value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
                     disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => {
                       const [source, id] = e.target.value.split('_');
-                      let item;
-                      if (source === 'order') {
-                        item = approvedDrawings.find(i => String(i.id) === String(id));
-                      } else {
-                        item = stockItems.find(i => String(i.id) === String(id));
-                      }
+                      
+                      const item = source === 'order' 
+                        ? approvedDrawings.find(i => String(i.id) === String(id))
+                        : stockItems.find(i => String(i.id) === String(id));
                       
                       if (item) {
                         const enrichedItem = { ...item, source };
@@ -646,6 +709,7 @@ const BOMFormPage = () => {
                         id: item.id,
                         source: 'order',
                         drawing_no: item.drawing_no,
+                        item_group: item.item_group || item.material_type,
                         subLabel: `${item.material_name || item.description} [${item.item_group || 'Item'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
                       })),
                       ...stockItems.map(item => ({
@@ -654,26 +718,41 @@ const BOMFormPage = () => {
                         id: item.id,
                         source: 'stock',
                         drawing_no: item.drawing_no,
-                        subLabel: `${item.material_name || item.item_description} [${item.material_type || 'Stock'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                        item_group: item.material_type,
+                        subLabel: `${item.material_name} [${item.material_type || 'Stock'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
                       }))
                     ].filter(opt => {
+                      const group = (opt.item_group || '').toLowerCase();
+                      const isFinishedOrSub = group.includes('finished') || group.includes('sub') || group.includes('assembly') || group === 'fg' || group === 'sfg';
+                      
                       if (drawingFilter) {
-                        return opt.drawing_no === drawingFilter;
+                        return String(opt.drawing_no) === String(drawingFilter) && isFinishedOrSub;
                       }
-                      return true;
+                      return isFinishedOrSub;
                     })}
                     value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
                     disabled={!!itemId && itemId !== 'bom-form'}
                     onChange={(e) => {
                       const [source, id] = e.target.value.split('_');
-                      let item;
-                      if (source === 'order') {
-                        item = approvedDrawings.find(i => String(i.id) === String(id));
-                      } else {
-                        item = stockItems.find(i => String(i.id) === String(id));
-                      }
+                      
+                      const item = source === 'order' 
+                        ? approvedDrawings.find(i => String(i.id) === String(id))
+                        : stockItems.find(i => String(i.id) === String(id));
+                      
                       if (item) {
-                        setSelectedItem({ ...item, source });
+                        const enrichedItem = { ...item, source };
+                        setSelectedItem(enrichedItem);
+                        setProductForm(prev => ({
+                          ...prev,
+                          description: item.material_name || item.description || item.item_description,
+                          itemCode: item.item_code,
+                          itemGroup: item.item_group || item.material_type || getItemGroupFromMaterialType(item.material_type),
+                          drawingNo: item.drawing_no || '',
+                          drawing_id: item.drawing_id || '',
+                          uom: item.unit || item.uom || 'Kg',
+                          revision: item.revision_no || item.revision || '1',
+                          quantity: item.quantity || 1
+                        }));
                       }
                     }}
                     subLabelField="subLabel"
@@ -827,7 +906,7 @@ const BOMFormPage = () => {
                         setComponentForm({
                           ...componentForm,
                           componentCode: e.target.value,
-                          rate: item ? (item.valuation_rate || 0) : componentForm.rate,
+                          rate: item ? (item.valuation_rate > 0 ? item.valuation_rate : (item.selling_rate || 0)) : componentForm.rate,
                           uom: item ? (item.unit || 'Kg') : componentForm.uom
                         });
                       }}
@@ -990,7 +1069,7 @@ const BOMFormPage = () => {
                         setMaterialForm({
                           ...materialForm,
                           materialName: e.target.value,
-                          rate: item ? (item.valuation_rate || 0) : materialForm.rate,
+                          rate: item ? (item.selling_rate || item.valuation_rate || 0) : materialForm.rate,
                           uom: item ? (item.unit || 'Kg') : materialForm.uom
                         });
                       }}
@@ -1360,7 +1439,7 @@ const BOMFormPage = () => {
                           ...scrapForm,
                           itemName: e.target.value,
                           itemCode: item ? item.item_code : scrapForm.itemCode,
-                          rate: item ? (item.valuation_rate || 0) : scrapForm.rate
+                          rate: item ? (item.valuation_rate > 0 ? item.valuation_rate : (item.selling_rate || 0)) : scrapForm.rate
                         });
                       }}
                       subLabelField="subLabel"
