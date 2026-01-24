@@ -120,7 +120,7 @@ const MaterialRequirements = () => {
       sortable: true,
       render: (val, row) => (
         <div>
-          <div className="font-bold text-slate-900">{val}</div>
+          <div className=" text-slate-900">{val}</div>
           <div className="text-[10px] text-slate-400">{row.details.length} linked project(s)</div>
         </div>
       )
@@ -148,7 +148,7 @@ const MaterialRequirements = () => {
       sortable: true,
       className: 'text-center',
       render: (val, row) => (
-        <span className="font-semibold text-slate-700">
+        <span className=" text-slate-700">
           {val.toFixed(2)} {row.uom}
         </span>
       )
@@ -159,7 +159,7 @@ const MaterialRequirements = () => {
       sortable: true,
       className: 'text-center',
       render: (val, row) => val > 0 ? (
-        <span className="text-rose-600 font-bold">{val.toFixed(2)} {row.uom}</span>
+        <span className="text-rose-600 ">{val.toFixed(2)} {row.uom}</span>
       ) : (
         <span className="text-emerald-600">—</span>
       )
@@ -168,9 +168,9 @@ const MaterialRequirements = () => {
       label: 'Status',
       key: 'shortage',
       render: (val) => val > 0 ? (
-        <span className="px-2 py-1 bg-rose-50 text-rose-600 rounded-full text-[10px] font-bold">SHORTAGE</span>
+        <span className="px-2 py-1 bg-rose-50 text-rose-600 rounded-full text-[10px] ">SHORTAGE</span>
       ) : (
-        <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold">AVAILABLE</span>
+        <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] ">AVAILABLE</span>
       )
     },
     {
@@ -188,7 +188,7 @@ const MaterialRequirements = () => {
           {row.available_qty > 0 && (
             <button 
               onClick={() => handleOpenIssue(row)}
-              className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold text-[10px] px-2 py-1 rounded shadow-sm"
+              className="bg-emerald-600 text-white hover:bg-emerald-700  text-[10px] px-2 py-1 rounded shadow-sm"
             >
               Issue
             </button>
@@ -222,28 +222,28 @@ const MaterialRequirements = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-white">
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Items Needed</p>
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Total Items Needed</p>
             <p className="text-xl text-slate-900 mt-1">{totalRequired}</p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Items with Shortage</p>
-            <p className="text-2xl font-bold text-rose-600 mt-1">{withShortage}</p>
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Items with Shortage</p>
+            <p className="text-2xl  text-rose-600 mt-1">{withShortage}</p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Stock Health</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Stock Health</p>
+            <p className="text-2xl  text-emerald-600 mt-1">
               {totalRequired ? Math.round(((totalRequired - withShortage) / totalRequired) * 100) : 100}%
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Active Plans</p>
-            <p className="text-2xl font-bold text-indigo-600 mt-1">
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Active Plans</p>
+            <p className="text-2xl  text-indigo-600 mt-1">
               {[...new Set(requirements.flatMap(r => r.details.map(d => d.plan_code)))].length}
             </p>
           </div>
@@ -281,23 +281,23 @@ const MaterialRequirements = () => {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="p-3 bg-slate-50 rounded-lg">
               <p className="text-slate-500 text-xs">Total Required</p>
-              <p className="font-bold text-lg">{selectedMat?.required_qty} {selectedMat?.uom}</p>
+              <p className=" text-lg">{selectedMat?.required_qty} {selectedMat?.uom}</p>
             </div>
             <div className="p-3 bg-slate-50 rounded-lg">
               <p className="text-slate-500 text-xs">Stock Available</p>
-              <p className="font-bold text-lg text-emerald-600">{selectedMat?.available_qty} {selectedMat?.uom}</p>
+              <p className=" text-lg text-emerald-600">{selectedMat?.available_qty} {selectedMat?.uom}</p>
             </div>
           </div>
           
-          <h4 className="font-bold text-slate-800 text-sm border-b pb-2">Linked Projects & Plans</h4>
+          <h4 className=" text-slate-800 text-sm border-b pb-2">Linked Projects & Plans</h4>
           <div className="max-h-60 overflow-y-auto space-y-2">
             {selectedMat?.details.map((d, i) => (
               <div key={i} className="flex justify-between items-center p-2 border rounded-lg text-sm">
                 <div>
-                  <div className="font-bold">{d.project_name}</div>
+                  <div className="">{d.project_name}</div>
                   <div className="text-xs text-slate-500">Plan: {d.plan_code} | Item: {d.item_code}</div>
                 </div>
-                <div className="font-bold text-indigo-600">{d.qty} {selectedMat.uom}</div>
+                <div className=" text-indigo-600">{d.qty} {selectedMat.uom}</div>
               </div>
             ))}
           </div>

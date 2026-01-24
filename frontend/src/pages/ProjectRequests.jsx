@@ -171,7 +171,7 @@ const ProjectRequests = () => {
                         )}
                       </td>
                       <td className="p-2">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-semibold border ${statusInfo.bg} ${statusInfo.border} ${statusInfo.text} whitespace-nowrap`}>
+                        <span className={`px-2 py-1 rounded-full text-[10px]  border ${statusInfo.bg} ${statusInfo.border} ${statusInfo.text} whitespace-nowrap`}>
                           {statusInfo.label}
                         </span>
                       </td>
@@ -179,7 +179,7 @@ const ProjectRequests = () => {
                         {formatDate(req.target_dispatch_date)}
                       </td>
                       <td className="p-2">
-                        <span className={`text-xs font-semibold ${priorityColors[req.production_priority]}`}>
+                        <span className={`text-xs  ${priorityColors[req.production_priority]}`}>
                           {req.production_priority || 'NORMAL'}
                         </span>
                       </td>
@@ -189,14 +189,14 @@ const ProjectRequests = () => {
                             <button
                               onClick={() => handleAction(req.id, 'accept')}
                               disabled={actionLoading === req.id}
-                              className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                              className="px-3 py-1.5 bg-emerald-600 text-white text-xs  rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                             >
                               {actionLoading === req.id ? '...' : 'Accept'}
                             </button>
                             <button
                               onClick={() => handleAction(req.id, 'reject')}
                               disabled={actionLoading === req.id}
-                              className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                              className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs  rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
                             >
                               Reject
                             </button>

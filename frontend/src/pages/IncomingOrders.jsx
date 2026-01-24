@@ -43,7 +43,7 @@ const SalesOrderRow = ({ order, onAction, actionLoading }) => {
           {formatOrderCode(order.id)}
           {rejectedItems.length > 0 && (
             <div className="mt-1">
-              <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded text-[8px] font-bold uppercase animate-pulse border border-rose-200">
+              <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded text-[8px]   animate-pulse border border-rose-200">
                 {rejectedItems.length} Item(s) Rejected
               </span>
             </div>
@@ -66,7 +66,7 @@ const SalesOrderRow = ({ order, onAction, actionLoading }) => {
           </span>
           {order.status === 'DESIGN_QUERY' && order.rejection_reason && (
             <div className="mt-1.5 p-2 bg-amber-50 border border-amber-100 rounded text-[10px] text-amber-700 leading-relaxed max-w-[200px]">
-              <span className="font-bold">Rejection Reason:</span> {order.rejection_reason}
+              <span className="">Rejection Reason:</span> {order.rejection_reason}
             </div>
           )}
         </td>

@@ -190,7 +190,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       label: 'ID Code', 
       key: 'workstation_code', 
       sortable: true,
-      render: (val) => <span className="font-bold text-indigo-600 font-mono">{val}</span>
+      render: (val) => <span className=" text-indigo-600 font-mono">{val}</span>
     },
     { 
       label: 'Workstation / Location', 
@@ -221,7 +221,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
     { 
       label: 'Hourly Rate', 
       key: 'hourly_rate',
-      render: (val) => <span className="text-emerald-600 font-bold">₹{val}</span>
+      render: (val) => <span className="text-emerald-600 ">₹{val}</span>
     },
     { 
       label: 'Target', 
@@ -492,7 +492,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
             <RefreshCw className={`w-6 h-6 text-white ${loading ? 'animate-spin' : ''}`} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Workstation Master</h1>
+            <h1 className="text-2xl  text-slate-900">Workstation Master</h1>
             <p className="text-slate-500 text-sm">Manage production floor workstations and equipment</p>
           </div>
         </div>

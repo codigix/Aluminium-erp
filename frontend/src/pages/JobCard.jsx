@@ -227,7 +227,7 @@ const JobCard = () => {
       label: 'JC Number',
       key: 'jc_number',
       sortable: true,
-      render: (val, row) => <span className="font-bold text-slate-900">{val || `JC-${row.id.toString().padStart(4, '0')}`}</span>
+      render: (val, row) => <span className=" text-slate-900">{val || `JC-${row.id.toString().padStart(4, '0')}`}</span>
     },
     {
       label: 'WO Reference',
@@ -237,7 +237,7 @@ const JobCard = () => {
         <div className="flex flex-col">
           <span className="font-medium text-slate-800">{val}</span>
           {row.item_status === 'Rejected' && (
-            <span className="w-fit px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 animate-pulse uppercase border border-rose-200 mt-1">
+            <span className="w-fit px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 animate-pulse  border border-rose-200 mt-1">
               Rejected Drawing
             </span>
           )}
@@ -250,7 +250,7 @@ const JobCard = () => {
       sortable: true,
       render: (val, row) => (
         <div>
-          <div className="font-bold text-indigo-600">{val || 'Manual Operation'}</div>
+          <div className=" text-indigo-600">{val || 'Manual Operation'}</div>
           <div className="text-[10px] text-slate-500">{row.workstation_name || 'General Station'}</div>
         </div>
       )
@@ -267,7 +267,7 @@ const JobCard = () => {
       className: 'text-center',
       render: (val, row) => (
         <div className="flex flex-col items-center">
-          <div className="font-semibold text-slate-700">{val} / {row.produced_qty}</div>
+          <div className=" text-slate-700">{val} / {row.produced_qty}</div>
           <div className="w-24 bg-slate-100 rounded-full h-1 mt-1">
             <div 
               className="bg-indigo-500 h-1 rounded-full transition-all" 
@@ -293,7 +293,7 @@ const JobCard = () => {
             <button 
               onClick={() => handleUpdateStatus(row.id, 'IN_PROGRESS')}
               disabled={row.item_status === 'Rejected'}
-              className={`text-xs font-bold px-2 py-1 rounded ${
+              className={`text-xs  px-2 py-1 rounded ${
                 row.item_status === 'Rejected' 
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
                   : 'text-emerald-600 hover:text-emerald-900 hover:bg-emerald-50'
@@ -306,13 +306,13 @@ const JobCard = () => {
             <>
               <button 
                 onClick={() => handleLogProgress(row)}
-                className="text-indigo-600 hover:text-indigo-900 text-xs font-bold px-2 py-1 rounded hover:bg-indigo-50"
+                className="text-indigo-600 hover:text-indigo-900 text-xs  px-2 py-1 rounded hover:bg-indigo-50"
               >
                 Log
               </button>
               <button 
                 onClick={() => handleUpdateStatus(row.id, 'COMPLETED')}
-                className="text-amber-600 hover:text-amber-900 text-xs font-bold px-2 py-1 rounded hover:bg-amber-50"
+                className="text-amber-600 hover:text-amber-900 text-xs  px-2 py-1 rounded hover:bg-amber-50"
               >
                 Done
               </button>
@@ -349,30 +349,30 @@ const JobCard = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Active Jobs</p>
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Active Jobs</p>
             <p className="text-xl text-slate-900 mt-1">{jobCards.filter(jc => jc.status === 'IN_PROGRESS').length}</p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Pending</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Pending</p>
+            <p className="text-2xl  text-amber-600 mt-1">
               {jobCards.filter(jc => jc.status === 'PENDING').length}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Completed</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Completed</p>
+            <p className="text-2xl  text-emerald-600 mt-1">
               {jobCards.filter(jc => jc.status === 'COMPLETED').length}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Average Progress</p>
-            <p className="text-2xl font-bold text-indigo-600 mt-1">
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Average Progress</p>
+            <p className="text-2xl  text-indigo-600 mt-1">
               {jobCards.length ? Math.round(jobCards.reduce((acc, jc) => acc + (jc.produced_qty / jc.planned_qty), 0) / jobCards.length * 100) : 0}%
             </p>
           </div>
@@ -400,7 +400,7 @@ const JobCard = () => {
                 type="text" 
                 value={formData.jcNumber} 
                 disabled 
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-600"
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm  text-slate-600"
               />
             </FormControl>
             <FormControl label="Work Order">
@@ -504,11 +504,11 @@ const JobCard = () => {
       >
         <form onSubmit={submitProgress} className="space-y-4">
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
-            <div className="flex justify-between text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+            <div className="flex justify-between text-xs font-medium text-slate-500  tracking-wider mb-2">
               <span>Operation: {selectedJC?.operation_name}</span>
               <span>Planned: {selectedJC?.planned_qty}</span>
             </div>
-            <div className="flex justify-between text-sm font-bold text-slate-700">
+            <div className="flex justify-between text-sm  text-slate-700">
               <span>Produced: {selectedJC?.produced_qty}</span>
               <span>Rejected: {selectedJC?.rejected_qty}</span>
             </div>

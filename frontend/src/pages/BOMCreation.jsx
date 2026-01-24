@@ -164,7 +164,7 @@ const BOMCreation = () => {
     <div className="bg-slate-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-xl text-slate-900 flex items-center gap-2">
             <span className="p-2 bg-amber-100 rounded-lg text-amber-600">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -177,7 +177,7 @@ const BOMCreation = () => {
         <div className="flex gap-2">
           <Link 
             to="/bom-form"
-            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 shadow-indigo-100 transition-all"
+            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm  shadow-md hover:bg-indigo-700 shadow-indigo-100 transition-all"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -199,25 +199,25 @@ const BOMCreation = () => {
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Active Clients</div>
-          <div className="text-xl font-black text-slate-900">{orders.length}</div>
+          <div className="text-[10px] text-slate-400   tracking-wider mb-1">Active Clients</div>
+          <div className="text-xl  text-slate-900">{orders.length}</div>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Total Drawings</div>
-          <div className="text-xl font-black text-indigo-600">{totalDrawingsCount}</div>
+          <div className="text-[10px] text-slate-400   tracking-wider mb-1">Total Drawings</div>
+          <div className="text-xl  text-indigo-600">{totalDrawingsCount}</div>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Overall Completion</div>
+          <div className="text-[10px] text-slate-400   tracking-wider mb-1">Overall Completion</div>
           <div className="flex items-center gap-2">
-            <div className="text-xl font-black text-emerald-600">{completionPercent}%</div>
+            <div className="text-xl  text-emerald-600">{completionPercent}%</div>
             <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${completionPercent}%` }}></div>
             </div>
           </div>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Total BOM Value</div>
-          <div className="text-xl font-black text-indigo-600">₹{totalPageCost.toFixed(2)}</div>
+          <div className="text-[10px] text-slate-400   tracking-wider mb-1">Total BOM Value</div>
+          <div className="text-xl  text-indigo-600">₹{totalPageCost.toFixed(2)}</div>
         </div>
       </div>
 
@@ -226,7 +226,7 @@ const BOMCreation = () => {
           <div className="p-20 text-center text-slate-400">Loading clients...</div>
         ) : orders.length === 0 ? (
           <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-20 text-center text-slate-400 flex flex-col items-center shadow-sm">
-             <p className="font-semibold text-lg text-slate-600">No Orders in Design Phase</p>
+             <p className=" text-lg text-slate-600">No Orders in Design Phase</p>
           </div>
         ) : (
           orders.map(group => {
@@ -286,7 +286,7 @@ const BOMCreation = () => {
                       )}
                     </div>
                     <div>
-                      <h2 className="text-md font-bold text-slate-900 flex items-center gap-2">
+                      <h2 className="text-md  text-slate-900 flex items-center gap-2">
                         Client: {group.company_name}
                         <span className="text-xs font-normal text-slate-400">| PO: {group.po_number}</span>
                       </h2>
@@ -295,13 +295,13 @@ const BOMCreation = () => {
                   <div className="flex items-center gap-6">
                     {poTotalCost > 0 && (
                       <div className="text-right">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Est. Cost</p>
-                        <p className="text-xs font-bold text-indigo-600">₹{poTotalCost.toFixed(2)}</p>
+                        <p className="text-[10px] text-slate-400   tracking-wider">Total Est. Cost</p>
+                        <p className="text-xs  text-indigo-600">₹{poTotalCost.toFixed(2)}</p>
                       </div>
                     )}
                     <div className="text-right">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Drawing Coverage</p>
-                      <p className="text-xs font-bold text-slate-700">{completedDrawings} / {totalDrawings} Drawings</p>
+                      <p className="text-[10px] text-slate-400   tracking-wider">Drawing Coverage</p>
+                      <p className="text-xs  text-slate-700">{completedDrawings} / {totalDrawings} Drawings</p>
                     </div>
                     <StatusBadge status={completedDrawings === totalDrawings && totalDrawings > 0 ? 'COMPLETED' : 'IN_PROGRESS'} />
                   </div>
@@ -347,24 +347,24 @@ const BOMCreation = () => {
                               </div>
                               <div className="grid grid-cols-3 flex-1 gap-4">
                                 <div>
-                                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Drawing No</div>
-                                  <div className="text-sm font-bold text-indigo-600">DWG: {dwg}</div>
+                                  <div className="text-[10px] text-slate-400   tracking-wider">Drawing No</div>
+                                  <div className="text-sm  text-indigo-600">DWG: {dwg}</div>
                                 </div>
                                 <div>
-                                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Description</div>
+                                  <div className="text-[10px] text-slate-400   tracking-wider">Description</div>
                                   <div className="text-sm font-medium text-slate-700 truncate max-w-xs">{fgItem.description}</div>
                                 </div>
                                 <div>
-                                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Order Qty</div>
-                                  <div className="text-sm font-bold text-slate-900">{(fgItem.quantity || fgItem.total_quantity || 0)} {fgItem.unit}</div>
+                                  <div className="text-[10px] text-slate-400   tracking-wider">Order Qty</div>
+                                  <div className="text-sm  text-slate-900">{(fgItem.quantity || fgItem.total_quantity || 0)} {fgItem.unit}</div>
                                 </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-4">
                                {isDwgCompleted ? (
-                                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold">ALL COMPLETED</span>
+                                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] ">ALL COMPLETED</span>
                               ) : (
-                                <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">IN PROGRESS</span>
+                                <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] ">IN PROGRESS</span>
                               )}
                             </div>
                           </div>
@@ -373,133 +373,107 @@ const BOMCreation = () => {
                             <div className="p-4 space-y-6">
                               <div className="flex gap-8 mb-4 px-2 bg-slate-100/50 p-3 rounded-xl border border-slate-100">
                                 <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">BOMs Created :</span>
-                                  <span className="ml-2 text-xs font-bold text-slate-700">{completedItems.length}</span>
+                                  <span className="text-[10px] text-slate-400   tracking-wider">BOMs Created :</span>
+                                  <span className="ml-2 text-xs  text-slate-700">{completedItems.length}</span>
                                 </div>
                                 <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pending Items :</span>
-                                  <span className="ml-2 text-xs font-bold text-slate-700">{pendingItems.length}</span>
+                                  <span className="text-[10px] text-slate-400   tracking-wider">Pending Items :</span>
+                                  <span className="ml-2 text-xs  text-slate-700">{pendingItems.length}</span>
                                 </div>
                                 {totalDwgCost > 0 && (
                                   <div>
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Drawing Value :</span>
-                                    <span className="ml-2 text-sm font-black text-indigo-600">₹{totalDwgCost.toFixed(2)}</span>
+                                    <span className="text-[10px] text-slate-400   tracking-wider">Total Drawing Value :</span>
+                                    <span className="ml-2 text-sm  text-indigo-600">₹{totalDwgCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                   </div>
                                 )}
                               </div>
 
-                              <div className="flex flex-col gap-6">
-                                {/* Created BOMs Section */}
+                              <div className="flex flex-col gap-4">
+                                {/* Header for items */}
                                 {completedItems.length > 0 && (
-                                  <div className="space-y-3">
-                                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Created BOMs</h3>
-                                    <div className="flex flex-col gap-3">
-                                      {completedItems.map(item => (
-                                        <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-indigo-200 transition-all">
-                                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                            <div className="flex items-center gap-4">
-                                              <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                                </svg>
-                                              </div>
-                                              <div>
-                                                <div className="flex items-center gap-2">
-                                                  <span className="text-xs font-bold text-slate-900">{item.item_code}</span>
-                                                  <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-bold uppercase">
-                                                    {item.item_group || item.material_type || 'Assembly'}
-                                                  </span>
-                                                </div>
-                                                <div className="text-[11px] text-slate-500 mt-0.5">{item.description}</div>
-                                              </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-8">
-                                              <div className="text-right pr-8 border-r border-slate-100">
-                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">BOM Cost</p>
-                                                <p className="text-sm font-black text-indigo-600">₹{parseFloat(item.bom_cost || 0).toFixed(2)}</p>
-                                              </div>
-                                              <div className="text-right">
-                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Assembly</p>
-                                                <p className="text-xs font-bold text-emerald-600">COMPLETED</p>
-                                              </div>
-                                              <div className="text-right border-l border-slate-100 pl-8">
-                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Finished Good</p>
-                                                <p className="text-xs font-bold text-emerald-600">COMPLETED</p>
-                                              </div>
-                                              <div className="flex gap-2 ml-4">
-                                                <Link 
-                                                  to={`/bom-form/${item.id}`}
-                                                  className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                                  title="Edit BOM"
-                                                >
-                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
-                                                  </svg>
-                                                </Link>
-                                                <button 
-                                                  onClick={() => handleDeleteBOM(item.id)}
-                                                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                                  title="Delete BOM"
-                                                >
-                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                  </svg>
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
+                                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-slate-100/80 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                    <div className="col-span-4">Sub-Assembly Name</div>
+                                    <div className="col-span-2 text-center">Item Group</div>
+                                    <div className="col-span-1 text-center">Qty (1 Unit)</div>
+                                    <div className="col-span-1 text-right">BOM Amount</div>
+                                    <div className="col-span-1 text-center">Date</div>
+                                    <div className="col-span-1 text-center">Status</div>
+                                    <div className="col-span-2 text-right px-2">Actions</div>
                                   </div>
                                 )}
 
-                                {/* Pending Items Section */}
-                                {pendingItems.length > 0 && (
-                                  <div className="space-y-3">
-                                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Pending BOM Creation</h3>
-                                    <div className="flex flex-col gap-3">
-                                      {pendingItems.map(item => (
-                                        <div key={item.id} className="bg-white border border-slate-200 border-dashed rounded-xl p-4 shadow-sm hover:border-amber-300 transition-all flex justify-between items-center">
-                                          <div className="flex items-center gap-4">
-                                            <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
-                                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                              </svg>
-                                            </div>
-                                            <div>
+                                {/* Created BOMs Section */}
+                                {completedItems.length > 0 ? (
+                                  <div className="flex flex-col gap-3">
+                                    {completedItems.map(item => (
+                                      <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:border-indigo-200 transition-all">
+                                        <div className="grid grid-cols-1 md:grid-cols-12 items-center gap-4">
+                                          {/* Sub-Assembly Name */}
+                                          <div className="col-span-1 md:col-span-4 flex items-center gap-3">
+                                            <div className="flex flex-col">
                                               <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-slate-900">{item.item_code}</span>
-                                                <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-600 rounded-full font-bold uppercase">
-                                                  {item.item_group || 'Assembly'}
-                                                </span>
+                                                <span className="text-sm font-medium text-slate-900">{item.description}</span>
                                               </div>
-                                              <div className="text-[11px] text-slate-500 mt-0.5">{item.description}</div>
+                                              <div className="text-[10px] text-slate-400 font-medium">BOM-{item.id}</div>
                                             </div>
                                           </div>
-                                          
-                                          <div className="flex items-center gap-8">
-                                            <div className="text-right">
-                                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Assembly</p>
-                                              <p className="text-xs font-bold text-amber-600">PENDING</p>
-                                            </div>
-                                            <div className="text-right border-l border-slate-100 pl-8">
-                                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Finished Good</p>
-                                              <p className="text-xs font-bold text-amber-600 uppercase">Pending</p>
-                                            </div>
-                                            <div className="ml-4">
-                                              <Link 
-                                                to={`/bom-form/${item.id}`}
-                                                className="px-6 py-2 bg-white border border-indigo-600 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                                              >
-                                                + Create BOM
-                                              </Link>
-                                            </div>
+
+                                          {/* Item Group */}
+                                          <div className="col-span-1 md:col-span-2 flex justify-center">
+                                            <span className="text-[10px] px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full flex items-center gap-1 border border-indigo-100">
+                                              {item.item_group || item.material_type || 'Sub-Assembly'}
+                                            </span>
+                                          </div>
+
+                                          {/* Quantity (for 1 unit) */}
+                                          <div className="col-span-1 md:col-span-1 text-center">
+                                            <p className="text-xs text-slate-700">1.00 {item.unit || 'Nos'}</p>
+                                          </div>
+
+                                          {/* BOM Amount */}
+                                          <div className="col-span-1 md:col-span-1 text-right">
+                                            <p className="text-sm font-bold text-slate-900">₹{parseFloat(item.bom_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                          </div>
+
+                                          {/* Date */}
+                                          <div className="col-span-1 md:col-span-1 text-center">
+                                            <p className="text-[10px] font-medium text-slate-500">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB') : '—'}</p>
+                                          </div>
+
+                                          {/* Status */}
+                                          <div className="col-span-1 md:col-span-1 flex justify-center">
+                                            <span className={`px-2 py-0.5 rounded text-[9px] font-medium tracking-wider ${item.status === 'REJECTED' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-700'}`}>
+                                              {item.status === 'BOM_SUBMITTED' ? 'Draft' : (item.status || 'Draft')}
+                                            </span>
+                                          </div>
+
+                                          {/* Actions */}
+                                          <div className="col-span-1 md:col-span-2 flex justify-end gap-1 px-2">
+                                            <Link to={`/bom-form/${item.id}?view=true`} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="View BOM">
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                              </svg>
+                                            </Link>
+                                            <Link to={`/bom-form/${item.id}`} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit BOM">
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                              </svg>
+                                            </Link>
+                                            <button onClick={() => handleDeleteBOM(item.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete BOM">
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                              </svg>
+                                            </button>
                                           </div>
                                         </div>
-                                      ))}
-                                    </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="py-10 text-center bg-white border border-slate-100 rounded-xl border-dashed">
+                                    <p className="text-xs text-slate-400">No BOMs have been created for this drawing yet.</p>
+                                    <Link to={`/bom-form/${drawingItems[0].id}`} className="mt-2 inline-block text-xs  text-indigo-600 hover:text-indigo-700">+ Click here to start creating</Link>
                                   </div>
                                 )}
                               </div>

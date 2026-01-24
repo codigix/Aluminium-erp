@@ -69,7 +69,7 @@ const CompanyMaster = ({
           <div className="">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <Building2 className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Company Information</h3>
+              <h3 className="text-sm  text-slate-800 tracking-wider ">Company Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <FormControl label="Company Name">
@@ -101,7 +101,7 @@ const CompanyMaster = ({
           <div className="">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <Building2 className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Tax Information</h3>
+              <h3 className="text-sm  text-slate-800 tracking-wider ">Tax Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <FormControl label="GSTIN">
@@ -139,7 +139,7 @@ const CompanyMaster = ({
           <div className="">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <MapPin className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Billing Address</h3>
+              <h3 className="text-sm  text-slate-800 tracking-wider ">Billing Address</h3>
             </div>
             <div className="space-y-3">
               <FormControl label="Address Line 1">
@@ -194,7 +194,7 @@ const CompanyMaster = ({
           <div className="">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <User className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase">Contact Person</h3>
+              <h3 className="text-sm  text-slate-800 tracking-wider ">Contact Person</h3>
             </div>
             <FormControl label="Contact Person Name">
               <input
@@ -231,14 +231,14 @@ const CompanyMaster = ({
             <button
               type="button"
               onClick={onToggleCreatePanel}
-              className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-all"
+              className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-10 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2"
+              className="px-10 py-2.5 rounded-xl bg-indigo-600 text-white text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2"
             >
               {loading ? (
                 <>
@@ -281,7 +281,7 @@ const CompanyMaster = ({
           <button
             type="button"
             onClick={onToggleCreatePanel}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
           >
             <Plus className="w-5 h-5" />
             <span>New Company</span>

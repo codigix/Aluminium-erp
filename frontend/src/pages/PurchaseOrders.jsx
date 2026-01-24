@@ -320,7 +320,7 @@ const PurchaseOrders = () => {
       label: 'PO Number',
       key: 'po_number',
       sortable: true,
-      render: (val, row) => <span className="font-bold text-slate-900">{val || `PO-${String(row.id).padStart(4, '0')}`}</span>
+      render: (val, row) => <span className=" text-slate-900">{val || `PO-${String(row.id).padStart(4, '0')}`}</span>
     },
     {
       label: 'Vendor',
@@ -332,7 +332,7 @@ const PurchaseOrders = () => {
       label: 'Total Amount',
       key: 'total_amount',
       sortable: true,
-      render: (val) => <span className="font-bold text-indigo-600">{formatCurrency(val)}</span>
+      render: (val) => <span className=" text-indigo-600">{formatCurrency(val)}</span>
     },
     {
       label: 'Expected Delivery',
@@ -345,7 +345,7 @@ const PurchaseOrders = () => {
       key: 'status',
       sortable: true,
       render: (val) => (
-        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold tracking-wider border ${poStatusColors[val]?.badge}`}>
+        <span className={`inline-block px-3 py-1 rounded-full text-[10px]  tracking-wider border ${poStatusColors[val]?.badge}`}>
           {poStatusColors[val]?.label?.toUpperCase() || val?.toUpperCase()}
         </span>
       )
@@ -388,7 +388,7 @@ const PurchaseOrders = () => {
   const renderExpandedRow = (po) => (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mx-4">
       <table className="w-full text-xs">
-        <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] font-bold tracking-wider">
+        <thead className="bg-slate-50 text-slate-400  text-[9px]  tracking-wider">
           <tr>
             <th className="px-4 py-2 text-left">Description</th>
             <th className="px-4 py-2 text-left">Material</th>
@@ -405,7 +405,7 @@ const PurchaseOrders = () => {
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-slate-900">{item.description}</p>
                     {item.sales_order_item_status === 'Rejected' && (
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 animate-pulse uppercase border border-rose-200">
+                      <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 animate-pulse  border border-rose-200">
                         Rejected Drawing
                       </span>
                     )}
@@ -413,9 +413,9 @@ const PurchaseOrders = () => {
                   {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
                 </td>
                 <td className="px-4 py-2 text-slate-600">{item.material_name || '—'}</td>
-                <td className="px-4 py-2 text-center font-bold">{item.quantity} {item.unit || 'NOS'}</td>
+                <td className="px-4 py-2 text-center ">{item.quantity} {item.unit || 'NOS'}</td>
                 <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.unit_rate)}</td>
-                <td className="px-4 py-2 text-right font-bold text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
+                <td className="px-4 py-2 text-right  text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
               </tr>
             ))
           ) : (
@@ -427,8 +427,8 @@ const PurchaseOrders = () => {
         {po.items && po.items.length > 0 && (
           <tfoot className="bg-slate-50/50">
             <tr>
-              <td colSpan="4" className="px-4 py-2 text-right font-bold text-slate-500">Total Amount:</td>
-              <td className="px-4 py-2 text-right font-black text-indigo-600 text-sm">
+              <td colSpan="4" className="px-4 py-2 text-right  text-slate-500">Total Amount:</td>
+              <td className="px-4 py-2 text-right  text-indigo-600 text-sm">
                 {formatCurrency(po.total_amount)}
               </td>
             </tr>

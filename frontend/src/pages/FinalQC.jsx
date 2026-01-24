@@ -14,11 +14,11 @@ const FinalQC = () => {
               <Clock className="w-4 h-4 text-amber-500" />
             </div>
           </div>
-          <h3 className="text-slate-900 font-bold">Final Quality Control</h3>
+          <h3 className="text-slate-900 ">Final Quality Control</h3>
           <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
             The post-production quality clearance module is currently under development.
           </p>
-          <div className="mt-6 px-4 py-1.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold  tracking-widest rounded-full border border-indigo-200">
+          <div className="mt-6 px-4 py-1.5 bg-indigo-100 text-indigo-700 text-[10px]   tracking-widest rounded-full border border-indigo-200">
             Feature Coming Soon
           </div>
         </div>

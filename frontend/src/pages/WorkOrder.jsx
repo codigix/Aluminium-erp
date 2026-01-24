@@ -167,7 +167,7 @@ const WorkOrder = () => {
       label: 'WO Number',
       key: 'wo_number',
       sortable: true,
-      render: (val) => <span className="font-bold text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     {
       label: 'Project / SO',
@@ -181,7 +181,7 @@ const WorkOrder = () => {
       sortable: true,
       render: (val, row) => (
         <div>
-          <div className="font-bold text-indigo-600">{val}</div>
+          <div className=" text-indigo-600">{val}</div>
           <div className="text-[10px] text-slate-500 truncate max-w-[150px]">{row.description}</div>
         </div>
       )
@@ -190,7 +190,7 @@ const WorkOrder = () => {
       label: 'Qty',
       key: 'quantity',
       sortable: true,
-      render: (val) => <span className="font-semibold text-slate-700">{val} NOS</span>
+      render: (val) => <span className=" text-slate-700">{val} NOS</span>
     },
     {
       label: 'Schedule',
@@ -214,7 +214,7 @@ const WorkOrder = () => {
               style={{ width: `${val || 0}%` }}
             ></div>
           </div>
-          <span className="text-[10px] font-bold text-slate-500">{val || 0}%</span>
+          <span className="text-[10px]  text-slate-500">{val || 0}%</span>
         </div>
       )
     },
@@ -267,30 +267,30 @@ const WorkOrder = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-white">
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Active</p>
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Total Active</p>
             <p className="text-xl text-slate-900 mt-1">{workOrders.length}</p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">In Progress</p>
-            <p className="text-2xl font-bold text-blue-600 mt-1">
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">In Progress</p>
+            <p className="text-2xl  text-blue-600 mt-1">
               {workOrders.filter(wo => wo.status === 'IN_PROGRESS').length}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Completed</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Completed</p>
+            <p className="text-2xl  text-emerald-600 mt-1">
               {workOrders.filter(wo => wo.status === 'COMPLETED').length}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Pending</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">
+            <p className="text-xs text-slate-500 font-medium  tracking-wider">Pending</p>
+            <p className="text-2xl  text-amber-600 mt-1">
               {workOrders.filter(wo => wo.status === 'CREATED').length}
             </p>
           </div>
@@ -318,7 +318,7 @@ const WorkOrder = () => {
                 type="text" 
                 value={newWO.woNumber} 
                 disabled 
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-600"
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm  text-slate-600"
               />
             </FormControl>
             <FormControl label="Priority">

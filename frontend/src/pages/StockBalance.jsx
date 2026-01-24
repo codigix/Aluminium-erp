@@ -86,7 +86,7 @@ const StockBalance = () => {
       label: 'Item Code',
       key: 'item_code',
       sortable: true,
-      render: (val) => <span className="font-semibold text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     {
       label: 'Material Name',
@@ -110,7 +110,7 @@ const StockBalance = () => {
         return (
           <div className="flex items-center justify-end gap-2">
             <span className={`inline-block w-1.5 h-1.5 rounded-full ${statusColor.indicator}`}></span>
-            <span className={`font-mono font-bold text-sm ${statusColor.text}`}>
+            <span className={`font-mono  text-sm ${statusColor.text}`}>
               {parseFloat(val || 0).toFixed(3)}
             </span>
           </div>
@@ -153,8 +153,8 @@ const StockBalance = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
           <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-indigo-600 font-bold tracking-widest  mb-1">Total Items</p>
-              <p className="text-2xl font-bold text-indigo-900">{stats.totalItems}</p>
+              <p className="text-[10px] text-indigo-600  tracking-widest  mb-1">Total Items</p>
+              <p className="text-2xl  text-indigo-900">{stats.totalItems}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">
               <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -164,8 +164,8 @@ const StockBalance = () => {
           </div>
           <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-emerald-600 font-bold tracking-widest  mb-1">Total Balance</p>
-              <p className="text-2xl font-bold text-emerald-900">{parseFloat(stats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              <p className="text-[10px] text-emerald-600  tracking-widest  mb-1">Total Balance</p>
+              <p className="text-2xl  text-emerald-900">{parseFloat(stats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">
               <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,8 +175,8 @@ const StockBalance = () => {
           </div>
           <div className="bg-rose-50 border border-rose-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-rose-600 font-bold tracking-widest  mb-1">Low Stock Items</p>
-              <p className="text-2xl font-bold text-rose-900">{stats.lowStock}</p>
+              <p className="text-[10px] text-rose-600  tracking-widest  mb-1">Low Stock Items</p>
+              <p className="text-2xl  text-rose-900">{stats.lowStock}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">
               <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

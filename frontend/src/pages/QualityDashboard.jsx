@@ -58,8 +58,8 @@ const QualityDashboard = () => {
     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{title}</p>
-          <p className="text-2xl font-bold text-slate-900">{count}</p>
+          <p className="text-[10px]  text-slate-400  tracking-widest mb-1">{title}</p>
+          <p className="text-2xl  text-slate-900">{count}</p>
         </div>
         <div className={`p-4 rounded-xl transition-colors ${colorClass}`}>
           <Icon className="w-6 h-6" />
@@ -73,7 +73,7 @@ const QualityDashboard = () => {
       label: 'GRN Reference', 
       key: 'grn_id', 
       sortable: true,
-      render: (val) => <span className="font-bold text-indigo-600">GRN-{String(val).padStart(4, '0')}</span> 
+      render: (val) => <span className=" text-indigo-600">GRN-{String(val).padStart(4, '0')}</span> 
     },
     { 
       label: 'Item Code', 
@@ -85,13 +85,13 @@ const QualityDashboard = () => {
       label: 'Quantity Pending', 
       key: 'quantity', 
       className: 'text-right',
-      render: (val) => <span className="font-mono font-bold text-slate-700">{parseFloat(val || 0).toFixed(3)}</span>
+      render: (val) => <span className="font-mono  text-slate-700">{parseFloat(val || 0).toFixed(3)}</span>
     },
     { 
       label: 'Current Status', 
       key: 'status',
       render: (val) => (
-        <Badge variant="purple" className="uppercase tracking-wider font-bold text-[10px]">
+        <Badge variant="purple" className=" tracking-wider  text-[10px]">
           {val}
         </Badge>
       )
@@ -105,7 +105,7 @@ const QualityDashboard = () => {
           <div className="w-16 h-16 border-4 border-indigo-50 border-t-indigo-600 rounded-full animate-spin" />
           <Beaker className="w-8 h-8 text-indigo-600 absolute inset-0 m-auto animate-pulse" />
         </div>
-        <p className="mt-6 text-sm font-semibold text-slate-500 tracking-wide">Gathering Quality Insights...</p>
+        <p className="mt-6 text-sm  text-slate-500 tracking-wide">Gathering Quality Insights...</p>
       </div>
     );
   }
@@ -114,7 +114,7 @@ const QualityDashboard = () => {
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Quality Assurance Dashboard</h1>
+          <h1 className="text-2xl  text-slate-900">Quality Assurance Dashboard</h1>
           <p className="text-slate-500 mt-1">Real-time monitoring of inspection status and manufacturing quality</p>
         </div>
         <button 
@@ -162,7 +162,7 @@ const QualityDashboard = () => {
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <div className="w-1 h-6 bg-indigo-600 rounded-full"></div>
-          <h2 className="text-lg font-bold text-slate-900">Items Awaiting Inspection</h2>
+          <h2 className="text-lg  text-slate-900">Items Awaiting Inspection</h2>
         </div>
         <DataTable
           columns={columns}

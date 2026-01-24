@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -104,7 +105,7 @@ const BOMApproval = () => {
     <div className="">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">BOM Approval</h1>
+          <h1 className="text-xl text-slate-900">BOM Approval</h1>
           <p className="text-xs text-slate-500">Review and approve finalized Bill of Materials</p>
         </div>
         <button 
@@ -159,7 +160,7 @@ const BOMApproval = () => {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm font-bold text-slate-900">{order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : `SO-${order.id}`)}</div>
+                      <div className="text-sm  text-slate-900">{order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : `SO-${order.id}`)}</div>
                       <div className="text-[10px] text-slate-500">Sales Order Ref</div>
                     </td>
                     <td className="p-2 whitespace-nowrap">
@@ -213,7 +214,7 @@ const BOMApproval = () => {
             <div className="relative bg-white rounded-2xl shadow-xl max-w-5xl w-full overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">BOM Details: {selectedOrder?.po_number || (selectedOrder?.customer_po_id ? `PO-${selectedOrder.customer_po_id}` : `SO-${selectedOrder?.id}`)}</h3>
+                  <h3 className="text-sm  text-slate-900">BOM Details: {selectedOrder?.po_number || (selectedOrder?.customer_po_id ? `PO-${selectedOrder.customer_po_id}` : `SO-${selectedOrder?.id}`)}</h3>
                   <p className="text-xs text-slate-500">{selectedOrder?.company_name} • {selectedOrder?.project_name}</p>
                 </div>
                 <button onClick={() => setShowDetails(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
@@ -231,12 +232,12 @@ const BOMApproval = () => {
                     {/* Summary Bar */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                        <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-bold">Total Drawings</div>
-                        <div className="text-xl font-bold text-slate-900">{orderItems.filter(i => i.status !== 'REJECTED').length}</div>
+                        <div className="text-[10px] text-slate-400 mb-1 tracking-wider  ">Total Drawings</div>
+                        <div className="text-xl text-slate-900">{orderItems.filter(i => i.status !== 'REJECTED').length}</div>
                       </div>
                       <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                        <div className="text-[10px] text-indigo-400 mb-1 tracking-wider uppercase font-bold">Total Est. Cost</div>
-                        <div className="text-xl font-bold text-indigo-600">
+                        <div className="text-[10px] text-indigo-400 mb-1 tracking-wider  ">Total Est. Cost</div>
+                        <div className="text-xl  text-indigo-600">
                           ₹{orderItems.reduce((total, item) => {
                             if (item.status === 'REJECTED') return total;
                             const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
@@ -260,12 +261,24 @@ const BOMApproval = () => {
                       <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden">
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-4">
                               {item.status !== 'REJECTED' && (
-                                <span className="text-sm text-slate-900">{item.item_code || item.drawing_no}</span>
+                                <span className="text-sm font-semibold text-slate-900">{item.item_code || item.drawing_no}</span>
+                              )}
+                              {item.status !== 'REJECTED' && (
+                                <Link 
+                                  to={`/bom-form/${item.id}?view=true`} 
+                                  target="_blank"
+                                  className="text-[10px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-medium bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 transition-all shadow-sm"
+                                >
+                                  View Full BOM
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </Link>
                               )}
                               {item.status === 'REJECTED' && (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
+                                <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 border border-rose-200 animate-pulse ">
                                   Rejected
                                 </span>
                               )}
@@ -282,8 +295,8 @@ const BOMApproval = () => {
                           </div>
                           <div className="flex items-center gap-6">
                             <div className="text-right">
-                              <div className="text-[9px] text-slate-400 uppercase tracking-wider">Cost / Unit</div>
-                              <div className="text-xs font-semibold text-slate-700">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                              <div className="text-[9px] text-slate-400  tracking-wider">Cost / Unit</div>
+                              <div className="text-xs  text-slate-700">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
                                      item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
                                      item.operations?.reduce((sum, o) => {
                                        const cycle = parseFloat(o.cycle_time_min || 0);
@@ -294,8 +307,8 @@ const BOMApproval = () => {
                                      item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0) / parseFloat(item.quantity || 1)).toFixed(2)}</div>
                             </div>
                             <div className="text-right">
-                              <div className="text-[9px] text-indigo-400 uppercase tracking-wider font-bold">Total Cost</div>
-                              <div className="text-sm font-bold text-indigo-600">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
+                              <div className="text-[9px] text-indigo-400  tracking-wider ">Total Cost</div>
+                              <div className="text-sm  text-indigo-600">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
                                      item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
                                      item.operations?.reduce((sum, o) => {
                                        const cycle = parseFloat(o.cycle_time_min || 0);

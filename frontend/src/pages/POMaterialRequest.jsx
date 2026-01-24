@@ -105,7 +105,7 @@ const POMaterialRequest = () => {
       key: 'po_number',
       label: 'PO Number',
       sortable: true,
-      render: (val) => <span className="font-bold text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     {
       key: 'po_date',
@@ -129,13 +129,13 @@ const POMaterialRequest = () => {
             <>
               <button 
                 onClick={() => handleAcceptReject(row.id, 'ACCEPTED')}
-                className="px-3 py-1 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all shadow-sm shadow-emerald-200"
+                className="px-3 py-1 bg-emerald-500 text-white rounded-lg text-[10px]  hover:bg-emerald-600 transition-all shadow-sm shadow-emerald-200"
               >
                 Accept
               </button>
               <button 
                 onClick={() => handleAcceptReject(row.id, 'REJECTED')}
-                className="px-3 py-1 bg-rose-500 text-white rounded-lg text-[10px] font-bold hover:bg-rose-600 transition-all shadow-sm shadow-rose-200"
+                className="px-3 py-1 bg-rose-500 text-white rounded-lg text-[10px]  hover:bg-rose-600 transition-all shadow-sm shadow-rose-200"
               >
                 Reject
               </button>
@@ -143,7 +143,7 @@ const POMaterialRequest = () => {
           ) : row.store_acceptance_status === 'ACCEPTED' ? (
             <button 
               onClick={() => navigate('/grn', { state: { poNumber: row.po_number } })}
-              className="px-3 py-1 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-all shadow-sm shadow-blue-200"
+              className="px-3 py-1 bg-blue-600 text-white rounded-lg text-[10px]  hover:bg-blue-700 transition-all shadow-sm shadow-blue-200"
             >
               Create GRN
             </button>
@@ -156,11 +156,11 @@ const POMaterialRequest = () => {
   const renderExpanded = (group) => (
     <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mx-4">
       <div className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center">
-        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Requested Materials</h4>
+        <h4 className="text-[10px]  text-slate-500  tracking-widest">Requested Materials</h4>
         <span className="text-[10px] text-slate-400 font-medium">Expected by: {formatDate(group.expected_delivery_date)}</span>
       </div>
       <table className="w-full text-left text-xs">
-        <thead className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest font-bold">
+        <thead className="bg-slate-50/50 text-slate-400 text-[9px]  tracking-widest ">
           <tr>
             <th className="px-4 py-2">Material / Item</th>
             <th className="px-4 py-2">Type</th>
@@ -178,10 +178,10 @@ const POMaterialRequest = () => {
               </td>
               <td className="px-4 py-2 text-slate-500">{item.material_type || '—'}</td>
               <td className="px-4 py-2 text-slate-600 font-mono">{item.drawing_no || '—'}</td>
-              <td className="px-4 py-2 text-right font-bold text-slate-700">
+              <td className="px-4 py-2 text-right  text-slate-700">
                 {parseFloat(item.po_qty || 0).toFixed(2)} <span className="text-[9px] text-slate-400 font-normal">{item.unit}</span>
               </td>
-              <td className="px-4 py-2 text-right text-indigo-600 font-bold">
+              <td className="px-4 py-2 text-right text-indigo-600 ">
                 {parseFloat(item.pending_grn_qty || 0).toFixed(2)}
               </td>
             </tr>
@@ -195,7 +195,7 @@ const POMaterialRequest = () => {
     <div className="min-h-screen bg-slate-50/50 p-4">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">PO Material Request</h1>
+          <h1 className="text-2xl  text-slate-900 tracking-tight">PO Material Request</h1>
           <p className="text-slate-500 text-xs font-medium">Inventory Department - Review and Accept Purchase Orders</p>
         </div>
 

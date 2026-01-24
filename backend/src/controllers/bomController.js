@@ -2,10 +2,16 @@ const bomService = require('../services/bomService');
 
 const getItemMaterials = async (req, res, next) => {
   try {
-    const materials = await bomService.getItemMaterials(req.params.itemId);
-    const components = await bomService.getItemComponents(req.params.itemId);
-    const operations = await bomService.getItemOperations(req.params.itemId);
-    const scrap = await bomService.getItemScrap(req.params.itemId);
+    const { itemId } = req.params;
+    const { itemCode } = req.query;
+    
+    // Support fetching by either itemId (sales_order_item_id) or itemCode (Master BOM)
+    const effectiveItemId = (itemId === 'null' || itemId === 'undefined' || itemId === 'bom-form') ? null : itemId;
+    
+    const materials = await bomService.getItemMaterials(effectiveItemId, itemCode);
+    const components = await bomService.getItemComponents(effectiveItemId, itemCode);
+    const operations = await bomService.getItemOperations(effectiveItemId, itemCode);
+    const scrap = await bomService.getItemScrap(effectiveItemId, itemCode);
     res.json({ materials, components, operations, scrap });
   } catch (error) {
     next(error);

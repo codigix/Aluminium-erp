@@ -14,11 +14,11 @@ const IncomingQC = () => {
               <Clock className="w-4 h-4 text-amber-500" />
             </div>
           </div>
-          <h3 className="text-slate-900 font-bold">Incoming Quality Control</h3>
+          <h3 className="text-slate-900 ">Incoming Quality Control</h3>
           <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
             The raw material inspection module is currently under development.
           </p>
-          <div className="mt-6 px-4 py-1.5 bg-blue-100 text-blue-700 text-[10px] font-bold  tracking-widest rounded-full border border-blue-200">
+          <div className="mt-6 px-4 py-1.5 bg-blue-100 text-blue-700 text-[10px]   tracking-widest rounded-full border border-blue-200">
             Feature Coming Soon
           </div>
         </div>

@@ -1,38 +1,78 @@
 const pool = require('../config/db');
 
-const getItemMaterials = async (itemId) => {
+const getItemMaterials = async (itemId, itemCode = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
-  const [rows] = await pool.query(
-    'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-    [parsedItemId]
-  );
+  let rows = [];
+  if (parsedItemId) {
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [parsedItemId]
+    );
+  }
+  
+  if (rows.length === 0 && itemCode) {
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_materials WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
+      [itemCode]
+    );
+  }
   return rows;
 };
 
-const getItemComponents = async (itemId) => {
+const getItemComponents = async (itemId, itemCode = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
-  const [rows] = await pool.query(
-    'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-    [parsedItemId]
-  );
+  let rows = [];
+  if (parsedItemId) {
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [parsedItemId]
+    );
+  }
+  
+  if (rows.length === 0 && itemCode) {
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_components WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
+      [itemCode]
+    );
+  }
   return rows;
 };
 
-const getItemOperations = async (itemId) => {
+const getItemOperations = async (itemId, itemCode = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
-  const [rows] = await pool.query(
-    'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-    [parsedItemId]
-  );
+  let rows = [];
+  if (parsedItemId) {
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [parsedItemId]
+    );
+  }
+  
+  if (rows.length === 0 && itemCode) {
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_operations WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
+      [itemCode]
+    );
+  }
   return rows;
 };
 
-const getItemScrap = async (itemId) => {
+const getItemScrap = async (itemId, itemCode = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
-  const [rows] = await pool.query(
-    'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-    [parsedItemId]
-  );
+  let rows = [];
+  if (parsedItemId) {
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [parsedItemId]
+    );
+  }
+  
+  if (rows.length === 0 && itemCode) {
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_scrap WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
+      [itemCode]
+    );
+  }
   return rows;
 };
 
@@ -129,33 +169,71 @@ const getBOMBySalesOrder = async (salesOrderId) => {
 };
 
 const createBOMRequest = async (bomData) => {
-  const { itemId, productForm, materials, components, operations, scrap } = bomData;
-  const { itemGroup, uom, revision, description, isActive, isDefault, quantity, drawingNo, drawing_id } = productForm;
+  const { itemId, productForm, materials, components, operations, scrap, source, costing } = bomData;
+  const { itemCode, itemGroup, uom, revision, description, isActive, isDefault, quantity, drawingNo, drawing_id } = productForm;
+  const bom_cost = costing?.costPerUnit || 0;
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    // 1. Update sales_order_items with BOM metadata
-    await connection.execute(
-      `UPDATE sales_order_items 
-       SET item_code = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, quantity = ?, drawing_no = ?, drawing_id = ?
-       WHERE id = ?`,
-      [productForm.itemCode, itemGroup, uom, revision, description, isActive ? 1 : 0, isDefault ? 1 : 0, quantity, drawingNo || null, drawing_id || null, itemId]
-    );
+    const isMasterBOM = source === 'stock' || !itemId;
+    const safeItemCode = itemCode || null;
 
-    // 2. Clear existing BOM items
-    await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);
-    await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
-    await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
-    await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
+    if (!isMasterBOM) {
+      // 1. Update sales_order_items with BOM metadata and costing
+      await connection.execute(
+        `UPDATE sales_order_items 
+         SET item_code = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, quantity = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
+         WHERE id = ?`,
+        [
+          safeItemCode, 
+          itemGroup || null, 
+          uom || null, 
+          revision || null, 
+          description || null, 
+          isActive ? 1 : 0, 
+          isDefault ? 1 : 0, 
+          quantity || 0, 
+          drawingNo || null, 
+          drawing_id || null, 
+          bom_cost,
+          itemId
+        ]
+      );
+
+      // 2. Clear existing BOM items for this sales order item
+      await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);
+      await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
+      await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
+      await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
+    } else {
+      // For Master BOM, clear by item_code where sales_order_item_id is NULL
+      await connection.execute('DELETE FROM sales_order_item_materials WHERE item_code = ? AND sales_order_item_id IS NULL', [safeItemCode]);
+      await connection.execute('DELETE FROM sales_order_item_components WHERE item_code = ? AND sales_order_item_id IS NULL', [safeItemCode]);
+      await connection.execute('DELETE FROM sales_order_item_operations WHERE item_code = ? AND sales_order_item_id IS NULL', [safeItemCode]);
+      await connection.execute('DELETE FROM sales_order_item_scrap WHERE item_code = ? AND sales_order_item_id IS NULL', [safeItemCode]);
+    }
 
     // 3. Insert new BOM items
+    const linkId = isMasterBOM ? null : (itemId || null);
+
     if (materials && materials.length > 0) {
       for (const m of materials) {
         await connection.execute(
-          'INSERT INTO sales_order_item_materials (sales_order_item_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [itemId, m.material_name, m.material_type, m.item_group, m.qty_per_pc, m.uom, m.rate, m.warehouse, m.operation]
+          'INSERT INTO sales_order_item_materials (sales_order_item_id, item_code, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            linkId, 
+            safeItemCode, 
+            m.material_name || null, 
+            m.material_type || null, 
+            m.item_group || null, 
+            m.qty_per_pc || 0, 
+            m.uom || null, 
+            m.rate || 0, 
+            m.warehouse || null, 
+            m.operation || null
+          ]
         );
       }
     }
@@ -163,8 +241,18 @@ const createBOMRequest = async (bomData) => {
     if (components && components.length > 0) {
       for (const c of components) {
         await connection.execute(
-          'INSERT INTO sales_order_item_components (sales_order_item_id, component_code, description, quantity, uom, rate, loss_percent, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [itemId, c.component_code, c.description, c.quantity, c.uom, c.rate, c.loss_percent, c.notes]
+          'INSERT INTO sales_order_item_components (sales_order_item_id, item_code, component_code, description, quantity, uom, rate, loss_percent, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            linkId, 
+            safeItemCode, 
+            c.component_code || null, 
+            c.description || null, 
+            c.quantity || 0, 
+            c.uom || null, 
+            c.rate || 0, 
+            c.loss_percent || 0, 
+            c.notes || null
+          ]
         );
       }
     }
@@ -172,8 +260,18 @@ const createBOMRequest = async (bomData) => {
     if (operations && operations.length > 0) {
       for (const o of operations) {
         await connection.execute(
-          'INSERT INTO sales_order_item_operations (sales_order_item_id, operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [itemId, o.operation_name, o.workstation, o.cycle_time_min, o.setup_time_min, o.hourly_rate, o.operation_type, o.target_warehouse]
+          'INSERT INTO sales_order_item_operations (sales_order_item_id, item_code, operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            linkId, 
+            safeItemCode, 
+            o.operation_name || null, 
+            o.workstation || null, 
+            o.cycle_time_min || 0, 
+            o.setup_time_min || 0, 
+            o.hourly_rate || 0, 
+            o.operation_type || 'In-House', 
+            o.target_warehouse || null
+          ]
         );
       }
     }
@@ -181,25 +279,34 @@ const createBOMRequest = async (bomData) => {
     if (scrap && scrap.length > 0) {
       for (const s of scrap) {
         await connection.execute(
-          'INSERT INTO sales_order_item_scrap (sales_order_item_id, item_code, item_name, input_qty, loss_percent, rate) VALUES (?, ?, ?, ?, ?, ?)',
-          [itemId, s.item_code, s.item_name, s.input_qty, s.loss_percent, s.rate]
+          'INSERT INTO sales_order_item_scrap (sales_order_item_id, item_code, scrap_item_code, item_name, input_qty, loss_percent, rate) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            linkId, 
+            safeItemCode, 
+            s.scrap_item_code || s.item_code || null, 
+            s.item_name || null, 
+            s.input_qty || 0, 
+            s.loss_percent || 0, 
+            s.rate || 0
+          ]
         );
       }
     }
 
-    // 4. Update sales_order status
-    const [itemRows] = await connection.query(
-      'SELECT sales_order_id FROM sales_order_items WHERE id = ?',
-      [itemId]
-    );
-
-    if (itemRows.length > 0) {
-      const salesOrderId = itemRows[0].sales_order_id;
-      // Also update sales_order status to 'BOM_SUBMITTED'
-      await connection.execute(
-        "UPDATE sales_orders SET status = 'BOM_SUBMITTED', updated_at = NOW() WHERE id = ?",
-        [salesOrderId]
+    // 4. Update sales_order status (only if linked to sales order)
+    if (!isMasterBOM) {
+      const [itemRows] = await connection.query(
+        'SELECT sales_order_id FROM sales_order_items WHERE id = ?',
+        [itemId]
       );
+
+      if (itemRows.length > 0) {
+        const salesOrderId = itemRows[0].sales_order_id;
+        await connection.execute(
+          "UPDATE sales_orders SET status = 'BOM_SUBMITTED', updated_at = NOW() WHERE id = ?",
+          [salesOrderId]
+        );
+      }
     }
 
     await connection.commit();
@@ -221,6 +328,7 @@ const getApprovedBOMs = async () => {
       soi.description,
       soi.unit,
       soi.quantity,
+      soi.bom_cost,
       c.company_name,
       so.project_name,
       so.id as sales_order_id,
@@ -230,9 +338,9 @@ const getApprovedBOMs = async () => {
     JOIN companies c ON so.company_id = c.id
     WHERE so.status IN ('BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED')
     AND (
-      EXISTS (SELECT 1 FROM sales_order_item_materials WHERE sales_order_item_id = soi.id)
-      OR EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id)
-      OR EXISTS (SELECT 1 FROM sales_order_item_operations WHERE sales_order_item_id = soi.id)
+      EXISTS (SELECT 1 FROM sales_order_item_materials WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL))
+      OR EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL))
+      OR EXISTS (SELECT 1 FROM sales_order_item_operations WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL))
     )
     ORDER BY soi.created_at DESC
   `);

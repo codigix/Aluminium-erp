@@ -78,7 +78,7 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
               filteredOptions.map((opt, idx) => (
                 <div
                   key={idx}
-                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${String(opt[valueField]) === String(value) ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
+                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 ${String(opt[valueField]) === String(value) ? 'bg-blue-50 text-blue-600 ' : 'text-slate-700'}`}
                   onClick={() => {
                     onChange({ target: { value: opt[valueField] } });
                     setSearchTerm(opt[labelField]);
@@ -261,7 +261,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
 
       <div className="overflow-x-auto relative">
         <table className="w-full text-left text-sm border-collapse">
-          <thead className="bg-slate-50/50 text-slate-500 text-[10px] uppercase tracking-widest font-bold">
+          <thead className="bg-slate-50/50 text-slate-500 text-[10px]  tracking-widest ">
             <tr>
               {renderExpanded && <th className="px-6 py-4 border-b border-slate-100 w-10"></th>}
               {columns.map((col, idx) => (

@@ -129,7 +129,7 @@ const WarehouseAllocation = () => {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Warehouse Allocation</h1>
+            <h1 className="text-xl text-slate-900">Warehouse Allocation</h1>
             <p className="text-sm text-slate-500 font-medium">Assign accepted material from GRN to warehouse locations</p>
           </div>
         </div>
@@ -138,7 +138,7 @@ const WarehouseAllocation = () => {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold ">
+            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px]  ">
               <tr>
                 <th className="p-2 text-left">Source (GRN/PO)</th>
                 <th className="p-2 text-left">Item Details</th>
@@ -167,25 +167,25 @@ const WarehouseAllocation = () => {
                 pendingItems.map((item) => (
                   <tr key={item.grn_item_id} className="group hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-5">
-                      <div className="font-bold text-indigo-600">#{item.grn_number}</div>
-                      <div className="text-[10px] text-slate-400 font-bold  tracking-tight mt-0.5">PO: {item.po_number}</div>
+                      <div className=" text-indigo-600">#{item.grn_number}</div>
+                      <div className="text-[10px] text-slate-400   tracking-tight mt-0.5">PO: {item.po_number}</div>
                     </td>
                     <td className="px-6 py-5">
-                      <div className="font-semibold text-slate-900">{item.item_code}</div>
+                      <div className=" text-slate-900">{item.item_code}</div>
                       <div className="text-xs text-slate-500 max-w-[200px] truncate">{item.material_name}</div>
                     </td>
-                    <td className="px-6 py-5 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30">
+                    <td className="px-6 py-5 text-right font-mono  text-emerald-600 bg-emerald-50/30">
                       {parseFloat(item.accepted_qty).toFixed(3)}
                     </td>
-                    <td className="px-6 py-5 text-right font-mono font-bold text-slate-400">
+                    <td className="px-6 py-5 text-right font-mono  text-slate-400">
                       {parseFloat(item.allocated_qty || 0).toFixed(3)}
                     </td>
-                    <td className="px-6 py-5 text-right font-mono font-bold text-rose-600 bg-rose-50/30">
+                    <td className="px-6 py-5 text-right font-mono  text-rose-600 bg-rose-50/30">
                       {parseFloat(item.pending_allocation_qty).toFixed(3)}
                     </td>
                     <td className="px-6 py-5">
                       <select
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white transition-all"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs  focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white transition-all"
                         value={allocationData[item.grn_item_id]?.target_warehouse || ''}
                         onChange={(e) => handleInputChange(item.grn_item_id, 'target_warehouse', e.target.value)}
                       >
@@ -198,7 +198,7 @@ const WarehouseAllocation = () => {
                     <td className="px-6 py-5">
                       <input
                         type="number"
-                        className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-xs  focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                         value={allocationData[item.grn_item_id]?.allocate_qty || ''}
                         onChange={(e) => handleInputChange(item.grn_item_id, 'allocate_qty', e.target.value)}
                         max={item.pending_allocation_qty}
@@ -210,7 +210,7 @@ const WarehouseAllocation = () => {
                       <button
                         onClick={() => handleAllocate(item)}
                         disabled={allocatingId === item.grn_item_id}
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-bold text-xs transition-all shadow-sm ${
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white  text-xs transition-all shadow-sm ${
                           allocatingId === item.grn_item_id 
                             ? 'bg-slate-300 cursor-not-allowed' 
                             : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-indigo-100'

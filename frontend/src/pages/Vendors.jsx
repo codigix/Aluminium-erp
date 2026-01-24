@@ -217,11 +217,11 @@ const Vendors = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600  text-lg">
             {val.charAt(0)}
           </div>
           <div>
-            <div className="font-bold text-slate-900">{val}</div>
+            <div className=" text-slate-900">{val}</div>
             <div className="text-xs text-slate-400">{row.vendor_type}</div>
           </div>
         </div>
@@ -270,7 +270,7 @@ const Vendors = () => {
       render: (val) => {
         const config = vendorStatusColors[val] || vendorStatusColors.ACTIVE;
         return (
-          <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${config.badge}`}>
+          <span className={`px-3 py-1 rounded-full text-[10px]  border ${config.badge}`}>
             {config.label}
           </span>
         );
@@ -308,13 +308,13 @@ const Vendors = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Vendors</h2>
+          <h2 className="text-2xl  text-slate-900 tracking-tight">Vendors</h2>
           <p className="text-sm text-slate-500">Manage your supplier network and performance</p>
         </div>
         <div className="flex gap-3">
           <button
             onClick={handleExportList}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm  hover:bg-slate-50 transition-all shadow-sm"
           >
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -323,7 +323,7 @@ const Vendors = () => {
           </button>
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200"
+            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm  hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
@@ -342,8 +342,8 @@ const Vendors = () => {
               </svg>
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Total Vendors</p>
-              <p className="text-2xl font-bold text-slate-900">{stats?.totalVendors || vendors.length}</p>
+              <p className="text-xs text-slate-500   tracking-wider">Total Vendors</p>
+              <p className="text-2xl  text-slate-900">{stats?.totalVendors || vendors.length}</p>
             </div>
           </div>
         </Card>
@@ -355,8 +355,8 @@ const Vendors = () => {
               </svg>
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Active</p>
-              <p className="text-2xl font-bold text-slate-900">{vendors.filter(v => v.status === 'ACTIVE').length}</p>
+              <p className="text-xs text-slate-500   tracking-wider">Active</p>
+              <p className="text-2xl  text-slate-900">{vendors.filter(v => v.status === 'ACTIVE').length}</p>
             </div>
           </div>
         </Card>
@@ -368,8 +368,8 @@ const Vendors = () => {
               </svg>
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Avg Rating</p>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-xs text-slate-500   tracking-wider">Avg Rating</p>
+              <p className="text-2xl  text-slate-900">
                 {(vendors.reduce((acc, v) => acc + parseFloat(v.rating || 0), 0) / (vendors.length || 1)).toFixed(1)}
               </p>
             </div>
@@ -383,8 +383,8 @@ const Vendors = () => {
               </svg>
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Top Category</p>
-              <p className="text-xl font-bold text-slate-900 truncate max-w-[120px]">Material</p>
+              <p className="text-xs text-slate-500   tracking-wider">Top Category</p>
+              <p className="text-xl text-slate-900 truncate max-w-[120px]">Material</p>
             </div>
           </div>
         </Card>
@@ -418,7 +418,7 @@ const Vendors = () => {
       >
         <form onSubmit={handleAddVendor} className="space-y-8 max-h-[70vh] overflow-y-auto px-1">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase border-b border-slate-100 pb-2 mb-4">Basic Information</h3>
+            <h3 className="text-sm  text-slate-800 tracking-wider  border-b border-slate-100 pb-2 mb-4">Basic Information</h3>
             <div className="">
               <FormControl label="Vendor Name *">
                 <input
@@ -480,7 +480,7 @@ const Vendors = () => {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase border-b border-slate-100 pb-2 mb-4">Contact Information</h3>
+            <h3 className="text-sm  text-slate-800 tracking-wider  border-b border-slate-100 pb-2 mb-4">Contact Information</h3>
             <div className="">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                 <FormControl label="Email">
@@ -516,7 +516,7 @@ const Vendors = () => {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-slate-800 tracking-wider uppercase border-b border-slate-100 pb-2 mb-4">Performance</h3>
+            <h3 className="text-sm  text-slate-800 tracking-wider  border-b border-slate-100 pb-2 mb-4">Performance</h3>
             <FormControl label="Initial Rating (0-5)">
               <div className="flex items-center gap-4">
                 <input
@@ -543,13 +543,13 @@ const Vendors = () => {
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-all"
+              className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
             >
               Add Vendor
             </button>

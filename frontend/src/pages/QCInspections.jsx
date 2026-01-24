@@ -269,7 +269,7 @@ const QCInspections = () => {
       key: 'grn_id',
       sortable: true,
       render: (val) => (
-        <span className="font-mono font-bold text-indigo-600">
+        <span className="font-mono  text-indigo-600">
           GRN-{String(val).padStart(4, '0')}
         </span>
       )
@@ -290,7 +290,7 @@ const QCInspections = () => {
       key: 'items',
       className: 'text-right',
       sortable: true,
-      render: (val) => <span className="font-mono font-bold text-slate-900">{val || 0}</span>
+      render: (val) => <span className="font-mono  text-slate-900">{val || 0}</span>
     },
     {
       label: 'Pass/Fail',
@@ -298,8 +298,8 @@ const QCInspections = () => {
       className: 'text-right',
       render: (val, row) => (
         <div className="flex flex-col items-end">
-          <span className="text-emerald-600 font-bold">{val || row.accepted_quantity || 0}</span>
-          <span className="text-red-500 text-[10px] font-bold">Fail: {row.fail_quantity || 0}</span>
+          <span className="text-emerald-600 ">{val || row.accepted_quantity || 0}</span>
+          <span className="text-red-500 text-[10px] ">Fail: {row.fail_quantity || 0}</span>
         </div>
       )
     },
@@ -308,7 +308,7 @@ const QCInspections = () => {
       key: 'status',
       sortable: true,
       render: (val) => (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider border ${qcStatusColors[val]?.badge}`}>
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px]  tracking-wider border ${qcStatusColors[val]?.badge}`}>
           {qcStatusColors[val]?.label || val}
         </span>
       )
@@ -339,13 +339,13 @@ const QCInspections = () => {
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-2">
             <ListTodo className="w-4 h-4 text-indigo-600" />
-            <h4 className="text-xs font-bold text-slate-900 tracking-wider uppercase">Items Verification</h4>
+            <h4 className="text-xs  text-slate-900 tracking-wider ">Items Verification</h4>
           </div>
           
           {qc.items_detail && qc.items_detail.length > 0 ? (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
               <table className="w-full text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase text-slate-500 font-bold">
+                <thead className="bg-slate-50 border-b border-slate-200 text-[10px]  text-slate-500 ">
                   <tr>
                     <th className="px-4 py-2 text-left">Item Code</th>
                     <th className="px-4 py-2 text-right">Ordered</th>
@@ -357,12 +357,12 @@ const QCInspections = () => {
                   {qc.items_detail.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50">
                       <td className="px-4 py-2">
-                        <div className="font-bold text-slate-900">{item.item_code}</div>
+                        <div className=" text-slate-900">{item.item_code}</div>
                         <div className="text-[10px] text-slate-400 truncate max-w-[200px]">{item.description}</div>
                       </td>
                       <td className="px-4 py-2 text-right font-mono text-slate-600">{item.ordered_qty}</td>
-                      <td className="px-4 py-2 text-right font-mono font-bold text-emerald-600">{item.received_qty}</td>
-                      <td className="px-4 py-2 text-right font-mono font-bold text-orange-600">{item.shortage || 0}</td>
+                      <td className="px-4 py-2 text-right font-mono  text-emerald-600">{item.received_qty}</td>
+                      <td className="px-4 py-2 text-right font-mono  text-orange-600">{item.shortage || 0}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -378,19 +378,19 @@ const QCInspections = () => {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-              <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1">Pass Quantity</p>
-              <p className="text-sm font-bold text-emerald-600">{qc.pass_quantity || qc.accepted_quantity || 0}</p>
+              <p className="text-[10px]  text-slate-400 tracking-wider  mb-1">Pass Quantity</p>
+              <p className="text-sm  text-emerald-600">{qc.pass_quantity || qc.accepted_quantity || 0}</p>
             </div>
             <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-              <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1">Fail Quantity</p>
-              <p className="text-sm font-bold text-red-600">{qc.fail_quantity || 0}</p>
+              <p className="text-[10px]  text-slate-400 tracking-wider  mb-1">Fail Quantity</p>
+              <p className="text-sm  text-red-600">{qc.fail_quantity || 0}</p>
             </div>
           </div>
 
           <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-              <p className="text-[10px] font-bold text-amber-600 tracking-wider uppercase">Defects Identified</p>
+              <p className="text-[10px]  text-amber-600 tracking-wider ">Defects Identified</p>
             </div>
             <p className="text-xs text-slate-700 leading-relaxed font-medium">
               {qc.defects || "No specific defects reported."}
@@ -400,7 +400,7 @@ const QCInspections = () => {
           <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
             <div className="flex items-center gap-2 mb-2">
               <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
-              <p className="text-[10px] font-bold text-blue-600 tracking-wider uppercase">Final Remarks</p>
+              <p className="text-[10px]  text-blue-600 tracking-wider ">Final Remarks</p>
             </div>
             <p className="text-xs text-slate-700 leading-relaxed font-medium">
               {qc.remarks || "No additional remarks."}
@@ -417,8 +417,8 @@ const QCInspections = () => {
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">{label}</p>
-        <p className="text-sm font-bold text-slate-900">{value}</p>
+        <p className="text-[10px]  text-slate-500 tracking-wider ">{label}</p>
+        <p className="text-sm  text-slate-900">{value}</p>
       </div>
     </div>
   );
@@ -427,12 +427,12 @@ const QCInspections = () => {
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">QC Inspections</h2>
+          <h2 className="text-xl text-slate-900">QC Inspections</h2>
           <p className="text-xs text-slate-500 font-medium">Monitor and manage quality control checks</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm  shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
         >
           <Plus className="w-5 h-5" />
           Create Inspection
@@ -486,7 +486,7 @@ const QCInspections = () => {
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">New QC Inspection</h3>
+                  <h3 className="text-sm  text-slate-900">New QC Inspection</h3>
                   <p className="text-[10px] text-slate-500 font-medium tracking-wider">Quality Assurance</p>
                 </div>
               </div>
@@ -598,13 +598,13 @@ const QCInspections = () => {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-6 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
+                  className="px-6 py-2 text-sm  text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm  shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
                 >
                   Create Inspection
                 </button>
@@ -624,7 +624,7 @@ const QCInspections = () => {
                   <Eye className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Inspection Details</h3>
+                  <h3 className="text-sm  text-slate-900">Inspection Details</h3>
                   <p className="text-[10px] text-slate-500 font-medium tracking-wider">GRN-{String(selectedQC.grn_id).padStart(4, '0')}</p>
                 </div>
               </div>
@@ -643,8 +643,8 @@ const QCInspections = () => {
                     <FileText className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">PO Number</p>
-                    <p className="text-sm font-bold text-slate-900">{selectedQC.po_number || '—'}</p>
+                    <p className="text-[10px]  text-slate-500 tracking-wider ">PO Number</p>
+                    <p className="text-sm  text-slate-900">{selectedQC.po_number || '—'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -652,8 +652,8 @@ const QCInspections = () => {
                     <User className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Vendor</p>
-                    <p className="text-sm font-bold text-slate-900">{selectedQC.vendor_name || '—'}</p>
+                    <p className="text-[10px]  text-slate-500 tracking-wider ">Vendor</p>
+                    <p className="text-sm  text-slate-900">{selectedQC.vendor_name || '—'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -661,8 +661,8 @@ const QCInspections = () => {
                     <Clock className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Status</p>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider border ${qcStatusColors[selectedQC.status]?.badge}`}>
+                    <p className="text-[10px]  text-slate-500 tracking-wider ">Status</p>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px]  tracking-wider border ${qcStatusColors[selectedQC.status]?.badge}`}>
                       {qcStatusColors[selectedQC.status]?.label || selectedQC.status}
                     </span>
                   </div>
@@ -679,27 +679,27 @@ const QCInspections = () => {
 
               {selectedQC.items_detail && selectedQC.items_detail.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-900 tracking-[0.2em] uppercase">Items Verification</h4>
+                  <h4 className="text-xs  text-slate-900 tracking-[0.2em] ">Items Verification</h4>
                   <div className="overflow-hidden rounded-xl border border-slate-200">
                     <table className="w-full text-xs text-left">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 font-bold text-slate-600 tracking-wider text-[10px] uppercase">Item Code</th>
-                          <th className="px-4 py-3 text-right font-bold text-slate-600 tracking-wider text-[10px] uppercase">Ordered</th>
-                          <th className="px-4 py-3 text-right font-bold text-slate-600 tracking-wider text-[10px] uppercase">Received</th>
-                          <th className="px-4 py-3 text-right font-bold text-slate-600 tracking-wider text-[10px] uppercase">Shortage</th>
+                          <th className="px-4 py-3  text-slate-600 tracking-wider text-[10px] ">Item Code</th>
+                          <th className="px-4 py-3 text-right  text-slate-600 tracking-wider text-[10px] ">Ordered</th>
+                          <th className="px-4 py-3 text-right  text-slate-600 tracking-wider text-[10px] ">Received</th>
+                          <th className="px-4 py-3 text-right  text-slate-600 tracking-wider text-[10px] ">Shortage</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedQC.items_detail.map((item, idx) => (
                           <tr key={idx}>
                             <td className="px-4 py-3">
-                              <p className="font-bold text-slate-900">{item.item_code || 'N/A'}</p>
+                              <p className=" text-slate-900">{item.item_code || 'N/A'}</p>
                               {item.description && <p className="text-[10px] text-slate-500 truncate max-w-xs">{item.description}</p>}
                             </td>
                             <td className="px-4 py-3 text-right font-mono text-slate-600">{item.ordered_qty}</td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">{item.received_qty}</td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-orange-600">{item.shortage || 0}</td>
+                            <td className="px-4 py-3 text-right font-mono  text-emerald-600">{item.received_qty}</td>
+                            <td className="px-4 py-3 text-right font-mono  text-orange-600">{item.shortage || 0}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -710,13 +710,13 @@ const QCInspections = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-slate-100">
                 <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                  <p className="text-[10px] font-bold text-amber-600 tracking-wider uppercase mb-2">Defects Identified</p>
+                  <p className="text-[10px]  text-amber-600 tracking-wider  mb-2">Defects Identified</p>
                   <p className="text-sm text-slate-700 leading-relaxed font-medium">
                     {selectedQC.defects || "No specific defects reported."}
                   </p>
                 </div>
                 <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                  <p className="text-[10px] font-bold text-blue-600 tracking-wider uppercase mb-2">Final Remarks</p>
+                  <p className="text-[10px]  text-blue-600 tracking-wider  mb-2">Final Remarks</p>
                   <p className="text-sm text-slate-700 leading-relaxed font-medium">
                     {selectedQC.remarks || "No additional remarks."}
                   </p>
@@ -727,7 +727,7 @@ const QCInspections = () => {
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
               <button
                 onClick={() => setShowViewModal(false)}
-                className="px-6 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all"
+                className="px-6 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm  shadow-sm hover:bg-slate-50 transition-all"
               >
                 Close
               </button>
@@ -746,7 +746,7 @@ const QCInspections = () => {
                   <Edit className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Update Status</h3>
+                  <h3 className="text-sm  text-slate-900">Update Status</h3>
                   <p className="text-[10px] text-slate-500 font-medium tracking-wider">QC-{String(selectedQC.id).padStart(4, '0')}</p>
                 </div>
               </div>
@@ -780,7 +780,7 @@ const QCInspections = () => {
                 </div>
 
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-2">Note</p>
+                  <p className="text-[10px]  text-slate-500 tracking-wider  mb-2">Note</p>
                   <p className="text-xs text-slate-600 italic">
                     Updating the status will affect the inventory availability and quality reports.
                   </p>
@@ -791,13 +791,13 @@ const QCInspections = () => {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-6 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
+                  className="px-6 py-2 text-sm  text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm  shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
                 >
                   Update Status
                 </button>

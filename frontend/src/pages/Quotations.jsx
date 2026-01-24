@@ -631,10 +631,10 @@ const Quotations = () => {
       sortable: true,
       render: (val, q) => (
         <div className="font-medium text-slate-900">
-          <div className="text-sm font-bold tracking-tight">{val}</div>
+          <div className="text-sm  tracking-tight">{val}</div>
           {q.sales_order_id && (
             <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-              <span className="px-1.5 py-0.5 bg-slate-100 rounded font-bold">SO-{q.sales_order_id}</span>
+              <span className="px-1.5 py-0.5 bg-slate-100 rounded ">SO-{q.sales_order_id}</span>
               {q.project_name && <span className="truncate max-w-[120px]">{q.project_name}</span>}
             </div>
           )}
@@ -647,8 +647,8 @@ const Quotations = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col">
-          <span className="text-slate-900 font-bold">{getVendorName(val)}</span>
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Vendor ID: #{val}</span>
+          <span className="text-slate-900 ">{getVendorName(val)}</span>
+          <span className="text-[10px] text-slate-400  tracking-wider font-medium">Vendor ID: #{val}</span>
         </div>
       )
     },
@@ -660,18 +660,18 @@ const Quotations = () => {
         <div className="flex flex-col gap-1">
           <span className="font-medium text-slate-700">{formatDate(val)}</span>
           {val && daysValid(val) > 0 && (
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 w-fit">
+            <span className="text-[9px]  px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 w-fit">
               {daysValid(val)} days left
             </span>
           )}
           {val && daysValid(val) <= 0 && (
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 w-fit">
+            <span className="text-[9px]  px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 w-fit">
               Expired
             </span>
           )}
         </div>
       ) : (
-        <div className="font-black text-indigo-600 text-sm">{formatCurrency(val)}</div>
+        <div className=" text-indigo-600 text-sm">{formatCurrency(val)}</div>
       )
     },
     {
@@ -679,7 +679,7 @@ const Quotations = () => {
       label: 'Status',
       sortable: true,
       render: (val) => (
-        <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider border ${rfqStatusColors[val]?.badge}`}>
+        <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px]  tracking-wider border ${rfqStatusColors[val]?.badge}`}>
           {rfqStatusColors[val]?.label?.toUpperCase() || val}
         </span>
       )
@@ -750,11 +750,11 @@ const Quotations = () => {
   const renderExpandedRow = (q) => (
     <div className="bg-slate-50/50 rounded-xl border border-slate-200 overflow-hidden mx-4 mb-2">
       <div className="px-4 py-2 bg-slate-100/50 border-b border-slate-200 flex justify-between items-center">
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Quotation Line Items</span>
+        <span className="text-[10px]  text-slate-500  tracking-widest">Quotation Line Items</span>
         {q.notes && <span className="text-[10px] text-slate-400 italic">Notes: {q.notes}</span>}
       </div>
       <table className="w-full text-xs">
-        <thead className="text-slate-400 uppercase text-[9px] font-bold tracking-wider">
+        <thead className="text-slate-400  text-[9px]  tracking-wider">
           <tr>
             <th className="px-4 py-3 text-left">Drawing / Item</th>
             <th className="px-4 py-3 text-left">Description</th>
@@ -776,7 +776,7 @@ const Quotations = () => {
                   <div className="flex items-center gap-2">
                     {item.drawing_no || item.item_code || '—'}
                     {item.status === 'REJECTED' && (
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 border border-rose-200 animate-pulse uppercase">
+                      <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 border border-rose-200 animate-pulse ">
                         Rejected
                       </span>
                     )}
@@ -794,11 +794,11 @@ const Quotations = () => {
                     <span className="text-[10px] text-slate-400">{item.material_type}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-center font-bold text-slate-900">{item.quantity} {item.unit || item.uom || 'NOS'}</td>
+                <td className="px-4 py-3 text-center  text-slate-900">{item.quantity} {item.unit || item.uom || 'NOS'}</td>
                 {activeTab === 'received' && (
                   <>
                     <td className="px-4 py-3 text-right text-slate-600 font-mono">{formatCurrency(item.unit_rate)}</td>
-                    <td className="px-4 py-3 text-right font-bold text-indigo-600 font-mono">{formatCurrency(item.amount)}</td>
+                    <td className="px-4 py-3 text-right  text-indigo-600 font-mono">{formatCurrency(item.amount)}</td>
                   </>
                 )}
               </tr>
@@ -814,8 +814,8 @@ const Quotations = () => {
         {activeTab === 'received' && q.total_amount > 0 && (
           <tfoot className="bg-slate-100/30">
             <tr>
-              <td colSpan="5" className="px-4 py-3 text-right font-bold text-slate-500 uppercase text-[10px] tracking-widest">Total Value:</td>
-              <td className="px-4 py-3 text-right font-black text-indigo-600 text-sm font-mono border-l border-slate-200">
+              <td colSpan="5" className="px-4 py-3 text-right  text-slate-500  text-[10px] tracking-widest">Total Value:</td>
+              <td className="px-4 py-3 text-right  text-indigo-600 text-sm font-mono border-l border-slate-200">
                 {formatCurrency(q.total_amount)}
               </td>
             </tr>
@@ -835,14 +835,14 @@ const Quotations = () => {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Vendor Quotations</h1>
+            <h1 className="text-2xl  text-slate-900">Vendor Quotations</h1>
             <p className="text-sm text-slate-500 font-medium">Manage and compare vendor quotes</p>
           </div>
         </div>
        <div className="flex items-center gap-3">
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -856,7 +856,7 @@ const Quotations = () => {
         <div className="flex gap-2 p-1 bg-slate-50 rounded-xl w-fit border border-slate-100">
           <button
             onClick={() => setActiveTab('sent')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition ${
+            className={`px-6 py-2 rounded-lg text-sm  transition ${
               activeTab === 'sent'
                 ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
                 : 'text-slate-500 hover:text-slate-700'
@@ -867,7 +867,7 @@ const Quotations = () => {
           
           <button
             onClick={() => setActiveTab('received')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+            className={`px-6 py-2 rounded-lg text-sm  transition-all ${
               activeTab === 'received'
                 ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
                 : 'text-slate-500 hover:text-slate-700'
@@ -889,7 +889,7 @@ const Quotations = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm  focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
             >
               <option value="All Quotations">All Statuses</option>
               <option value="DRAFT">Draft</option>
