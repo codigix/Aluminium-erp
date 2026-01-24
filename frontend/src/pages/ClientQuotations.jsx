@@ -484,7 +484,7 @@ const ClientQuotations = () => {
                                                   <div className="text-slate-900 text-xs">{item.drawing_no || 'N/A'}</div>
                                                   {item.status === 'REJECTED' && (
                                                     <div className="flex flex-col gap-1">
-                                                      <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black uppercase w-fit animate-pulse">Rejected</span>
+                                                      <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px]   w-fit animate-pulse">Rejected</span>
                                                       {item.rejection_reason && (
                                                         <span className="text-[9px] text-red-600 italic leading-tight">
                                                           Reason: {item.rejection_reason}
@@ -504,7 +504,7 @@ const ClientQuotations = () => {
                                               <td className="p-2 text-xs text-slate-600">{item.unit || 'Pcs'}</td>
                                               <td className="p-2 text-right">
                                                 {item.status === 'REJECTED' ? (
-                                                  <span className="text-red-600 font-bold text-[10px] uppercase pr-4">Rejected</span>
+                                                  <span className="text-red-600  text-[10px]  pr-4">Rejected</span>
                                                 ) : (
                                                   <input
                                                     type="text"
@@ -597,7 +597,7 @@ const ClientQuotations = () => {
                             </td>
                             <td className="p-2 text-xs text-slate-500">{new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                             <td className="p-2">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              <span className={`px-2 py-0.5 rounded-full text-[10px]  ${
                                 group.status === 'SENT' ? 'bg-blue-100 text-blue-700' : 
                                 group.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 
                                 group.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
@@ -644,7 +644,7 @@ const ClientQuotations = () => {
                                                 <div className="text-slate-900 text-[11px] font-medium">{q.drawing_no || '—'}</div>
                                                 {q.status === 'REJECTED' && (
                                                   <div className="flex flex-col gap-0.5">
-                                                    <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black uppercase w-fit animate-pulse">Rejected</span>
+                                                    <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px]   w-fit animate-pulse">Rejected</span>
                                                     {q.rejection_reason && (
                                                       <span className="text-[9px] text-red-600 italic leading-tight">
                                                         Reason: {q.rejection_reason}
@@ -657,7 +657,7 @@ const ClientQuotations = () => {
                                             <td className="p-2 text-[11px] text-slate-600">{q.item_description}</td>
                                             {q.status === 'REJECTED' ? (
                                               <td colSpan={3} className="p-2 text-right">
-                                                <span className="text-red-600 font-bold text-[10px] uppercase pr-4">Rejected – No Financials</span>
+                                                <span className="text-red-600  text-[10px]  pr-4">Rejected – No Financials</span>
                                               </td>
                                             ) : (
                                               <>

@@ -14,11 +14,11 @@ const QualityRejections = () => {
               <Clock className="w-4 h-4 text-amber-500" />
             </div>
           </div>
-          <h3 className="text-slate-900 font-bold">Quality Rejections</h3>
+          <h3 className="text-slate-900 ">Quality Rejections</h3>
           <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
             The non-conformance tracking and rejection analysis module is currently under development.
           </p>
-          <div className="mt-6 px-4 py-1.5 bg-red-100 text-red-700 text-[10px] font-bold  tracking-widest rounded-full border border-red-200">
+          <div className="mt-6 px-4 py-1.5 bg-red-100 text-red-700 text-[10px]   tracking-widest rounded-full border border-red-200">
             Feature Coming Soon
           </div>
         </div>

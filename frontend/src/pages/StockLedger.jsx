@@ -148,7 +148,7 @@ const StockLedger = () => {
         <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div className="lg:col-span-1">
-              <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Item Code</label>
+              <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Item Code</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,7 +165,7 @@ const StockLedger = () => {
               </div>
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Start Date</label>
+              <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Start Date</label>
               <input
                 type="date"
                 value={startDate}
@@ -174,7 +174,7 @@ const StockLedger = () => {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">End Date</label>
+              <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">End Date</label>
               <input
                 type="date"
                 value={endDate}
@@ -185,7 +185,7 @@ const StockLedger = () => {
             <div className="flex gap-2">
               <button
                 onClick={handleFilter}
-                className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition-all shadow-sm flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm  hover:bg-slate-800 transition-all shadow-sm flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -199,7 +199,7 @@ const StockLedger = () => {
                   setEndDate('');
                   fetchLedger({});
                 }}
-                className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-all"
+                className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-lg text-sm  hover:bg-slate-50 transition-all"
                 title="Reset Filters"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,7 +210,7 @@ const StockLedger = () => {
             <div>
               <button
                 onClick={() => setShowModal(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm  hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -237,7 +237,7 @@ const StockLedger = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px] font-bold ">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px]  ">
                 <tr>
                   <th className="px-4 py-4 text-left ">Item Code</th>
                   <th className="px-4 py-4 text-left ">Material</th>
@@ -252,29 +252,29 @@ const StockLedger = () => {
               <tbody className="divide-y divide-slate-100">
                 {ledger.map((entry) => (
                   <tr key={entry.id} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-4 font-semibold text-slate-900">{entry.item_code}</td>
+                    <td className="px-4 py-4  text-slate-900">{entry.item_code}</td>
                     <td className="px-4 py-4">
                       <div className="text-slate-600 font-medium">{entry.material_name || '—'}</div>
-                      <div className="text-[10px] text-slate-400 font-semibold ">{entry.material_type || '—'}</div>
+                      <div className="text-[10px] text-slate-400  ">{entry.material_type || '—'}</div>
                     </td>
                     <td className="px-4 py-4 text-slate-500 text-xs">
                       {new Date(entry.transaction_date).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider  ${transactionTypeColors[entry.transaction_type]?.badge}`}>
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px]  tracking-wider  ${transactionTypeColors[entry.transaction_type]?.badge}`}>
                         {entry.transaction_type}
                       </span>
                     </td>
-                    <td className={`px-4 py-4 text-right font-mono font-bold ${entry.transaction_type === 'IN' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                    <td className={`px-4 py-4 text-right font-mono  ${entry.transaction_type === 'IN' ? 'text-emerald-600' : 'text-slate-900'}`}>
                       {entry.transaction_type === 'IN' ? '+' : '-'}{parseFloat(entry.quantity).toFixed(3)}
                     </td>
-                    <td className="px-4 py-4 text-right font-mono font-bold text-slate-900 bg-slate-50/50">
+                    <td className="px-4 py-4 text-right font-mono  text-slate-900 bg-slate-50/50">
                       {parseFloat(entry.balance_after || 0).toFixed(3)}
                     </td>
                     <td className="px-4 py-4">
                       {entry.reference_doc_type && entry.reference_doc_number 
                         ? (
-                          <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded text-[10px] font-semibold text-slate-600">
+                          <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded text-[10px]  text-slate-600">
                             <span className="text-slate-400">{entry.reference_doc_type}:</span>
                             {entry.reference_doc_number}
                           </div>
@@ -311,7 +311,7 @@ const StockLedger = () => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
               <div>
-                <h3 className="text-sm font-bold text-slate-900  tracking-wider">Add Stock Ledger Entry</h3>
+                <h3 className="text-sm  text-slate-900  tracking-wider">Add Stock Ledger Entry</h3>
                 <p className="text-[10px] text-slate-500 font-medium">Create a new manual inventory transaction</p>
               </div>
               <button 
@@ -327,7 +327,7 @@ const StockLedger = () => {
             <form onSubmit={handleAddEntry} className="p-6 space-y-3">
               <div className="">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Item Code *</label>
+                  <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Item Code *</label>
                   <input
                     type="text"
                     value={formData.itemCode}
@@ -340,7 +340,7 @@ const StockLedger = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Transaction Type *</label>
+                    <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Transaction Type *</label>
                     <select
                       value={formData.transactionType}
                       onChange={(e) => setFormData({...formData, transactionType: e.target.value})}
@@ -353,7 +353,7 @@ const StockLedger = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Quantity *</label>
+                    <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Quantity *</label>
                     <div className="relative">
                       <input
                         type="number"
@@ -370,7 +370,7 @@ const StockLedger = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Ref Doc Type</label>
+                    <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Ref Doc Type</label>
                     <input
                       type="text"
                       value={formData.refDocType}
@@ -380,7 +380,7 @@ const StockLedger = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Ref Doc Number</label>
+                    <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Ref Doc Number</label>
                     <input
                       type="text"
                       value={formData.refDocNumber}
@@ -392,7 +392,7 @@ const StockLedger = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500  tracking-widest mb-1.5 ml-1">Remarks</label>
+                  <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Remarks</label>
                   <textarea
                     value={formData.remarks}
                     onChange={(e) => setFormData({...formData, remarks: e.target.value})}
@@ -407,13 +407,13 @@ const StockLedger = () => {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-6 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
+                  className="px-6 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm  hover:bg-slate-50 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
                 >
                   Add Ledger Entry
                 </button>

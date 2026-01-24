@@ -225,7 +225,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       label: 'Operation Code', 
       key: 'operation_code', 
       sortable: true,
-      render: (val) => <span className="font-bold text-indigo-600 font-mono">{val}</span>
+      render: (val) => <span className=" text-indigo-600 font-mono">{val}</span>
     },
     { 
       label: 'Operation Name', 
@@ -257,7 +257,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       label: 'Hourly Rate', 
       key: 'operation_rate',
       render: (val) => (
-        <span className="text-emerald-600 font-bold">
+        <span className="text-emerald-600 ">
           ₹{val || 0}
         </span>
       )
@@ -313,7 +313,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Operation Master</h1>
+          <h1 className="text-xl text-slate-900">Operation Master</h1>
           <p className="text-xs text-slate-500 font-medium">Define and manage manufacturing operations and standard times</p>
         </div>
         <div className="flex gap-2">
@@ -328,7 +328,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
           </button>
           <button 
             onClick={() => { resetForm(); setShowForm(true); }}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all active:scale-95"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -448,13 +448,13 @@ const OperationMaster = ({ showForm, setShowForm }) => {
             <button 
               type="button" 
               onClick={() => { setShowForm(false); resetForm(); }}
-              className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-all"
+              className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
             >
               {isEditing ? 'Update Operation' : 'Save Operation'}
             </button>

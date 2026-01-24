@@ -363,11 +363,11 @@ const ProductionPlan = () => {
           </div>
 
           <div className="">
-            <h3 className="text-sm font-semibold text-slate-900 border-b pb-2">Select Items for Production</h3>
+            <h3 className="text-sm  text-slate-900 border-b pb-2">Select Items for Production</h3>
             <div className="max-h-60 overflow-y-auto border rounded-md">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 sticky top-0">
-                  <tr className="text-left text-[10px] text-slate-500 uppercase">
+                  <tr className="text-left text-[10px] text-slate-500 ">
                     <th className="p-2 w-10">Select</th>
                     <th className="p-2">Project</th>
                     <th className="p-2">Item</th>
@@ -399,9 +399,9 @@ const ProductionPlan = () => {
                         <td className="p-2 font-medium">{item.project_name || selectedOrderDetails?.project_name}</td>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <div className="text-[11px] font-bold text-indigo-600">{item.item_code}</div>
+                            <div className="text-[11px]  text-indigo-600">{item.item_code}</div>
                             {item.status === 'Rejected' && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-600 animate-pulse uppercase border border-rose-200">
+                              <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 animate-pulse  border border-rose-200">
                                 Rejected Drawing
                               </span>
                             )}
@@ -413,7 +413,7 @@ const ProductionPlan = () => {
                             </div>
                           )}
                         </td>
-                        <td className="p-2 text-center font-semibold text-slate-700">
+                        <td className="p-2 text-center  text-slate-700">
                           {(item.total_qty || item.quantity) - (item.already_planned_qty || 0)} {item.unit}
                         </td>
                       </tr>
@@ -429,13 +429,13 @@ const ProductionPlan = () => {
 
           {newPlan.items.length > 0 && (
             <div className="">
-              <h3 className="text-sm font-semibold text-slate-900 border-b pb-2">Plan Details</h3>
+              <h3 className="text-sm  text-slate-900 border-b pb-2">Plan Details</h3>
               <div className="space-y-4 mt-4">
                 {newPlan.items.map((item, index) => (
                   <div key={item.salesOrderItemId} className="p-3 border rounded-lg bg-slate-50/50 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
-                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase">
+                        <span className="text-[10px]  text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded ">
                           {item.itemCode}
                         </span>
                         <h4 className="text-xs font-medium text-slate-800 mt-1">{item.projectName}</h4>
@@ -494,7 +494,7 @@ const ProductionPlan = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3 mt-2 border-t pt-2">
                       <div>
-                        <h5 className="text-[10px] font-bold text-slate-500 uppercase">Sub-assemblies</h5>
+                        <h5 className="text-[10px]  text-slate-500 ">Sub-assemblies</h5>
                         <ul className="text-[10px] text-slate-600 list-disc pl-4 mt-1">
                           {item.components?.map((c, i) => (
                             <li key={i}>{c.component_code} - {c.description} ({c.quantity} {c.uom})</li>
@@ -503,7 +503,7 @@ const ProductionPlan = () => {
                         </ul>
                       </div>
                       <div>
-                        <h5 className="text-[10px] font-bold text-slate-500 uppercase">Raw Materials</h5>
+                        <h5 className="text-[10px]  text-slate-500 ">Raw Materials</h5>
                         <ul className="text-[10px] text-slate-600 list-disc pl-4 mt-1">
                           {item.materials?.map((m, i) => (
                             <li key={i}>{m.material_name} ({m.qty_per_pc} {m.uom})</li>
@@ -512,7 +512,7 @@ const ProductionPlan = () => {
                         </ul>
                       </div>
                       <div>
-                        <h5 className="text-[10px] font-bold text-slate-500 uppercase">Operations</h5>
+                        <h5 className="text-[10px]  text-slate-500 ">Operations</h5>
                         <ul className="text-[10px] text-slate-600 list-disc pl-4 mt-1">
                           {item.operations?.map((o, i) => (
                             <li key={i}>{o.operation_name} ({o.workstation})</li>

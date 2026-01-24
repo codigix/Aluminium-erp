@@ -208,7 +208,7 @@ const CustomerPO = ({
                                       </tr>
                                       <tr className="bg-indigo-50">
                                         <td colSpan="3" className="p-2 text-right text-xs text-indigo-700 font-medium">Grand Total (Incl. GST):</td>
-                                        <td className="p-2 text-right text-sm text-indigo-600 font-semibold">{formatCurrency(group.total_amount * 1.18)}</td>
+                                        <td className="p-2 text-right text-sm text-indigo-600 ">{formatCurrency(group.total_amount * 1.18)}</td>
                                       </tr>
                                     </tfoot>
                                   </table>

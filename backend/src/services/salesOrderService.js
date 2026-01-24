@@ -655,34 +655,67 @@ const getOrderTimeline = async salesOrderId => {
 
   // Fetch materials, components, operations, and scrap for each item
   for (const item of allTimelineItems) {
-    const [materials] = await pool.query(
+    // First try by sales_order_item_id
+    let [materials] = await pool.query(
       'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
       [item.id]
     );
-    item.materials = materials;
-
-    const [components] = await pool.query(
+    
+    let [components] = await pool.query(
       'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
       [item.id]
     );
-    item.components = components;
 
-    const [operations] = await pool.query(
+    let [operations] = await pool.query(
       'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
       [item.id]
     );
-    item.operations = operations;
 
-    const [scrap] = await pool.query(
+    let [scrap] = await pool.query(
       'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
       [item.id]
     );
+
+    // If no BOM items found by ID, try by item_code (Master BOM)
+    if (materials.length === 0 && components.length === 0 && operations.length === 0) {
+      const [mMaster] = await pool.query(
+        'SELECT * FROM sales_order_item_materials WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
+        [item.item_code]
+      );
+      materials = mMaster;
+
+      const [cMaster] = await pool.query(
+        'SELECT * FROM sales_order_item_components WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
+        [item.item_code]
+      );
+      components = cMaster;
+
+      const [oMaster] = await pool.query(
+        'SELECT * FROM sales_order_item_operations WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
+        [item.item_code]
+      );
+      operations = oMaster;
+
+      const [sMaster] = await pool.query(
+        'SELECT * FROM sales_order_item_scrap WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
+        [item.item_code]
+      );
+      scrap = sMaster;
+    }
+
+    item.materials = materials;
+    item.components = components;
+    item.operations = operations;
     item.scrap = scrap;
 
     // Calculate summary costs
     const orderQty = parseFloat(item.quantity || 1);
     const matCost = materials.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * orderQty * parseFloat(m.rate || 0)), 0);
-    const compCost = components.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0);
+    const compCost = components.reduce((sum, c) => {
+      const base = parseFloat(c.quantity || 0) * orderQty * parseFloat(c.rate || 0);
+      const loss = base * (parseFloat(c.loss_percent || 0) / 100);
+      return sum + (base - loss);
+    }, 0);
     const laborCost = operations.reduce((sum, o) => {
       const cycle = parseFloat(o.cycle_time_min || 0);
       const setup = parseFloat(o.setup_time_min || 0);
@@ -697,8 +730,13 @@ const getOrderTimeline = async salesOrderId => {
     }, 0);
     
     const totalOrderCost = matCost + compCost + laborCost - scrapRecovery;
-    item.bom_cost = orderQty > 0 ? totalOrderCost / orderQty : 0;
-    item.has_bom = (materials.length > 0 || components.length > 0 || operations.length > 0);
+    const calculatedBomCost = orderQty > 0 ? totalOrderCost / orderQty : 0;
+    
+    // Prioritize stored bom_cost if available (>0), otherwise use calculated
+    item.bom_cost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : calculatedBomCost;
+
+    // Improved has_bom check: True if materials, components OR operations exist
+    item.has_bom = Boolean(materials?.length > 0 || components?.length > 0 || operations?.length > 0);
   }
   
   return allTimelineItems;

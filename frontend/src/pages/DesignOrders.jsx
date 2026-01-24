@@ -809,13 +809,13 @@ const DesignOrders = () => {
             <div className="flex bg-slate-200 p-1 rounded-xl">
               <button
                 onClick={() => setActiveTab('incoming')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === 'incoming' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'incoming' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 Incoming Requests
               </button>
               <button
                 onClick={() => setActiveTab('progress')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === 'progress' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'progress' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 In Progress
               </button>
@@ -843,7 +843,7 @@ const DesignOrders = () => {
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 border-b border-blue-700">
               <div className="flex justify-between items-center mb-3">
                 <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+                  <h2 className="text-base  text-white flex items-center gap-2 mb-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                     📥 Incoming Design Requests
                   </h2>
@@ -853,12 +853,12 @@ const DesignOrders = () => {
                   <button
                     onClick={fetchIncomingOrders}
                     disabled={incomingLoading}
-                    className="px-3 py-1.5 bg-white rounded text-xs text-blue-600 shadow-sm transition-colors disabled:opacity-50 font-bold"
+                    className="px-3 py-1.5 bg-white rounded text-xs text-blue-600 shadow-sm transition-colors disabled:opacity-50 "
                   >
                     ↻ Refresh
                   </button>
                   {incomingOrders.length > 0 && (
-                    <span className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs font-bold">
+                    <span className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs ">
                       {incomingOrders.length}
                     </span>
                   )}
@@ -866,13 +866,13 @@ const DesignOrders = () => {
               </div>
             {selectedIncomingOrders.size > 0 && (
               <div className="flex items-center gap-2 pt-2 border-t border-blue-400">
-                <span className="text-white text-xs font-semibold">
+                <span className="text-white text-xs ">
                   {selectedIncomingOrders.size} selected
                 </span>
                 <button
                   onClick={handleBulkApprove}
                   disabled={bulkOperationLoading}
-                  className="px-3 py-1.5 bg-emerald-500 text-white rounded text-xs font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center gap-1"
+                  className="px-3 py-1.5 bg-emerald-500 text-white rounded text-xs  hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center gap-1"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
                   Bulk Approve
@@ -880,7 +880,7 @@ const DesignOrders = () => {
                 <button
                   onClick={handleBulkReject}
                   disabled={bulkOperationLoading}
-                  className="px-3 py-1.5 bg-red-500 text-white rounded text-xs font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors flex items-center gap-1"
+                  className="px-3 py-1.5 bg-red-500 text-white rounded text-xs  hover:bg-red-600 disabled:opacity-50 transition-colors flex items-center gap-1"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
                   Bulk Reject
@@ -902,14 +902,14 @@ const DesignOrders = () => {
                       disabled={incomingOrders.length === 0}
                     />
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Client Name</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Group</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
-                  <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Status</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Action</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Client Name</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Item Code</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Group</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Drawing No</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Description</th>
+                  <th className="px-4 py-2 text-center text-xs  text-slate-600 ">Qty</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Status</th>
+                  <th className="px-4 py-2 text-right text-xs  text-slate-600 ">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
@@ -918,7 +918,7 @@ const DesignOrders = () => {
                     <td colSpan="7" className="px-4 py-6 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-xs text-slate-600 font-semibold">Checking for new requests...</span>
+                        <span className="text-xs text-slate-600 ">Checking for new requests...</span>
                       </div>
                     </td>
                   </tr>
@@ -927,7 +927,7 @@ const DesignOrders = () => {
                     <td colSpan="7" className="px-4 py-8 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <p className="text-xs text-slate-500 font-semibold">No incoming design requests</p>
+                        <p className="text-xs text-slate-500 ">No incoming design requests</p>
                       </div>
                     </td>
                   </tr>
@@ -961,13 +961,13 @@ const DesignOrders = () => {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-col">
-                              <span className="font-bold text-slate-900 text-xs">{group.company_name}</span>
+                              <span className=" text-slate-900 text-xs">{group.company_name}</span>
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-slate-500 font-bold">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
+                                <span className="text-[10px] text-slate-500 ">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 font-bold text-slate-900">
+                          <td className="px-4 py-3  text-slate-900">
                             <div className="flex items-center gap-2">
                               <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
                               <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg text-[10px]">
@@ -990,7 +990,7 @@ const DesignOrders = () => {
                                  e.stopPropagation();
                                  handleAcceptAll(group.orders.map(o => o.id));
                                }}
-                               className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                               className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors shadow-sm"
                              >
                                Accept All
                              </button>
@@ -999,7 +999,7 @@ const DesignOrders = () => {
                                  e.stopPropagation();
                                  toggleIncomingPo(groupKey);
                                }}
-                               className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-50 transition-colors"
+                               className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px]  hover:bg-slate-50 transition-colors"
                              >
                                {isExpanded ? 'Hide' : 'Show'}
                              </button>
@@ -1020,7 +1020,7 @@ const DesignOrders = () => {
                             <td className="px-4 py-2.5">
                               <div className="flex flex-col gap-1 items-start">
                                 {order.item_code && (
-                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
+                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] ">
                                     {order.item_code}
                                   </span>
                                 )}
@@ -1038,11 +1038,11 @@ const DesignOrders = () => {
                                 <span className="text-slate-300 text-[10px] italic">Not Set</span>
                               )}
                             </td>
-                            <td className="px-4 py-2.5 font-bold text-indigo-600">
+                            <td className="px-4 py-2.5  text-indigo-600">
                               <div className="flex items-center gap-2">
                                 {order.drawing_no || '—'}
                                 {order.item_status === 'REJECTED' && (
-                                  <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black animate-pulse">REJECTED</span>
+                                  <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px]  animate-pulse">REJECTED</span>
                                 )}
                               </div>
                             </td>
@@ -1051,7 +1051,7 @@ const DesignOrders = () => {
                                 <span className="text-slate-600 italic">{order.item_description || 'No description'}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-2.5 text-center font-bold text-slate-900">
+                            <td className="px-4 py-2.5 text-center  text-slate-900">
                               {order.item_qty || 1}
                             </td>
                             <td className="px-4 py-2.5">
@@ -1099,7 +1099,7 @@ const DesignOrders = () => {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <div>
-                    <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+                    <h2 className="text-base  text-white flex items-center gap-2 mb-1">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                       🎨 Design Tasks in Progress
                     </h2>
@@ -1120,12 +1120,12 @@ const DesignOrders = () => {
                   <button
                     onClick={fetchOrders}
                     disabled={loading}
-                    className="px-3 py-1.5 bg-white rounded text-xs text-purple-600 shadow-sm transition-colors disabled:opacity-50 font-bold"
+                    className="px-3 py-1.5 bg-white rounded text-xs text-purple-600 shadow-sm transition-colors disabled:opacity-50 "
                   >
                     ↻ Refresh
                   </button>
                   {orders.length > 0 && (
-                    <span className="px-3 py-1 bg-white text-purple-600 rounded-full text-xs font-bold">
+                    <span className="px-3 py-1 bg-white text-purple-600 rounded-full text-xs ">
                       {filteredOrders.length} {filteredOrders.length !== orders.length ? `of ${orders.length}` : ''}
                     </span>
                   )}
@@ -1137,14 +1137,14 @@ const DesignOrders = () => {
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Customer</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Group</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
-                  <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Status</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Actions</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Customer</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Item Code</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Group</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Drawing No</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Description</th>
+                  <th className="px-4 py-2 text-center text-xs  text-slate-600 ">Qty</th>
+                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Status</th>
+                  <th className="px-4 py-2 text-right text-xs  text-slate-600 ">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
@@ -1153,7 +1153,7 @@ const DesignOrders = () => {
                     <td colSpan="8" className="px-4 py-8 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-xs text-slate-600 font-semibold">Loading design orders...</span>
+                        <span className="text-xs text-slate-600 ">Loading design orders...</span>
                       </div>
                     </td>
                   </tr>
@@ -1162,7 +1162,7 @@ const DesignOrders = () => {
                     <td colSpan="8" className="px-4 py-8 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <p className="text-xs text-slate-500 font-semibold">No tasks match your search</p>
+                        <p className="text-xs text-slate-500 ">No tasks match your search</p>
                       </div>
                     </td>
                   </tr>
@@ -1180,21 +1180,21 @@ const DesignOrders = () => {
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
                                 <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                                <span className="font-bold text-slate-900 text-xs">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
+                                <span className=" text-slate-900 text-xs">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
                               </div>
-                              <span className="font-bold text-indigo-600 text-[10px] ml-5">{group.company_name}</span>
+                              <span className=" text-indigo-600 text-[10px] ml-5">{group.company_name}</span>
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold">
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] ">
                               {group.orders.length} Drawing Tasks
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className="text-slate-600 font-bold text-xs">{group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}</span>
+                            <span className="text-slate-600  text-xs">{group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}</span>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            <span className={`px-2 py-0.5 rounded-full text-[10px]  ${
                               group.orders.some(o => o.status === 'DESIGN_QUERY') 
                                 ? 'bg-amber-100 text-amber-700 border border-amber-200' 
                                 : group.orders.some(o => o.status === 'IN_DESIGN') 
@@ -1210,7 +1210,7 @@ const DesignOrders = () => {
                                  e.stopPropagation();
                                  toggleActivePo(groupKey);
                                }}
-                               className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-50 transition-colors"
+                               className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px]  hover:bg-slate-50 transition-colors"
                              >
                                {isExpanded ? 'Hide' : 'Show'}
                              </button>
@@ -1222,7 +1222,7 @@ const DesignOrders = () => {
                             <td className="px-4 py-3 whitespace-nowrap text-slate-600 pl-8 font-medium">{order.company_name}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               {order.item_code ? (
-                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] ">
                                   {order.item_code}
                                 </span>
                               ) : (
@@ -1238,11 +1238,11 @@ const DesignOrders = () => {
                                 <span className="text-slate-300 text-[10px] italic">Not Set</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap font-bold text-indigo-600">
+                            <td className="px-4 py-3 whitespace-nowrap  text-indigo-600">
                               <div className="flex items-center gap-2">
                                 {order.drawing_no || '—'}
                                 {order.item_status === 'REJECTED' && (
-                                  <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px] font-black animate-pulse">REJECTED</span>
+                                  <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px]  animate-pulse">REJECTED</span>
                                 )}
                               </div>
                             </td>
@@ -1250,18 +1250,18 @@ const DesignOrders = () => {
                               <div className="flex flex-col">
                                 <span>{order.description || 'No description'}</span>
                                 {order.item_status === 'REJECTED' && order.item_rejection_reason && (
-                                  <span className="text-[9px] text-red-500 font-bold mt-1">
+                                  <span className="text-[9px] text-red-500  mt-1">
                                     Reason: {order.item_rejection_reason}
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center font-bold text-slate-900">{order.total_quantity || 0}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center  text-slate-900">{order.total_quantity || 0}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <select
                                 value={order.status}
                                 onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                                className={`text-xs font-semibold rounded px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${getStatusColor(order.status)}`}
+                                className={`text-xs  rounded px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${getStatusColor(order.status)}`}
                               >
                                 <option value="DRAFT">Draft</option>
                                 <option value="IN_DESIGN">In progress</option>
@@ -1317,7 +1317,7 @@ const DesignOrders = () => {
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-2 border-b border-purple-700">
                 <div className="flex justify-between items-start gap-4">
                   <div>
-                    <h3 className="text-lg font-bold text-white mb-1">
+                    <h3 className="text-lg  text-white mb-1">
                       Technical Details: {selectedOrder?.po_number && selectedOrder?.po_number !== 'NO-PO' ? `PO ${selectedOrder.po_number}` : 'Design Request'}
                     </h3>
                     <p className="text-sm text-purple-100">
@@ -1341,19 +1341,19 @@ const DesignOrders = () => {
                     <div className="flex justify-center mb-3">
                       <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                    <p className="text-slate-600 font-semibold text-xs">Loading technical details...</p>
+                    <p className="text-slate-600  text-xs">Loading technical details...</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-200">
                       <thead className="bg-slate-100">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Item Code</th>
-                          <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Drawing No</th>
-                          <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Rev</th>
-                          <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Description</th>
-                          <th className="px-4 py-2 text-center text-xs font-bold text-slate-600 uppercase">Qty</th>
-                          <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">PDF / Actions</th>
+                          <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Item Code</th>
+                          <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Drawing No</th>
+                          <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Rev</th>
+                          <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Description</th>
+                          <th className="px-4 py-2 text-center text-xs  text-slate-600 ">Qty</th>
+                          <th className="px-4 py-2 text-right text-xs  text-slate-600 ">PDF / Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
@@ -1369,7 +1369,7 @@ const DesignOrders = () => {
                                   onChange={(e) => setEditItemData({...editItemData, drawing_no: e.target.value})}
                                 />
                               ) : (
-                                <span className="font-bold text-slate-900">{item.drawing_no || '—'}</span>
+                                <span className=" text-slate-900">{item.drawing_no || '—'}</span>
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
@@ -1385,7 +1385,7 @@ const DesignOrders = () => {
                               )}
                             </td>
                             <td className="px-4 py-3 text-slate-600">{item.description}</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-indigo-600">{parseFloat(item.quantity).toFixed(3)} {item.unit}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center  text-indigo-600">{parseFloat(item.quantity).toFixed(3)} {item.unit}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-right">
                               {editingItem?.id === item.id ? (
                                 <div className="flex flex-col gap-2 items-end">
@@ -1399,13 +1399,13 @@ const DesignOrders = () => {
                                     <button 
                                       onClick={() => handleSaveItem(item.id)}
                                       disabled={itemSaveLoading}
-                                      className="px-2 py-1 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                                      className="px-2 py-1 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                                     >
                                       Save
                                     </button>
                                     <button 
                                       onClick={() => setEditingItem(null)}
-                                      className="px-2 py-1 bg-slate-200 text-slate-700 rounded text-xs font-semibold hover:bg-slate-300 transition-colors"
+                                      className="px-2 py-1 bg-slate-200 text-slate-700 rounded text-xs  hover:bg-slate-300 transition-colors"
                                     >
                                       Cancel
                                     </button>
@@ -1454,7 +1454,7 @@ const DesignOrders = () => {
               <div className="bg-slate-50 p-2border-t border-slate-200 flex justify-end">
                 <button 
                   type="button" 
-                  className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                  className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs  hover:bg-indigo-700 transition-colors"
                   onClick={() => setShowDetails(false)}
                 >
                   Close
@@ -1469,7 +1469,7 @@ const DesignOrders = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 sticky top-0">
-              <h2 className="text-lg font-bold text-white">
+              <h2 className="text-lg  text-white">
                 {reviewDetails.length === 1 ? 'Drawing Review' : 'Design Review'} - {reviewOrder.company_name}
               </h2>
               <p className="text-indigo-100 text-xs mt-1">
@@ -1480,25 +1480,25 @@ const DesignOrders = () => {
             <div className="p-6 space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">Customer</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.company_name}</p>
+                  <label className="text-xs  text-slate-600 ">Customer</label>
+                  <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder.company_name}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">{reviewOrder.po_number === 'NO-PO' ? 'Request Type' : 'PO Number'}</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.po_number === 'NO-PO' ? 'Design Request' : reviewOrder.po_number || '—'}</p>
+                  <label className="text-xs  text-slate-600 ">{reviewOrder.po_number === 'NO-PO' ? 'Request Type' : 'PO Number'}</label>
+                  <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder.po_number === 'NO-PO' ? 'Design Request' : reviewOrder.po_number || '—'}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">Project</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder.project_name}</p>
+                  <label className="text-xs  text-slate-600 ">Project</label>
+                  <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder.project_name}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 uppercase">{reviewOrder.po_number === 'NO-PO' ? 'Request ID' : 'Sales Order'}</label>
-                  <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{(reviewOrder.po_number === 'NO-PO' ? 'DR-' : 'SO-') + String(reviewOrder.id).padStart(4, '0')}</p>
+                  <label className="text-xs  text-slate-600 ">{reviewOrder.po_number === 'NO-PO' ? 'Request ID' : 'Sales Order'}</label>
+                  <p className="text-sm  text-slate-900 text-xs mt-1">{(reviewOrder.po_number === 'NO-PO' ? 'DR-' : 'SO-') + String(reviewOrder.id).padStart(4, '0')}</p>
                 </div>
               </div>
 
               <div className="border-t pt-4">
-                <label className="text-xs font-bold text-slate-600 uppercase block mb-3">Drawing Details</label>
+                <label className="text-xs  text-slate-600  block mb-3">Drawing Details</label>
                 {reviewLoading ? (
                   <div className="text-center py-4">
                     <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -1511,11 +1511,11 @@ const DesignOrders = () => {
                           <div className="grid grid-cols-4 gap-3 text-sm flex-1">
                             <div>
                               <span className="text-xs text-slate-500">Drawing No</span>
-                              <p className="font-semibold text-slate-900 text-xs">{item.drawing_no || '—'}</p>
+                              <p className=" text-slate-900 text-xs">{item.drawing_no || '—'}</p>
                             </div>
                             <div>
                               <span className="text-xs text-slate-500">Group</span>
-                              <p className="font-semibold text-slate-900 text-xs">
+                              <p className=" text-slate-900 text-xs">
                                 {item.item_group ? (
                                   <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px]">
                                     {item.item_group}
@@ -1525,19 +1525,19 @@ const DesignOrders = () => {
                             </div>
                             <div>
                               <span className="text-xs text-slate-500">Revision</span>
-                              <p className="font-semibold text-slate-900 text-xs">{item.revision_no || '—'}</p>
+                              <p className=" text-slate-900 text-xs">{item.revision_no || '—'}</p>
                             </div>
                             <div>
                               <span className="text-xs text-slate-500">Quantity</span>
-                              <p className="font-semibold text-slate-900 text-xs">{item.quantity || 1} {item.unit || 'NOS'}</p>
+                              <p className=" text-slate-900 text-xs">{item.quantity || 1} {item.unit || 'NOS'}</p>
                             </div>
                           </div>
                           {item.status === 'REJECTED' ? (
-                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-[10px] font-bold uppercase">Rejected</span>
+                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-[10px]  ">Rejected</span>
                           ) : (
                             <button
                               onClick={() => handleRejectItem(item.id)}
-                              className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-[10px] font-bold border border-red-200 transition-colors"
+                              className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-[10px]  border border-red-200 transition-colors"
                             >
                               Reject Item
                             </button>
@@ -1560,13 +1560,13 @@ const DesignOrders = () => {
               <div className="flex gap-3">
                 <button 
                   onClick={() => setShowReviewModal(false)}
-                  className="px-4 py-2 bg-slate-300 text-slate-900 rounded-lg text-xs font-semibold hover:bg-slate-400 transition-colors"
+                  className="px-4 py-2 bg-slate-300 text-slate-900 rounded-lg text-xs  hover:bg-slate-400 transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={() => handleApproveDesign(reviewOrder.id)}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs  hover:bg-emerald-700 transition-colors"
                 >
                   ✓ Approve & Send
                 </button>
@@ -1585,7 +1585,7 @@ const DesignOrders = () => {
               <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 border-b border-white/10">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-xl font-bold text-white mb-1">
+                    <h3 className="text-xl  text-white mb-1">
                       Reject Reason
                     </h3>
                     <p className="text-indigo-100 text-xs font-medium">
@@ -1606,25 +1606,25 @@ const DesignOrders = () => {
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-slate-600 uppercase">Customer</label>
-                    <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder?.company_name}</p>
+                    <label className="text-xs  text-slate-600 ">Customer</label>
+                    <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder?.company_name}</p>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-600 uppercase">PO Number</label>
-                    <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder?.po_number || '—'}</p>
+                    <label className="text-xs  text-slate-600 ">PO Number</label>
+                    <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder?.po_number || '—'}</p>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-600 uppercase">Project</label>
-                    <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder?.project_name}</p>
+                    <label className="text-xs  text-slate-600 ">Project</label>
+                    <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder?.project_name}</p>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-600 uppercase">Sales Order</label>
-                    <p className="text-sm font-semibold text-slate-900 text-xs mt-1">{reviewOrder?.so_number || '—'}</p>
+                    <label className="text-xs  text-slate-600 ">Sales Order</label>
+                    <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder?.so_number || '—'}</p>
                   </div>
                 </div>
 
                 <div className="border-t pt-4">
-                  <label className="text-xs font-bold text-slate-600 uppercase block mb-2">Rejection Reason</label>
+                  <label className="text-xs  text-slate-600  block mb-2">Rejection Reason</label>
                   <textarea
                     value={rejectData.reason}
                     onChange={(e) => setRejectData({ ...rejectData, reason: e.target.value })}
@@ -1638,13 +1638,13 @@ const DesignOrders = () => {
               <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end gap-3">
                 <button 
                   onClick={() => setShowRejectModal(false)}
-                  className="px-4 py-2 bg-slate-300 text-slate-900 rounded-lg text-xs font-semibold hover:bg-slate-400 transition-colors"
+                  className="px-4 py-2 bg-slate-300 text-slate-900 rounded-lg text-xs  hover:bg-slate-400 transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={submitRejection}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors"
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs  hover:bg-red-700 transition-colors"
                 >
                   Confirm Rejection
                 </button>
@@ -1661,7 +1661,7 @@ const DesignOrders = () => {
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowAddMaterialModal(false)}></div>
             <div className="relative bg-white rounded-2xl shadow-2xl max-w-5xl w-full overflow-hidden transform transition-all border border-slate-200">
               <div className="bg-slate-50 p-2 border-b border-slate-200 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <h3 className="text-lg  text-slate-800 flex items-center gap-2">
                   <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg text-xs">📦</span>
                   {isEditingMaterial ? 'Edit Material / Item' : 'Add New Material / Item'}
                 </h3>
@@ -1679,7 +1679,7 @@ const DesignOrders = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Row 1 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Code *</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Item Code *</label>
                     <div className="flex gap-2">
                       <input 
                         type="text" 
@@ -1695,7 +1695,7 @@ const DesignOrders = () => {
                           const code = await fetchNextItemCode(materialFormData.itemName, materialFormData.itemGroup);
                           if (code) setMaterialFormData(prev => ({ ...prev, itemCode: code }));
                         }}
-                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-bold transition-all border border-slate-200"
+                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px]  transition-all border border-slate-200"
                         title="Generate Next Code"
                       >
                         🔄
@@ -1703,7 +1703,7 @@ const DesignOrders = () => {
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Name *</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Item Name *</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1714,7 +1714,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Item Group *</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Item Group *</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.itemGroup}
@@ -1732,7 +1732,7 @@ const DesignOrders = () => {
 
                   {/* Row 2 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Default UOM *</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Default UOM *</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.defaultUom}
@@ -1746,7 +1746,7 @@ const DesignOrders = () => {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Valuation Rate</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Valuation Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1755,7 +1755,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Selling Rate</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Selling Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1766,7 +1766,7 @@ const DesignOrders = () => {
 
                   {/* Row 3 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">No. of Cavity (for mould items)</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">No. of Cavity (for mould items)</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1775,7 +1775,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Weight per Unit</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Weight per Unit</label>
                     <input 
                       type="number" 
                       step="0.001"
@@ -1786,7 +1786,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Weight UOM</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Weight UOM</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.weightUom}
@@ -1800,7 +1800,7 @@ const DesignOrders = () => {
 
                   {/* Row 4 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Drawing No (Optional)</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Drawing No (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1810,7 +1810,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Revision (Optional)</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Revision (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1820,7 +1820,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Material Grade (Optional)</label>
+                    <label className="text-[11px]  text-slate-500  tracking-wider">Material Grade (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1836,13 +1836,13 @@ const DesignOrders = () => {
                     <button 
                       type="button"
                       onClick={handleClearMaterialForm}
-                      className="px-6 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all border border-slate-200"
+                      className="px-6 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs  hover:bg-slate-200 transition-all border border-slate-200"
                     >
                       Clear Form
                     </button>
                     <button 
                       type="button"
-                      className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
+                      className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
                     >
                       Generate EAN Barcode
                     </button>
@@ -1851,14 +1851,14 @@ const DesignOrders = () => {
                     <button 
                       type="button"
                       onClick={() => setShowAddMaterialModal(false)}
-                      className="flex-1 md:flex-none px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all"
+                      className="flex-1 md:flex-none px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs  hover:bg-slate-50 transition-all"
                     >
                       Cancel
                     </button>
                     <button 
                       type="submit"
                       disabled={isSubmittingMaterial}
-                      className="flex-1 md:flex-none px-10 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+                      className="flex-1 md:flex-none px-10 py-2.5 bg-emerald-600 text-white rounded-xl text-xs  hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
                     >
                       {isSubmittingMaterial ? (
                         <>
@@ -1875,7 +1875,7 @@ const DesignOrders = () => {
               <div className="px-8 pb-8">
                 <div className="border-t border-slate-100 pt-6">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <h4 className="text-sm  text-slate-700 flex items-center gap-2">
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
                       {materialFormData.drawingNo ? `Materials for Drawing: ${materialFormData.drawingNo}` : 'Recently Added Materials'}
                     </h4>
@@ -1896,7 +1896,7 @@ const DesignOrders = () => {
                         <button
                           type="button"
                           onClick={() => setModalSearchTerm(materialFormData.drawingNo)}
-                          className="px-3 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-[10px] font-bold hover:bg-blue-100 transition-all whitespace-nowrap"
+                          className="px-3 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-[10px]  hover:bg-blue-100 transition-all whitespace-nowrap"
                         >
                           This Drawing
                         </button>
@@ -1909,14 +1909,14 @@ const DesignOrders = () => {
                       <table className="w-full text-left border-collapse">
                         <thead className="bg-slate-50 sticky top-0 z-10">
                           <tr>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Item Code</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Material Name</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Group</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">UOM</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">Selling Rate</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">Weight/Unit</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Drawing No</th>
-                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">Actions</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">Item Code</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">Material Name</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">Group</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">UOM</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200 text-center">Selling Rate</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200 text-center">Weight/Unit</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">Drawing No</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -1949,7 +1949,7 @@ const DesignOrders = () => {
                                   <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
                                     <td className="px-4 py-3 text-xs font-medium text-slate-700">
                                       {item.item_code}
-                                      {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px] font-bold uppercase">Current Drg</span>}
+                                      {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px]  ">Current Drg</span>}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-slate-600">{item.material_name}</td>
                                     <td className="px-4 py-3 text-xs text-slate-600">
@@ -1960,7 +1960,7 @@ const DesignOrders = () => {
                                     <td className="px-4 py-3 text-xs text-slate-600">{item.unit}</td>
                                     <td className="px-4 py-3 text-xs text-slate-600 text-center">₹{item.selling_rate || 0}</td>
                                     <td className="px-4 py-3 text-xs text-slate-600 text-center">{item.weight_per_unit || 0} {item.weight_uom}</td>
-                                    <td className="px-4 py-3 text-xs text-slate-600 font-bold">{item.drawing_no || '-'}</td>
+                                    <td className="px-4 py-3 text-xs text-slate-600 ">{item.drawing_no || '-'}</td>
                                     <td className="px-4 py-3 text-xs text-right">
                                       <div className="flex justify-end gap-1">
                                         <button

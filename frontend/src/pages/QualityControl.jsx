@@ -236,7 +236,7 @@ const QualityControl = () => {
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px] font-bold text-slate-500  tracking-wider">{label}</p>
+        <p className="text-[10px]  text-slate-500  tracking-wider">{label}</p>
         <p className="text-sm text-slate-900 leading-tight">{value}</p>
       </div>
     </div>
@@ -248,7 +248,7 @@ const QualityControl = () => {
         <div className="flex bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
           <button
             onClick={() => setActiveTab('grn')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm  transition-all ${
               activeTab === 'grn'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
@@ -259,7 +259,7 @@ const QualityControl = () => {
           </button>
           <button
             onClick={() => setActiveTab('qc')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm  transition-all ${
               activeTab === 'qc'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
@@ -272,7 +272,7 @@ const QualityControl = () => {
 
         <button
           onClick={() => activeTab === 'grn' ? setShowGRNModal(true) : setShowQCModal(true)}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm  shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
         >
           <Plus className="w-5 h-5" />
           {activeTab === 'grn' ? 'Create GRN' : 'New Inspection'}
@@ -302,7 +302,7 @@ const QualityControl = () => {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm text-slate-300 mb-4">
                 <Inbox className="w-8 h-8" />
               </div>
-              <p className="text-slate-900 font-bold">No records found</p>
+              <p className="text-slate-900 ">No records found</p>
               <p className="text-slate-500 text-sm mt-1 max-w-xs mx-auto">
                 {activeTab === 'grn' 
                   ? "Start by creating a Goods Received Note for incoming material."
@@ -315,22 +315,22 @@ const QualityControl = () => {
                 <thead className="bg-slate-50 border-b border-slate-200">
                   {activeTab === 'grn' ? (
                     <tr>
-                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">GRN #</th>
-                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">PO Number</th>
-                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">GRN Date</th>
-                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Received Qty</th>
-                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Status</th>
-                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Actions</th>
+                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">GRN #</th>
+                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">PO Number</th>
+                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">GRN Date</th>
+                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Received Qty</th>
+                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">Status</th>
+                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Actions</th>
                     </tr>
                   ) : (
                     <tr>
-                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Inspection #</th>
-                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">GRN #</th>
-                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Inspection Date</th>
-                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Pass Qty</th>
-                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Fail Qty</th>
-                      <th className="p-2 font-bold text-slate-600  tracking-wider text-[10px]">Status</th>
-                      <th className="p-2 text-right font-bold text-slate-600  tracking-wider text-[10px]">Actions</th>
+                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">Inspection #</th>
+                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">GRN #</th>
+                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">Inspection Date</th>
+                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Pass Qty</th>
+                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Fail Qty</th>
+                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">Status</th>
+                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Actions</th>
                     </tr>
                   )}
                 </thead>
@@ -338,14 +338,14 @@ const QualityControl = () => {
                   {activeTab === 'grn' ? (
                     grns.map((grn) => (
                       <tr key={`grn-${grn.id}`} className="hover:bg-indigo-50/30 transition-colors group">
-                        <td className="p-2 font-mono font-bold text-indigo-600">
+                        <td className="p-2 font-mono  text-indigo-600">
                           GRN-{String(grn.id).padStart(4, '0')}
                         </td>
                         <td className="p-2 font-medium text-slate-700">{grn.poNumber}</td>
                         <td className="p-2 text-slate-500">{formatDate(grn.grnDate)}</td>
-                        <td className="p-2 text-right font-mono font-bold text-slate-900">{grn.receivedQuantity}</td>
+                        <td className="p-2 text-right font-mono  text-slate-900">{grn.receivedQuantity}</td>
                         <td className="p-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold  tracking-wider border ${grnStatusColors[grn.status]?.badge}`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px]   tracking-wider border ${grnStatusColors[grn.status]?.badge}`}>
                             {grnStatusColors[grn.status]?.label || grn.status}
                           </span>
                         </td>
@@ -364,17 +364,17 @@ const QualityControl = () => {
                   ) : (
                     qcInspections.map((qc) => (
                       <tr key={`qc-${qc.id}`} className="hover:bg-indigo-50/30 transition-colors group">
-                        <td className="p-2 font-mono font-bold text-indigo-600">
+                        <td className="p-2 font-mono  text-indigo-600">
                           QC-{String(qc.id).padStart(4, '0')}
                         </td>
                         <td className="p-2 font-mono text-slate-500">
                           GRN-{String(qc.grnId).padStart(4, '0')}
                         </td>
                         <td className="p-2 text-slate-500">{formatDate(qc.inspectionDate)}</td>
-                        <td className="p-2 text-right font-mono font-bold text-emerald-600">{qc.passQuantity}</td>
-                        <td className="p-2 text-right font-mono font-bold text-red-600">{qc.failQuantity || 0}</td>
+                        <td className="p-2 text-right font-mono  text-emerald-600">{qc.passQuantity}</td>
+                        <td className="p-2 text-right font-mono  text-red-600">{qc.failQuantity || 0}</td>
                         <td className="p-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold  tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px]   tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
                             {qcStatusColors[qc.status]?.label || qc.status}
                           </span>
                         </td>
@@ -437,7 +437,7 @@ const QualityControl = () => {
                   <Archive className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Create Goods Received Note</h3>
+                  <h3 className="text-sm  text-slate-900">Create Goods Received Note</h3>
                   <p className="text-[10px] text-slate-500 font-medium  tracking-wider">Inventory Inward</p>
                 </div>
               </div>
@@ -514,13 +514,13 @@ const QualityControl = () => {
                 <button
                   type="button"
                   onClick={() => setShowGRNModal(false)}
-                  className="px-6 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
+                  className="px-6 py-2 text-sm  text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm  shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
                 >
                   Complete Receipt
                 </button>
@@ -540,7 +540,7 @@ const QualityControl = () => {
                   <CheckBadgeIcon className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Create QC Inspection</h3>
+                  <h3 className="text-sm  text-slate-900">Create QC Inspection</h3>
                   <p className="text-[10px] text-slate-500 font-medium  tracking-wider">Quality Verification</p>
                 </div>
               </div>
@@ -652,13 +652,13 @@ const QualityControl = () => {
                 <button
                   type="button"
                   onClick={() => setShowQCModal(false)}
-                  className="px-6 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
+                  className="px-6 py-2 text-sm  text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm  shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all"
                 >
                   Submit Inspection
                 </button>

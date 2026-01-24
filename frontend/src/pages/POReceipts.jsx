@@ -293,7 +293,7 @@ const POReceipts = () => {
       key: 'po_number',
       label: 'PO Number',
       sortable: true,
-      render: (val) => <span className="font-bold text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     { key: 'vendor_name', label: 'Vendor', sortable: true },
     {
@@ -306,7 +306,7 @@ const POReceipts = () => {
       key: 'received_quantity',
       label: 'Received Qty',
       sortable: true,
-      render: (val) => <span className="font-bold text-indigo-600">{val}</span>
+      render: (val) => <span className=" text-indigo-600">{val}</span>
     },
     {
       key: 'status',
@@ -355,11 +355,11 @@ const POReceipts = () => {
   const renderExpanded = (receipt) => (
     <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mx-4">
       <div className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center">
-        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Received Item Details</h4>
+        <h4 className="text-[10px]  text-slate-500  tracking-widest">Received Item Details</h4>
         {receipt.notes && <span className="text-[10px] text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full">Notes: {receipt.notes}</span>}
       </div>
       <table className="w-full text-left text-xs">
-        <thead className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest font-bold">
+        <thead className="bg-slate-50/50 text-slate-400 text-[9px]  tracking-widest ">
           <tr>
             <th className="px-4 py-2">Material / Description</th>
             <th className="px-4 py-2 text-center">Expected</th>
@@ -375,7 +375,7 @@ const POReceipts = () => {
                 {item.material_type && <div className="text-[10px] text-slate-500">{item.material_type}</div>}
               </td>
               <td className="px-4 py-2 text-center text-slate-500">{item.expected_qty || item.quantity}</td>
-              <td className="px-4 py-2 text-center text-emerald-600 font-bold">{item.received_qty}</td>
+              <td className="px-4 py-2 text-center text-emerald-600 ">{item.received_qty}</td>
               <td className="px-4 py-2 text-center text-slate-400">{item.unit || 'NOS'}</td>
             </tr>
           ))}
@@ -399,12 +399,12 @@ const POReceipts = () => {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">PO Receipts</h1>
+            <h1 className="text-2xl  text-slate-900 tracking-tight">PO Receipts</h1>
             <p className="text-slate-500 text-xs font-medium">Track and manage purchase order receipts from vendors</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
@@ -428,8 +428,8 @@ const POReceipts = () => {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{stat.label}</p>
-                  <p className="text-2xl font-black text-slate-900">{stat.value || 0}</p>
+                  <p className="text-[10px] text-slate-500   tracking-wider">{stat.label}</p>
+                  <p className="text-2xl  text-slate-900">{stat.value || 0}</p>
                 </div>
               </div>
             ))}
@@ -488,10 +488,10 @@ const POReceipts = () => {
 
             {formData.items.length > 0 && (
               <div className="space-y-3">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Materials in PO</label>
+                <label className="text-[10px] text-slate-500   tracking-widest">Materials in PO</label>
                 <div className="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
                   <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-50 text-slate-400 text-[9px] uppercase tracking-widest font-bold">
+                    <thead className="bg-slate-50 text-slate-400 text-[9px]  tracking-widest ">
                       <tr>
                         <th className="px-4 py-3">Material / Description</th>
                         <th className="px-4 py-3 text-center">Expected</th>
@@ -503,7 +503,7 @@ const POReceipts = () => {
                       {formData.items.map((item, idx) => (
                         <tr key={idx}>
                           <td className="px-4 py-3">
-                            <p className="font-bold text-slate-900">{item.material_name || item.description}</p>
+                            <p className=" text-slate-900">{item.material_name || item.description}</p>
                             {item.material_type && <p className="text-[10px] text-slate-500">{item.material_type}</p>}
                           </td>
                           <td className="px-4 py-3 text-center font-medium text-slate-600">{item.quantity}</td>
@@ -521,7 +521,7 @@ const POReceipts = () => {
                                   receivedQuantity: total
                                 });
                               }}
-                              className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-center focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-bold text-indigo-600"
+                              className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-center focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all  text-indigo-600"
                             />
                           </td>
                           <td className="px-4 py-3 text-center text-slate-400">{item.unit || 'NOS'}</td>
@@ -538,7 +538,7 @@ const POReceipts = () => {
                 <input
                   type="number"
                   value={formData.receivedQuantity}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-indigo-600 cursor-not-allowed outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm  text-indigo-600 cursor-not-allowed outline-none"
                   readOnly
                 />
               </FormControl>
@@ -558,13 +558,13 @@ const POReceipts = () => {
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="px-6 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all"
+                className="px-6 py-2.5 border border-slate-200 rounded-xl text-sm  text-slate-500 hover:bg-slate-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
+                className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
               >
                 Create Receipt
               </button>
@@ -605,7 +605,7 @@ const POReceipts = () => {
                 type="number"
                 value={editFormData.receivedQuantity}
                 onChange={(e) => setEditFormData({...editFormData, receivedQuantity: e.target.value})}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-bold text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm  text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
 
@@ -622,13 +622,13 @@ const POReceipts = () => {
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="px-6 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all"
+                className="px-6 py-2.5 border border-slate-200 rounded-xl text-sm  text-slate-500 hover:bg-slate-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
               >
                 Update Receipt
               </button>

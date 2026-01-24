@@ -263,7 +263,7 @@ const SalesOrders = () => {
       label: 'Customer',
       key: 'company_name',
       sortable: true,
-      render: (val) => <span className="font-bold text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     {
       label: 'Order Date',
@@ -308,12 +308,12 @@ const SalesOrders = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Sales Orders</h1>
+            <h1 className="text-2xl  text-slate-900">Sales Orders</h1>
             <p className="text-sm text-slate-500">Manage your sales orders and production workflow</p>
           </div>
           <button 
             onClick={handleAddOrder}
-            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-bold"
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 "
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -358,7 +358,7 @@ const SalesOrders = () => {
                 </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">{formMode === 'create' ? 'New Sales Order' : formMode === 'edit' ? 'Edit Sales Order' : 'View Sales Order'}</h1>
+              <h1 className="text-xl text-slate-900">{formMode === 'create' ? 'New Sales Order' : formMode === 'edit' ? 'Edit Sales Order' : 'View Sales Order'}</h1>
               <p className="text-xs text-slate-500">Create and configure sales orders</p>
             </div>
           </div>
@@ -366,14 +366,14 @@ const SalesOrders = () => {
         <div className="flex items-center gap-3">
            <button 
               onClick={() => setViewMode('list')}
-              className="px-6 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors font-bold"
+              className="px-6 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors "
             >
               Cancel
             </button>
             {formMode !== 'view' && (
               <button 
                 onClick={handleSaveOrder}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-bold shadow-lg shadow-indigo-200"
+                className="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors  shadow-lg shadow-indigo-200"
               >
                 {formMode === 'create' ? 'Save Sales Order' : 'Update Sales Order'}
               </button>
@@ -517,15 +517,15 @@ const SalesOrders = () => {
                     <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-900">Finished Goods <span className="text-slate-400 font-normal ml-1">(1)</span></p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Product: <span className="font-bold text-slate-700">{selectedBom.description}</span></p>
+                  <p className="text-sm  text-slate-900">Finished Goods <span className="text-slate-400 font-normal ml-1">(1)</span></p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Product: <span className=" text-slate-700">{selectedBom.description}</span></p>
                   <p className="text-[10px] text-indigo-600 font-mono">BOM ID: {selectedBom.drawing_no}</p>
                 </div>
               </div>
 
               <div className="overflow-x-auto border border-slate-100 rounded-xl">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-slate-500 font-bold">
+                  <thead className="bg-slate-50 text-slate-500 ">
                     <tr>
                       <th className="px-4 py-3 text-left">Item Code</th>
                       <th className="px-4 py-3 text-left">Type</th>
@@ -542,7 +542,7 @@ const SalesOrders = () => {
                         <td className="px-4 py-3 text-center">
                           <input 
                             type="number" 
-                            className="w-16 text-center border-none bg-transparent focus:ring-0 p-0 font-bold" 
+                            className="w-16 text-center border-none bg-transparent focus:ring-0 p-0 " 
                             value={item.quantity}
                             onChange={(e) => {
                                 const newItems = [...formData.items];
@@ -554,7 +554,7 @@ const SalesOrders = () => {
                           />
                         </td>
                         <td className="px-4 py-3 text-right text-slate-600">₹ {item.rate.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-emerald-600">₹ {item.amount.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right  text-emerald-600">₹ {item.amount.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -618,26 +618,26 @@ const SalesOrders = () => {
             <div className="space-y-3 p-4">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Finished Goods Total Cost (Unit):</span>
-                <span className="font-bold text-slate-700">₹ {subTotal.toFixed(2)}</span>
+                <span className=" text-slate-700">₹ {subTotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Finished Goods Cost × Sales Quantity ({formData.orderQuantity}):</span>
-                <span className="font-bold text-slate-700">₹ {(subTotal * formData.orderQuantity).toFixed(2)}</span>
+                <span className=" text-slate-700">₹ {(subTotal * formData.orderQuantity).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs pt-3 border-t border-slate-100">
                 <span className="text-slate-500">Cost with Profit:</span>
-                <span className="font-bold text-slate-700">₹ {costWithProfit.toFixed(2)}</span>
+                <span className=" text-slate-700">₹ {costWithProfit.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">GST ({formData.cgstRate + formData.sgstRate}%):</span>
-                <span className="font-bold text-slate-700">₹ {gstAmount.toFixed(2)}</span>
+                <span className=" text-slate-700">₹ {gstAmount.toFixed(2)}</span>
               </div>
               <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
                 <div>
-                   <p className="text-sm font-bold text-slate-900">Sales Order Price:</p>
+                   <p className="text-sm  text-slate-900">Sales Order Price:</p>
                 </div>
                 <div className="text-right">
-                   <p className="text-2xl font-black text-emerald-600">₹ {totalAmount.toFixed(2)}</p>
+                   <p className="text-2xl  text-emerald-600">₹ {totalAmount.toFixed(2)}</p>
                 </div>
               </div>
             </div>
@@ -649,7 +649,7 @@ const SalesOrders = () => {
       <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">
         <button 
           onClick={() => setViewMode('list')}
-          className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-bold flex items-center gap-2"
+          className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors  flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
           Back
@@ -657,7 +657,7 @@ const SalesOrders = () => {
         {formMode !== 'view' && (
           <button 
             onClick={handleSaveOrder}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-bold shadow-lg shadow-indigo-200 flex items-center gap-2"
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors  shadow-lg shadow-indigo-200 flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
             Save Sales Order

@@ -141,9 +141,9 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
           `INSERT INTO purchase_order_items (
             purchase_order_id, item_code, description, quantity, unit, unit_rate, amount,
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            material_name, material_type, drawing_no
+            material_name, material_type, drawing_no, drawing_id
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             poId,
             item.item_code || null,
@@ -159,7 +159,8 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
             totalItemAmount,
             item.material_name || null,
             item.material_type || null,
-            item.drawing_no || null
+            item.drawing_no || null,
+            item.drawing_id || null
           ]
         );
       }

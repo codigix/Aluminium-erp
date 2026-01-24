@@ -916,7 +916,7 @@ const CustomerDrawing = () => {
         <div className="mb-4">
           <Card>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <h2 className="text-lg  text-slate-800 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-600" />
                 Client Requirements
               </h2>
@@ -1624,7 +1624,7 @@ const CustomerDrawing = () => {
           {uploadMode === 'manual' ? (
             <div className="mt-4">
               <div className="flex justify-between items-center mb-2">
-                <h3 className="text-xs font-semibold text-slate-700">Drawing Details</h3>
+                <h3 className="text-xs  text-slate-700">Drawing Details</h3>
                 <button 
                   type="button"
                   onClick={addManualDrawingRow}
@@ -1638,13 +1638,13 @@ const CustomerDrawing = () => {
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Drawing # *</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Description</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider w-16">Rev</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider w-16">Qty</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">File *</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500 uppercase tracking-wider">Notes</th>
-                      <th className="px-3 py-2 text-center text-[10px] font-medium text-slate-500 uppercase tracking-wider w-10"></th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider">Drawing # *</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider">Description</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider w-16">Rev</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider w-16">Qty</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider">File *</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider">Notes</th>
+                      <th className="px-3 py-2 text-center text-[10px] font-medium text-slate-500  tracking-wider w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
@@ -1801,7 +1801,7 @@ const CustomerDrawing = () => {
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-emerald-900">{lastUploadedDrawings.count} Drawings Uploaded</p>
+                    <p className="text-sm  text-emerald-900">{lastUploadedDrawings.count} Drawings Uploaded</p>
                     <p className="text-xs text-emerald-700 mt-0.5">Ready to be sent to the Design Engineering department</p>
                   </div>
                 </div>

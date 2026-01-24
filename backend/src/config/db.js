@@ -625,7 +625,8 @@ const ensureSalesOrderItemColumns = async () => {
       { name: 'is_active', definition: 'TINYINT(1) DEFAULT 1' },
       { name: 'is_default', definition: 'TINYINT(1) DEFAULT 0' },
       { name: 'status', definition: "VARCHAR(50) DEFAULT 'PENDING'" },
-      { name: 'rejection_reason', definition: 'TEXT' }
+      { name: 'rejection_reason', definition: 'TEXT' },
+      { name: 'bom_cost', definition: 'DECIMAL(14, 2) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -680,7 +681,8 @@ const ensureSalesOrderItemMaterialsTable = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS sales_order_item_materials (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        sales_order_item_id INT NOT NULL,
+        sales_order_item_id INT NULL,
+        item_code VARCHAR(100) NULL,
         material_name VARCHAR(255) NOT NULL,
         material_type VARCHAR(100),
         item_group VARCHAR(100),
@@ -711,7 +713,8 @@ const ensureBOMAdditionalTables = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS sales_order_item_components (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        sales_order_item_id INT NOT NULL,
+        sales_order_item_id INT NULL,
+        item_code VARCHAR(100) NULL,
         component_code VARCHAR(100),
         description TEXT,
         quantity DECIMAL(12, 4) NOT NULL,
@@ -729,7 +732,8 @@ const ensureBOMAdditionalTables = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS sales_order_item_operations (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        sales_order_item_id INT NOT NULL,
+        sales_order_item_id INT NULL,
+        item_code VARCHAR(100) NULL,
         operation_name VARCHAR(100) NOT NULL,
         workstation VARCHAR(100),
         cycle_time_min DECIMAL(10, 2) DEFAULT 0,
@@ -747,8 +751,9 @@ const ensureBOMAdditionalTables = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS sales_order_item_scrap (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        sales_order_item_id INT NOT NULL,
-        item_code VARCHAR(100),
+        sales_order_item_id INT NULL,
+        item_code VARCHAR(100) NULL,
+        scrap_item_code VARCHAR(100),
         item_name VARCHAR(255),
         input_qty DECIMAL(12, 4) DEFAULT 0,
         loss_percent DECIMAL(5, 2) DEFAULT 0,
@@ -762,6 +767,47 @@ const ensureBOMAdditionalTables = async () => {
     console.log('BOM Additional tables (Components, Operations, Scrap) synchronized');
   } catch (error) {
     console.error('BOM Additional tables sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureBOMMasterColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const tables = ['sales_order_item_materials', 'sales_order_item_components', 'sales_order_item_operations', 'sales_order_item_scrap'];
+    
+    for (const table of tables) {
+      const [columns] = await connection.query(`SHOW COLUMNS FROM ${table}`);
+      let existing = new Set(columns.map(column => column.Field));
+      
+      // Special case for scrap table: rename existing item_code to scrap_item_code if it's the only one
+      if (table === 'sales_order_item_scrap' && existing.has('item_code') && !existing.has('scrap_item_code')) {
+        // Check if item_code is in the old position (likely at the end or after item_name)
+        // or just rename it anyway to make space for the master item_code
+        await connection.query(`ALTER TABLE ${table} CHANGE COLUMN item_code scrap_item_code VARCHAR(100) NULL`);
+        console.log(`Renamed item_code to scrap_item_code in ${table}`);
+        // Refresh columns list
+        const [newCols] = await connection.query(`SHOW COLUMNS FROM ${table}`);
+        existing = new Set(newCols.map(c => c.Field));
+      }
+
+      // 1. Make sales_order_item_id NULLABLE
+      const itemIdCol = columns.find(c => c.Field === 'sales_order_item_id');
+      if (itemIdCol && itemIdCol.Null === 'NO') {
+        await connection.query(`ALTER TABLE ${table} MODIFY sales_order_item_id INT NULL`);
+        console.log(`Made sales_order_item_id nullable in ${table}`);
+      }
+      
+      // 2. Add item_code column (this will be the master item code)
+      if (!existing.has('item_code')) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN item_code VARCHAR(100) NULL AFTER sales_order_item_id`);
+        console.log(`Added master item_code column to ${table}`);
+      }
+    }
+  } catch (error) {
+    console.error('BOM Master columns sync failed', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -994,6 +1040,7 @@ const bootstrapDatabase = async () => {
   await ensureSalesOrderItemMaterialsTable();
   await ensureBOMAdditionalTables();
   await ensureBOMMaterialsColumns();
+  await ensureBOMMasterColumns();
   await ensureOperationsTable();
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();
