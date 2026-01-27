@@ -278,7 +278,7 @@ const PurchaseOrders = () => {
         body: JSON.stringify({
           status: editFormData.status,
           poNumber: selectedPO.po_number,
-          expectedDeliveryDate: editFormData.expectedDeliveryDate,
+          expectedDeliveryDate: editFormData.expectedDeliveryDate || null,
           notes: editFormData.notes
         })
       });

@@ -148,7 +148,7 @@ const StockLedger = () => {
         <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div className="lg:col-span-1">
-              <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Item Code</label>
+              <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Item Code</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,7 +165,7 @@ const StockLedger = () => {
               </div>
             </div>
             <div>
-              <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Start Date</label>
+              <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Start Date</label>
               <input
                 type="date"
                 value={startDate}
@@ -174,7 +174,7 @@ const StockLedger = () => {
               />
             </div>
             <div>
-              <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">End Date</label>
+              <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">End Date</label>
               <input
                 type="date"
                 value={endDate}
@@ -327,7 +327,7 @@ const StockLedger = () => {
             <form onSubmit={handleAddEntry} className="p-6 space-y-3">
               <div className="">
                 <div>
-                  <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Item Code *</label>
+                  <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Item Code *</label>
                   <input
                     type="text"
                     value={formData.itemCode}
@@ -340,7 +340,7 @@ const StockLedger = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Transaction Type *</label>
+                    <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Transaction Type *</label>
                     <select
                       value={formData.transactionType}
                       onChange={(e) => setFormData({...formData, transactionType: e.target.value})}
@@ -353,7 +353,7 @@ const StockLedger = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Quantity *</label>
+                    <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Quantity *</label>
                     <div className="relative">
                       <input
                         type="number"
@@ -370,7 +370,7 @@ const StockLedger = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Ref Doc Type</label>
+                    <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Ref Doc Type</label>
                     <input
                       type="text"
                       value={formData.refDocType}
@@ -380,7 +380,7 @@ const StockLedger = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Ref Doc Number</label>
+                    <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Ref Doc Number</label>
                     <input
                       type="text"
                       value={formData.refDocNumber}
@@ -392,7 +392,7 @@ const StockLedger = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Remarks</label>
+                  <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Remarks</label>
                   <textarea
                     value={formData.remarks}
                     onChange={(e) => setFormData({...formData, remarks: e.target.value})}

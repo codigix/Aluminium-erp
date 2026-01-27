@@ -198,7 +198,7 @@ const SalesOrders = () => {
         },
         body: JSON.stringify({
           companyId: formData.customerId,
-          targetDispatchDate: formData.deliveryDate,
+          targetDispatchDate: formData.deliveryDate || null,
           status: formData.status,
           items: formData.items,
           cgst_rate: formData.cgstRate,
@@ -233,20 +233,35 @@ const SalesOrders = () => {
         const bomDetails = await response.json();
         const selectedBom = boms.find(b => String(b.id) === String(bomId));
         
-        let totalRate = 0;
-        if (bomDetails.materials) {
-            totalRate += bomDetails.materials.reduce((sum, m) => sum + (Number(m.qty_per_pc || 0) * Number(m.rate || 0)), 0);
-        }
-        if (bomDetails.components) {
-            totalRate += bomDetails.components.reduce((sum, c) => sum + (Number(c.quantity || 0) * Number(c.rate || 0)), 0);
-        }
-        if (bomDetails.operations) {
-            totalRate += bomDetails.operations.reduce((sum, o) => sum + (Number(o.hourly_rate || 0) * (Number(o.cycle_time_min || 0) / 60)), 0);
+        // Use saved bom_cost if available, otherwise calculate it
+        let totalRate = Number(selectedBom?.bom_cost || 0);
+        
+        if (totalRate === 0) {
+            if (bomDetails.materials) {
+                totalRate += bomDetails.materials.reduce((sum, m) => sum + (Number(m.qty_per_pc || 0) * Number(m.rate || 0)), 0);
+            }
+            if (bomDetails.components) {
+                totalRate += bomDetails.components.reduce((sum, c) => sum + (Number(c.quantity || 0) * Number(c.rate || 0)), 0);
+            }
+            if (bomDetails.operations) {
+                totalRate += bomDetails.operations.reduce((sum, o) => sum + (Number(o.hourly_rate || 0) * (Number(o.cycle_time_min || 0) / 60)), 0);
+            }
+            
+            // Subtract scrap value if present in calculation
+            if (bomDetails.scrap) {
+                const scrapValue = bomDetails.scrap.reduce((sum, s) => {
+                    const input = Number(s.input_qty || 0);
+                    const loss = Number(s.loss_percent || 0) / 100;
+                    const rate = Number(s.rate || 0);
+                    return sum + (input * loss * rate);
+                }, 0);
+                totalRate -= scrapValue;
+            }
         }
 
         const items = [{
-          item_code: selectedBom.item_code,
-          description: selectedBom.description,
+          item_code: selectedBom?.item_code || '',
+          description: selectedBom?.description || '',
           type: 'Finished Good',
           quantity: formData.orderQuantity,
           rate: totalRate || 0,
@@ -477,89 +492,51 @@ const SalesOrders = () => {
           </Card>
 
           {/* BOM & Inventory */}
-          {(user?.department_code === 'ADMIN' || user?.department_code === 'DESIGN_ENG' || user?.department_code === 'SALES') && (
-            <Card title="BOM & Inventory" subtitle="Production template and storage">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-                <FormControl label="Select BOM *">
-                  <SearchableSelect 
-                    options={boms.map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
-                    value={formData.bomId}
-                    onChange={(e) => handleBomChange(e.target.value)}
-                    placeholder="Select BOM..."
-                    disabled={formMode === 'view'}
-                  />
-                </FormControl>
-                <FormControl label="Order Quantity *">
-                  <input 
-                    type="number"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                    value={formData.orderQuantity}
-                    onChange={(e) => {
-                      const newQty = Number(e.target.value);
-                      const newItems = formData.items.map(item => ({
-                          ...item,
-                          quantity: newQty,
-                          amount: newQty * item.rate
-                      }));
-                      setFormData({...formData, orderQuantity: newQty, items: newItems});
-                    }}
-                    disabled={formMode === 'view'}
-                  />
-                </FormControl>
-                <FormControl label="Warehouse">
-                  <select 
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                    value={formData.warehouse}
-                    onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
-                    disabled={formMode === 'view'}
-                  >
-                    <option value="">Select warehouse...</option>
-                    {warehouseOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </FormControl>
-              </div>
-            </Card>
-          )}
-
-          {/* Simple Quantity and Warehouse for other Depts */}
-          {user?.department_code !== 'ADMIN' && user?.department_code !== 'DESIGN_ENG' && user?.department_code !== 'SALES' && (
-            <Card title="Order Details" subtitle="Quantity and storage details">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-                <FormControl label="Order Quantity *">
-                  <input 
-                    type="number"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                    value={formData.orderQuantity}
-                    onChange={(e) => {
-                      const newQty = Number(e.target.value);
-                      const newItems = formData.items.map(item => ({
-                          ...item,
-                          quantity: newQty,
-                          amount: newQty * (item.rate || 0)
-                      }));
-                      setFormData({...formData, orderQuantity: newQty, items: newItems});
-                    }}
-                    disabled={formMode === 'view'}
-                  />
-                </FormControl>
-                <FormControl label="Warehouse">
-                  <select 
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                    value={formData.warehouse}
-                    onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
-                    disabled={formMode === 'view'}
-                  >
-                    <option value="">Select warehouse...</option>
-                    {warehouseOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </FormControl>
-              </div>
-            </Card>
-          )}
+          <Card title="BOM & Inventory" subtitle="Production template and storage">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+              <FormControl label="Select BOM *">
+                <SearchableSelect 
+                  options={boms
+                    .filter(b => b.item_group === 'FG' || b.item_group === 'Finished Goods' || !b.item_group)
+                    .map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
+                  value={formData.bomId}
+                  onChange={(e) => handleBomChange(e.target.value)}
+                  placeholder="Select warehouse..."
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+              <FormControl label="Order Quantity *">
+                <input 
+                  type="number"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.orderQuantity}
+                  onChange={(e) => {
+                    const newQty = Number(e.target.value);
+                    const newItems = formData.items.map(item => ({
+                        ...item,
+                        quantity: newQty,
+                        amount: newQty * item.rate
+                    }));
+                    setFormData({...formData, orderQuantity: newQty, items: newItems});
+                  }}
+                  disabled={formMode === 'view'}
+                />
+              </FormControl>
+              <FormControl label="Warehouse">
+                <select 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  value={formData.warehouse}
+                  onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
+                  disabled={formMode === 'view'}
+                >
+                  <option value="">Select warehouse...</option>
+                  {warehouseOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </FormControl>
+            </div>
+          </Card>
 
           {/* BOM Details Table */}
           {selectedBom && (

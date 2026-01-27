@@ -177,7 +177,7 @@ const DesignOrders = () => {
       }
     };
     autoGenerateCode();
-  }, [materialFormData.itemName, materialFormData.itemGroup, isEditingMaterial, showAddMaterialModal]);
+  }, [materialFormData.itemName, materialFormData.itemGroup, materialFormData.itemCode, isEditingMaterial, showAddMaterialModal]);
 
   const handleViewOrder = async (order) => {
     try {
@@ -246,11 +246,6 @@ const DesignOrders = () => {
     } catch (error) {
       errorToast(error.message);
     }
-  };
-
-  const handleRejectDesign = (orderId) => {
-    setRejectData({ id: orderId, type: 'ORDER', reason: '' });
-    setShowRejectModal(true);
   };
 
   const handleRejectItem = (itemId) => {
@@ -791,16 +786,6 @@ const DesignOrders = () => {
     return acc;
   }, {});
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'DRAFT': return 'bg-gray-100 text-gray-800';
-      case 'IN_DESIGN': return 'bg-blue-100 text-blue-800';
-      case 'COMPLETED': return 'bg-green-100 text-green-800';
-      case 'DESIGN_QUERY': return 'bg-amber-100 text-amber-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
       <div className="max-w-7xl mx-auto">
@@ -844,258 +829,273 @@ const DesignOrders = () => {
 
         {/* INCOMING REQUESTS SECTION */}
         {activeTab === 'incoming' && (
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200 mb-4">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 border-b border-blue-700">
-              <div className="flex justify-between items-center mb-3">
+          <div className="space-y-4">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 rounded-2xl shadow-sm border border-blue-700 mb-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <h2 className="text-base  text-white flex items-center gap-2 mb-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                    📥 Incoming Design Requests
+                  <h2 className="text-lg  text-white flex items-center gap-2">
+                    <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    Incoming Design Requests
                   </h2>
-                  <p className="text-blue-100 text-xs">Customer drawings ready for design engineering review</p>
+                  <p className="text-blue-100 text-xs mt-1 font-medium opacity-90">Review and approve customer drawings from sales department</p>
                 </div>
-                <div className="flex items-center gap-2">
+                
+                <div className="flex items-center gap-3 w-full md:w-auto">
                   <button
                     onClick={fetchIncomingOrders}
                     disabled={incomingLoading}
-                    className="px-3 py-1.5 bg-white rounded text-xs text-blue-600 shadow-sm transition-colors disabled:opacity-50 "
+                    className="flex-1 md:flex-none px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/30 rounded-xl text-xs  text-white transition-all backdrop-blur-sm flex items-center justify-center gap-2"
                   >
-                    ↻ Refresh
+                    <svg className={`w-3.5 h-3.5 ${incomingLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Refresh
                   </button>
+                  
                   {incomingOrders.length > 0 && (
-                    <span className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs ">
-                      {incomingOrders.length}
-                    </span>
+                    <div className="px-4 py-2 bg-white text-blue-600 rounded-xl text-xs  shadow-lg shadow-blue-900/20">
+                      {incomingOrders.length} REQUESTS
+                    </div>
                   )}
                 </div>
               </div>
-            {selectedIncomingOrders.size > 0 && (
-              <div className="flex items-center gap-2 pt-2 border-t border-blue-400">
-                <span className="text-white text-xs ">
-                  {selectedIncomingOrders.size} selected
-                </span>
-                <button
-                  onClick={handleBulkApprove}
-                  disabled={bulkOperationLoading}
-                  className="px-3 py-1.5 bg-emerald-500 text-white rounded text-xs  hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
-                  Bulk Approve
-                </button>
-                <button
-                  onClick={handleBulkReject}
-                  disabled={bulkOperationLoading}
-                  className="px-3 py-1.5 bg-red-500 text-white rounded text-xs  hover:bg-red-600 disabled:opacity-50 transition-colors flex items-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                  Bulk Reject
-                </button>
-              </div>
-            )}
-          </div>
-        
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="px-4 py-2 text-left">
+
+              {selectedIncomingOrders.size > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/20 flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="px-3 py-1.5 bg-white/20 rounded-lg border border-white/30 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                    <span className="text-white text-xs   tracking-wider">
+                      {selectedIncomingOrders.size} Selected
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      onClick={handleBulkApprove}
+                      disabled={bulkOperationLoading}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs  shadow-lg shadow-emerald-900/20 transition-all flex items-center gap-2 border border-emerald-400"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
+                      Approve Selected
+                    </button>
+                    <button
+                      onClick={handleBulkReject}
+                      disabled={bulkOperationLoading}
+                      className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs  shadow-lg shadow-red-900/20 transition-all flex items-center gap-2 border border-red-400"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                      Reject Selected
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              {incomingLoading ? (
+                <div className="py-24 text-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-sm  text-slate-600 animate-pulse">Scanning for incoming requests...</p>
+                  </div>
+                </div>
+              ) : incomingOrders.length === 0 ? (
+                <div className="py-24 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200 shadow-inner">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg  text-slate-900">Inbox is Clear</h3>
+                      <p className="text-sm text-slate-500 mt-1 font-medium">No new design requests waiting for review.</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 px-4 py-2 bg-slate-100 rounded-xl mb-2">
                     <input
                       type="checkbox"
                       checked={selectedIncomingOrders.size === incomingOrders.length && incomingOrders.length > 0}
                       onChange={toggleSelectAllOrders}
-                      className="w-4 h-4 rounded"
+                      className="w-4 h-4 rounded-md border-slate-300 text-blue-600 focus:ring-blue-500"
                       disabled={incomingOrders.length === 0}
                     />
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Client Name</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Item Code</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Group</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Drawing No</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Description</th>
-                  <th className="px-4 py-2 text-center text-xs  text-slate-600 ">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Status</th>
-                  <th className="px-4 py-2 text-right text-xs  text-slate-600 ">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
-                {incomingLoading ? (
-                  <tr>
-                    <td colSpan="7" className="px-4 py-6 text-center">
-                      <div className="flex justify-center items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-xs text-slate-600 ">Checking for new requests...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : incomingOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="px-4 py-8 text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <p className="text-xs text-slate-500 ">No incoming design requests</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  Object.entries(groupedIncoming).map(([groupKey, group]) => {
+                    <span className="text-[10px]  text-slate-500  ">Select All Requests</span>
+                  </div>
+                  
+                  {Object.entries(groupedIncoming).map(([groupKey, group]) => {
                     const isExpanded = expandedIncomingPo[groupKey];
                     const allSelected = group.orders.every(o => selectedIncomingOrders.has(o.id));
 
                     return (
-                      <React.Fragment key={groupKey}>
-                        {/* Group Header */}
-                        <tr 
-                          className={`bg-slate-50/80 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-all ${isExpanded ? 'sticky top-0 z-10' : ''}`} 
+                      <div key={groupKey} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all hover:border-blue-200">
+                        <div 
                           onClick={() => toggleIncomingPo(groupKey)}
+                          className={`px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50 border-b border-slate-200' : 'hover:bg-slate-50'}`}
                         >
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              checked={allSelected}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                const newSelected = new Set(selectedIncomingOrders);
-                                group.orders.forEach(o => {
-                                  if (e.target.checked) newSelected.add(o.id);
-                                  else newSelected.delete(o.id);
-                                });
-                                setSelectedIncomingOrders(newSelected);
-                              }}
-                              className="w-4 h-4 rounded"
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-col">
-                              <span className=" text-slate-900 text-xs">{group.company_name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-slate-500 ">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3  text-slate-900">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg text-[10px]">
-                                {group.orders.length} Drawings
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-slate-400 text-[10px]">Multiple Drawings Review</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-slate-400 text-[10px]">Total: {group.orders.reduce((sum, o) => sum + (Number(o.item_qty) || 1), 0)}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-slate-400 text-[10px]">Pending</span>
-                          </td>
-                          <td className="px-4 py-3 text-right flex gap-2 justify-end">
-                             <button
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 handleAcceptAll(group.orders.map(o => o.id));
-                               }}
-                               className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors shadow-sm"
-                             >
-                               Accept All
-                             </button>
-                             <button
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 toggleIncomingPo(groupKey);
-                               }}
-                               className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px]  hover:bg-slate-50 transition-colors"
-                             >
-                               {isExpanded ? 'Hide' : 'Show'}
-                             </button>
-                          </td>
-                        </tr>
-                        {/* Group Items */}
-                        {isExpanded && group.orders.map((order) => (
-                          <tr key={order.id} className={`transition-colors text-[11px] border-b border-slate-50 ${order.item_status === 'REJECTED' ? 'bg-red-50/50' : 'bg-white/50'} ${selectedIncomingOrders.has(order.id) ? 'bg-blue-50' : 'hover:bg-blue-50/20'}`}>
-                            <td className="px-4 py-2.5 pl-8">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
-                                checked={selectedIncomingOrders.has(order.id)}
-                                onChange={() => toggleSelectOrder(order.id)}
-                                className="w-3.5 h-3.5 rounded"
+                                checked={allSelected}
+                                onChange={(e) => {
+                                  const newSelected = new Set(selectedIncomingOrders);
+                                  group.orders.forEach(o => {
+                                    if (e.target.checked) newSelected.add(o.id);
+                                    else newSelected.delete(o.id);
+                                  });
+                                  setSelectedIncomingOrders(newSelected);
+                                }}
+                                className="w-4 h-4 rounded-md border-slate-300 text-blue-600 focus:ring-blue-500"
                               />
-                            </td>
-                            <td className="px-4 py-2.5 text-slate-400"></td>
-                            <td className="px-4 py-2.5">
-                              <div className="flex flex-col gap-1 items-start">
-                                {order.item_code && (
-                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] ">
-                                    {order.item_code}
-                                  </span>
-                                )}
-                                {!order.item_code && (
-                                  <span className="text-slate-400 italic">Pending</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-2.5">
-                              {order.item_group ? (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-medium">
-                                  {order.item_group}
+                            </div>
+                            <div className={`p-2 rounded-lg transition-all ${isExpanded ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                              <svg className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                            <div>
+                              <h3 className="text-sm  text-slate-900 flex items-center gap-2">
+                                {group.company_name}
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] ">
+                                  {group.orders.length} ITEMS
                                 </span>
-                              ) : (
-                                <span className="text-slate-300 text-[10px] italic">Not Set</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-2.5  text-indigo-600">
-                              <div className="flex items-center gap-2">
-                                {order.drawing_no || '—'}
-                                {order.item_status === 'REJECTED' && (
-                                  <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px]  animate-pulse">REJECTED</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <div className="flex flex-col">
-                                <span className="text-slate-600 italic">{order.item_description || 'No description'}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-2.5 text-center  text-slate-900">
-                              {order.item_qty || 1}
-                            </td>
-                            <td className="px-4 py-2.5">
-                              {order.item_status && order.item_status !== 'PENDING' ? (
-                                <div className="flex flex-col gap-0.5 items-start">
-                                  <StatusBadge status={order.item_status} />
-                                  {order.item_status === 'REJECTED' && order.item_rejection_reason && (
-                                    <span className="text-[9px] text-red-500 italic leading-tight">
-                                      {order.item_rejection_reason}
-                                    </span>
-                                  )}
+                              </h3>
+                              <p className="text-[10px] text-slate-500  tracking-tight mt-0.5">
+                                {group.po_number === 'NO-PO' ? 'DESIGN REQUEST' : `PO: ${group.po_number}`}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-4 mt-4 md:mt-0 ml-auto md:ml-0">
+                            <div className="text-right">
+                              <p className="text-[9px] text-slate-400   ">Total Qty</p>
+                              <p className="text-sm  text-slate-800">
+                                {group.orders.reduce((sum, o) => sum + (Number(o.item_qty) || 1), 0)}
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAcceptAll(group.orders.map(o => o.id));
+                              }}
+                              className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-xl text-xs  transition-all border border-indigo-100  tracking-tighter"
+                            >
+                              Accept Group
+                            </button>
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="p-4 bg-slate-50/50">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {group.orders.map((order) => (
+                                <div 
+                                  key={order.id} 
+                                  className={`bg-white rounded-xl border-2 transition-all group relative ${
+                                    selectedIncomingOrders.has(order.id) ? 'border-blue-500 shadow-md ring-4 ring-blue-50' : 'border-slate-100 hover:border-slate-300'
+                                  } ${order.item_status === 'REJECTED' ? 'bg-red-50/30' : ''}`}
+                                >
+                                  <div className="p-4">
+                                    <div className="flex justify-between items-start mb-3">
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedIncomingOrders.has(order.id)}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            toggleSelectOrder(order.id);
+                                          }}
+                                          className="w-4 h-4 rounded-md border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <div>
+                                          <p className="text-sm  text-slate-900 truncate max-w-[150px]">
+                                            {order.drawing_no || 'NO DRAWING NO'}
+                                          </p>
+                                          <p className="text-[10px] text-slate-400   tracking-wider">Drawing Ref</p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-xs  text-indigo-600">{order.item_qty || 1}</p>
+                                        <p className="text-[9px] text-slate-400   ">Qty</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {order.item_code ? (
+                                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[9px]   tracking-tight">
+                                            {order.item_code}
+                                          </span>
+                                        ) : (
+                                          <span className="px-2 py-0.5 bg-slate-100 text-slate-400 italic rounded text-[9px] ">Pending Code</span>
+                                        )}
+                                        {order.item_group && (
+                                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[9px]   tracking-tight">
+                                            {order.item_group}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="bg-slate-50/80 rounded-lg p-2.5 border border-slate-100">
+                                        <p className="text-[9px] text-slate-400    mb-1">Description</p>
+                                        <p className="text-[11px] text-slate-600 italic line-clamp-2 leading-relaxed">
+                                          {order.item_description || 'No description provided'}
+                                        </p>
+                                      </div>
+
+                                      {order.item_status && order.item_status !== 'PENDING' && (
+                                        <div className="flex flex-col gap-1.5">
+                                          <StatusBadge status={order.item_status} />
+                                          {order.item_status === 'REJECTED' && order.item_rejection_reason && (
+                                            <div className="p-2 bg-red-50 rounded-lg border border-red-100">
+                                              <p className="text-[9px] text-red-500 italic leading-snug">
+                                                <span className="  not-italic mr-1 text-[8px]">Reason:</span>
+                                                {order.item_rejection_reason}
+                                              </p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="px-4 py-2.5 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center rounded-b-xl">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleViewOrder(order); }}
+                                      className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-600 rounded-lg text-[10px]   tracking-tighter border border-slate-200 hover:border-blue-200 transition-all shadow-sm"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                      </svg>
+                                      Review
+                                    </button>
+                                    
+                                    <div className="flex items-center gap-1">
+                                      {order.item_status !== 'REJECTED' && (
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); handleRejectItem(order.id); }}
+                                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                          title="Reject Item"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              ) : (
-                                <span className="text-slate-400">Pending</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-2.5 whitespace-nowrap text-right flex gap-1 justify-end">
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleViewOrder(order); }}
-                                className="p-1 bg-slate-100 text-slate-500 rounded hover:bg-slate-200 transition-colors"
-                                title="View details"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                </svg>
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* ACTIVE DESIGN TASKS SECTION */}
         {activeTab === 'progress' && (
@@ -1138,176 +1138,176 @@ const DesignOrders = () => {
               </div>
             </div>
         
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Customer</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Item Code</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Group</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Drawing No</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Description</th>
-                  <th className="px-4 py-2 text-center text-xs  text-slate-600 ">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Status</th>
-                  <th className="px-4 py-2 text-right text-xs  text-slate-600 ">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan="8" className="px-4 py-8 text-center">
-                      <div className="flex justify-center items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-xs text-slate-600 ">Loading design orders...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : filteredOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan="8" className="px-4 py-8 text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <p className="text-xs text-slate-500 ">No tasks match your search</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  Object.entries(groupedActive).map(([groupKey, group]) => {
-                    const isExpanded = expandedActivePo[groupKey];
-                    return (
-                      <React.Fragment key={groupKey}>
-                        {/* Group Header */}
-                        <tr 
-                          className={`bg-slate-50/80 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-all ${isExpanded ? 'sticky top-0 z-10' : ''}`} 
-                          onClick={() => toggleActivePo(groupKey)}
-                        >
-                          <td className="px-4 py-3">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                                <span className=" text-slate-900 text-xs">{group.po_number === 'NO-PO' ? 'Design Request' : `PO: ${group.po_number}`}</span>
-                              </div>
-                              <span className=" text-indigo-600 text-[10px] ml-5">{group.company_name}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] ">
-                              {group.orders.length} Drawing Tasks
+          <div className="space-y-4 p-4">
+            {loading ? (
+              <div className="py-24 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <p className="text-slate-600 font-medium">Loading design tasks...</p>
+              </div>
+            ) : Object.keys(groupedActive).length === 0 ? (
+              <div className="py-24 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                <div className="flex flex-col items-center">
+                  <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                    <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900">No active tasks found</h3>
+                  <p className="text-sm text-slate-500 mt-1">Try adjusting your search or refresh to see newly added orders.</p>
+                </div>
+              </div>
+            ) : (
+              Object.entries(groupedActive).map(([groupKey, group]) => {
+                const isExpanded = expandedActivePo[groupKey];
+                return (
+                  <div key={groupKey} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all hover:border-indigo-200">
+                    {/* Group Header */}
+                    <div 
+                      onClick={() => toggleActivePo(groupKey)}
+                      className={`px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50 border-b border-slate-200' : 'hover:bg-slate-50'}`}
+                    >
+                      <div className="flex items-center gap-4 mb-4 md:mb-0">
+                        <div className={`p-2.5 rounded-xl transition-all duration-300 ${isExpanded ? 'bg-indigo-600 text-white shadow-indigo-200 shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                          <svg className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-sm  text-slate-900 flex items-center gap-2">
+                            {group.po_number === 'NO-PO' ? 'Direct Design Request' : `PO: ${group.po_number}`}
+                            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[10px]  tracking-wider ">
+                              {group.orders.length} Drawings
                             </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-slate-600  text-xs">{group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px]  ${
-                              group.orders.some(o => o.status === 'DESIGN_QUERY') 
-                                ? 'bg-amber-100 text-amber-700 border border-amber-200' 
-                                : group.orders.some(o => o.status === 'IN_DESIGN') 
-                                  ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}>
-                              {group.orders.some(o => o.status === 'DESIGN_QUERY') ? 'Rejected' : group.orders.some(o => o.status === 'IN_DESIGN') ? 'In Design' : 'Pending'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                             <button
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 toggleActivePo(groupKey);
-                               }}
-                               className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-[10px]  hover:bg-slate-50 transition-colors"
-                             >
-                               {isExpanded ? 'Hide' : 'Show'}
-                             </button>
-                          </td>
-                        </tr>
-                        {/* Group Items */}
-                        {isExpanded && group.orders.map((order) => (
-                          <tr key={`${order.id}-${order.item_id}`} className="hover:bg-purple-50/30 transition-colors text-xs border-b border-slate-50">
-                            <td className="px-4 py-3 whitespace-nowrap text-slate-600 pl-8 font-medium">{order.company_name}</td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              {order.item_code ? (
-                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] ">
-                                  {order.item_code}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic">Pending</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              {order.item_group ? (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-medium">
-                                  {order.item_group}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-[10px] italic">Not Set</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap  text-indigo-600">
-                              <div className="flex items-center gap-2">
-                                {order.drawing_no || '—'}
-                                {order.item_status === 'REJECTED' && (
-                                  <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px]  animate-pulse">REJECTED</span>
-                                )}
+                          </h3>
+                          <p className="text-xs text-indigo-500 font-semibold mt-0.5 tracking-wide">{group.company_name}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 mt-3 md:mt-0">
+                        <div className="text-right">
+                          <p className="text-[10px] text-slate-400    mb-0.5">Total Quantity</p>
+                          <p className="text-sm  text-slate-800 tracking-tight">
+                            {group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <StatusBadge status={group.orders.some(o => o.status === 'DESIGN_QUERY') ? 'DESIGN_QUERY' : group.orders.some(o => o.status === 'IN_DESIGN') ? 'IN_DESIGN' : 'DRAFT'} />
+                           <button className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+                           </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Group Items (Cards) */}
+                    {isExpanded && (
+                      <div className="p-5 bg-slate-50/50">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                          {group.orders.map((order) => (
+                            <div key={`${order.id}-${order.item_id}`} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col h-full">
+                              {/* Card Header */}
+                              <div className="p-4 border-b border-slate-100 flex justify-between items-start gap-3 bg-slate-50/30">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-sm  text-slate-900 truncate">
+                                      {order.drawing_no || 'Pending Drawing'}
+                                    </span>
+                                    {order.item_status === 'REJECTED' && (
+                                      <span className="flex-shrink-0 px-2 py-0.5 bg-red-100 text-red-700 rounded text-[9px]   tracking-tighter animate-pulse border border-red-200">REJECTED</span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {order.item_code ? (
+                                      <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[10px] ">
+                                        {order.item_code}
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-400 italic rounded text-[10px]">No Item Code</span>
+                                    )}
+                                    {order.item_group && (
+                                      <span className="px-2 py-0.5 bg-purple-50 text-purple-600 border border-purple-100 rounded text-[10px] ">
+                                        {order.item_group}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="text-[10px] text-slate-400   tracking-wider mb-0.5">Quantity</p>
+                                  <p className="text-sm  text-indigo-600 leading-none">{order.total_quantity || 0}</p>
+                                </div>
                               </div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-slate-500 italic">
-                              <div className="flex flex-col">
-                                <span>{order.description || 'No description'}</span>
-                                {order.item_status === 'REJECTED' && order.item_rejection_reason && (
-                                  <span className="text-[9px] text-red-500  mt-1">
-                                    Reason: {order.item_rejection_reason}
-                                  </span>
-                                )}
+
+                              {/* Card Body */}
+                              <div className="p-4 flex-1">
+                                <div className="mb-4">
+                                  <p className="text-[10px] text-slate-400   tracking-wider mb-1.5">Description</p>
+                                  <p className="text-xs text-slate-600 line-clamp-2 italic leading-relaxed">
+                                    {order.description || 'No technical description provided'}
+                                  </p>
+                                  {order.item_status === 'REJECTED' && order.item_rejection_reason && (
+                                    <div className="mt-3 p-2 bg-red-50 rounded-lg border border-red-100">
+                                      <p className="text-[10px] text-red-400   mb-0.5">Rejection Reason</p>
+                                      <p className="text-[10px] text-red-600 italic leading-snug">{order.item_rejection_reason}</p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="pt-3 border-t border-slate-50">
+                                  <p className="text-[10px] text-slate-400   tracking-wider mb-2">Technical Status</p>
+                                  <select
+                                    value={order.status}
+                                    onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                                    className={`w-full text-xs  rounded-xl px-3 py-2 border-2 focus:ring-4 focus:ring-indigo-500/20 cursor-pointer transition-all appearance-none bg-no-repeat bg-[right_0.5rem_center] bg-[length:1rem_1rem] ${
+                                      order.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                      order.status === 'IN_DESIGN' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                      'bg-slate-50 text-slate-600 border-slate-200'
+                                    }`}
+                                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7' /%3E%3C/svg%3E")` }}
+                                  >
+                                    <option value="DRAFT">DRAFT SPEC</option>
+                                    <option value="IN_DESIGN">IN PROGRESS</option>
+                                    <option value="COMPLETED">FINALIZED</option>
+                                  </select>
+                                </div>
                               </div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center  text-slate-900">{order.total_quantity || 0}</td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <select
-                                value={order.status}
-                                onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                                className={`text-xs  rounded px-2 py-1 border-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${getStatusColor(order.status)}`}
-                              >
-                                <option value="DRAFT">Draft</option>
-                                <option value="IN_DESIGN">In progress</option>
-                                <option value="COMPLETED">Completed</option>
-                              </select>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-right">
-                              <div className="flex justify-end gap-1">
-                                <button 
-                                  onClick={() => openAddMaterialModal(order)}
-                                  className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100 rounded transition-all"
-                                  title="Add Material"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                                  </svg>
-                                </button>
-                                <button 
-                                  onClick={() => handleViewDetails(order)}
-                                  className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100 rounded transition-all"
-                                  title="View Details"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                </button>
+
+                              {/* Card Footer */}
+                              <div className="p-3 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
+                                <div className="flex gap-1">
+                                  <button 
+                                    onClick={() => openAddMaterialModal(order)}
+                                    className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all border border-transparent hover:border-emerald-100"
+                                    title="Add Technical Material"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+                                  </button>
+                                  <button 
+                                    onClick={() => handleViewDetails(order)}
+                                    className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-transparent hover:border-indigo-100"
+                                    title="View Timeline & Specs"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                  </button>
+                                </div>
                                 <button 
                                   onClick={() => handleDelete(order.id)}
-                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-all"
-                                  title="Delete"
+                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all border border-transparent hover:border-red-100"
+                                  title="Delete Task"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                 </button>
                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -1357,7 +1357,7 @@ const DesignOrders = () => {
                           <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Drawing No</th>
                           <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Rev</th>
                           <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Description</th>
-                          <th className="px-4 py-2 text-center text-xs  text-slate-600 ">Qty</th>
+                          <th className="px-4 py-2 text-left text-xs  text-slate-600 ">Qty</th>
                           <th className="px-4 py-2 text-right text-xs  text-slate-600 ">PDF / Actions</th>
                         </tr>
                       </thead>
@@ -1684,7 +1684,7 @@ const DesignOrders = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Row 1 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Item Code *</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Item Code *</label>
                     <div className="flex gap-2">
                       <input 
                         type="text" 
@@ -1708,7 +1708,7 @@ const DesignOrders = () => {
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Item Name *</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Item Name *</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1719,7 +1719,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Item Group *</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Item Group *</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.itemGroup}
@@ -1737,7 +1737,7 @@ const DesignOrders = () => {
 
                   {/* Row 2 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Default UOM *</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Default UOM *</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.defaultUom}
@@ -1751,7 +1751,7 @@ const DesignOrders = () => {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Valuation Rate</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Valuation Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1760,7 +1760,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Selling Rate</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Selling Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1771,7 +1771,7 @@ const DesignOrders = () => {
 
                   {/* Row 3 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">No. of Cavity (for mould items)</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">No. of Cavity (for mould items)</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1780,7 +1780,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Weight per Unit</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Weight per Unit</label>
                     <input 
                       type="number" 
                       step="0.001"
@@ -1791,7 +1791,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Weight UOM</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Weight UOM</label>
                     <select 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.weightUom}
@@ -1805,7 +1805,7 @@ const DesignOrders = () => {
 
                   {/* Row 4 */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Drawing No (Optional)</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Drawing No (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1815,7 +1815,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Revision (Optional)</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Revision (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1825,7 +1825,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px]  text-slate-500  tracking-wider">Material Grade (Optional)</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Material Grade (Optional)</label>
                     <input 
                       type="text" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -1889,7 +1889,7 @@ const DesignOrders = () => {
                         <input
                           type="text"
                           placeholder="Search items or drawing..."
-                          className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[11px] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                          className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                           value={modalSearchTerm}
                           onChange={(e) => setModalSearchTerm(e.target.value)}
                         />

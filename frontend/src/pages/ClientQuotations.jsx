@@ -641,7 +641,7 @@ const ClientQuotations = () => {
                                             <td className="p-2 text-[10px] text-slate-600 ">{idx + 1}</td>
                                             <td className="p-2">
                                               <div className="flex flex-col gap-1">
-                                                <div className="text-slate-900 text-[11px] font-medium">{q.drawing_no || '—'}</div>
+                                                <div className="text-slate-900 text-xs font-medium">{q.drawing_no || '—'}</div>
                                                 {q.status === 'REJECTED' && (
                                                   <div className="flex flex-col gap-0.5">
                                                     <span className="px-1.5 py-0.5 bg-red-600 text-white rounded text-[8px]   w-fit animate-pulse">Rejected</span>
@@ -654,18 +654,18 @@ const ClientQuotations = () => {
                                                 )}
                                               </div>
                                             </td>
-                                            <td className="p-2 text-[11px] text-slate-600">{q.item_description}</td>
+                                            <td className="p-2 text-xs text-slate-600">{q.item_description}</td>
                                             {q.status === 'REJECTED' ? (
                                               <td colSpan={3} className="p-2 text-right">
                                                 <span className="text-red-600  text-[10px]  pr-4">Rejected – No Financials</span>
                                               </td>
                                             ) : (
                                               <>
-                                                <td className="p-2 text-left text-[11px]  text-slate-900">
+                                                <td className="p-2 text-left text-xs  text-slate-900">
                                                   {q.item_qty !== null ? Number(q.item_qty).toFixed(3) : '—'}
                                                 </td>
-                                                <td className="p-2 text-[11px] text-slate-600">{q.item_unit || 'NOS'}</td>
-                                                <td className="p-2 text-right text-[11px]  text-emerald-600">₹{(q.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                <td className="p-2 text-xs text-slate-600">{q.item_unit || 'NOS'}</td>
+                                                <td className="p-2 text-right text-xs  text-emerald-600">₹{(q.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                               </>
                                             )}
                                           </tr>
@@ -673,16 +673,16 @@ const ClientQuotations = () => {
                                       </tbody>
                                       <tfoot className="bg-slate-50">
                                         <tr>
-                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-slate-700">Sub Total:</td>
-                                          <td className="p-2 text-right text-[11px] text-slate-900">₹{group.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td colSpan="5" className="p-2 text-right text-xs  text-slate-700">Sub Total:</td>
+                                          <td className="p-2 text-right text-xs text-slate-900">₹{group.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                         <tr>
-                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-slate-700">GST (18%):</td>
-                                          <td className="p-2 text-right text-[11px] text-slate-900">₹{(group.total_amount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td colSpan="5" className="p-2 text-right text-xs  text-slate-700">GST (18%):</td>
+                                          <td className="p-2 text-right text-xs text-slate-900">₹{(group.total_amount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                         <tr className="bg-emerald-50">
-                                          <td colSpan="5" className="p-2 text-right text-[11px]  text-emerald-700 ">Grand Total (Incl. GST):</td>
-                                          <td className="p-2 text-right text-[11px]  text-emerald-600 text-sm">₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                          <td colSpan="5" className="p-2 text-right text-xs  text-emerald-700 ">Grand Total (Incl. GST):</td>
+                                          <td className="p-2 text-right text-xs  text-emerald-600 text-sm">₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                       </tfoot>
                                     </table>

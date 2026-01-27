@@ -58,7 +58,7 @@ const QualityDashboard = () => {
     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[10px]  text-slate-400  tracking-widest mb-1">{title}</p>
+          <p className="text-[10px]  text-slate-400   mb-1">{title}</p>
           <p className="text-2xl  text-slate-900">{count}</p>
         </div>
         <div className={`p-4 rounded-xl transition-colors ${colorClass}`}>

@@ -533,7 +533,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
                 <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Std Time</th>
                 <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Hourly Rate</th>
                 <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Status</th>
-                <th className="p-2 text-right text-[11px]  text-slate-500  tracking-wider">Actions</th>
+                <th className="p-2 text-right text-xs  text-slate-500  tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">

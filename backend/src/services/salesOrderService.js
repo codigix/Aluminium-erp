@@ -152,12 +152,13 @@ const createSalesOrder = async (orderData) => {
 
     for (const item of orderItems) {
       const [itemResult] = await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status, rejection_reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status, rejection_reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           salesOrderId, 
           item.item_code, 
           item.drawing_no, 
+          item.drawing_id || null,
           item.revision_no, 
           item.description, 
           item.quantity, 
@@ -644,63 +645,114 @@ const getApprovedDrawings = async () => {
 
 const getOrderTimeline = async salesOrderId => {
   const [items] = await pool.query(
-    `SELECT soi.*, sb.material_type as item_group 
+    `SELECT soi.*, sb.material_type as item_group, sb.product_type,
+            COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
+            cd.drawing_name
      FROM sales_order_items soi
      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
+     LEFT JOIN (
+       SELECT d1.drawing_no, d1.id as latest_drawing_id, d1.description as drawing_name
+       FROM customer_drawings d1
+       JOIN (
+         SELECT drawing_no, MAX(id) as max_id
+         FROM customer_drawings
+         GROUP BY drawing_no
+       ) d2 ON d1.id = d2.max_id
+     ) cd ON cd.drawing_no = soi.drawing_no
      WHERE soi.sales_order_id = ?`,
     [salesOrderId]
   );
   
-  const allTimelineItems = [...items];
+  if (items.length === 0) return [];
 
-  // Fetch materials, components, operations, and scrap for each item
-  for (const item of allTimelineItems) {
-    // First try by sales_order_item_id
-    let [materials] = await pool.query(
-      'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-      [item.id]
-    );
+  const itemIds = items.map(i => i.id);
+  const itemCodes = items.map(i => i.item_code).filter(Boolean);
+  const drawingNos = items.map(i => i.drawing_no).filter(Boolean);
+
+  // Fetch all related data in bulk
+  const [allMaterials] = await pool.query(
+    `SELECT * FROM sales_order_item_materials 
+     WHERE sales_order_item_id IN (?) 
+     OR (item_code IN (?) AND sales_order_item_id IS NULL)
+     OR (drawing_no IN (?) AND sales_order_item_id IS NULL AND item_code IS NULL)
+     ORDER BY created_at ASC`,
+    [itemIds, itemCodes.length > 0 ? itemCodes : [null], drawingNos.length > 0 ? drawingNos : [null]]
+  );
+
+  const [allComponents] = await pool.query(
+    `SELECT * FROM sales_order_item_components 
+     WHERE sales_order_item_id IN (?) 
+     OR (item_code IN (?) AND sales_order_item_id IS NULL)
+     OR (drawing_no IN (?) AND sales_order_item_id IS NULL AND item_code IS NULL)
+     ORDER BY created_at ASC`,
+    [itemIds, itemCodes.length > 0 ? itemCodes : [null], drawingNos.length > 0 ? drawingNos : [null]]
+  );
+
+  const [allOperations] = await pool.query(
+    `SELECT * FROM sales_order_item_operations 
+     WHERE sales_order_item_id IN (?) 
+     OR (item_code IN (?) AND sales_order_item_id IS NULL)
+     OR (drawing_no IN (?) AND sales_order_item_id IS NULL AND item_code IS NULL)
+     ORDER BY created_at ASC`,
+    [itemIds, itemCodes.length > 0 ? itemCodes : [null], drawingNos.length > 0 ? drawingNos : [null]]
+  );
+
+  const [allScrap] = await pool.query(
+    `SELECT * FROM sales_order_item_scrap 
+     WHERE sales_order_item_id IN (?) 
+     OR (item_code IN (?) AND sales_order_item_id IS NULL)
+     OR (drawing_no IN (?) AND sales_order_item_id IS NULL AND item_code IS NULL)
+     ORDER BY created_at ASC`,
+    [itemIds, itemCodes.length > 0 ? itemCodes : [null], drawingNos.length > 0 ? drawingNos : [null]]
+  );
+
+  // Map data for quick lookup
+  const materialsByItem = allMaterials.reduce((acc, m) => {
+    const key = m.sales_order_item_id ? `id_${m.sales_order_item_id}` : (m.item_code ? `code_${m.item_code}` : `dwg_${m.drawing_no}`);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(m);
+    return acc;
+  }, {});
+
+  const componentsByItem = allComponents.reduce((acc, c) => {
+    const key = c.sales_order_item_id ? `id_${c.sales_order_item_id}` : (c.item_code ? `code_${c.item_code}` : `dwg_${c.drawing_no}`);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(c);
+    return acc;
+  }, {});
+
+  const operationsByItem = allOperations.reduce((acc, o) => {
+    const key = o.sales_order_item_id ? `id_${o.sales_order_item_id}` : (o.item_code ? `code_${o.item_code}` : `dwg_${o.drawing_no}`);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(o);
+    return acc;
+  }, {});
+
+  const scrapByItem = allScrap.reduce((acc, s) => {
+    const key = s.sales_order_item_id ? `id_${s.sales_order_item_id}` : (s.item_code ? `code_${s.item_code}` : `dwg_${s.drawing_no}`);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(s);
+    return acc;
+  }, {});
+
+  // Process each item
+  for (const item of items) {
+    // Try order-specific first, then fall back to master (code), then fall back to master (drawing)
+    let materials = materialsByItem[`id_${item.id}`] || materialsByItem[`code_${item.item_code}`] || materialsByItem[`dwg_${item.drawing_no}`] || [];
+    let components = componentsByItem[`id_${item.id}`] || componentsByItem[`code_${item.item_code}`] || componentsByItem[`dwg_${item.drawing_no}`] || [];
+    let operations = operationsByItem[`id_${item.id}`] || operationsByItem[`code_${item.item_code}`] || operationsByItem[`dwg_${item.drawing_no}`] || [];
+    let scrap = scrapByItem[`id_${item.id}`] || scrapByItem[`code_${item.item_code}`] || scrapByItem[`dwg_${item.drawing_no}`] || [];
+
+    // Ensure we don't mix order-specific and master if any order-specific exists
+    const hasOrderSpecific = (materialsByItem[`id_${item.id}`]?.length > 0 || 
+                            componentsByItem[`id_${item.id}`]?.length > 0 || 
+                            operationsByItem[`id_${item.id}`]?.length > 0);
     
-    let [components] = await pool.query(
-      'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-      [item.id]
-    );
-
-    let [operations] = await pool.query(
-      'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-      [item.id]
-    );
-
-    let [scrap] = await pool.query(
-      'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-      [item.id]
-    );
-
-    // If no BOM items found by ID, try by item_code (Master BOM)
-    if (materials.length === 0 && components.length === 0 && operations.length === 0) {
-      const [mMaster] = await pool.query(
-        'SELECT * FROM sales_order_item_materials WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-        [item.item_code]
-      );
-      materials = mMaster;
-
-      const [cMaster] = await pool.query(
-        'SELECT * FROM sales_order_item_components WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-        [item.item_code]
-      );
-      components = cMaster;
-
-      const [oMaster] = await pool.query(
-        'SELECT * FROM sales_order_item_operations WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-        [item.item_code]
-      );
-      operations = oMaster;
-
-      const [sMaster] = await pool.query(
-        'SELECT * FROM sales_order_item_scrap WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-        [item.item_code]
-      );
-      scrap = sMaster;
+    if (hasOrderSpecific) {
+      materials = materialsByItem[`id_${item.id}`] || [];
+      components = componentsByItem[`id_${item.id}`] || [];
+      operations = operationsByItem[`id_${item.id}`] || [];
+      scrap = scrapByItem[`id_${item.id}`] || [];
     }
 
     item.materials = materials;
@@ -708,7 +760,7 @@ const getOrderTimeline = async salesOrderId => {
     item.operations = operations;
     item.scrap = scrap;
 
-    // Calculate summary costs
+    // Calculate costs
     const orderQty = parseFloat(item.quantity || 1);
     const matCost = materials.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * orderQty * parseFloat(m.rate || 0)), 0);
     const compCost = components.reduce((sum, c) => {
@@ -732,15 +784,13 @@ const getOrderTimeline = async salesOrderId => {
     const totalOrderCost = matCost + compCost + laborCost - scrapRecovery;
     const calculatedBomCost = orderQty > 0 ? totalOrderCost / orderQty : 0;
     
-    // Prioritize stored bom_cost if available (>0), otherwise use calculated
     item.bom_cost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : calculatedBomCost;
-
-    // Improved has_bom check: True if materials, components OR operations exist
-    item.has_bom = Boolean(materials?.length > 0 || components?.length > 0 || operations?.length > 0);
+    item.has_bom = Boolean(materials?.length > 0 || components?.length > 0 || operations?.length > 0 || scrap?.length > 0);
   }
   
-  return allTimelineItems;
+  return items;
 };
+
 
 const generateSalesOrderPDF = async (salesOrderId) => {
   const [orderRows] = await pool.query(
@@ -898,11 +948,22 @@ const deleteSalesOrder = async (salesOrderId) => {
 
 const getSalesOrderItem = async itemId => {
   const [items] = await pool.query(
-    `SELECT soi.*, so.project_name, c.company_name, cp.po_number 
+    `SELECT soi.*, so.project_name, c.company_name, cp.po_number,
+            COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
+            cd.drawing_name
      FROM sales_order_items soi
      JOIN sales_orders so ON so.id = soi.sales_order_id
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     LEFT JOIN (
+       SELECT d1.drawing_no, d1.id as latest_drawing_id, d1.description as drawing_name
+       FROM customer_drawings d1
+       JOIN (
+         SELECT drawing_no, MAX(id) as max_id
+         FROM customer_drawings
+         GROUP BY drawing_no
+       ) d2 ON d1.id = d2.max_id
+     ) cd ON cd.drawing_no = soi.drawing_no
      WHERE soi.id = ?`,
     [itemId]
   );

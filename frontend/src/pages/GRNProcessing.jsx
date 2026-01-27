@@ -687,13 +687,13 @@ const GRNProcessing = () => {
 
               {poItems.length > 0 && (
                 <div className="rounded-2xl border border-slate-200 overflow-hidden">
-                  <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                  <div className="p-2 bg-slate-50 border-b border-slate-200">
                     <h3 className=" text-slate-900">PO Items</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Enter actual accepted quantities to track shortages</p>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="bg-slate-50/50 text-slate-500 text-[10px]  tracking-widest ">
+                      <thead className="bg-slate-50/50 text-slate-500 text-[10px]   ">
                         <tr>
                           <th className="px-6 py-3 text-left">Material Details</th>
                           <th className="px-6 py-3 text-center">PO Qty</th>
@@ -711,12 +711,12 @@ const GRNProcessing = () => {
 
                           return (
                             <tr key={item.id} className={itemError ? 'bg-red-50/50' : 'hover:bg-slate-50/30'}>
-                              <td className="px-6 py-4">
+                              <td className="p-2">
                                 <div className=" text-slate-900">{item.material_name}</div>
                                 <div className="text-xs text-slate-500">{item.material_type} • {item.drawing_no || 'No Drawing'}</div>
                               </td>
-                              <td className="px-6 py-4 text-center font-medium text-slate-700">{item.quantity}</td>
-                              <td className="px-6 py-4">
+                              <td className="p-2 text-center font-medium text-slate-700">{item.quantity}</td>
+                              <td className="p-2">
                                 <input
                                   type="number"
                                   min="0"
@@ -725,12 +725,12 @@ const GRNProcessing = () => {
                                   className={`w-full px-3 py-1.5 bg-white border ${itemError ? 'border-red-300' : 'border-slate-200'} rounded-lg text-center  text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-none`}
                                 />
                               </td>
-                              <td className="px-6 py-4 text-center">
+                              <td className="p-2 text-center">
                                 <Badge className={itemStatusColors[status] || itemStatusColors.PENDING}>
                                   {status === 'PENDING' ? '—' : status}
                                 </Badge>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="p-2">
                                 <input
                                   type="text"
                                   value={data.remarks || ''}

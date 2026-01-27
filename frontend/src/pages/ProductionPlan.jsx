@@ -399,7 +399,7 @@ const ProductionPlan = () => {
                         <td className="p-2 font-medium">{item.project_name || selectedOrderDetails?.project_name}</td>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <div className="text-[11px]  text-indigo-600">{item.item_code}</div>
+                            <div className="text-xs  text-indigo-600">{item.item_code}</div>
                             {item.status === 'Rejected' && (
                               <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 animate-pulse  border border-rose-200">
                                 Rejected Drawing

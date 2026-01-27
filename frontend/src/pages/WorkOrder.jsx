@@ -196,7 +196,7 @@ const WorkOrder = () => {
       label: 'Schedule',
       key: 'start_date',
       render: (_, row) => (
-        <div className="text-[11px] text-slate-600">
+        <div className="text-xs text-slate-600">
           <div>Start: {formatDisplayDate(row.start_date)}</div>
           <div>End: {formatDisplayDate(row.end_date)}</div>
         </div>

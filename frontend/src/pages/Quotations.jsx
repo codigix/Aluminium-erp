@@ -362,7 +362,8 @@ const Quotations = () => {
         body: JSON.stringify({
           ...formData,
           vendorId: parseInt(formData.vendorId),
-          salesOrderId: formData.salesOrderId ? parseInt(formData.salesOrderId) : null
+          salesOrderId: formData.salesOrderId ? parseInt(formData.salesOrderId) : null,
+          validUntil: formData.validUntil || null
         })
       });
 
@@ -402,7 +403,7 @@ const Quotations = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          validUntil: recordData.validUntil,
+          validUntil: recordData.validUntil || null,
           items: recordData.items,
           notes: recordData.notes
         })
@@ -750,7 +751,7 @@ const Quotations = () => {
   const renderExpandedRow = (q) => (
     <div className="bg-slate-50/50 rounded-xl border border-slate-200 overflow-hidden mx-4 mb-2">
       <div className="px-4 py-2 bg-slate-100/50 border-b border-slate-200 flex justify-between items-center">
-        <span className="text-[10px]  text-slate-500  tracking-widest">Quotation Line Items</span>
+        <span className="text-[10px]  text-slate-500  ">Quotation Line Items</span>
         {q.notes && <span className="text-[10px] text-slate-400 italic">Notes: {q.notes}</span>}
       </div>
       <table className="w-full text-xs">
@@ -814,7 +815,7 @@ const Quotations = () => {
         {activeTab === 'received' && q.total_amount > 0 && (
           <tfoot className="bg-slate-100/30">
             <tr>
-              <td colSpan="5" className="px-4 py-3 text-right  text-slate-500  text-[10px] tracking-widest">Total Value:</td>
+              <td colSpan="5" className="px-4 py-3 text-right  text-slate-500  text-[10px] ">Total Value:</td>
               <td className="px-4 py-3 text-right  text-indigo-600 text-sm font-mono border-l border-slate-200">
                 {formatCurrency(q.total_amount)}
               </td>

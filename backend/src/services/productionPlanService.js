@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const bomService = require('./bomService');
 
 const listProductionPlans = async () => {
   const [rows] = await pool.query(
@@ -142,13 +143,9 @@ const getSalesOrderFullDetails = async (id) => {
   );
 
   for (let item of items) {
-    const [materials] = await pool.query('SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ?', [item.id]);
-    const [components] = await pool.query('SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ?', [item.id]);
-    const [operations] = await pool.query('SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ?', [item.id]);
-    
-    item.materials = materials;
-    item.components = components;
-    item.operations = operations;
+    item.materials = await bomService.getItemMaterials(item.id, item.item_code, item.drawing_no);
+    item.components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
+    item.operations = await bomService.getItemOperations(item.id, item.item_code, item.drawing_no);
   }
 
   order.items = items;

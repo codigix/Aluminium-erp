@@ -18,7 +18,7 @@ const IncomingQC = () => {
           <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
             The raw material inspection module is currently under development.
           </p>
-          <div className="mt-6 px-4 py-1.5 bg-blue-100 text-blue-700 text-[10px]   tracking-widest rounded-full border border-blue-200">
+          <div className="mt-6 px-4 py-1.5 bg-blue-100 text-blue-700 text-[10px]    rounded-full border border-blue-200">
             Feature Coming Soon
           </div>
         </div>
