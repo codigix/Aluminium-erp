@@ -156,11 +156,11 @@ const POMaterialRequest = () => {
   const renderExpanded = (group) => (
     <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mx-4">
       <div className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center">
-        <h4 className="text-[10px]  text-slate-500  tracking-widest">Requested Materials</h4>
+        <h4 className="text-[10px]  text-slate-500  ">Requested Materials</h4>
         <span className="text-[10px] text-slate-400 font-medium">Expected by: {formatDate(group.expected_delivery_date)}</span>
       </div>
       <table className="w-full text-left text-xs">
-        <thead className="bg-slate-50/50 text-slate-400 text-[9px]  tracking-widest ">
+        <thead className="bg-slate-50/50 text-slate-400 text-[9px]   ">
           <tr>
             <th className="px-4 py-2">Material / Item</th>
             <th className="px-4 py-2">Type</th>

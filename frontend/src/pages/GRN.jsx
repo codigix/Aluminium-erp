@@ -25,7 +25,7 @@ const StatMiniCard = ({ title, count, color, icon }) => {
   return (
     <div className={`p-4 rounded-2xl border ${colorMap[color]} shadow-sm flex flex-col items-center text-center`}>
       <div className="p-2 bg-white rounded-lg shadow-sm mb-2">{icon}</div>
-      <p className="text-[10px]   tracking-widest opacity-80 mb-0.5">{title}</p>
+      <p className="text-[10px]    opacity-80 mb-0.5">{title}</p>
       <p className="text-xl ">{count || 0}</p>
     </div>
   );
@@ -377,7 +377,7 @@ const GRN = () => {
             <form onSubmit={handleCreateGRN} className="p-6 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">PO Number *</label>
+                  <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">PO Number *</label>
                   <input
                     type="text"
                     value={formData.poNumber}
@@ -389,7 +389,7 @@ const GRN = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">GRN Date *</label>
+                  <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">GRN Date *</label>
                   <input
                     type="date"
                     value={formData.grnDate}
@@ -401,7 +401,7 @@ const GRN = () => {
               </div>
 
               <div>
-                <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Received Quantity *</label>
+                <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Received Quantity *</label>
                 <input
                   type="number"
                   value={formData.receivedQuantity}
@@ -414,7 +414,7 @@ const GRN = () => {
               </div>
 
               <div>
-                <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Notes (Optional)</label>
+                <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Notes (Optional)</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
@@ -465,23 +465,23 @@ const GRN = () => {
             <div className="p-6">
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">GRN Number</p>
+                  <p className="text-[10px]  text-slate-400   mb-1">GRN Number</p>
                   <p className="text-sm  text-slate-900">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">PO Number</p>
+                  <p className="text-[10px]  text-slate-400   mb-1">PO Number</p>
                   <p className="text-sm  text-indigo-600">{selectedGRN.poNumber}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">GRN Date</p>
+                  <p className="text-[10px]  text-slate-400   mb-1">GRN Date</p>
                   <p className="text-sm  text-slate-900">{formatDate(selectedGRN.grnDate)}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Received Qty</p>
+                  <p className="text-[10px]  text-slate-400   mb-1">Received Qty</p>
                   <p className="text-sm  text-slate-900">{selectedGRN.receivedQuantity}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 col-span-2">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-2">Current Status</p>
+                  <p className="text-[10px]  text-slate-400   mb-2">Current Status</p>
                   <span className={`inline-flex px-3 py-1 rounded-full text-[10px]  tracking-wider  ${grnStatusColors[selectedGRN.status]?.badge}`}>
                     {grnStatusColors[selectedGRN.status]?.label || selectedGRN.status}
                   </span>
@@ -490,7 +490,7 @@ const GRN = () => {
 
               {selectedGRN.notes && (
                 <div className="mb-6 bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
-                  <p className="text-[10px]  text-indigo-600  tracking-widest mb-2">Notes</p>
+                  <p className="text-[10px]  text-indigo-600   mb-2">Notes</p>
                   <p className="text-sm text-slate-700 font-medium leading-relaxed">{selectedGRN.notes}</p>
                 </div>
               )}
@@ -529,21 +529,21 @@ const GRN = () => {
             <form onSubmit={handleUpdateGRN} className="p-6 space-y-3">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">GRN ID</p>
+                  <p className="text-[10px]  text-slate-400   mb-1">GRN ID</p>
                   <p className="text-xs  text-slate-700">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
                 </div>
                 <div>
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">PO Number</p>
+                  <p className="text-[10px]  text-slate-400   mb-1">PO Number</p>
                   <p className="text-xs  text-indigo-600">{selectedGRN.poNumber}</p>
                 </div>
                 <div>
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Received Qty</p>
+                  <p className="text-[10px]  text-slate-400   mb-1">Received Qty</p>
                   <p className="text-xs  text-slate-700">{selectedGRN.receivedQuantity}</p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px]  text-slate-500  tracking-widest mb-1.5 ml-1">Update Status *</label>
+                <label className="block text-[10px]  text-slate-500   mb-1.5 ml-1">Update Status *</label>
                 <select
                   value={editFormData.status}
                   onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}

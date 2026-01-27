@@ -102,7 +102,7 @@ const CustomerPO = ({
                       <th className="p-2 text-left text-xs  text-slate-700 ">Quote ID / Client</th>
                       <th className="p-2 text-left text-xs  text-slate-700 ">Sent Date</th>
                       <th className="p-2 text-left text-xs  text-slate-700 ">Total Amount</th>
-                      <th className="p-2 text-center text-xs  text-slate-700 ">Status</th>
+                      <th className="p-2 text-left text-xs  text-slate-700 ">Status</th>
                       <th className="p-2 text-right text-xs  text-slate-700 ">Action</th>
                     </tr>
                   </thead>

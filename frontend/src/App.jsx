@@ -1152,7 +1152,7 @@ function App() {
             )}
 
             {authMode === 'login' && (
-              <div className="text-center text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
+              <div className="text-left text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
                 <p className="">Demo Credentials:</p>
                 <div className="grid grid-cols-2 gap-2 text-left bg-slate-50 p-3 rounded-lg overflow-y-auto max-h-64">
                   <button 
@@ -1683,7 +1683,7 @@ function App() {
                   </button>
                 </div>
                 {contactListLoading ? (
-                  <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-200 rounded-2xl">Loading contacts...</div>
+                  <div className="p-6 text-left text-xs text-slate-500 border border-dashed border-slate-200 rounded-2xl">Loading contacts...</div>
                 ) : contactList.length ? (
                   <div className="space-y-3">
                     {contactList.map(contact => (

@@ -179,9 +179,9 @@ const DrawingMaster = () => {
         </div>
         
         {isLoading ? (
-          <div className="py-4 text-center text-xs text-slate-500 italic">Fetching revisions...</div>
+          <div className="py-4 text-left text-xs text-slate-500 italic">Fetching revisions...</div>
         ) : revisions.length === 0 ? (
-          <div className="py-4 text-center text-xs text-slate-400 italic">No previous revisions recorded</div>
+          <div className="py-4 text-left text-xs text-slate-400 italic">No previous revisions recorded</div>
         ) : (
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200">

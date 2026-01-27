@@ -324,6 +324,7 @@ const ensureStockColumns = async () => {
     const requiredStockCols = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'product_type', definition: 'VARCHAR(100) NULL' },
       { name: 'valuation_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'selling_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'no_of_cavity', definition: 'INT DEFAULT 1' },
@@ -621,7 +622,7 @@ const ensureSalesOrderItemColumns = async () => {
       { name: 'revision_no', definition: 'VARCHAR(50) NULL' },
       { name: 'drawing_pdf', definition: 'VARCHAR(500) NULL' },
       { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
-      { name: 'item_group', definition: 'VARCHAR(100)' },
+      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
       { name: 'is_active', definition: 'TINYINT(1) DEFAULT 1' },
       { name: 'is_default', definition: 'TINYINT(1) DEFAULT 0' },
       { name: 'status', definition: "VARCHAR(50) DEFAULT 'PENDING'" },
@@ -691,6 +692,7 @@ const ensureSalesOrderItemMaterialsTable = async () => {
         rate DECIMAL(12, 2) DEFAULT 0,
         warehouse VARCHAR(100),
         operation VARCHAR(100),
+        description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE
@@ -813,6 +815,50 @@ const ensureBOMMasterColumns = async () => {
   }
 };
 
+const ensureBOMDrawingColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const tables = ['sales_order_item_materials', 'sales_order_item_components', 'sales_order_item_operations', 'sales_order_item_scrap'];
+    
+    for (const table of tables) {
+      const [columns] = await connection.query(`SHOW COLUMNS FROM ${table}`);
+      const existing = new Set(columns.map(column => column.Field));
+      
+      if (!existing.has('drawing_no')) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN drawing_no VARCHAR(120) NULL AFTER item_code`);
+        console.log(`Added drawing_no column to ${table}`);
+      }
+    }
+  } catch (error) {
+    console.error('BOM Drawing columns sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureBOMHierarchyColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const tables = ['sales_order_item_materials', 'sales_order_item_components', 'sales_order_item_scrap'];
+    
+    for (const table of tables) {
+      const [columns] = await connection.query(`SHOW COLUMNS FROM ${table}`);
+      const existing = new Set(columns.map(column => column.Field));
+      
+      if (!existing.has('parent_id')) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN parent_id INT NULL AFTER item_code`);
+        console.log(`Added parent_id column to ${table}`);
+      }
+    }
+  } catch (error) {
+    console.error('BOM Hierarchy columns sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureBOMMaterialsColumns = async () => {
   let connection;
   try {
@@ -823,7 +869,8 @@ const ensureBOMMaterialsColumns = async () => {
       { name: 'rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'item_group', definition: 'VARCHAR(100)' },
       { name: 'warehouse', definition: 'VARCHAR(100)' },
-      { name: 'operation', definition: 'VARCHAR(100)' }
+      { name: 'operation', definition: 'VARCHAR(100)' },
+      { name: 'description', definition: 'TEXT' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -1041,6 +1088,8 @@ const bootstrapDatabase = async () => {
   await ensureBOMAdditionalTables();
   await ensureBOMMaterialsColumns();
   await ensureBOMMasterColumns();
+  await ensureBOMDrawingColumns();
+  await ensureBOMHierarchyColumns();
   await ensureOperationsTable();
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();

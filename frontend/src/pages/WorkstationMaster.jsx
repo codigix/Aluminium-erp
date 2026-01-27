@@ -90,13 +90,19 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       const url = isEditing ? `${API_BASE}/workstations/${editingId}` : `${API_BASE}/workstations`;
       const method = isEditing ? 'PUT' : 'POST';
 
+      // Ensure empty date is sent as null
+      const payload = {
+        ...formData,
+        last_maintenance_date: formData.last_maintenance_date || null
+      };
+
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {

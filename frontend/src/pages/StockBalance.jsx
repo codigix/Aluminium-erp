@@ -153,7 +153,7 @@ const StockBalance = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
           <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-indigo-600  tracking-widest  mb-1">Total Items</p>
+              <p className="text-[10px] text-indigo-600    mb-1">Total Items</p>
               <p className="text-2xl  text-indigo-900">{stats.totalItems}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">
@@ -164,7 +164,7 @@ const StockBalance = () => {
           </div>
           <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-emerald-600  tracking-widest  mb-1">Total Balance</p>
+              <p className="text-[10px] text-emerald-600    mb-1">Total Balance</p>
               <p className="text-2xl  text-emerald-900">{parseFloat(stats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">
@@ -175,7 +175,7 @@ const StockBalance = () => {
           </div>
           <div className="bg-rose-50 border border-rose-100 rounded-lg p-5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-rose-600  tracking-widest  mb-1">Low Stock Items</p>
+              <p className="text-[10px] text-rose-600    mb-1">Low Stock Items</p>
               <p className="text-2xl  text-rose-900">{stats.lowStock}</p>
             </div>
             <div className="p-2 bg-white rounded-lg shadow-sm">

@@ -112,9 +112,9 @@ const shareWithDesign = async (id) => {
 
     // 6. Create Sales Order Item
     await connection.execute(
-      `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, drawing_pdf, description, quantity, unit)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [salesOrderId, drawing.drawing_no, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, quantity, unit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [salesOrderId, drawing.drawing_no, drawing.id, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
     );
     
     await connection.commit();
@@ -264,9 +264,9 @@ const shareDrawingsBulk = async (ids) => {
       // 6. Create Sales Order Items
       for (const drawing of clientDrawings) {
         await connection.execute(
-          `INSERT INTO sales_order_items (sales_order_id, drawing_no, revision_no, drawing_pdf, description, quantity, unit)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [salesOrderId, drawing.drawing_no, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
+          `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, quantity, unit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [salesOrderId, drawing.drawing_no, drawing.id, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
         );
       }
     }

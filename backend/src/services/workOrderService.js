@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const bomService = require('./bomService');
 
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
@@ -22,14 +23,17 @@ const createWorkOrder = async (data) => {
   try {
     await connection.beginTransaction();
 
-    // 0. Check if item is rejected
+    // 0. Check if item is rejected and fetch its details
     const [itemRows] = await connection.query(
-      'SELECT status FROM sales_order_items WHERE id = ?',
+      'SELECT item_code, drawing_no, status FROM sales_order_items WHERE id = ?',
       [salesOrderItemId]
     );
-    if (itemRows.length > 0 && itemRows[0].status === 'Rejected') {
+    if (itemRows.length === 0) throw new Error('Sales Order Item not found');
+    
+    if (itemRows[0].status === 'Rejected') {
       throw new Error('Cannot create Work Order for a rejected drawing/item.');
     }
+    const item = itemRows[0];
 
     // 1. Create the Work Order
     const [result] = await connection.execute(
@@ -41,15 +45,26 @@ const createWorkOrder = async (data) => {
 
     const workOrderId = result.insertId;
 
-    // 2. Fetch Operations from BOM
-    const [bomOperations] = await connection.query(
-      `SELECT soio.*, o.id as master_operation_id, w.id as master_workstation_id
-       FROM sales_order_item_operations soio
-       LEFT JOIN operations o ON soio.operation_name = o.operation_name
-       LEFT JOIN workstations w ON soio.workstation = w.workstation_name
-       WHERE soio.sales_order_item_id = ?`,
-      [salesOrderItemId]
-    );
+    // 2. Fetch Operations from BOM using multi-tier logic
+    const bomOperationsRaw = await bomService.getItemOperations(salesOrderItemId, item.item_code, item.drawing_no);
+    
+    // We still need to join with master operations/workstations for the master IDs
+    const bomOperations = [];
+    for (const op of bomOperationsRaw) {
+      const [masterOps] = await connection.query(
+        'SELECT id FROM operations WHERE operation_name = ?',
+        [op.operation_name]
+      );
+      const [masterWs] = await connection.query(
+        'SELECT id FROM workstations WHERE workstation_name = ?',
+        [op.workstation]
+      );
+      bomOperations.push({
+        ...op,
+        master_operation_id: masterOps[0]?.id || null,
+        master_workstation_id: masterWs[0]?.id || null
+      });
+    }
 
     if (bomOperations.length === 0) {
       throw new Error('Cannot create Work Order: No operations found in BOM for this item. Please define BOM operations first.');

@@ -147,7 +147,7 @@ const BOMApproval = () => {
               <tr>
                 <th className="p-2 text-left text-xs  text-slate-500 ">PO / SO Ref</th>
                 <th className="p-2 text-left text-xs  text-slate-500 ">Customer / Project</th>
-                <th className="p-2 text-center text-xs  text-slate-500 ">Status</th>
+                <th className="p-2 text-left text-xs  text-slate-500 ">Status</th>
                 <th className="p-2 text-right text-xs  text-slate-500 ">Actions</th>
               </tr>
             </thead>
@@ -263,7 +263,7 @@ const BOMApproval = () => {
                           <div>
                             <div className="flex items-center gap-4">
                               {item.status !== 'REJECTED' && (
-                                <span className="text-sm font-semibold text-slate-900">{item.item_code || item.drawing_no}</span>
+                                <span className="text-sm  text-slate-900">{item.item_code || item.drawing_no}</span>
                               )}
                               {item.status !== 'REJECTED' && (
                                 <Link 
@@ -284,7 +284,7 @@ const BOMApproval = () => {
                               )}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-slate-600">{item.description}</span>
+                              <span className="text-xs text-slate-600">{item.drawing_name || item.description}</span>
                               {item.status === 'REJECTED' && item.rejection_reason && (
                                 <>
                                   <span className="mx-2 text-slate-300">|</span>
@@ -358,7 +358,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No materials defined'}</td></tr>
+                              <tr><td colSpan="5" className="px-4 py-4 text-left text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No materials defined'}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -394,7 +394,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="4" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No components defined'}</td></tr>
+                              <tr><td colSpan="4" className="px-4 py-4 text-left text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No components defined'}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -439,7 +439,7 @@ const BOMApproval = () => {
                                 );
                               })
                             ) : (
-                              <tr><td colSpan="5" className="px-4 py-4 text-center text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No operations defined'}</td></tr>
+                              <tr><td colSpan="5" className="px-4 py-4 text-left text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No operations defined'}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -479,7 +479,7 @@ const BOMApproval = () => {
                         
                         {/* Item Total Breakdown */}
                         <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
-                           <div className="text-xs   tracking-widest opacity-60">Item Cost Summary</div>
+                           <div className="text-xs    opacity-60">Item Cost Summary</div>
                            <div className="flex gap-8">
                               <div className="text-right">
                                  <div className="text-[9px]  opacity-50 ">Total Item Cost</div>

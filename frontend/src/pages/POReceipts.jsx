@@ -355,11 +355,11 @@ const POReceipts = () => {
   const renderExpanded = (receipt) => (
     <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mx-4">
       <div className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center">
-        <h4 className="text-[10px]  text-slate-500  tracking-widest">Received Item Details</h4>
+        <h4 className="text-[10px]  text-slate-500  ">Received Item Details</h4>
         {receipt.notes && <span className="text-[10px] text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full">Notes: {receipt.notes}</span>}
       </div>
       <table className="w-full text-left text-xs">
-        <thead className="bg-slate-50/50 text-slate-400 text-[9px]  tracking-widest ">
+        <thead className="bg-slate-50/50 text-slate-400 text-[9px]   ">
           <tr>
             <th className="px-4 py-2">Material / Description</th>
             <th className="px-4 py-2 text-center">Expected</th>
@@ -488,10 +488,10 @@ const POReceipts = () => {
 
             {formData.items.length > 0 && (
               <div className="space-y-3">
-                <label className="text-[10px] text-slate-500   tracking-widest">Materials in PO</label>
+                <label className="text-[10px] text-slate-500   ">Materials in PO</label>
                 <div className="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
                   <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-50 text-slate-400 text-[9px]  tracking-widest ">
+                    <thead className="bg-slate-50 text-slate-400 text-[9px]   ">
                       <tr>
                         <th className="px-4 py-3">Material / Description</th>
                         <th className="px-4 py-3 text-center">Expected</th>

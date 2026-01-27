@@ -18,7 +18,7 @@ const FinalQC = () => {
           <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
             The post-production quality clearance module is currently under development.
           </p>
-          <div className="mt-6 px-4 py-1.5 bg-indigo-100 text-indigo-700 text-[10px]   tracking-widest rounded-full border border-indigo-200">
+          <div className="mt-6 px-4 py-1.5 bg-indigo-100 text-indigo-700 text-[10px]    rounded-full border border-indigo-200">
             Feature Coming Soon
           </div>
         </div>

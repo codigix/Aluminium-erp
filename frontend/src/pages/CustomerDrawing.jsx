@@ -1052,8 +1052,8 @@ const CustomerDrawing = () => {
                               <th className="px-3 py-2 text-left text-xs  text-slate-600">Drawing</th>
                               <th className="px-3 py-2 text-left text-xs  text-slate-600">Description</th>
                               <th className="px-3 py-2 text-left text-xs  text-slate-600">Rev</th>
-                              <th className="px-3 py-2 text-center text-xs  text-slate-600">Qty</th>
-                              <th className="px-3 py-2 text-center text-xs  text-slate-600">File</th>
+                              <th className="px-3 py-2 text-left text-xs  text-slate-600">Qty</th>
+                              <th className="px-3 py-2 text-left text-xs  text-slate-600">File</th>
                               <th className="px-3 py-2 text-left text-xs  text-slate-600">By</th>
                               <th className="px-3 py-2 text-right text-xs  text-slate-600">Actions</th>
                             </tr>
@@ -1258,7 +1258,7 @@ const CustomerDrawing = () => {
                         <th className="px-3 py-2 text-left text-xs  text-slate-700">Revision</th>
                         <th className="px-3 py-2 text-left text-xs  text-slate-700">Date</th>
                         <th className="px-3 py-2 text-left text-xs  text-slate-700">Description</th>
-                        <th className="px-3 py-2 text-center text-xs  text-slate-700">File</th>
+                        <th className="px-3 py-2 text-left text-xs  text-slate-700">File</th>
                         <th className="px-3 py-2 text-right text-xs  text-slate-700">Reference</th>
                       </tr>
                     </thead>
