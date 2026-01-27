@@ -40,6 +40,7 @@ const PurchaseOrders = () => {
   const [poItems, setPoItems] = useState([]);
   const [poSuggestions, setPoSuggestions] = useState([]);
   const [isManualPo, setIsManualPo] = useState(false);
+  const [user, setUser] = useState(null);
   const [formData, setFormData] = useState({
     quotationId: '',
     projectName: '',
@@ -56,9 +57,20 @@ const PurchaseOrders = () => {
   });
 
   useEffect(() => {
-    fetchPOs();
-    fetchStats();
-    fetchApprovedQuotations();
+    const storedUser = localStorage.getItem('authUser');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'PROCUREMENT' || parsedUser.department_code === 'INVENTORY' || parsedUser.department_code === 'SALES') {
+        fetchPOs();
+        fetchStats();
+        fetchApprovedQuotations();
+      }
+    } else {
+      fetchPOs();
+      fetchStats();
+      fetchApprovedQuotations();
+    }
   }, []);
 
   const fetchPOs = async () => {

@@ -20,6 +20,7 @@ const SalesOrders = () => {
   const [orders, setOrders] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [boms, setBoms] = useState([]);
+  const [user, setUser] = useState(null);
 
   const initialFormState = {
     series: 'Auto-generated',
@@ -42,9 +43,20 @@ const SalesOrders = () => {
   const [formData, setFormData] = useState(initialFormState);
 
   useEffect(() => {
-    fetchOrders();
-    fetchCompanies();
-    fetchBoms();
+    const storedUser = localStorage.getItem('authUser');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      fetchOrders();
+      fetchCompanies();
+      if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'DESIGN_ENG' || parsedUser.department_code === 'SALES') {
+        fetchBoms();
+      }
+    } else {
+      fetchOrders();
+      fetchCompanies();
+      fetchBoms();
+    }
   }, []);
 
   const fetchOrders = async () => {
@@ -88,7 +100,7 @@ const SalesOrders = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setBoms(data);
+        setBoms(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Error fetching boms:', err);
@@ -465,49 +477,89 @@ const SalesOrders = () => {
           </Card>
 
           {/* BOM & Inventory */}
-          <Card title="BOM & Inventory" subtitle="Production template and storage">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-              <FormControl label="Select BOM *">
-                <SearchableSelect 
-                  options={boms.map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
-                  value={formData.bomId}
-                  onChange={(e) => handleBomChange(e.target.value)}
-                  placeholder="Select warehouse..."
-                  disabled={formMode === 'view'}
-                />
-              </FormControl>
-              <FormControl label="Order Quantity *">
-                <input 
-                  type="number"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                  value={formData.orderQuantity}
-                  onChange={(e) => {
-                    const newQty = Number(e.target.value);
-                    const newItems = formData.items.map(item => ({
-                        ...item,
-                        quantity: newQty,
-                        amount: newQty * item.rate
-                    }));
-                    setFormData({...formData, orderQuantity: newQty, items: newItems});
-                  }}
-                  disabled={formMode === 'view'}
-                />
-              </FormControl>
-              <FormControl label="Warehouse">
-                <select 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                  value={formData.warehouse}
-                  onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
-                  disabled={formMode === 'view'}
-                >
-                  <option value="">Select warehouse...</option>
-                  {warehouseOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </FormControl>
-            </div>
-          </Card>
+          {(user?.department_code === 'ADMIN' || user?.department_code === 'DESIGN_ENG' || user?.department_code === 'SALES') && (
+            <Card title="BOM & Inventory" subtitle="Production template and storage">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+                <FormControl label="Select BOM *">
+                  <SearchableSelect 
+                    options={boms.map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
+                    value={formData.bomId}
+                    onChange={(e) => handleBomChange(e.target.value)}
+                    placeholder="Select BOM..."
+                    disabled={formMode === 'view'}
+                  />
+                </FormControl>
+                <FormControl label="Order Quantity *">
+                  <input 
+                    type="number"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                    value={formData.orderQuantity}
+                    onChange={(e) => {
+                      const newQty = Number(e.target.value);
+                      const newItems = formData.items.map(item => ({
+                          ...item,
+                          quantity: newQty,
+                          amount: newQty * item.rate
+                      }));
+                      setFormData({...formData, orderQuantity: newQty, items: newItems});
+                    }}
+                    disabled={formMode === 'view'}
+                  />
+                </FormControl>
+                <FormControl label="Warehouse">
+                  <select 
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                    value={formData.warehouse}
+                    onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
+                    disabled={formMode === 'view'}
+                  >
+                    <option value="">Select warehouse...</option>
+                    {warehouseOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </FormControl>
+              </div>
+            </Card>
+          )}
+
+          {/* Simple Quantity and Warehouse for other Depts */}
+          {user?.department_code !== 'ADMIN' && user?.department_code !== 'DESIGN_ENG' && user?.department_code !== 'SALES' && (
+            <Card title="Order Details" subtitle="Quantity and storage details">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                <FormControl label="Order Quantity *">
+                  <input 
+                    type="number"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                    value={formData.orderQuantity}
+                    onChange={(e) => {
+                      const newQty = Number(e.target.value);
+                      const newItems = formData.items.map(item => ({
+                          ...item,
+                          quantity: newQty,
+                          amount: newQty * (item.rate || 0)
+                      }));
+                      setFormData({...formData, orderQuantity: newQty, items: newItems});
+                    }}
+                    disabled={formMode === 'view'}
+                  />
+                </FormControl>
+                <FormControl label="Warehouse">
+                  <select 
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                    value={formData.warehouse}
+                    onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
+                    disabled={formMode === 'view'}
+                  >
+                    <option value="">Select warehouse...</option>
+                    {warehouseOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </FormControl>
+              </div>
+            </Card>
+          )}
 
           {/* BOM Details Table */}
           {selectedBom && (

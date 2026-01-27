@@ -44,6 +44,60 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads')));
 
+// 🔐 PRODUCTION API LOCKDOWN
+const allowedProdApis = [
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/verify',
+  '/api/auth/profile',
+  '/api/departments',
+  '/api/users',
+  '/api/companies',
+  '/api/customer-pos',
+  '/api/sales-orders',
+  '/api/design-orders',
+  '/api/vendors',
+  '/api/quotations',
+  '/api/quotation-requests',
+  '/api/purchase-orders',
+  '/api/bom',
+  '/api/drawings',
+  '/api/po-receipts',
+  '/api/grns',
+  '/api/grn-items',
+  '/api/qc-inspections',
+  '/api/stock',
+  '/api/warehouse-allocations',
+  '/api/inventory',
+  '/api/workstations',
+  '/api/operations',
+  '/api/production-plans',
+  '/api/material-requirements',
+  '/api/work-orders',
+  '/api/job-cards',
+  '/api/material-issues',
+  '/api/dashboard',
+  '/api/access'
+];
+
+const productionApiGuard = (req, res, next) => {
+  if (process.env.NODE_ENV !== 'production') {
+    return next();
+  }
+
+  const isAllowed = allowedProdApis.some(api => 
+    req.originalUrl.startsWith(api)
+  );
+
+  if (!isAllowed) {
+    return res.status(404).json({ message: 'Not Found' });
+  }
+
+  next();
+};
+
+app.use(productionApiGuard);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/departments', departmentRoutes);
 

@@ -52,6 +52,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
+const isProduction = import.meta.env.PROD;
 const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
@@ -215,6 +216,16 @@ function App() {
       }
     }
   }, [token, user, activeModule, allowedModules, navigate])
+
+  // 🛡️ PRODUCTION ROUTE GUARD
+  useEffect(() => {
+    if (isProduction) {
+      const restrictedModules = ['project-requests', 'bom-form'];
+      if (restrictedModules.includes(activeModule)) {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [activeModule, isProduction, navigate]);
 
   const [authMode, setAuthMode] = useState('login')
   const [loginEmail, setLoginEmail] = useState('')
@@ -1251,94 +1262,96 @@ function App() {
   return (
     <>
       <div className="flex min-h-screen bg-gray-50 text-slate-900">
-        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
-          mobileMenuOpen ? 'flex' : 'hidden'
-        } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="p-2 border-b flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="h-8 w-8 rounded-lg bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
-                <Building2 className="h-4 w-4 text-slate-900" />
+        {!isProduction && (
+          <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
+            mobileMenuOpen ? 'flex' : 'hidden'
+          } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="p-2 border-b flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="h-8 w-8 rounded-lg bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
+                  <Building2 className="h-4 w-4 text-slate-900" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs  leading-tight">SPTECHPIONEER</p>
+                  <p className="text-xs text-indigo-600 truncate">{user?.department_code || 'ERP'}</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-xs  leading-tight">SPTECHPIONEER</p>
-                <p className="text-xs text-indigo-600 truncate">{user?.department_code || 'ERP'}</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="lg:hidden p-1 hover:bg-white/20 rounded transition text-white"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden p-1 hover:bg-white/20 rounded transition text-white"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-2">
-            {navigationItems.map((item) => {
-              const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
-              const isDisabled = item.isGroup || !item.moduleId
-              
-              if (item.isGroup) {
-                return (
-                  <div key={item.label} className="pt-1">
-                    <div
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500  tracking-wider hover:text-slate-700 transition-colors"
-                    >
-                      <span>{item.label}</span>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-2">
+              {navigationItems.map((item) => {
+                const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
+                const isDisabled = item.isGroup || !item.moduleId
+                
+                if (item.isGroup) {
+                  return (
+                    <div key={item.label} className="pt-1">
+                      <div
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500  tracking-wider hover:text-slate-700 transition-colors"
+                      >
+                        <span>{item.label}</span>
+                      </div>
                     </div>
-                  </div>
+                  )
+                }
+                
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      if (item.moduleId) {
+                        navigate(`/${item.moduleId}`)
+                        setMobileMenuOpen(false)
+                      }
+                    }}
+                    className={`flex items-center gap-3 w-full p-2  text-sm font-medium transition-all duration-150 group ${item.indent ? 'ml-2' : ''} ${
+                      isActive 
+                        ? 'bg-indigo-50 text-indigo-700 ' 
+                        : isDisabled 
+                        ? 'text-slate-400 cursor-not-allowed' 
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                    disabled={isDisabled}
+                  >
+                    {iconMap[item.icon] && (() => {
+                      const IconComponent = iconMap[item.icon]
+                      return <IconComponent className="w-4 h-4 flex-shrink-0" />
+                    })()}
+                    <span className="flex-1 text-left truncate">{item.label}</span>
+                    {isActive && <span className="text-indigo-600 text-xs ">●</span>}
+                  </button>
                 )
-              }
-              
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => {
-                    if (item.moduleId) {
-                      navigate(`/${item.moduleId}`)
-                      setMobileMenuOpen(false)
-                    }
-                  }}
-                  className={`flex items-center gap-3 w-full p-2  text-sm font-medium transition-all duration-150 group ${item.indent ? 'ml-2' : ''} ${
-                    isActive 
-                      ? 'bg-indigo-50 text-indigo-700 ' 
-                      : isDisabled 
-                      ? 'text-slate-400 cursor-not-allowed' 
-                      : 'text-slate-700 hover:bg-slate-100'
-                  }`}
-                  disabled={isDisabled}
-                >
-                  {iconMap[item.icon] && (() => {
-                    const IconComponent = iconMap[item.icon]
-                    return <IconComponent className="w-4 h-4 flex-shrink-0" />
-                  })()}
-                  <span className="flex-1 text-left truncate">{item.label}</span>
-                  {isActive && <span className="text-indigo-600 text-xs ">●</span>}
-                </button>
-              )
-            })}
-          </div>
-          <div className="px-3 py-4 border-t border-slate-200 space-y-3">
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
-            >
-              Logout
-            </button>
-          </div>
-        </aside>
+              })}
+            </div>
+            <div className="px-3 py-4 border-t border-slate-200 space-y-3">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          </aside>
+        )}
 
-        {mobileMenuOpen && (
+        {mobileMenuOpen && !isProduction && (
           <div
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
-        <div className="flex-1 lg:ml-64 flex flex-col bg-slate-50">
+        <div className={`flex-1 ${!isProduction ? 'lg:ml-64' : ''} flex flex-col bg-slate-50`}>
           <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
             <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
               
@@ -1520,7 +1533,7 @@ function App() {
                   <BOMApproval />
                 )}
 
-                {activeModule === 'bom-form' && (
+                {activeModule === 'bom-form' && !isProduction && (
                   <BOMFormPage />
                 )}
 
@@ -1531,7 +1544,7 @@ function App() {
                   <OperationMaster showForm={showOperationForm} setShowForm={setShowOperationForm} />
                 )}
 
-                {activeModule === 'project-requests' && (
+                {activeModule === 'project-requests' && !isProduction && (
                   <ProjectRequests />
                 )}
 

@@ -18,6 +18,7 @@ const GRNProcessing = () => {
   const [showModal, setShowModal] = useState(false);
   const [expandedItems, setExpandedItems] = useState({});
   const [itemsLoading, setItemsLoading] = useState({});
+  const [user, setUser] = useState(null);
 
   const [formData, setFormData] = useState({
     poId: '',
@@ -34,9 +35,20 @@ const GRNProcessing = () => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchGRNs();
-    fetchPurchaseOrders();
-    fetchPOReceipts();
+    const storedUser = localStorage.getItem('authUser');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'INVENTORY') {
+        fetchGRNs();
+        fetchPurchaseOrders();
+        fetchPOReceipts();
+      }
+    } else {
+      fetchGRNs();
+      fetchPurchaseOrders();
+      fetchPOReceipts();
+    }
   }, []);
 
   const fetchPOReceipts = async () => {

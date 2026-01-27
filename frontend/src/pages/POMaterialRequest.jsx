@@ -9,10 +9,20 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api
 const POMaterialRequest = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchRequests();
+    const storedUser = localStorage.getItem('authUser');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'INVENTORY') {
+        fetchRequests();
+      }
+    } else {
+      fetchRequests();
+    }
   }, []);
 
   const fetchRequests = async () => {

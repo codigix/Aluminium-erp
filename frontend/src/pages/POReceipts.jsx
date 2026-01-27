@@ -13,6 +13,7 @@ const POReceipts = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [user, setUser] = useState(null);
 
   const [formData, setFormData] = useState({
     poId: '',
@@ -30,9 +31,20 @@ const POReceipts = () => {
   });
 
   useEffect(() => {
-    fetchReceipts();
-    fetchStats();
-    fetchPurchaseOrders();
+    const storedUser = localStorage.getItem('authUser');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'PROCUREMENT' || parsedUser.department_code === 'INVENTORY' || parsedUser.department_code === 'SALES') {
+        fetchReceipts();
+        fetchStats();
+        fetchPurchaseOrders();
+      }
+    } else {
+      fetchReceipts();
+      fetchStats();
+      fetchPurchaseOrders();
+    }
   }, []);
 
   const fetchReceipts = async () => {
