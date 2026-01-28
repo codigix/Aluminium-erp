@@ -114,7 +114,7 @@ const sendOrderToDesign = async (req, res, next) => {
 const approveDesign = async (req, res, next) => {
   try {
     await salesOrderService.approveDesignAndCreateQuotation(req.params.id);
-    res.json({ message: 'Design accepted and moved to Process tab.' });
+    res.json({ message: 'Design approved. Quotation request created for Sales.' });
   } catch (error) {
     next(error);
   }
@@ -137,7 +137,7 @@ const bulkApproveDesigns = async (req, res, next) => {
       return res.status(400).json({ error: 'orderIds array is required' });
     }
     const result = await salesOrderService.bulkApproveDesigns(orderIds);
-    res.json({ message: `${result.approvedCount} designs accepted and moved to Process tab.`, ...result });
+    res.json({ message: `${result.approvedCount} designs approved. Sent to Sales for quotation.`, ...result });
   } catch (error) {
     next(error);
   }

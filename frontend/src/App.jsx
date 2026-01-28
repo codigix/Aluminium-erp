@@ -284,7 +284,6 @@ function App() {
       method, 
       headers: { 
         'Content-Type': 'application/json',
-        'X-ERP-Request': 'true',
         ...(token && { 'Authorization': `Bearer ${token}` })
       } 
     }
@@ -318,10 +317,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-ERP-Request': 'true'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       })
       if (!res.ok) {
@@ -362,9 +358,7 @@ function App() {
 
   const loadDepartmentsAndRoles = useCallback(async () => {
     try {
-      const deptRes = await fetch(`${API_BASE}/departments`, {
-        headers: { 'X-ERP-Request': 'true' }
-      })
+      const deptRes = await fetch(`${API_BASE}/departments`)
       if (deptRes.ok) {
         const depts = await deptRes.json()
         setDepartments(Array.isArray(depts) ? depts : [])
@@ -390,10 +384,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-ERP-Request': 'true'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: signupForm.username || signupForm.email.split('@')[0],
           email: signupForm.email,

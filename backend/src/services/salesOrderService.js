@@ -451,7 +451,7 @@ const approveDesignAndCreateQuotation = async (salesOrderId) => {
     
     await connection.execute(
       'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id = ?',
-      ['DESIGN_IN_REVIEW', 'DESIGN_ENG', salesOrderId]
+      ['DESIGN_APPROVED', 'SALES', salesOrderId]
     );
     
     // Mark non-rejected items as ACCEPTED
@@ -551,7 +551,7 @@ const bulkApproveDesigns = async (orderIds) => {
     
     await connection.execute(
       `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id IN (${placeholders})`,
-      ['DESIGN_IN_REVIEW', 'DESIGN_ENG', ...orderIds]
+      ['DESIGN_APPROVED', 'SALES', ...orderIds]
     );
     
     // Mark non-rejected items as ACCEPTED for all orders
@@ -559,11 +559,6 @@ const bulkApproveDesigns = async (orderIds) => {
       `UPDATE sales_order_items SET status = 'ACCEPTED' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING')`,
       orderIds
     );
-
-    // Create design orders for each sales order
-    for (const orderId of orderIds) {
-      await designOrderService.createDesignOrder(orderId, connection, 'IN_DESIGN');
-    }
     
     await connection.commit();
     return { approvedCount: orders.length };
@@ -625,7 +620,7 @@ const getApprovedDrawings = async () => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_APPROVED')
+     WHERE so.status IN ('DESIGN_APPROVED', 'DESIGN_IN_REVIEW')
      ORDER BY so.created_at DESC`
   );
   
