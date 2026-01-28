@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -13,6 +14,7 @@ const JobCard = () => {
   const [selectedWO, setSelectedWO] = useState(null);
   const [operations, setOperations] = useState([]);
   const [workstations, setWorkstations] = useState([]);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
 
   const [formData, setFormData] = useState({
     jcNumber: '',
@@ -235,7 +237,22 @@ const JobCard = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="font-medium text-slate-800">{val}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-slate-800">{val}</span>
+            <button 
+              onClick={() => setPreviewDrawing({
+                item_code: row.item_code,
+                description: row.description || row.wo_item_description
+              })}
+              className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+              title="Preview Drawing"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
           {row.item_status === 'Rejected' && (
             <span className="w-fit px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 animate-pulse  border border-rose-200 mt-1">
               Rejected Drawing
@@ -562,6 +579,12 @@ const JobCard = () => {
           </div>
         </form>
       </Modal>
+
+      <DrawingPreviewModal 
+        isOpen={!!previewDrawing}
+        onClose={() => setPreviewDrawing(null)}
+        drawing={previewDrawing}
+      />
     </div>
   );
 };

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 

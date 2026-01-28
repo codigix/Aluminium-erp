@@ -4,7 +4,8 @@ import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 
-const Router = import.meta.env.PROD ? MemoryRouter : BrowserRouter
+const isProduction = import.meta.env.PROD || !window.location.hostname.includes('localhost');
+const Router = isProduction ? MemoryRouter : BrowserRouter
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

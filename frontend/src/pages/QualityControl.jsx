@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   Archive, 
   Shield, 
@@ -18,7 +19,8 @@ import {
   Calendar,
   User,
   Inbox,
-  ArrowUpRight
+  ArrowUpRight,
+  Loader2
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
@@ -51,6 +53,8 @@ const QualityControl = () => {
   const [loading, setLoading] = useState(false);
   const [showGRNModal, setShowGRNModal] = useState(false);
   const [showQCModal, setShowQCModal] = useState(false);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
+  const [detailModal, setDetailModal] = useState({ open: false, data: null, type: 'grn', loading: false });
 
   const [grnFormData, setGrnFormData] = useState({
     poNumber: '',
@@ -141,6 +145,28 @@ const QualityControl = () => {
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
+    }
+  };
+
+  const handleViewDetails = async (id, type) => {
+    setDetailModal({ open: true, data: null, type, loading: true });
+    try {
+      const token = localStorage.getItem('authToken');
+      const endpoint = type === 'grn' ? `${API_BASE}/grn-items/${id}/details` : `${API_BASE}/qc-inspections/${id}/items`;
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const items = await response.json();
+        setDetailModal({ open: true, data: items, type, loading: false });
+      } else {
+        errorToast('Failed to fetch details');
+        setDetailModal(prev => ({ ...prev, loading: false }));
+      }
+    } catch (error) {
+      console.error('Error fetching details:', error);
+      errorToast('Network error');
+      setDetailModal(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -351,7 +377,11 @@ const QualityControl = () => {
                         </td>
                         <td className="p-2 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                            <button 
+                              onClick={() => handleViewDetails(grn.id, 'grn')}
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="View Details"
+                            >
                               <Eye className="w-4 h-4" />
                             </button>
                             <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
@@ -380,7 +410,11 @@ const QualityControl = () => {
                         </td>
                         <td className="p-2 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                            <button 
+                              onClick={() => handleViewDetails(qc.id, 'qc')}
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="View Details"
+                            >
                               <Eye className="w-4 h-4" />
                             </button>
                             <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
@@ -667,6 +701,87 @@ const QualityControl = () => {
           </div>
         </div>
       )}
+
+      {/* Detail Modal */}
+      {detailModal.open && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    {detailModal.type === 'grn' ? 'GRN Item Details' : 'QC Inspection Items'}
+                  </h3>
+                </div>
+              </div>
+              <button 
+                onClick={() => setDetailModal({ ...detailModal, open: false })}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              {detailModal.loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-2" />
+                  <p className="text-sm text-slate-500">Loading items...</p>
+                </div>
+              ) : !detailModal.data || detailModal.data.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">No items found.</div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="p-2 font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Item Code</th>
+                        <th className="p-2 font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Description</th>
+                        <th className="p-2 text-right font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Ordered</th>
+                        <th className="p-2 text-right font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Received</th>
+                        <th className="p-2 text-right font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Accepted</th>
+                        <th className="p-2 text-center font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Drawing</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {detailModal.data.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
+                          <td className="p-2 font-mono text-indigo-600">{item.item_code}</td>
+                          <td className="p-2 text-slate-600">{item.description || item.item_description || 'N/A'}</td>
+                          <td className="p-2 text-right">{item.po_qty || item.ordered_qty || 0}</td>
+                          <td className="p-2 text-right">{item.received_qty || 0}</td>
+                          <td className="p-2 text-right font-semibold text-emerald-600">{item.accepted_qty || 0}</td>
+                          <td className="p-2 text-center">
+                            <button 
+                              onClick={() => setPreviewDrawing({
+                                item_code: item.item_code,
+                                description: item.description || item.item_description
+                              })}
+                              className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors inline-flex items-center gap-1"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span className="text-[10px]">Preview</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DrawingPreviewModal 
+        isOpen={!!previewDrawing}
+        onClose={() => setPreviewDrawing(null)}
+        drawing={previewDrawing}
+      />
     </div>
   );
 };

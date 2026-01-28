@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -21,6 +22,7 @@ const SalesOrders = () => {
   const [companies, setCompanies] = useState([]);
   const [boms, setBoms] = useState([]);
   const [user, setUser] = useState(null);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
 
   const initialFormState = {
     series: 'Auto-generated',
@@ -495,15 +497,40 @@ const SalesOrders = () => {
           <Card title="BOM & Inventory" subtitle="Production template and storage">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
               <FormControl label="Select BOM *">
-                <SearchableSelect 
-                  options={boms
-                    .filter(b => b.item_group === 'FG' || b.item_group === 'Finished Goods' || !b.item_group)
-                    .map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
-                  value={formData.bomId}
-                  onChange={(e) => handleBomChange(e.target.value)}
-                  placeholder="Select warehouse..."
-                  disabled={formMode === 'view'}
-                />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <SearchableSelect 
+                      options={boms
+                        .filter(b => b.item_group === 'FG' || b.item_group === 'Finished Goods' || !b.item_group)
+                        .map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
+                      value={formData.bomId}
+                      onChange={(e) => handleBomChange(e.target.value)}
+                      placeholder="Select BOM..."
+                      disabled={formMode === 'view'}
+                    />
+                  </div>
+                  {formData.bomId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const bom = boms.find(b => String(b.id) === String(formData.bomId));
+                        if (bom) {
+                          setPreviewDrawing({
+                            item_code: bom.item_code,
+                            description: bom.description
+                          });
+                        }
+                      }}
+                      className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100"
+                      title="Preview Drawing"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </FormControl>
               <FormControl label="Order Quantity *">
                 <input 
@@ -693,6 +720,12 @@ const SalesOrders = () => {
           </button>
         )}
       </div>
+
+      <DrawingPreviewModal 
+        isOpen={!!previewDrawing}
+        onClose={() => setPreviewDrawing(null)}
+        drawing={previewDrawing}
+      />
     </div>
   );
 };

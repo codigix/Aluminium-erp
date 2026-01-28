@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+const AdmZip = require('adm-zip');
 const drawingService = require('../services/drawingService');
 const parseExcelDrawings = require('../utils/excelDrawingParser');
 
@@ -50,30 +53,74 @@ const createDrawing = async (req, res, next) => {
   try {
     const { clientName, drawingNo, revision, qty, description, remarks, fileType, contactPerson, phoneNumber, emailAddress } = req.body;
     
-    // Use relative path for database storage to ensure frontend can access it via static middleware
-    const filePath = req.file ? `uploads/${req.file.filename}` : null;
-    if (!filePath) throw new Error('Drawing file is required');
+    // Check for both single file and multiple files (upload.fields)
+    const excelFile = req.files?.file?.[0] || req.file;
+    const zipFile = req.files?.zipFile?.[0];
+
+    const filePath = excelFile ? `uploads/${excelFile.filename}` : null;
+    if (!filePath) throw new Error('Excel or Drawing file is required');
 
     const uploadedBy = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'Sales';
 
-    // Check if it's an Excel file and if we should parse it
-    if (fileType === 'XLSX' || fileType === 'XLS') {
+    // Handle Excel + ZIP
+    if ((fileType === 'XLSX' || fileType === 'XLS') && excelFile) {
       const parsedDrawings = await parseExcelDrawings(filePath);
       if (parsedDrawings && parsedDrawings.length > 0) {
-        const batchData = parsedDrawings.map(d => ({
-          clientName,
-          drawingNo: d.drawingNo,
-          revision: d.revision || revision,
-          qty: d.qty || qty || 1,
-          description: d.description || description,
-          filePath,
-          fileType,
-          remarks: d.remarks || remarks,
-          uploadedBy,
-          contactPerson,
-          phoneNumber,
-          emailAddress
-        }));
+        let zipEntries = [];
+        if (zipFile) {
+          const zip = new AdmZip(zipFile.path);
+          zipEntries = zip.getEntries();
+        }
+
+        const batchData = [];
+        for (const d of parsedDrawings) {
+          let rowFilePath = null; 
+          
+          if (zipFile && zipEntries.length > 0) {
+            // Find drawing file in ZIP matching drawingNo
+            // We search for files matching drawingNo (ignoring case and extension)
+            const cleanDrawingNo = d.drawingNo.toLowerCase().trim();
+            const entry = zipEntries.find(e => {
+              if (e.isDirectory) return false;
+              const entryName = e.entryName.toLowerCase();
+              const fileName = path.basename(entryName, path.extname(entryName));
+              
+              // Priority 1: Exact match of filename without extension
+              if (fileName === cleanDrawingNo) return true;
+              
+              // Priority 2: Full entry name matches (for files in root)
+              if (entryName === cleanDrawingNo) return true;
+
+              // Priority 3: Filename includes drawing number (best effort)
+              return fileName.includes(cleanDrawingNo) || cleanDrawingNo.includes(fileName);
+            });
+
+            if (entry) {
+              const safeFileName = `${Date.now()}-${path.basename(entry.entryName).replace(/\s+/g, '_')}`;
+              const destPath = path.join(process.cwd(), 'uploads', safeFileName);
+              fs.writeFileSync(destPath, entry.getData());
+              rowFilePath = `uploads/${safeFileName}`;
+            }
+          }
+
+          // If no ZIP match, we can still save the record but without a file path
+          // Unless the user uploaded a single drawing (which shouldn't happen in batch mode but let's be safe)
+          
+          batchData.push({
+            clientName,
+            drawingNo: d.drawingNo,
+            revision: d.revision || revision,
+            qty: d.qty || qty || 1,
+            description: d.description || description,
+            filePath: rowFilePath,
+            fileType: rowFilePath ? (path.extname(rowFilePath).replace('.', '').toUpperCase() || 'PDF') : 'NONE',
+            remarks: d.remarks || remarks,
+            uploadedBy,
+            contactPerson,
+            phoneNumber,
+            emailAddress
+          });
+        }
         
         const count = await drawingService.createBatchCustomerDrawings(batchData);
         return res.status(201).json({ 

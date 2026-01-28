@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -16,6 +18,37 @@ const BOMApproval = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
+
+  // Preview State
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
+
+  const handlePreviewByNo = async (drawingNo) => {
+    if (!drawingNo || drawingNo === 'N/A') {
+      errorToast('Drawing number not available');
+      return;
+    }
+    
+    try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const drawings = await response.json();
+            const dwg = drawings.find(d => d.drawing_no === drawingNo);
+            if (dwg) {
+                setPreviewDrawing(dwg);
+                setShowPreviewModal(true);
+                return;
+            }
+        }
+        errorToast('Drawing file not found in system');
+    } catch (error) {
+        console.error(error);
+        errorToast('Failed to fetch drawing info');
+    }
+  };
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -266,16 +299,25 @@ const BOMApproval = () => {
                                 <span className="text-sm  text-slate-900">{item.item_code || item.drawing_no}</span>
                               )}
                               {item.status !== 'REJECTED' && (
-                                <Link 
-                                  to={`/bom-form/${item.id}?view=true`} 
-                                  target="_blank"
-                                  className="text-[10px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-medium bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 transition-all shadow-sm"
-                                >
-                                  View Full BOM
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                </Link>
+                                <div className="flex items-center gap-2">
+                                  <Link 
+                                    to={`/bom-form/${item.id}?view=true`} 
+                                    target="_blank"
+                                    className="text-[10px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-medium bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 transition-all shadow-sm"
+                                  >
+                                    View Full BOM
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                  </Link>
+                                  <button
+                                    onClick={() => handlePreviewByNo(item.item_code || item.drawing_no)}
+                                    className="p-1 text-indigo-600 hover:bg-indigo-100 rounded border border-indigo-100 transition-all shadow-sm flex items-center gap-1"
+                                    title="Preview Drawing"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               )}
                               {item.status === 'REJECTED' && (
                                 <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 border border-rose-200 animate-pulse ">
@@ -569,6 +611,11 @@ const BOMApproval = () => {
           </div>
         </div>
       )}
+      <DrawingPreviewModal 
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        drawing={previewDrawing}
+      />
     </div>
   );
 };

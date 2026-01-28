@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -225,6 +227,42 @@ const BOMFormPage = () => {
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
+
+  // Preview State
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
+
+  const handlePreviewByNo = async (drawingNo) => {
+    if (!drawingNo || drawingNo === 'N/A') {
+      errorToast('Please select a valid drawing number first');
+      return;
+    }
+    
+    // Check if we already have it in approvedDrawings
+    let dwg = approvedDrawings.find(d => d.drawing_no === drawingNo);
+    if (!dwg) {
+        // Fetch from backend
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const drawings = await response.json();
+                dwg = drawings.find(d => d.drawing_no === drawingNo);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+    
+    if (dwg) {
+        setPreviewDrawing(dwg);
+        setShowPreviewModal(true);
+    } else {
+        errorToast('Drawing file not found in system');
+    }
+  };
 
   const drawingOptions = useMemo(() => {
     const drawingMap = new Map();
@@ -1117,6 +1155,14 @@ const BOMFormPage = () => {
                           })()}
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePreviewByNo(drawingFilter)}
+                        className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+                        title="Preview Drawing"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => {
                           setDrawingFilter('');
@@ -2444,6 +2490,12 @@ const BOMFormPage = () => {
           </button>
         )}
       </div>
+
+      <DrawingPreviewModal 
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        drawing={previewDrawing}
+      />
     </div >
       
       );

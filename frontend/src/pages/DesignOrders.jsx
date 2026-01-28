@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, StatusBadge } from '../components/ui.jsx';
+import { Card, StatusBadge, Modal } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { Plus, Search, RefreshCw, Filter, FileText, Send, Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
 
@@ -70,6 +72,15 @@ const DesignOrders = () => {
   const [isEditingMaterial, setIsEditingMaterial] = useState(false);
   const [editingMaterialId, setEditingMaterialId] = useState(null);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
+
+  // Preview State
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
+
+  const handlePreview = (item) => {
+    setPreviewDrawing(item);
+    setShowPreviewModal(true);
+  };
 
   const fetchItemsList = async (drawingNo = null) => {
     try {
@@ -1432,11 +1443,11 @@ const DesignOrders = () => {
                                   </button>
                                   {item.drawing_pdf ? (
                                     <button 
-                                      onClick={() => window.open(`${API_BASE.replace('/api', '')}/${item.drawing_pdf}`, '_blank')}
+                                      onClick={() => handlePreview(item)}
                                       className="p-1 text-indigo-600 hover:bg-indigo-100 rounded transition-colors"
-                                      title="View PDF"
+                                      title="View Drawing"
                                     >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                      <Eye className="w-4 h-4" />
                                     </button>
                                   ) : (
                                     <span className="text-slate-400 text-xs">—</span>
@@ -1515,14 +1526,23 @@ const DesignOrders = () => {
                   </div>
                 ) : reviewDetails.length > 0 ? (
                   <div className="space-y-3">
-                    {reviewDetails.map((item) => (
                       <div key={item.id} className="p-3 bg-slate-50 rounded border border-slate-200">
                         <div className="flex justify-between items-start mb-2">
-                          <div className="grid grid-cols-4 gap-3 text-sm flex-1">
-                            <div>
-                              <span className="text-xs text-slate-500">Drawing No</span>
-                              <p className=" text-slate-900 text-xs">{item.drawing_no || '—'}</p>
-                            </div>
+                          <div className="flex items-center gap-3 flex-1">
+                            {item.drawing_pdf && (
+                              <button 
+                                onClick={() => handlePreview(item)}
+                                className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-all border border-indigo-100"
+                                title="View Drawing"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
+                            <div className="grid grid-cols-4 gap-3 text-sm flex-1">
+                              <div>
+                                <span className="text-xs text-slate-500">Drawing No</span>
+                                <p className=" text-slate-900 text-xs">{item.drawing_no || '—'}</p>
+                              </div>
                             <div>
                               <span className="text-xs text-slate-500">Group</span>
                               <p className=" text-slate-900 text-xs">
@@ -2013,6 +2033,12 @@ const DesignOrders = () => {
           </div>
         </div>
       )}
+      {/* Drawing Preview Modal */}
+      <DrawingPreviewModal 
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        drawing={previewDrawing}
+      />
     </div>
   );
 };

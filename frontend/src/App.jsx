@@ -223,12 +223,19 @@ function App() {
     }
   }, [token, user, activeModule, allowedModules, navigate, isProduction])
 
-  // 🛡️ PRODUCTION ROUTE GUARD
+  // 🛡️ PRODUCTION ROUTE GUARD & URL CLEANER
   useEffect(() => {
-    if (isProduction && location.pathname !== '/') {
-      navigate('/', { replace: true });
+    if (isProduction) {
+      // Clear browser address bar path in production
+      if (window.location.pathname !== '/') {
+        window.history.replaceState(null, '', '/');
+      }
+      // Internal navigation for MemoryRouter
+      if (location.pathname !== '/') {
+        navigate('/', { replace: true });
+      }
     }
-  }, [location.pathname, isProduction, navigate]);
+  }, [isProduction]);
 
   const [authMode, setAuthMode] = useState('login')
   const [loginEmail, setLoginEmail] = useState('')

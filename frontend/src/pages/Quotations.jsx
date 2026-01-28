@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, DataTable } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -76,6 +78,37 @@ const Quotations = () => {
     validUntil: '',
     items: []
   });
+
+  // Preview State
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
+
+  const handlePreviewByNo = async (drawingNo) => {
+    if (!drawingNo || drawingNo === '—') {
+      errorToast('Drawing number not available');
+      return;
+    }
+    
+    try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const drawings = await response.json();
+            const dwg = drawings.find(d => d.drawing_no === drawingNo);
+            if (dwg) {
+                setPreviewDrawing(dwg);
+                setShowPreviewModal(true);
+                return;
+            }
+        }
+        errorToast('Drawing file not found in system');
+    } catch (error) {
+        console.error(error);
+        errorToast('Failed to fetch drawing info');
+    }
+  };
 
   useEffect(() => {
     fetchQuotations();
@@ -776,6 +809,13 @@ const Quotations = () => {
                 <td className="px-4 py-3 font-medium text-slate-900">
                   <div className="flex items-center gap-2">
                     {item.drawing_no || item.item_code || '—'}
+                    <button
+                      onClick={() => handlePreviewByNo(item.drawing_no || item.item_code)}
+                      className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                      title="Preview Drawing"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
                     {item.status === 'REJECTED' && (
                       <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 border border-rose-200 animate-pulse ">
                         Rejected
@@ -1017,13 +1057,25 @@ const Quotations = () => {
                         </div>
                         {formData.items.map((item, idx) => (
                           <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                            <input
-                              type="text"
-                              placeholder="Drawing No"
-                              value={item.drawing_no}
-                              onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                            <div className="col-span-2 relative">
+                              <input
+                                type="text"
+                                placeholder="Drawing No"
+                                value={item.drawing_no}
+                                onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 pr-7"
+                              />
+                              {item.drawing_no && (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePreviewByNo(item.drawing_no)}
+                                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
+                                  title="Preview Drawing"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                             <input
                               type="text"
                               placeholder="Description"
@@ -1172,8 +1224,16 @@ const Quotations = () => {
                                     placeholder="Item description..."
                                   />
                                   {item.item_code && (
-                                    <div className="text-[10px] text-slate-400 px-2 mt-0.5">
+                                    <div className="text-[10px] text-slate-400 px-2 mt-0.5 flex items-center gap-2">
                                       Code: {item.item_code}
+                                      <button
+                                        type="button"
+                                        onClick={() => handlePreviewByNo(item.item_code)}
+                                        className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                                        title="Preview Drawing"
+                                      >
+                                        <Eye className="w-3 h-3" />
+                                      </button>
                                     </div>
                                   )}
                                 </td>
@@ -1501,6 +1561,11 @@ const Quotations = () => {
           </div>
         </div>
       )}
+      <DrawingPreviewModal 
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        drawing={previewDrawing}
+      />
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Modal, FormControl, DataTable, Badge } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -23,6 +24,15 @@ const DrawingMaster = () => {
     drawing_pdf: null
   });
   const [saveLoading, setSaveLoading] = useState(false);
+  
+  // Preview State
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
+
+  const handlePreview = (drawing) => {
+    setPreviewDrawing(drawing);
+    setShowPreviewModal(true);
+  };
 
   const fetchDrawings = async (search = '') => {
     try {
@@ -118,19 +128,19 @@ const DrawingMaster = () => {
       )
     },
     {
-      label: 'PDF',
+      label: 'Preview',
       key: 'drawing_pdf',
-      render: (val) => val ? (
-        <a 
-          href={`${API_BASE.replace('/api', '')}/${val}`} 
-          target="_blank" 
-          rel="noreferrer"
-          className="text-indigo-600 hover:text-indigo-900 transition-colors"
+      render: (val, row) => val ? (
+        <button 
+          onClick={() => handlePreview(row)}
+          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors mx-auto block"
+          title="Preview Drawing"
         >
-          <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
-        </a>
+        </button>
       ) : <span className="text-slate-300">—</span>
     },
     {
@@ -207,16 +217,16 @@ const DrawingMaster = () => {
                     </td>
                     <td className="px-4 py-2 text-right">
                       {rev.drawing_pdf ? (
-                        <a 
-                          href={`${API_BASE.replace('/api', '')}/${rev.drawing_pdf}`} 
-                          target="_blank" 
-                          rel="noreferrer"
+                        <button 
+                          onClick={() => handlePreview({ ...rev, drawing_no: row.drawing_no })}
                           className="text-indigo-600 hover:text-indigo-900 transition-colors inline-block"
+                          title="Preview Revision"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
-                        </a>
+                        </button>
                       ) : <span className="text-slate-300">—</span>}
                     </td>
                   </tr>
@@ -397,6 +407,12 @@ const DrawingMaster = () => {
           </div>
         </form>
       </Modal>
+
+      <DrawingPreviewModal 
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        drawing={previewDrawing}
+      />
     </div>
   );
 };
