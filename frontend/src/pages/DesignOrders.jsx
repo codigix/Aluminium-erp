@@ -237,10 +237,11 @@ const DesignOrders = () => {
       
       if (!response.ok) throw new Error('Failed to approve design');
       
-      successToast('Design approved. Sent to Sales for quotation.');
+      successToast('Design accepted and moved to Process tab.');
       setShowReviewModal(false);
       setReviewOrder(null);
       setReviewDetails([]);
+      setActiveTab('progress');
       fetchOrders();
       fetchIncomingOrders();
     } catch (error) {
@@ -325,8 +326,8 @@ const DesignOrders = () => {
     if (!orderIds || orderIds.length === 0) return;
 
     const result = await Swal.fire({
-      title: '<span class="text-lg font-semibold">Accept & Send to Quotation</span>',
-      html: `<span class="text-sm text-gray-600">Are you sure you want to accept all ${orderIds.length} items and send them to the Client Quotation page?</span>`,
+      title: '<span class="text-lg font-semibold">Accept & Move to Process</span>',
+      html: `<span class="text-sm text-gray-600">Are you sure you want to accept all ${orderIds.length} items and move them to the Process tab?</span>`,
       showCancelButton: true,
       confirmButtonColor: '#10b981',
       confirmButtonText: 'Yes, Accept All',
@@ -353,8 +354,10 @@ const DesignOrders = () => {
 
         if (!response.ok) throw new Error('Failed to accept orders');
 
-        successToast('Orders accepted and sent to Quotation page');
-        navigate('/client-quotations');
+        successToast('Orders accepted and moved to Process tab');
+        setActiveTab('progress');
+        fetchOrders();
+        fetchIncomingOrders();
       } catch (error) {
         errorToast(error.message);
       } finally {
@@ -370,12 +373,12 @@ const DesignOrders = () => {
     }
 
     const result = await Swal.fire({
-      title: 'Bulk Approve Designs',
-      text: `Are you sure you want to approve ${selectedIncomingOrders.size} design(s) and send them to Sales for quotation?`,
+      title: 'Bulk Accept Designs',
+      text: `Are you sure you want to accept ${selectedIncomingOrders.size} design(s) and move them to the Process tab?`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#10b981',
-      confirmButtonText: 'Yes, approve all'
+      confirmButtonText: 'Yes, accept all'
     });
 
     if (result.isConfirmed) {
@@ -393,9 +396,11 @@ const DesignOrders = () => {
 
         if (!response.ok) throw new Error('Failed to approve designs');
 
-        successToast(`${selectedIncomingOrders.size} designs approved and sent to Sales department.`);
+        successToast(`${selectedIncomingOrders.size} designs accepted and moved to Process tab.`);
         setSelectedIncomingOrders(new Set());
+        setActiveTab('progress');
         fetchIncomingOrders();
+        fetchOrders();
       } catch (error) {
         errorToast(error.message);
       } finally {
