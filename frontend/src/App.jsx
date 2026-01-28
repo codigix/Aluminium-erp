@@ -52,7 +52,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 const API_HOST = API_BASE.replace(/\/api$/, '')
-const isProduction = import.meta.env.PROD;
+const isProduction = import.meta.env.PROD || window.location.hostname === 'aluminiumerp.codigix.co';
 const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
@@ -209,23 +209,20 @@ function App() {
   }, [user?.department_code])
 
   useEffect(() => {
-    if (token && user && activeModule === 'dashboard') {
+    if (token && user && activeModule === 'dashboard' && !isProduction) {
       const firstFunctionalModule = allowedModules.find(m => m !== 'dashboard')
       if (firstFunctionalModule) {
         navigate(`/${firstFunctionalModule}`, { replace: true })
       }
     }
-  }, [token, user, activeModule, allowedModules, navigate])
+  }, [token, user, activeModule, allowedModules, navigate, isProduction])
 
   // 🛡️ PRODUCTION ROUTE GUARD
   useEffect(() => {
-    if (isProduction) {
-      const restrictedModules = ['project-requests', 'bom-form'];
-      if (restrictedModules.includes(activeModule)) {
-        navigate('/dashboard', { replace: true });
-      }
+    if (isProduction && location.pathname !== '/') {
+      navigate('/', { replace: true });
     }
-  }, [activeModule, isProduction, navigate]);
+  }, [location.pathname, isProduction, navigate]);
 
   const [authMode, setAuthMode] = useState('login')
   const [loginEmail, setLoginEmail] = useState('')
@@ -341,9 +338,11 @@ function App() {
       showToast(`Welcome, ${data.user.first_name || data.user.username}!`)
       
       // Redirect to first allowed module based on department
-      const userAllowed = DEPARTMENT_MODULES[data.user.department_code] || []
-      if (userAllowed.length > 0) {
-        navigate(`/${userAllowed[0]}`)
+      if (!isProduction) {
+        const userAllowed = DEPARTMENT_MODULES[data.user.department_code] || []
+        if (userAllowed.length > 0) {
+          navigate(`/${userAllowed[0]}`)
+        }
       }
     } catch (error) {
       showToast(error.message)
@@ -1361,20 +1360,22 @@ function App() {
         )}
 
         <div className={`flex-1 ${!isProduction ? 'lg:ml-64' : ''} flex flex-col bg-slate-50`}>
-          <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
-            <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
-              
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-sm text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
-                  <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
-                </div>
-                <div className="h-5 w-5 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white  text-lg">
-                  {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
+          {!isProduction && (
+            <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+              <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
+                
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                    <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
+                  </div>
+                  <div className="h-5 w-5 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white  text-lg">
+                    {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="flex-1 p-3">
             {location.pathname.startsWith('/receipt-details/') ? (
@@ -1387,13 +1388,31 @@ function App() {
               </div>
             ) : (
               <>
-                {toast && (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-2xl text-sm shadow-sm">
-                    {toast}
+                {isProduction ? (
+                  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+                    <div className="h-20 w-20 rounded-3xl bg-slate-900 flex items-center justify-center mb-6 shadow-xl">
+                      <Building2 className="h-10 w-10 text-white" />
+                    </div>
+                    <h2 className="text-3xl font-bold text-slate-900 mb-2">SPTECHPIONEER ERP</h2>
+                    <p className="text-slate-500 max-w-md">The production environment is currently restricted to authorized access only. Internal modules are hidden for security.</p>
+                    <div className="mt-8">
+                      <button 
+                        onClick={handleLogout}
+                        className="px-6 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition shadow-lg"
+                      >
+                        Logout Session
+                      </button>
+                    </div>
                   </div>
-                )}
+                ) : (
+                  <>
+                    {toast && (
+                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-2xl text-sm shadow-sm">
+                        {toast}
+                      </div>
+                    )}
 
-                {activeModule === 'company-master' && (
+                    {activeModule === 'company-master' && (
                   <CompanyMaster
                     companies={companies}
                     showCreatePanel={showCreatePanel}
@@ -1572,6 +1591,8 @@ function App() {
                 {activeModule === 'job-card' && (
                   <JobCard />
                 )}
+              </>
+            )}
               </>
             )}
           </div>
