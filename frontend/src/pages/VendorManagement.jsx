@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card } from '../components/ui.jsx';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const vendorStatusColors = {
   ACTIVE: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', label: 'Active' },
@@ -279,3 +279,4 @@ const VendorManagement = () => {
 };
 
 export default VendorManagement;
+

@@ -3,7 +3,7 @@ import { Card } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const transactionTypeColors = {
   IN: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700' },
@@ -427,3 +427,4 @@ const StockLedger = () => {
 };
 
 export default StockLedger;
+

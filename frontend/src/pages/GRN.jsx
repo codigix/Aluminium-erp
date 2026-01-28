@@ -3,7 +3,7 @@ import { Card, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const grnStatusColors = {
   PENDING: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', badge: 'bg-amber-100 text-amber-700', label: 'Pending' },
@@ -583,3 +583,4 @@ const GRN = () => {
 };
 
 export default GRN;
+

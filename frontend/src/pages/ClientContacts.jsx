@@ -64,3 +64,4 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
 )
 
 export default ClientContacts
+

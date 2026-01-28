@@ -9,7 +9,7 @@ import {
   Beaker
 } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const QualityDashboard = () => {
   const [stats, setStats] = useState({
@@ -177,3 +177,4 @@ const QualityDashboard = () => {
 };
 
 export default QualityDashboard;
+

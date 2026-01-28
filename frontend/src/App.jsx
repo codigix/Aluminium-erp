@@ -50,7 +50,7 @@ import JobCard from './pages/JobCard'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api')
 const API_HOST = API_BASE.replace(/\/api$/, '')
 const MODULE_IDS = ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card']
 const DEFAULT_MODULE = 'customer-drawing'
@@ -167,12 +167,6 @@ function App() {
   
   const activeModule = getActiveModuleFromPath()
   
-  // Production Route Guard: Force root path in production
-  useEffect(() => {
-    if (import.meta.env.PROD && location.pathname !== '/') {
-      navigate('/', { replace: true });
-    }
-  }, [location.pathname, navigate]);
 
   const [token, setToken] = useState(() => {
     try {
@@ -1262,10 +1256,9 @@ function App() {
   return (
     <>
       <div className="flex min-h-screen bg-gray-50 text-slate-900">
-        {!import.meta.env.PROD && (
-          <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
-            mobileMenuOpen ? 'flex' : 'hidden'
-          } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
+          mobileMenuOpen ? 'flex' : 'hidden'
+        } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-2 border-b flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1">
                 <div className="h-8 w-8 rounded-lg bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
@@ -1342,18 +1335,16 @@ function App() {
               </button>
             </div>
           </aside>
-        )}
 
-        {mobileMenuOpen && !import.meta.env.PROD && (
+        {mobileMenuOpen && (
           <div
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
-        <div className={`flex-1 ${!import.meta.env.PROD ? 'lg:ml-64' : ''} flex flex-col bg-slate-50`}>
-          {!import.meta.env.PROD && (
-            <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+        <div className={`flex-1 lg:ml-64 flex flex-col bg-slate-50`}>
+          <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
               <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
                 
                 <div className="flex items-center gap-3">
@@ -1367,7 +1358,6 @@ function App() {
                 </div>
               </div>
             </div>
-          )}
 
           <div className="flex-1 p-3">
             {location.pathname.startsWith('/receipt-details/') ? (
