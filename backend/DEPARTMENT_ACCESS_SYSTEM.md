@@ -277,6 +277,7 @@ Response:
     "canViewDocuments": ["customer_pos", "sales_orders", "companies"],
     "canEditDocuments": ["customer_pos", "sales_orders"],
     "canChangeStatusTo": [1],
+    "allowedModules": ["customer-po", "sales-order", "customer-drawing", "client-quotations"],
     "permissions": [...]
   },
   "workflow": {...}

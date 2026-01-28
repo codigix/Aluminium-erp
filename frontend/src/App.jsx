@@ -176,6 +176,13 @@ function App() {
   
   const activeModule = getActiveModuleFromPath()
   
+  // Production Route Guard: Force root path in production
+  useEffect(() => {
+    if (import.meta.env.PROD && location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   const [token, setToken] = useState(() => {
     try {
       const storedToken = localStorage.getItem('authToken')
@@ -204,9 +211,14 @@ function App() {
     }
   })
 
+  const [accessRules, setAccessRules] = useState(null)
+
   const allowedModules = useMemo(() => {
+    if (accessRules && accessRules.allowedModules) {
+      return accessRules.allowedModules
+    }
     return user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
-  }, [user?.department_code])
+  }, [user?.department_code, accessRules])
 
   useEffect(() => {
     if (token && user && activeModule === 'dashboard' && !isProduction) {
@@ -312,6 +324,25 @@ function App() {
     }
     return res.json()
   }, [token, showToast])
+
+  const loadAccessDashboard = useCallback(async () => {
+    try {
+      const data = await apiRequest('/access/dashboard')
+      if (data && data.accessRules) {
+        setAccessRules(data.accessRules)
+      }
+    } catch (error) {
+      console.error('Error loading access dashboard:', error)
+    }
+  }, [apiRequest])
+
+  useEffect(() => {
+    if (token && user) {
+      loadAccessDashboard().catch(() => null)
+    } else {
+      setAccessRules(null)
+    }
+  }, [token, user, loadAccessDashboard])
 
   const performLogin = useCallback(async (email, password) => {
     setLoginLoading(true)
@@ -1270,7 +1301,7 @@ function App() {
   return (
     <>
       <div className="flex min-h-screen bg-gray-50 text-slate-900">
-        {!isProduction && (
+        {!import.meta.env.PROD && (
           <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
             mobileMenuOpen ? 'flex' : 'hidden'
           } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -1352,15 +1383,15 @@ function App() {
           </aside>
         )}
 
-        {mobileMenuOpen && !isProduction && (
+        {mobileMenuOpen && !import.meta.env.PROD && (
           <div
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
-        <div className={`flex-1 ${!isProduction ? 'lg:ml-64' : ''} flex flex-col bg-slate-50`}>
-          {!isProduction && (
+        <div className={`flex-1 ${!import.meta.env.PROD ? 'lg:ml-64' : ''} flex flex-col bg-slate-50`}>
+          {!import.meta.env.PROD && (
             <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
               <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
                 

@@ -75,6 +75,19 @@ const productionApiGuard = (req, res, next) => {
 app.use(productionApiGuard);
 
 app.use('/api/auth', authRoutes);
+
+// Production API Lockdown - ONLY login allowed in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    const allowedRoutes = ['/api/auth/login'];
+    // Allow login and uploads, block everything else
+    if (!allowedRoutes.includes(req.path) && !req.path.startsWith('/uploads')) {
+      return res.status(403).json({ message: "Access denied in production" });
+    }
+    next();
+  });
+}
+
 app.use('/api/departments', departmentRoutes);
 
 app.use(authenticate);
