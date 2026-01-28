@@ -28,3 +28,4 @@ const QualityRejections = () => {
 };
 
 export default QualityRejections;
+

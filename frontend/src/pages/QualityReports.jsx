@@ -28,3 +28,4 @@ const QualityReports = () => {
 };
 
 export default QualityReports;
+

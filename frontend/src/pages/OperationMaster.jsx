@@ -3,7 +3,7 @@ import { Card, Modal, DataTable, Badge, FormControl, StatusBadge } from '../comp
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const OperationMaster = ({ showForm, setShowForm }) => {
   const [operations, setOperations] = useState([]);
@@ -611,3 +611,4 @@ const OperationMaster = ({ showForm, setShowForm }) => {
 };
 
 export default OperationMaster;
+

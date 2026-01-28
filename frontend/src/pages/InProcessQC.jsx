@@ -28,3 +28,4 @@ const InProcessQC = () => {
 };
 
 export default InProcessQC;
+

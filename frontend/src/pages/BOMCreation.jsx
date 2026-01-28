@@ -4,8 +4,7 @@ import { Card, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-const isProd = import.meta.env.PROD;
+const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const cleanText = (text) => text ? text.replace(/\s*\(.*$/, '').trim() : '';
 
@@ -530,3 +529,4 @@ const BOMCreation = () => {
 };
 
 export default BOMCreation;
+
