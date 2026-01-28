@@ -50,7 +50,9 @@ const allowedProdApis = [
 ];
 
 const productionApiGuard = (req, res, next) => {
-  if (process.env.NODE_ENV !== 'production') {
+  const isProd = process.env.NODE_ENV?.trim() === 'production';
+  
+  if (!isProd) {
     return next();
   }
 
