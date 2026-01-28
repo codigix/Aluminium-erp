@@ -167,6 +167,13 @@ function App() {
   
   const activeModule = getActiveModuleFromPath()
   
+  // Production Route Guard: Force root path in production
+  useEffect(() => {
+    if (import.meta.env.PROD && location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   const [token, setToken] = useState(() => {
     try {
       const storedToken = localStorage.getItem('authToken')
@@ -195,9 +202,14 @@ function App() {
     }
   })
 
+  const [accessRules, setAccessRules] = useState(null)
+
   const allowedModules = useMemo(() => {
+    if (accessRules && accessRules.allowedModules) {
+      return accessRules.allowedModules
+    }
     return user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
-  }, [user?.department_code])
+  }, [user?.department_code, accessRules])
 
   const [authMode, setAuthMode] = useState('login')
   const [loginEmail, setLoginEmail] = useState('')
@@ -286,6 +298,25 @@ function App() {
     }
     return res.json()
   }, [token, showToast])
+
+  const loadAccessDashboard = useCallback(async () => {
+    try {
+      const data = await apiRequest('/access/dashboard')
+      if (data && data.accessRules) {
+        setAccessRules(data.accessRules)
+      }
+    } catch (error) {
+      console.error('Error loading access dashboard:', error)
+    }
+  }, [apiRequest])
+
+  useEffect(() => {
+    if (token && user) {
+      loadAccessDashboard().catch(() => null)
+    } else {
+      setAccessRules(null)
+    }
+  }, [token, user, loadAccessDashboard])
 
   const performLogin = useCallback(async (email, password) => {
     setLoginLoading(true)
@@ -1231,108 +1262,112 @@ function App() {
   return (
     <>
       <div className="flex min-h-screen bg-gray-50 text-slate-900">
-        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
-          mobileMenuOpen ? 'flex' : 'hidden'
-        } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="p-2 border-b flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="h-8 w-8 rounded-lg bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
-                <Building2 className="h-4 w-4 text-slate-900" />
+        {!import.meta.env.PROD && (
+          <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
+            mobileMenuOpen ? 'flex' : 'hidden'
+          } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="p-2 border-b flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="h-8 w-8 rounded-lg bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
+                  <Building2 className="h-4 w-4 text-slate-900" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs  leading-tight">SPTECHPIONEER</p>
+                  <p className="text-xs text-indigo-600 truncate">{user?.department_code || 'ERP'}</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-xs  leading-tight">SPTECHPIONEER</p>
-                <p className="text-xs text-indigo-600 truncate">{user?.department_code || 'ERP'}</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="lg:hidden p-1 hover:bg-white/20 rounded transition text-white"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden p-1 hover:bg-white/20 rounded transition text-white"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-2">
-            {navigationItems.map((item) => {
-              const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
-              const isDisabled = item.isGroup || !item.moduleId
-              
-              if (item.isGroup) {
-                return (
-                  <div key={item.label} className="pt-1">
-                    <div
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500  tracking-wider hover:text-slate-700 transition-colors"
-                    >
-                      <span>{item.label}</span>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-2">
+              {navigationItems.map((item) => {
+                const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
+                const isDisabled = item.isGroup || !item.moduleId
+                
+                if (item.isGroup) {
+                  return (
+                    <div key={item.label} className="pt-1">
+                      <div
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500  tracking-wider hover:text-slate-700 transition-colors"
+                      >
+                        <span>{item.label}</span>
+                      </div>
                     </div>
-                  </div>
+                  )
+                }
+                
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      if (item.moduleId) {
+                        navigate(`/${item.moduleId}`)
+                        setMobileMenuOpen(false)
+                      }
+                    }}
+                    className={`flex items-center gap-3 w-full p-2  text-sm font-medium transition-all duration-150 group ${item.indent ? 'ml-2' : ''} ${
+                      isActive 
+                        ? 'bg-indigo-50 text-indigo-700 ' 
+                        : isDisabled 
+                        ? 'text-slate-400 cursor-not-allowed' 
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                    disabled={isDisabled}
+                  >
+                    {iconMap[item.icon] && (() => {
+                      const IconComponent = iconMap[item.icon]
+                      return <IconComponent className="w-4 h-4 flex-shrink-0" />
+                    })()}
+                    <span className="flex-1 text-left truncate">{item.label}</span>
+                    {isActive && <span className="text-indigo-600 text-xs ">●</span>}
+                  </button>
                 )
-              }
-              
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => {
-                    if (item.moduleId) {
-                      navigate(`/${item.moduleId}`)
-                      setMobileMenuOpen(false)
-                    }
-                  }}
-                  className={`flex items-center gap-3 w-full p-2  text-sm font-medium transition-all duration-150 group ${item.indent ? 'ml-2' : ''} ${
-                    isActive 
-                      ? 'bg-indigo-50 text-indigo-700 ' 
-                      : isDisabled 
-                      ? 'text-slate-400 cursor-not-allowed' 
-                      : 'text-slate-700 hover:bg-slate-100'
-                  }`}
-                  disabled={isDisabled}
-                >
-                  {iconMap[item.icon] && (() => {
-                    const IconComponent = iconMap[item.icon]
-                    return <IconComponent className="w-4 h-4 flex-shrink-0" />
-                  })()}
-                  <span className="flex-1 text-left truncate">{item.label}</span>
-                  {isActive && <span className="text-indigo-600 text-xs ">●</span>}
-                </button>
-              )
-            })}
-          </div>
-          <div className="px-3 py-4 border-t border-slate-200 space-y-3">
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
-            >
-              Logout
-            </button>
-          </div>
-        </aside>
+              })}
+            </div>
+            <div className="px-3 py-4 border-t border-slate-200 space-y-3">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          </aside>
+        )}
 
-        {mobileMenuOpen && (
+        {mobileMenuOpen && !import.meta.env.PROD && (
           <div
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
-        <div className="flex-1 lg:ml-64 flex flex-col bg-slate-50">
-          <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
-            <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
-              
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-sm text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
-                  <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
-                </div>
-                <div className="h-5 w-5 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white  text-lg">
-                  {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
+        <div className={`flex-1 ${!import.meta.env.PROD ? 'lg:ml-64' : ''} flex flex-col bg-slate-50`}>
+          {!import.meta.env.PROD && (
+            <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+              <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
+                
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                    <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
+                  </div>
+                  <div className="h-5 w-5 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white  text-lg">
+                    {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="flex-1 p-3">
             {location.pathname.startsWith('/receipt-details/') ? (
