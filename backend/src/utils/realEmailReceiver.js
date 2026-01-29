@@ -46,8 +46,16 @@ const processEmails = async () => {
             // Select INBOX
             await client.mailboxOpen('INBOX');
 
-            // Search for unread messages
+            // Search for unread messages OR recently received messages to ensure we don't miss anything
             let messages = await client.search({ seen: false });
+            
+            // If no unread, check last 10 messages just in case some were marked seen but not processed
+            if (messages.length === 0) {
+                const list = await client.fetch('1:*', { uid: true }, { last: 10 });
+                for await (const msg of list) {
+                    messages.push(msg.uid);
+                }
+            }
             
             for (let uid of messages) {
                 try {
@@ -66,10 +74,76 @@ const processEmails = async () => {
 
                     console.log(`[Email Receiver] Processing email: ${subject} from ${from}`);
 
-                    // Try to match quotation ID from subject (e.g., QRT-0007 or Quotation QRT-0007)
-                    const qrtMatch = subject.match(/QRT-(\d+)/i);
+                    // Match quotation ID or number from subject
+                    // Support QRT-123 (Client), QT-123 (Vendor), [QRT-123], [QT-123]
+                    let qrtMatch = subject.match(/(QRT|QT)-(\d+)/i) || subject.match(/\[((?:QRT|QT)-[^\]]+)\]/i);
+                    
+                    // Fallback: Check body if not found in subject (for older emails)
+                    if (!qrtMatch) {
+                        qrtMatch = body.match(/(QRT|QT)-(\d+)/i);
+                        if (qrtMatch) console.log(`[Email Receiver] Found ID ${qrtMatch[0]} in email body fallback`);
+                    }
+
+                    let quotationId = null;
+                    let quotationType = 'CLIENT'; // Default
+
                     if (qrtMatch) {
-                        const quotationId = parseInt(qrtMatch[1]);
+                        const prefix = (qrtMatch[1] || '').toUpperCase();
+                        
+                        // If it's a numeric match like QRT-123, extract the ID
+                        if (qrtMatch[2]) {
+                            quotationId = parseInt(qrtMatch[2]);
+                            // Determine type from prefix
+                            if (prefix === 'QT') {
+                                quotationType = 'VENDOR';
+                            } else {
+                                quotationType = 'CLIENT';
+                            }
+                        } else {
+                            // If it's a full number match like [QT-1738161038137], find in DB
+                            const fullQuoteNumber = qrtMatch[1];
+                            if (fullQuoteNumber.startsWith('QT-')) {
+                                quotationType = 'VENDOR';
+                                const [rows] = await pool.query('SELECT id FROM quotations WHERE quote_number = ?', [fullQuoteNumber]);
+                                if (rows.length > 0) quotationId = rows[0].id;
+                            } else {
+                                quotationType = 'CLIENT';
+                                // For QRT-0007, try to extract numeric ID if it's not in a dedicated quote_number column
+                                const numMatch = fullQuoteNumber.match(/\d+/);
+                                if (numMatch) quotationId = parseInt(numMatch[0]);
+                            }
+                        }
+                    } else {
+                        // LAST RESORT: Try to match by client name in subject for older emails
+                        // Example subject: "Re: Quotation Request from SP TECHPIONEER - S_DEMOO"
+                        const clientMatch = subject.match(/-\s*([^-]+)$/i);
+                        if (clientMatch) {
+                            const clientName = clientMatch[1].trim();
+                            console.log(`[Email Receiver] Attempting fallback search for client name: ${clientName}`);
+                            
+                            // Find company ID
+                            const [companies] = await pool.query(
+                                'SELECT id FROM companies WHERE company_name LIKE ?',
+                                [`%${clientName}%`]
+                            );
+
+                            if (companies.length > 0) {
+                                // Find latest quotation request for this company
+                                const [quotes] = await pool.query(
+                                    'SELECT id FROM quotation_requests WHERE company_id = ? ORDER BY created_at DESC LIMIT 1',
+                                    [companies[0].id]
+                                );
+                                
+                                if (quotes.length > 0) {
+                                    quotationId = quotes[0].id;
+                                    quotationType = 'CLIENT';
+                                    console.log(`[Email Receiver] Fallback matched client ${clientName} to Quotation Request ID: ${quotationId}`);
+                                }
+                            }
+                        }
+                    }
+
+                    if (quotationId) {
                         const cleanBody = stripReply(body);
                         
                         // Check if this message already exists in DB to avoid duplicates
@@ -84,11 +158,13 @@ const processEmails = async () => {
                                 `INSERT INTO quotation_communications 
                                 (quotation_id, quotation_type, sender_type, sender_email, message, email_message_id, created_at, is_read) 
                                 VALUES (?, ?, ?, ?, ?, ?, NOW(), 0)`,
-                                [quotationId, 'CLIENT', 'CLIENT', from, cleanBody, messageId]
+                                [quotationId, quotationType, quotationType, from, cleanBody, messageId]
                             );
                             
-                            console.log(`[Email Receiver] Saved reply for Quotation QRT-${quotationId}`);
+                            console.log(`[Email Receiver] Saved ${quotationType} reply for Quotation ID: ${quotationId} from ${from}`);
                         }
+                    } else {
+                        console.log(`[Email Receiver] No valid quotation ID found in subject: ${subject}`);
                     }
 
                     // Mark as seen

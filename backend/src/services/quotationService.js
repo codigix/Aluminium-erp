@@ -303,7 +303,12 @@ const sendQuotationEmail = async (quotationId, emailData) => {
       });
     }
 
-    const emailResult = await emailService.sendEmail(to, subject, message, attachments);
+    let finalSubject = subject;
+    if (!subject.includes(quotation.quote_number)) {
+      finalSubject = `[${quotation.quote_number}] ${subject}`;
+    }
+
+    const emailResult = await emailService.sendEmail(to, finalSubject, message, attachments);
     
     console.log(`[sendQuotationEmail] Email sent successfully to ${to}`);
     

@@ -195,14 +195,16 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
       // Alternatively, we could throw error if PDF is mandatory
     }
     
+    const formattedQuoteNumber = quoteNumber ? `[${quoteNumber}]` : '';
+    
     const mailOptions = {
       from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
       to: clientEmail,
-      subject: `Quotation Request ${quoteNumber || ''} from SP TECHPIONEER - ${clientName}`,
+      subject: `Quotation Request ${formattedQuoteNumber} from SP TECHPIONEER - ${clientName}`,
       html: `
         <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
           <h2 style="color: #f26522;">Dear ${clientName},</h2>
-          <p>Please find the attached quotation ${quoteNumber || ''} for your approved drawings from <strong>SP TECHPIONEER PVT. LTD.</strong></p>
+          <p>Please find the attached quotation ${formattedQuoteNumber} for your approved drawings from <strong>SP TECHPIONEER PVT. LTD.</strong></p>
           <p><strong>Total Quotation Value (Incl. GST):</strong> ₹${(totalAmount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           <p>The detailed breakdown of items, quantities, and pricing is provided in the attached PDF.</p>
           <p>We look forward to your feedback and approval.</p>
