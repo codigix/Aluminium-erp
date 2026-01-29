@@ -170,24 +170,48 @@ const sendQuotationViaEmail = async (req, res, next) => {
 
     const quotationIds = await Promise.all(quotationPromises);
 
-    await connection.execute(
-      `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() 
-       WHERE id IN (${items.map(() => '?').join(',')})`,
-      ['QUOTATION_SENT', 'SALES', ...items.map(i => i.orderId)]
-    );
+    const uniqueOrderIds = [...new Set(items.map(i => i.orderId))].filter(Boolean);
+
+    if (uniqueOrderIds.length > 0) {
+      await connection.execute(
+        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() 
+         WHERE id IN (${uniqueOrderIds.map(() => '?').join(',')})`,
+        ['QUOTATION_SENT', 'SALES', ...uniqueOrderIds]
+      );
+    }
 
     await connection.commit();
 
     let emailSent = false;
+    let emailMessageId = null;
+    const firstQuotationId = quotationIds[0];
+    const quoteNumber = `QRT-${String(firstQuotationId).padStart(4, '0')}`;
+
     try {
-      await emailService.sendQuotationEmail(
+      const emailResult = await emailService.sendQuotationEmail(
         clientEmail,
         clientName,
         items,
         totalAmount,
-        notes
+        notes,
+        clientId,
+        quoteNumber
       );
       emailSent = true;
+      emailMessageId = emailResult.messageId;
+
+      // Log to communications for ALL quotations in this batch
+      const messageText = `Quotation ${quoteNumber} sent to client.\nTotal Amount: ₹${(totalAmount * 1.18).toLocaleString('en-IN')}\nItems: ${items.length}`;
+      
+      for (const qId of quotationIds) {
+        await pool.execute(
+          `INSERT INTO quotation_communications 
+           (quotation_id, quotation_type, sender_type, message, email_message_id, created_at, is_read) 
+           VALUES (?, ?, ?, ?, ?, NOW(), 1)`,
+          [qId, 'CLIENT', 'SYSTEM', messageText, emailMessageId]
+        );
+      }
+
     } catch (emailError) {
       console.error('[Quotation Controller] Email sending failed:', emailError.message);
     }

@@ -314,6 +314,7 @@ const ensurePoReceiptColumns = async () => {
 };
 
 const ensureStockColumns = async () => {
+  console.log('Stock columns sync started');
   let connection;
   try {
     connection = await pool.getConnection();
@@ -352,9 +353,11 @@ const ensureStockColumns = async () => {
     
     const missingBalanceCols = requiredStockCols.filter(c => !existingBalanceCols.has(c.name));
     if (missingBalanceCols.length > 0) {
+      console.log('Missing columns in stock_balance:', missingBalanceCols.map(c => c.name));
       const alterBalanceSql = `ALTER TABLE stock_balance ${missingBalanceCols
         .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
         .join(', ')};`;
+      console.log('Executing SQL:', alterBalanceSql);
       await connection.query(alterBalanceSql);
       console.log('Stock Balance material columns synchronized');
     }
@@ -386,7 +389,7 @@ const ensureStockColumns = async () => {
 
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {
-      console.error('Stock columns sync failed', error.message);
+      console.error('Stock columns sync failed:', error);
     }
   } finally {
     if (connection) connection.release();
@@ -1084,6 +1087,32 @@ const ensureSeed = async () => {
   }
 };
 
+const ensureQuotationCommunicationTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS quotation_communications (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        quotation_id INT NOT NULL,
+        quotation_type ENUM('CLIENT', 'VENDOR') NOT NULL,
+        sender_type ENUM('SYSTEM', 'CLIENT', 'VENDOR') NOT NULL,
+        sender_email VARCHAR(255),
+        message TEXT NOT NULL,
+        email_message_id VARCHAR(255),
+        is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_quotation (quotation_id, quotation_type)
+      )
+    `);
+    console.log('Quotation communication table synchronized');
+  } catch (error) {
+    console.error('Quotation communication table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -1112,6 +1141,7 @@ const bootstrapDatabase = async () => {
   await ensureOperationsTable();
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();
+  await ensureQuotationCommunicationTable();
 };
 
 bootstrapDatabase();

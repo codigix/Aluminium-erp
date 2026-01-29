@@ -506,6 +506,7 @@ const generateItemCode = async (itemName, itemGroup) => {
 };
 
 const createItem = async (itemData) => {
+  console.log('createItem called with:', itemData);
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -551,6 +552,7 @@ const createItem = async (itemData) => {
     await connection.commit();
     return { success: true, itemCode };
   } catch (error) {
+    console.error('Error in createItem:', error);
     await connection.rollback();
     throw error;
   } finally {

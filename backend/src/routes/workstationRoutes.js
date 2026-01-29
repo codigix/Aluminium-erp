@@ -5,7 +5,7 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.use(authenticate);
 
-router.get('/', authorize(['PROD_VIEW']), async (req, res) => {
+router.get('/', authorize(['PROD_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const workstations = await workstationService.getAllWorkstations();
     res.json(workstations);
@@ -14,7 +14,7 @@ router.get('/', authorize(['PROD_VIEW']), async (req, res) => {
   }
 });
 
-router.get('/next-code', authorize(['PROD_VIEW']), async (req, res) => {
+router.get('/next-code', authorize(['PROD_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const nextCode = await workstationService.generateWorkstationCode();
     res.json({ nextCode });

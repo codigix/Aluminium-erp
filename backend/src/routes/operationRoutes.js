@@ -3,7 +3,7 @@ const router = express.Router();
 const operationService = require('../services/operationService');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/', authenticate, authorize(['PROD_VIEW']), async (req, res) => {
+router.get('/', authenticate, authorize(['PROD_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const operations = await operationService.getAllOperations();
     res.json(operations);
@@ -12,7 +12,7 @@ router.get('/', authenticate, authorize(['PROD_VIEW']), async (req, res) => {
   }
 });
 
-router.get('/next-code', authenticate, authorize(['PROD_VIEW']), async (req, res) => {
+router.get('/next-code', authenticate, authorize(['PROD_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const nextCode = await operationService.generateOperationCode();
     res.json({ nextCode });

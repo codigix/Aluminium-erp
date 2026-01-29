@@ -22,7 +22,7 @@ const createTransporter = () => {
   return nodemailer.createTransport(config);
 };
 
-const generateQuotationHTML = (clientName, items, totalAmount, notes) => {
+const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId) => {
   const itemsHTML = (items || [])
     .map((item, idx) => {
       const isRejected = item.status === 'REJECTED';
@@ -89,7 +89,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes) => {
           <td>
             <strong>Quotation For:</strong><br>
             <span style="font-size: 14px; font-weight: bold;">${clientName}</span><br>
-            Client ID: ${items[0]?.clientId || 'N/A'}
+            Client ID: ${clientId || 'N/A'}
           </td>
           <td>
             <strong>Quotation Details:</strong><br>
@@ -169,35 +169,40 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes) => {
   return html;
 };
 
-const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes) => {
+const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes, clientId, quoteNumber) => {
   try {
     const transporter = createTransporter();
-    const html = generateQuotationHTML(clientName, items, totalAmount, notes);
+    const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId);
     
     // Generate PDF buffer
     let pdfBuffer;
     try {
       const browser = await puppeteer.launch({
         headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
       });
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'networkidle0' });
-      pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+      pdfBuffer = await page.pdf({ 
+        format: 'A4', 
+        printBackground: true,
+        margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+      });
       await browser.close();
     } catch (pdfError) {
       console.error('[Email Service] PDF generation failed:', pdfError.message);
-      // Fallback to sending without PDF if generation fails
+      // We will proceed to send email without attachment if PDF fails
+      // Alternatively, we could throw error if PDF is mandatory
     }
     
     const mailOptions = {
       from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
       to: clientEmail,
-      subject: `Quotation Request from SP TECHPIONEER - ${clientName}`,
+      subject: `Quotation Request ${quoteNumber || ''} from SP TECHPIONEER - ${clientName}`,
       html: `
         <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
           <h2 style="color: #f26522;">Dear ${clientName},</h2>
-          <p>Please find the attached quotation for your approved drawings from <strong>SP TECHPIONEER PVT. LTD.</strong></p>
+          <p>Please find the attached quotation ${quoteNumber || ''} for your approved drawings from <strong>SP TECHPIONEER PVT. LTD.</strong></p>
           <p><strong>Total Quotation Value (Incl. GST):</strong> ₹${(totalAmount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           <p>The detailed breakdown of items, quantities, and pricing is provided in the attached PDF.</p>
           <p>We look forward to your feedback and approval.</p>
@@ -225,7 +230,40 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
   }
 };
 
+const sendReplyEmail = async (to, subject, message, replyToId) => {
+  try {
+    const transporter = createTransporter();
+    
+    const mailOptions = {
+      from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
+      to: to,
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+          <div style="white-space: pre-wrap;">${message}</div>
+          <br/>
+          <p>Best regards,</p>
+          <p><strong>Sales Team</strong><br/>SP TECHPIONEER PVT. LTD.</p>
+        </div>
+      `,
+      replyTo: process.env.REPLY_TO_EMAIL || 'sales@sptechpioneer.com'
+    };
+
+    if (replyToId) {
+      mailOptions.inReplyTo = replyToId;
+      mailOptions.references = [replyToId];
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('[Email Service] Failed to send reply email:', error.message);
+    throw new Error(`Failed to send reply email: ${error.message}`);
+  }
+};
+
 module.exports = {
   sendQuotationEmail,
-  generateQuotationHTML
+  generateQuotationHTML,
+  sendReplyEmail
 };

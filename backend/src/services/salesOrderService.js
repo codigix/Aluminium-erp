@@ -625,7 +625,7 @@ const getApprovedDrawings = async () => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_APPROVED')
+     WHERE so.status IN ('DESIGN_APPROVED', 'BOM_APPROVED')
      ORDER BY so.created_at DESC`
   );
   

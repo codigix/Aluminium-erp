@@ -23,6 +23,8 @@ const statusColors = {
   CREATED: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', label: 'Created' },
   DESIGN_IN_REVIEW: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', label: 'Design Review' },
   DESIGN_APPROVED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', label: 'Design Approved' },
+  BOM_APPROVED: { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', label: 'BOM Approved' },
+  BOM_SUBMITTED: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'BOM Submitted' },
   DESIGN_QUERY: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'Design Query' },
   PROCUREMENT_IN_PROGRESS: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', label: 'Procurement' },
   MATERIAL_READY: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', label: 'Material Ready' },

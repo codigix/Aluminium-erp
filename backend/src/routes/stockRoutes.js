@@ -3,7 +3,7 @@ const router = express.Router();
 const stockService = require('../services/stockService');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/items/next-code', authenticate, authorize(['STOCK_VIEW']), async (req, res) => {
+router.get('/items/next-code', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const { itemName, itemGroup } = req.query;
     const itemCode = await stockService.generateItemCode(itemName, itemGroup);
@@ -13,7 +13,7 @@ router.get('/items/next-code', authenticate, authorize(['STOCK_VIEW']), async (r
   }
 });
 
-router.post('/items', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.post('/items', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const result = await stockService.createItem(req.body);
     res.status(201).json(result);
@@ -22,7 +22,7 @@ router.post('/items', authenticate, authorize(['STOCK_MANAGE']), async (req, res
   }
 });
 
-router.put('/items/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.put('/items/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const result = await stockService.updateItem(req.params.id, req.body);
     res.json(result);
@@ -50,7 +50,7 @@ router.get('/ledger', authenticate, authorize(['STOCK_VIEW']), async (req, res) 
   }
 });
 
-router.get('/balance', authenticate, authorize(['STOCK_VIEW']), async (req, res) => {
+router.get('/balance', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const { drawingNo } = req.query;
     const balances = await stockService.getStockBalance(drawingNo);
@@ -60,7 +60,7 @@ router.get('/balance', authenticate, authorize(['STOCK_VIEW']), async (req, res)
   }
 });
 
-router.get('/balance/:itemCode', authenticate, authorize(['STOCK_VIEW']), async (req, res) => {
+router.get('/balance/:itemCode', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const balance = await stockService.getStockBalanceByItem(req.params.itemCode);
     if (!balance) {

@@ -1,18 +1,140 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const ClientQuotations = () => {
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'sent'
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'sent', or 'received'
   const [groupedByClient, setGroupedByClient] = useState({});
   const [sentQuotations, setSentQuotations] = useState([]);
+  const [receivedQuotations, setReceivedQuotations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedClientName, setExpandedClientName] = useState(null);
   const [expandedSentKey, setExpandedSentKey] = useState(null);
   const [quotePricesMap, setQuotePricesMap] = useState({});
   const [sendingClientName, setSendingClientName] = useState(null);
+
+  // Communication States
+  const [showCommDrawer, setShowCommDrawer] = useState(false);
+  const [selectedQuoteForComm, setSelectedQuoteForComm] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const chatEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (showCommDrawer) {
+      scrollToBottom();
+    }
+  }, [messages, showCommDrawer]);
+
+  const fetchUnreadCounts = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/communications/unread-counts?type=CLIENT`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const counts = {};
+        data.forEach(item => {
+          counts[item.quotation_id] = item.unread_count;
+        });
+        setUnreadCounts(counts);
+      }
+    } catch (error) {
+      console.error('Error fetching unread counts:', error);
+    }
+  };
+
+  const fetchMessages = async (quotationId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/communications?quotationId=${quotationId}&type=CLIENT`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(data);
+        
+        // Mark as read
+        await fetch(`${API_BASE}/quotations/communications/mark-as-read`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ quotationId, type: 'CLIENT' })
+        });
+        fetchUnreadCounts();
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !selectedQuoteForComm) return;
+
+    try {
+      setSendingMsg(true);
+      const token = localStorage.getItem('authToken');
+      
+      // Find client email from groupedByClient or sentQuotations
+      const group = sentQuotations.find(g => g.id === selectedQuoteForComm.id);
+      const firstQuote = group?.quotes?.[0];
+      
+      const response = await fetch(`${API_BASE}/quotations/communications`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          quotationId: selectedQuoteForComm.id,
+          quotationType: 'CLIENT',
+          message: newMessage,
+          recipientEmail: selectedQuoteForComm.clientEmail || firstQuote?.email,
+          quoteNumber: `QRT-${String(selectedQuoteForComm.id).padStart(4, '0')}`
+        })
+      });
+
+      if (response.ok) {
+        setNewMessage('');
+        fetchMessages(selectedQuoteForComm.id);
+      } else {
+        errorToast('Failed to send message');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      errorToast('Error sending message');
+    } finally {
+      setSendingMsg(false);
+    }
+  };
+
+  const openCommDrawer = (group) => {
+    // We need the client email, but it's not in the group object directly from fetchSentQuotations
+    // Let's get it from the first quote in the group
+    const firstQuote = group.quotes?.[0];
+    
+    setSelectedQuoteForComm({
+      id: group.id,
+      company_name: group.company_name,
+      clientEmail: firstQuote?.email || ''
+    });
+    setMessages([]);
+    setShowCommDrawer(true);
+    fetchMessages(group.id);
+  };
 
   const fetchApprovedOrders = async () => {
     try {
@@ -78,6 +200,12 @@ const ClientQuotations = () => {
             total_amount: 0,
             quotes: []
           };
+        } else {
+          // Use the smallest ID as the representative ID for the group
+          // This ensures consistency with the QRT number sent in emails
+          if (quote.id < grouped[key].id) {
+            grouped[key].id = quote.id;
+          }
         }
         grouped[key].quotes.push(quote);
         if (quote.status !== 'REJECTED') {
@@ -111,12 +239,61 @@ const ClientQuotations = () => {
   };
 
   useEffect(() => {
+    fetchUnreadCounts();
     if (activeTab === 'pending') {
       fetchApprovedOrders();
-    } else {
+    } else if (activeTab === 'sent') {
       fetchSentQuotations();
+    } else if (activeTab === 'received') {
+      fetchReceivedQuotations();
     }
   }, [activeTab]);
+
+  const fetchReceivedQuotations = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests?status=APPROVED,REJECTED,ACCEPTED`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch received quotations');
+      const data = await response.json();
+      
+      const grouped = {};
+      data.forEach(quote => {
+        const date = new Date(quote.created_at);
+        const roundedTime = Math.floor(date.getTime() / 10000) * 10000;
+        const key = `${quote.company_id}_${roundedTime}`;
+        
+        if (!grouped[key]) {
+          grouped[key] = {
+            id: quote.id,
+            uniqueKey: key,
+            company_name: quote.company_name,
+            company_id: quote.company_id,
+            created_at: quote.created_at,
+            status: quote.status,
+            total_amount: 0,
+            quotes: []
+          };
+        } else {
+          // Use the smallest ID as the representative ID for the group
+          if (quote.id < grouped[key].id) {
+            grouped[key].id = quote.id;
+          }
+        }
+        grouped[key].quotes.push(quote);
+        grouped[key].total_amount += parseFloat(quote.total_amount) || 0;
+      });
+      
+      setReceivedQuotations(Object.values(grouped));
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message || 'Failed to fetch received quotations');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleExpandClient = (clientName) => {
     if (expandedClientName === clientName) {
@@ -341,6 +518,12 @@ const ClientQuotations = () => {
               className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'sent' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
             >
               Sent Quotations
+            </button>
+            <button
+              onClick={() => setActiveTab('received')}
+              className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'received' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              Received Quotes
             </button>
           </div>
         </div>
@@ -608,12 +791,24 @@ const ClientQuotations = () => {
                               </span>
                             </td>
                             <td className="p-2">
-                              <button
-                                onClick={() => setExpandedSentKey(expandedSentKey === key ? null : key)}
-                                className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors"
-                              >
-                                {expandedSentKey === key ? 'Hide' : 'View'}
-                              </button>
+                              <div className="flex gap-2 items-center">
+                                <button
+                                  onClick={() => setExpandedSentKey(expandedSentKey === key ? null : key)}
+                                  className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors"
+                                >
+                                  {expandedSentKey === key ? 'Hide' : 'View'}
+                                </button>
+                                <button
+                                  onClick={() => openCommDrawer(group)}
+                                  className="relative p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                  title="Communication"
+                                >
+                                  <MessageSquare className="w-4 h-4" />
+                                  {unreadCounts[group.id] > 0 && (
+                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+                                  )}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                           {expandedSentKey === key && (
@@ -700,9 +895,120 @@ const ClientQuotations = () => {
             )
           )}
         </div>
-      </div>
+
+        {/* Communication Drawer */}
+      {/* Communication Modal */}
+      {showCommDrawer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setShowCommDrawer(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[600px] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-blue-600" />
+                  Communication History
+                </h3>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {selectedQuoteForComm?.company_name} (QRT-{String(selectedQuoteForComm?.id).padStart(4, '0')})
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => selectedQuoteForComm && fetchMessages(selectedQuoteForComm.id)}
+                  className="p-1.5 hover:bg-slate-200 rounded-full transition-colors text-slate-500 hover:text-blue-600"
+                  title="Refresh messages"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setShowCommDrawer(false)}
+                  className="p-1.5 hover:bg-slate-200 rounded-full transition-colors hover:bg-red-50 hover:text-red-500"
+                >
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Messages Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3">
+                  <div className="p-4 bg-white rounded-full shadow-sm border border-slate-100">
+                    <MessageSquare className="w-8 h-8 opacity-20" />
+                  </div>
+                  <p className="text-xs font-medium">No messages found for this quotation</p>
+                </div>
+              ) : (
+                messages.map((msg) => (
+                  <div key={msg.id} className={`flex flex-col ${msg.sender_type === 'SYSTEM' ? 'items-end' : 'items-start'}`}>
+                    <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs shadow-sm ${
+                      msg.sender_type === 'SYSTEM' 
+                        ? 'bg-blue-600 text-white rounded-tr-none' 
+                        : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
+                    }`}>
+                      <div className="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
+                      <div className={`text-[9px] mt-2 flex items-center gap-1.5 ${msg.sender_type === 'SYSTEM' ? 'text-blue-100' : 'text-slate-400'}`}>
+                        {msg.sender_type === 'SYSTEM' ? <ShieldCheck className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                        {new Date(msg.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                        {msg.sender_type === 'SYSTEM' && msg.email_message_id && (
+                          <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded-full">✓ Sent via Email</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input Footer */}
+            <div className="p-4 border-t border-slate-200 bg-white">
+              <form onSubmit={handleSendMessage} className="relative flex gap-3 items-end">
+                <div className="flex-1 relative">
+                  <textarea
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type a message to the client..."
+                    rows="3"
+                    className="w-full p-3 pr-10 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-slate-50 transition-all"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={sendingMsg || !newMessage.trim()}
+                  className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-200 flex-shrink-0"
+                >
+                  {sendingMsg ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
+                </button>
+              </form>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <div className="h-px w-8 bg-slate-100" />
+                <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">
+                  Email will be sent to {selectedQuoteForComm?.clientEmail}
+                </p>
+                <div className="h-px w-8 bg-slate-100" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 };
 
 export default ClientQuotations;
