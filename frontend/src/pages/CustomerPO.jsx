@@ -29,12 +29,14 @@ const CustomerPO = ({
           created_at: quote.created_at,
           status: 'SENT', 
           total_amount: 0,
+          received_amount: 0,
           quotes: []
         }
       }
       grouped[key].quotes.push(quote)
       if (quote.status !== 'REJECTED') {
         grouped[key].total_amount += parseFloat(quote.total_amount) || 0
+        grouped[key].received_amount += parseFloat(quote.received_amount) || 0
       }
     })
 
@@ -209,6 +211,10 @@ const CustomerPO = ({
                                       <tr className="bg-indigo-50">
                                         <td colSpan="3" className="p-2 text-right text-xs text-indigo-700 font-medium">Grand Total (Incl. GST):</td>
                                         <td className="p-2 text-right text-sm text-indigo-600 ">{formatCurrency(group.total_amount * 1.18)}</td>
+                                      </tr>
+                                      <tr className="border-t border-slate-200">
+                                        <td colSpan="3" className="p-2 text-right text-xs text-slate-700 font-medium">Received Amount:</td>
+                                        <td className="p-2 text-right text-sm text-emerald-600 font-bold">{formatCurrency(group.received_amount || (group.total_amount * 1.18))}</td>
                                       </tr>
                                     </tfoot>
                                   </table>

@@ -543,6 +543,7 @@ const ensureQuotationRequestTables = async () => {
         company_id INT NOT NULL,
         status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING',
         total_amount DECIMAL(14, 2) DEFAULT 0,
+        received_amount DECIMAL(14, 2) DEFAULT 0,
         notes TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -557,6 +558,7 @@ const ensureQuotationRequestTables = async () => {
     const existing = new Set(quotationCols.map(c => c.Field));
     const requiredColumns = [
       { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'received_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'notes', definition: 'TEXT NULL' },
       { name: 'sales_order_item_id', definition: 'INT NULL' },
       { name: 'rejection_reason', definition: 'TEXT NULL' }

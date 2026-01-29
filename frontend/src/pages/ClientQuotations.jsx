@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw } from 'lucide-react';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
@@ -15,6 +15,8 @@ const ClientQuotations = () => {
   const [expandedSentKey, setExpandedSentKey] = useState(null);
   const [quotePricesMap, setQuotePricesMap] = useState({});
   const [sendingClientName, setSendingClientName] = useState(null);
+  const [editingSentAmounts, setEditingSentAmounts] = useState({});
+  const [savingSentAmount, setSavingSentAmount] = useState(null);
 
   // Communication States
   const [showCommDrawer, setShowCommDrawer] = useState(false);
@@ -198,6 +200,7 @@ const ClientQuotations = () => {
             created_at: quote.created_at,
             status: 'SENT', // Default status for group
             total_amount: 0,
+            received_amount: 0,
             quotes: []
           };
         } else {
@@ -210,6 +213,7 @@ const ClientQuotations = () => {
         grouped[key].quotes.push(quote);
         if (quote.status !== 'REJECTED') {
           grouped[key].total_amount += parseFloat(quote.total_amount) || 0;
+          grouped[key].received_amount += parseFloat(quote.received_amount) || 0;
         }
       });
       
@@ -253,7 +257,7 @@ const ClientQuotations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests?status=APPROVED,REJECTED,ACCEPTED`, {
+      const response = await fetch(`${API_BASE}/quotation-requests?status=APPROVED,REJECTED,ACCEPTED,APPROVAL,COMPLETED`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch received quotations');
@@ -274,6 +278,7 @@ const ClientQuotations = () => {
             created_at: quote.created_at,
             status: quote.status,
             total_amount: 0,
+            received_amount: 0,
             quotes: []
           };
         } else {
@@ -284,6 +289,7 @@ const ClientQuotations = () => {
         }
         grouped[key].quotes.push(quote);
         grouped[key].total_amount += parseFloat(quote.total_amount) || 0;
+        grouped[key].received_amount += parseFloat(quote.received_amount) || 0;
       });
       
       setReceivedQuotations(Object.values(grouped));
@@ -311,6 +317,114 @@ const ClientQuotations = () => {
         [itemId]: price
       }
     }));
+  };
+
+  const handleApproveQuote = async (group) => {
+    const result = await Swal.fire({
+      title: 'Approve Quotation',
+      text: `Are you sure you want to approve QRT-${String(group.id).padStart(4, '0')}? This will move it to the Customer PO approval stage.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Approve',
+      confirmButtonColor: '#10b981'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const ids = group.quotes.map(q => q.id);
+        
+        const response = await fetch(`${API_BASE}/quotation-requests/batch-approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ids })
+        });
+
+        if (response.ok) {
+          successToast('Quotation approved successfully');
+          fetchReceivedQuotations();
+        } else {
+          errorToast('Failed to approve quotation');
+        }
+      } catch (error) {
+        console.error('Error approving quotation:', error);
+        errorToast('Error approving quotation');
+      }
+    }
+  };
+
+  const handleSentAmountChange = (key, value) => {
+    setEditingSentAmounts(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const saveSentAmount = async (group) => {
+    const newAmount = editingSentAmounts[group.uniqueKey];
+    if (newAmount === undefined || newAmount === '') return;
+
+    try {
+      setSavingSentAmount(group.uniqueKey);
+      const token = localStorage.getItem('authToken');
+      
+      const totalOriginal = group.total_amount;
+      const newTotalInclGst = parseFloat(newAmount);
+      const newTotalBase = newTotalInclGst / 1.18;
+      
+      // Distribute proportionally
+      const itemsToUpdate = group.quotes.map(q => {
+        const originalItemTotal = parseFloat(q.total_amount) || 0;
+        const itemQty = parseFloat(q.item_qty) || 1;
+        
+        let newItemTotal;
+        if (totalOriginal > 0) {
+          newItemTotal = (originalItemTotal / totalOriginal) * newTotalBase;
+        } else {
+          newItemTotal = newTotalBase / group.quotes.length;
+        }
+        
+        return {
+          id: q.id,
+          rate: newItemTotal / itemQty,
+          qty: itemQty,
+          received_amount: newTotalInclGst / group.quotes.length
+        };
+      });
+
+      const response = await fetch(`${API_BASE}/quotation-requests/batch-update-rates`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ items: itemsToUpdate })
+      });
+
+      if (response.ok) {
+        successToast('Amount updated successfully');
+        if (activeTab === 'sent') {
+          fetchSentQuotations();
+        } else {
+          fetchReceivedQuotations();
+        }
+        setEditingSentAmounts(prev => {
+          const next = { ...prev };
+          delete next[group.uniqueKey];
+          return next;
+        });
+      } else {
+        errorToast('Failed to update amount');
+      }
+    } catch (error) {
+      console.error('Error updating amount:', error);
+      errorToast('Error updating amount');
+    } finally {
+      setSavingSentAmount(null);
+    }
   };
 
   const calculateClientTotal = (clientName) => {
@@ -529,7 +643,11 @@ const ClientQuotations = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-          <div className={`bg-gradient-to-r ${activeTab === 'pending' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'} p-2`}>
+          <div className={`bg-gradient-to-r ${
+            activeTab === 'pending' ? 'from-emerald-600 to-teal-600' : 
+            activeTab === 'sent' ? 'from-blue-600 to-indigo-600' :
+            'from-purple-600 to-indigo-600'
+          } p-2`}>
             <div className="flex justify-between items-center">
               <h2 className="text-xs  text-white flex items-center gap-2">
                 {activeTab === 'pending' ? (
@@ -539,20 +657,27 @@ const ClientQuotations = () => {
                     </svg>
                     Design-Approved Orders
                   </>
-                ) : (
+                ) : activeTab === 'sent' ? (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                     </svg>
                     Sent Quotations History
                   </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    Received Quotations (Client Approved)
+                  </>
                 )}
               </h2>
               <button
-                onClick={activeTab === 'pending' ? fetchApprovedOrders : fetchSentQuotations}
+                onClick={activeTab === 'pending' ? fetchApprovedOrders : activeTab === 'sent' ? fetchSentQuotations : fetchReceivedQuotations}
                 disabled={loading}
                 className="px-3 py-1.5 bg-white rounded text-xs  shadow-sm transition-colors disabled:opacity-50"
-                style={{ color: activeTab === 'pending' ? '#059669' : '#4f46e5' }}
+                style={{ color: activeTab === 'pending' ? '#059669' : activeTab === 'sent' ? '#4f46e5' : '#7c3aed' }}
               >
                 ↻ Refresh
               </button>
@@ -737,13 +862,13 @@ const ClientQuotations = () => {
               </div>
             )
           ) : (
-            sentQuotations.length === 0 ? (
+            (activeTab === 'sent' ? sentQuotations : receivedQuotations).length === 0 ? (
               <div className="py-12 text-center">
                 <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
-                <p className="text-slate-500 ">No sent quotations found</p>
-                <p className="text-slate-400 text-sm mt-1">Quotations you send will appear here</p>
+                <p className="text-slate-500 ">No {activeTab} quotations found</p>
+                <p className="text-slate-400 text-sm mt-1">Quotations will appear here</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -760,7 +885,7 @@ const ClientQuotations = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-100">
-                    {sentQuotations.map((group) => {
+                    {(activeTab === 'sent' ? sentQuotations : receivedQuotations).map((group) => {
                       const key = group.uniqueKey;
                       return (
                         <React.Fragment key={key}>
@@ -773,9 +898,47 @@ const ClientQuotations = () => {
                               {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : group.quotes[0]?.project_name}
                             </td>
                             <td className="p-2 text-xs  text-emerald-600">
-                              <div className="flex flex-col">
+                              <div className="flex flex-col gap-1">
                                 <span className="text-slate-400 text-[10px] font-normal">Incl. GST (18%)</span>
-                                <span>₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                <div className="flex items-center gap-1">
+                                  {activeTab === 'received' ? (
+                                    <>
+                                      <div className="relative">
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-600">₹</span>
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={editingSentAmounts[key] !== undefined ? editingSentAmounts[key] : (group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18).toFixed(2)}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                              handleSentAmountChange(key, val);
+                                            }
+                                          }}
+                                          className="w-24 pl-5 pr-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-emerald-50/30"
+                                        />
+                                      </div>
+                                      {editingSentAmounts[key] !== undefined && (
+                                        <button
+                                          onClick={() => saveSentAmount(group)}
+                                          disabled={savingSentAmount === key}
+                                          className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                                          title="Save Amount"
+                                        >
+                                          {savingSentAmount === key ? (
+                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                          ) : (
+                                            <Save className="w-3 h-3" />
+                                          )}
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <div className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-bold border border-emerald-100">
+                                      ₹{(group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             <td className="p-2 text-xs text-slate-500">{new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
@@ -784,14 +947,25 @@ const ClientQuotations = () => {
                                 group.status === 'SENT' ? 'bg-blue-100 text-blue-700' : 
                                 group.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 
                                 group.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
-                                group.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 
+                                (group.status === 'APPROVED' || group.status === 'APPROVAL') ? 'bg-emerald-100 text-emerald-700' : 
+                                group.status === 'COMPLETED' ? 'bg-indigo-100 text-indigo-700' :
                                 'bg-slate-100 text-slate-700'
                               }`}>
-                                {group.status}
+                                {group.status === 'APPROVAL' ? 'APPROVED' : group.status}
                               </span>
                             </td>
                             <td className="p-2">
                               <div className="flex gap-2 items-center">
+                                {activeTab === 'received' && !['APPROVAL', 'COMPLETED'].includes(group.status) && (
+                                  <button
+                                    onClick={() => handleApproveQuote(group)}
+                                    className="px-3 py-1 bg-emerald-600 text-white rounded text-[10px]  hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                                    title="Approve for PO"
+                                  >
+                                    <ShieldCheck className="w-3 h-3" />
+                                    Approve
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => setExpandedSentKey(expandedSentKey === key ? null : key)}
                                   className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors"

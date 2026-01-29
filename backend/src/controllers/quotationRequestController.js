@@ -6,7 +6,7 @@ const getQuotationRequests = async (req, res, next) => {
   try {
     const { status } = req.query;
     let query = `
-      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.notes, qr.created_at, qr.rejection_reason,
+      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason,
              so.project_name, c.company_name, cp.po_number,
              COALESCE(soi.drawing_no, '—') as drawing_no,
              COALESCE(soi.description, so.project_name) as item_description,
@@ -23,8 +23,9 @@ const getQuotationRequests = async (req, res, next) => {
     const params = [];
 
     if (status) {
-      query += ' AND qr.status = ?';
-      params.push(status);
+      const statusArray = status.split(',');
+      query += ` AND qr.status IN (${statusArray.map(() => '?').join(',')})`;
+      params.push(...statusArray);
     }
 
     query += ' ORDER BY qr.created_at DESC';
@@ -156,10 +157,11 @@ const sendQuotationViaEmail = async (req, res, next) => {
       return new Promise(async (resolve, reject) => {
         try {
           const lineTotal = (item.quotedPrice || 0) * (item.quantity || 1);
+          const lineTotalInclGst = lineTotal * 1.18;
           const [result] = await connection.execute(
-            `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, total_amount, rejection_reason, notes, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-            [item.orderId, item.salesOrderItemId || null, clientId, item.status || 'PENDING', lineTotal, item.rejection_reason || null, notes || null]
+            `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, total_amount, received_amount, rejection_reason, notes, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [item.orderId, item.salesOrderItemId || null, clientId, item.status || 'PENDING', lineTotal, lineTotalInclGst, item.rejection_reason || null, notes || null]
           );
           resolve(result.insertId);
         } catch (error) {
@@ -261,8 +263,8 @@ const updateQuotationRates = async (req, res, next) => {
 
     for (const item of items) {
       await connection.execute(
-        'UPDATE quotation_requests SET total_amount = ?, updated_at = NOW() WHERE id = ?',
-        [item.rate * item.qty, item.id]
+        'UPDATE quotation_requests SET total_amount = ?, received_amount = ?, updated_at = NOW() WHERE id = ?',
+        [item.rate * item.qty, item.received_amount || 0, item.id]
       );
     }
 

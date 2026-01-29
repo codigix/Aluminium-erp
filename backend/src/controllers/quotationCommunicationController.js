@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 const emailService = require('../utils/emailService');
 
+const emailReceiver = require('../utils/realEmailReceiver');
+
 const getCommunications = async (req, res, next) => {
   try {
     const { quotationId, type } = req.query;
@@ -97,9 +99,22 @@ const getUnreadCounts = async (req, res, next) => {
   }
 };
 
+const syncEmails = async (req, res, next) => {
+  try {
+    // This will trigger the processEmails function in the receiver
+    // Since it's async and we don't want to wait for it to finish (might take long)
+    // We just trigger it and return success
+    emailReceiver.processEmails(); 
+    res.json({ message: 'Email synchronization triggered' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getCommunications,
   sendCommunication,
   markAsRead,
-  getUnreadCounts
+  getUnreadCounts,
+  syncEmails
 };

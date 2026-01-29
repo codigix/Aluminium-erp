@@ -37,13 +37,22 @@ const stripReply = (text) => {
     return cleanText.trim();
 };
 
+let isProcessing = false;
+let timeoutId = null;
+
 const processEmails = async () => {
+    if (isProcessing) {
+        console.log('[Email Receiver] Previous process still running, skipping...');
+        return;
+    }
+
+    isProcessing = true;
     const client = new ImapFlow(config);
     try {
+        console.log(`[Email Receiver] ${new Date().toISOString()} - Starting email sync...`);
         await client.connect();
         let lock = await client.getMailboxLock('INBOX');
         try {
-            // Select INBOX
             await client.mailboxOpen('INBOX');
 
             // Search for unread messages OR recently received messages to ensure we don't miss anything
@@ -57,6 +66,8 @@ const processEmails = async () => {
                 }
             }
             
+            console.log(`[Email Receiver] Found ${messages.length} messages to check.`);
+
             for (let uid of messages) {
                 try {
                     let message = await client.fetchOne(uid, { source: true });
@@ -72,8 +83,6 @@ const processEmails = async () => {
                     const from = parsed.from?.value[0]?.address || '';
                     const messageId = parsed.messageId;
 
-                    console.log(`[Email Receiver] Processing email: ${subject} from ${from}`);
-
                     // Match quotation ID or number from subject
                     // Support QRT-123 (Client), QT-123 (Vendor), [QRT-123], [QT-123]
                     let qrtMatch = subject.match(/(QRT|QT)-(\d+)/i) || subject.match(/\[((?:QRT|QT)-[^\]]+)\]/i);
@@ -81,7 +90,6 @@ const processEmails = async () => {
                     // Fallback: Check body if not found in subject (for older emails)
                     if (!qrtMatch) {
                         qrtMatch = body.match(/(QRT|QT)-(\d+)/i);
-                        if (qrtMatch) console.log(`[Email Receiver] Found ID ${qrtMatch[0]} in email body fallback`);
                     }
 
                     let quotationId = null;
@@ -91,17 +99,13 @@ const processEmails = async () => {
                         const prefix = (qrtMatch[1] || '').toUpperCase();
                         
                         // If it's a numeric match like QRT-123, extract the ID
-                        if (qrtMatch[2]) {
+                        if (qrtMatch[2] && !qrtMatch[1].includes('-')) {
                             quotationId = parseInt(qrtMatch[2]);
                             // Determine type from prefix
-                            if (prefix === 'QT') {
-                                quotationType = 'VENDOR';
-                            } else {
-                                quotationType = 'CLIENT';
-                            }
+                            quotationType = (prefix === 'QT') ? 'VENDOR' : 'CLIENT';
                         } else {
                             // If it's a full number match like [QT-1738161038137], find in DB
-                            const fullQuoteNumber = qrtMatch[1];
+                            const fullQuoteNumber = qrtMatch[1] || qrtMatch[0];
                             if (fullQuoteNumber.startsWith('QT-')) {
                                 quotationType = 'VENDOR';
                                 const [rows] = await pool.query('SELECT id FROM quotations WHERE quote_number = ?', [fullQuoteNumber]);
@@ -115,11 +119,9 @@ const processEmails = async () => {
                         }
                     } else {
                         // LAST RESORT: Try to match by client name in subject for older emails
-                        // Example subject: "Re: Quotation Request from SP TECHPIONEER - S_DEMOO"
                         const clientMatch = subject.match(/-\s*([^-]+)$/i);
                         if (clientMatch) {
                             const clientName = clientMatch[1].trim();
-                            console.log(`[Email Receiver] Attempting fallback search for client name: ${clientName}`);
                             
                             // Find company ID
                             const [companies] = await pool.query(
@@ -137,7 +139,6 @@ const processEmails = async () => {
                                 if (quotes.length > 0) {
                                     quotationId = quotes[0].id;
                                     quotationType = 'CLIENT';
-                                    console.log(`[Email Receiver] Fallback matched client ${clientName} to Quotation Request ID: ${quotationId}`);
                                 }
                             }
                         }
@@ -163,8 +164,6 @@ const processEmails = async () => {
                             
                             console.log(`[Email Receiver] Saved ${quotationType} reply for Quotation ID: ${quotationId} from ${from}`);
                         }
-                    } else {
-                        console.log(`[Email Receiver] No valid quotation ID found in subject: ${subject}`);
                     }
 
                     // Mark as seen
@@ -181,25 +180,29 @@ const processEmails = async () => {
         console.error('[Email Receiver] IMAP Error:', error.message);
         // Ensure client is closed on error
         try { await client.logout(); } catch (e) {}
+    } finally {
+        isProcessing = false;
+        console.log(`[Email Receiver] ${new Date().toISOString()} - Email sync finished.`);
+        // Schedule next run
+        if (timeoutId !== 'STOPPED') {
+            timeoutId = setTimeout(processEmails, 60000);
+        }
     }
 };
 
-let intervalId = null;
-
 const startEmailReceiver = () => {
-    if (intervalId) return;
+    if (timeoutId && timeoutId !== 'STOPPED') return;
     console.log('[Email Receiver] Real Email Receiver started (Polling every 60s)');
-    // Run immediately on start
+    timeoutId = null;
     processEmails();
-    // Then every 60 seconds
-    intervalId = setInterval(processEmails, 60000);
 };
 
 const stopEmailReceiver = () => {
-    if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
+    if (timeoutId && timeoutId !== 'STOPPED') {
+        clearTimeout(timeoutId);
     }
+    timeoutId = 'STOPPED';
+    console.log('[Email Receiver] Email Receiver stopped.');
 };
 
 module.exports = { startEmailReceiver, stopEmailReceiver, processEmails };

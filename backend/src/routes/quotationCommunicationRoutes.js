@@ -9,5 +9,6 @@ router.get('/', quotationCommunicationController.getCommunications);
 router.post('/', quotationCommunicationController.sendCommunication);
 router.post('/mark-as-read', quotationCommunicationController.markAsRead);
 router.get('/unread-counts', quotationCommunicationController.getUnreadCounts);
+router.post('/sync', quotationCommunicationController.syncEmails);
 
 module.exports = router;
