@@ -63,7 +63,7 @@ const BOMApproval = () => {
       const data = await response.json();
       
       if (activeTab === 'pending') {
-        setOrders(data.filter(order => order.status === 'BOM_SUBMITTED' || order.status === 'DESIGN_APPROVED'));
+        setOrders(data.filter(order => ['BOM_SUBMITTED', 'DESIGN_APPROVED', 'DESIGN_IN_REVIEW'].includes(order.status)));
       } else {
         setOrders(data.filter(order => 
           ['BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'COMPLETED'].includes(order.status)

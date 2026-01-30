@@ -431,7 +431,7 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
     } else if (departmentCode === 'DESIGN_ENG' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW')) {
       newStatus = 'DESIGN_IN_REVIEW';
       nextDepartment = 'DESIGN_ENG';
-    } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_APPROVED' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
+    } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_APPROVED' || currentOrder.status === 'BOM_APPROVED' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
       if (currentOrder.material_available) {
         newStatus = 'MATERIAL_READY';
         nextDepartment = 'PRODUCTION';
