@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
+const API_HOST = API_BASE.replace(/\/api$/, '');
 
 const warehouseOptions = [
   { value: 'RM', label: 'Raw Material Warehouse' },
@@ -20,8 +21,7 @@ const SalesOrders = () => {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [companies, setCompanies] = useState([]);
-  const [boms, setBoms] = useState([]);
-  const [user, setUser] = useState(null);
+  const [customerPos, setCustomerPos] = useState([]);
   const [previewDrawing, setPreviewDrawing] = useState(null);
 
   const initialFormState = {
@@ -32,10 +32,9 @@ const SalesOrders = () => {
     customerId: '',
     customerEmail: '',
     customerPhone: '',
-    bomId: '',
-    orderQuantity: 1,
+    customerPoId: '',
     warehouse: '',
-    status: 'Draft',
+    status: 'CREATED',
     cgstRate: 9,
     sgstRate: 9,
     profitMargin: 0,
@@ -47,17 +46,13 @@ const SalesOrders = () => {
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
     if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
       fetchOrders();
       fetchCompanies();
-      if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'DESIGN_ENG' || parsedUser.department_code === 'SALES') {
-        fetchBoms();
-      }
+      fetchCustomerPos();
     } else {
       fetchOrders();
       fetchCompanies();
-      fetchBoms();
+      fetchCustomerPos();
     }
   }, []);
 
@@ -94,18 +89,58 @@ const SalesOrders = () => {
     }
   };
 
-  const fetchBoms = async () => {
+  const fetchCustomerPos = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/bom/approved`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setBoms(Array.isArray(data) ? data : []);
+      const [poRes, quoteRes] = await Promise.all([
+        fetch(`${API_BASE}/customer-pos`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/quotation-requests?status=APPROVED,COMPLETED,APPROVAL`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+
+      let combinedData = [];
+
+      if (poRes.ok) {
+        const poData = await poRes.json();
+        combinedData = [...(Array.isArray(poData) ? poData : [])];
       }
+
+      if (quoteRes.ok) {
+        const quotes = await quoteRes.json();
+        // Group quotations by company and time to match QRT-xxxx batches
+        const grouped = {};
+        quotes.forEach(quote => {
+          const date = new Date(quote.created_at);
+          const roundedTime = Math.floor(date.getTime() / 10000) * 10000;
+          const key = `QRT_${quote.company_id}_${roundedTime}`;
+          
+          if (!grouped[key]) {
+            grouped[key] = {
+              id: `QRT-${quote.id}`,
+              po_number: `QRT-${String(quote.id).padStart(4, '0')}`,
+              company_id: quote.company_id,
+              company_name: quote.company_name,
+              status: 'APPROVED',
+              isQuotation: true,
+              created_at: quote.created_at,
+              items: []
+            };
+          }
+          grouped[key].items.push({
+            item_code: quote.drawing_no || quote.item_code || '—',
+            description: quote.item_description || '—',
+            type: 'Finished Good',
+            quantity: Number(quote.item_qty) || 0,
+            rate: Number(quote.total_amount) / (Number(quote.item_qty) || 1),
+            amount: Number(quote.total_amount),
+            drawing_no: quote.drawing_no
+          });
+        });
+        combinedData = [...combinedData, ...Object.values(grouped)];
+      }
+
+      setCustomerPos(combinedData);
     } catch (err) {
-      console.error('Error fetching boms:', err);
+      console.error('Error fetching customer POs/Quotations:', err);
     }
   };
 
@@ -131,12 +166,11 @@ const SalesOrders = () => {
           deliveryDate: data.target_dispatch_date || '',
           orderType: 'Sales',
           customerId: data.company_id || '',
-          customerEmail: data.contact_email || data.customer_email || '',
-          customerPhone: data.contact_mobile || data.customer_phone || '',
-          bomId: data.bom_id || '',
-          orderQuantity: data.items?.[0]?.quantity || 1,
+          customerEmail: data.contact_email || data.customer_email || data.email || '',
+          customerPhone: data.contact_mobile || data.customer_phone || data.phone || '',
+          customerPoId: data.customer_po_id || '',
           warehouse: data.warehouse || '',
-          status: data.status || 'Draft',
+          status: data.status || 'CREATED',
           cgstRate: data.cgst_rate || 0,
           sgstRate: data.sgst_rate || 0,
           profitMargin: data.profit_margin || 0,
@@ -206,7 +240,7 @@ const SalesOrders = () => {
           cgst_rate: formData.cgstRate,
           sgst_rate: formData.sgstRate,
           profit_margin: formData.profitMargin,
-          bom_id: formData.bomId,
+          customerPoId: formData.customerPoId,
           warehouse: formData.warehouse
         })
       });
@@ -224,60 +258,76 @@ const SalesOrders = () => {
     }
   };
 
-  const handleBomChange = async (bomId) => {
-    if (!bomId) return;
+  const handlePoChange = async (poId) => {
+    if (!poId) return;
+
+    // Check if it's a quotation from our combined list
+    if (String(poId).startsWith('QRT-')) {
+      const quote = customerPos.find(p => String(p.id) === String(poId));
+      if (quote) {
+        setFormData(prev => ({
+          ...prev,
+          customerPoId: poId,
+          customerId: quote.company_id,
+          // We don't have email/phone in the grouped quote object easily, 
+          // but the customer select will handle it if needed, or we can fetch company
+          items: quote.items
+        }));
+        
+        // Fetch company details to populate email/phone
+        try {
+          const token = localStorage.getItem('authToken');
+          const res = await fetch(`${API_BASE}/companies/${quote.company_id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const company = await res.json();
+            const primaryContact = Array.isArray(company?.contacts) 
+              ? company.contacts.find(c => (c.contact_type || c.contactType) === 'PRIMARY') || company.contacts[0]
+              : null;
+
+            setFormData(prev => ({
+              ...prev,
+              customerEmail: company.contact_email || company.customer_email || company.email || primaryContact?.email || '',
+              customerPhone: company.contact_mobile || company.customer_phone || company.phone || primaryContact?.phone || ''
+            }));
+          }
+        } catch (err) {
+          console.error('Error fetching company for quotation:', err);
+        }
+      }
+      return;
+    }
+
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/bom/items/${bomId}`, {
+      const response = await fetch(`${API_BASE}/customer-pos/${poId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        const bomDetails = await response.json();
-        const selectedBom = boms.find(b => String(b.id) === String(bomId));
+        const poDetails = await response.json();
         
-        // Use saved bom_cost if available, otherwise calculate it
-        let totalRate = Number(selectedBom?.bom_cost || 0);
-        
-        if (totalRate === 0) {
-            if (bomDetails.materials) {
-                totalRate += bomDetails.materials.reduce((sum, m) => sum + (Number(m.qty_per_pc || 0) * Number(m.rate || 0)), 0);
-            }
-            if (bomDetails.components) {
-                totalRate += bomDetails.components.reduce((sum, c) => sum + (Number(c.quantity || 0) * Number(c.rate || 0)), 0);
-            }
-            if (bomDetails.operations) {
-                totalRate += bomDetails.operations.reduce((sum, o) => sum + (Number(o.hourly_rate || 0) * (Number(o.cycle_time_min || 0) / 60)), 0);
-            }
-            
-            // Subtract scrap value if present in calculation
-            if (bomDetails.scrap) {
-                const scrapValue = bomDetails.scrap.reduce((sum, s) => {
-                    const input = Number(s.input_qty || 0);
-                    const loss = Number(s.loss_percent || 0) / 100;
-                    const rate = Number(s.rate || 0);
-                    return sum + (input * loss * rate);
-                }, 0);
-                totalRate -= scrapValue;
-            }
-        }
-
-        const items = [{
-          item_code: selectedBom?.item_code || '',
-          description: selectedBom?.description || '',
+        const items = poDetails.items.map(item => ({
+          item_code: item.item_code,
+          description: item.description,
           type: 'Finished Good',
-          quantity: formData.orderQuantity,
-          rate: totalRate || 0,
-          amount: (totalRate || 0) * formData.orderQuantity
-        }];
+          quantity: item.quantity,
+          rate: Number(item.rate),
+          amount: Number(item.rate) * Number(item.quantity),
+          drawing_no: item.drawing_no
+        }));
 
         setFormData(prev => ({
           ...prev,
-          bomId,
+          customerPoId: poId,
+          customerId: poDetails.company_id,
+          customerEmail: poDetails.contact_email || poDetails.customer_email || poDetails.email || '',
+          customerPhone: poDetails.contact_mobile || poDetails.customer_phone || poDetails.phone || '',
           items
         }));
       }
     } catch (err) {
-      console.error('Error fetching BOM details:', err);
+      console.error('Error fetching PO details:', err);
     }
   };
 
@@ -337,8 +387,8 @@ const SalesOrders = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl  text-slate-900">Sales Orders</h1>
-            <p className="text-sm text-slate-500">Manage your sales orders and production workflow</p>
+            <h1 className="text-2xl  text-slate-900">New Sales Orders</h1>
+            <p className="text-sm text-slate-500">View and manage new sales orders that haven't been processed by other departments yet.</p>
           </div>
           <button 
             onClick={handleAddOrder}
@@ -362,11 +412,16 @@ const SalesOrders = () => {
   }
 
   // Form View
-  const selectedBom = boms.find(b => String(b.id) === String(formData.bomId));
   const subTotal = formData.items.reduce((sum, item) => sum + (item.amount || 0), 0);
   const costWithProfit = subTotal * (1 + (formData.profitMargin / 100));
   const gstAmount = costWithProfit * ((formData.cgstRate + formData.sgstRate) / 100);
   const totalAmount = costWithProfit + gstAmount;
+
+  const filteredCustomerPos = customerPos.filter(po => {
+    const matchesCustomer = !formData.customerId || String(po.company_id) === String(formData.customerId);
+    const isApproved = po.status === 'APPROVED' || po.status === 'COMPLETED'; 
+    return matchesCustomer && isApproved;
+  });
 
   return (
     <div className="space-y-6 pb-20">
@@ -463,11 +518,17 @@ const SalesOrders = () => {
                   value={formData.customerId}
                   onChange={(e) => {
                     const company = companies.find(c => String(c.id) === String(e.target.value));
+                    const primaryContact = Array.isArray(company?.contacts) 
+                      ? company.contacts.find(c => (c.contact_type || c.contactType) === 'PRIMARY') || company.contacts[0]
+                      : null;
+                    
                     setFormData({
                       ...formData, 
                       customerId: e.target.value,
-                      customerEmail: company?.contact_email || '',
-                      customerPhone: company?.contact_mobile || ''
+                      customerEmail: company?.contact_email || company?.customer_email || company?.email || primaryContact?.email || '',
+                      customerPhone: company?.contact_mobile || company?.customer_phone || company?.phone || primaryContact?.phone || '',
+                      customerPoId: '',
+                      items: []
                     });
                   }}
                   placeholder="Select customer..."
@@ -493,61 +554,39 @@ const SalesOrders = () => {
             </div>
           </Card>
 
-          {/* BOM & Inventory */}
-          <Card title="BOM & Inventory" subtitle="Production template and storage">
+          {/* PO & Inventory */}
+          <Card title="PO & Inventory" subtitle="Customer Purchase Order and storage">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-              <FormControl label="Select BOM *">
+              <FormControl label="Select Customer PO *">
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <SearchableSelect 
-                      options={boms
-                        .filter(b => b.item_group === 'FG' || b.item_group === 'Finished Goods' || !b.item_group)
-                        .map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
-                      value={formData.bomId}
-                      onChange={(e) => handleBomChange(e.target.value)}
-                      placeholder="Select BOM..."
+                      options={filteredCustomerPos.map(po => ({ value: po.id, label: `${po.po_number} (${po.status})` }))}
+                      value={formData.customerPoId}
+                      onChange={(e) => handlePoChange(e.target.value)}
+                      placeholder="Select Customer PO..."
                       disabled={formMode === 'view'}
+                      allowCustom={false}
                     />
                   </div>
-                  {formData.bomId && (
+                  {formData.customerPoId && (
                     <button
                       type="button"
                       onClick={() => {
-                        const bom = boms.find(b => String(b.id) === String(formData.bomId));
-                        if (bom) {
-                          setPreviewDrawing({
-                            item_code: bom.item_code,
-                            description: bom.description
-                          });
+                        const po = customerPos.find(p => String(p.id) === String(formData.customerPoId));
+                        if (po) {
+                          window.open(`${API_HOST}/${po.pdf_path}`, '_blank');
                         }
                       }}
                       className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100"
-                      title="Preview Drawing"
+                      title="View PO PDF"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
                     </button>
                   )}
                 </div>
-              </FormControl>
-              <FormControl label="Order Quantity *">
-                <input 
-                  type="number"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                  value={formData.orderQuantity}
-                  onChange={(e) => {
-                    const newQty = Number(e.target.value);
-                    const newItems = formData.items.map(item => ({
-                        ...item,
-                        quantity: newQty,
-                        amount: newQty * item.rate
-                    }));
-                    setFormData({...formData, orderQuantity: newQty, items: newItems});
-                  }}
-                  disabled={formMode === 'view'}
-                />
               </FormControl>
               <FormControl label="Warehouse">
                 <select 
@@ -565,17 +604,16 @@ const SalesOrders = () => {
             </div>
           </Card>
 
-          {/* BOM Details Table */}
-          {selectedBom && (
-            <Card title="BOM Details" subtitle="Items included in selected BOM">
+          {/* PO Item Details */}
+          {formData.items.length > 0 && (
+            <Card title="Order Items" subtitle="Items included in selected PO">
               <div className="p-4 bg-blue-50/50 rounded-xl mb-4 border border-blue-100 flex items-center gap-4">
                 <div className="p-3 bg-white rounded-xl shadow-sm border border-blue-100">
                     <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 </div>
                 <div>
-                  <p className="text-sm  text-slate-900">Finished Goods <span className="text-slate-400 font-normal ml-1">(1)</span></p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Product: <span className=" text-slate-700">{selectedBom.description}</span></p>
-                  <p className="text-[10px] text-indigo-600 font-mono">BOM ID: {selectedBom.drawing_no}</p>
+                  <p className="text-sm  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">PO Number: <span className=" text-slate-700">{customerPos.find(p => String(p.id) === String(formData.customerPoId))?.po_number || '—'}</span></p>
                 </div>
               </div>
 
@@ -609,8 +647,8 @@ const SalesOrders = () => {
                             disabled={formMode === 'view'}
                           />
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-600">₹ {item.rate.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right  text-emerald-600">₹ {item.amount.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">₹ {Number(item.rate || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right  text-emerald-600">₹ {Number(item.amount || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -631,10 +669,10 @@ const SalesOrders = () => {
                   onChange={(e) => setFormData({...formData, status: e.target.value})}
                   disabled={formMode === 'view'}
                 >
-                  <option value="Draft">Draft</option>
-                  <option value="Active">Active</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
+                  <option value="CREATED">Created</option>
+                  <option value="DESIGN_IN_REVIEW">Design in Review</option>
+                  <option value="IN_PRODUCTION">In Production</option>
+                  <option value="CLOSED">Closed</option>
                 </select>
               </FormControl>
               <div className="grid grid-cols-2 gap-4">
@@ -670,30 +708,26 @@ const SalesOrders = () => {
           </Card>
 
           {/* Price Summary */}
-          <Card title="Cost Breakdown">
+          <Card title="Order Summary">
             <div className="space-y-3 p-4">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Finished Goods Total Cost (Unit):</span>
-                <span className=" text-slate-700">₹ {subTotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Finished Goods Cost × Sales Quantity ({formData.orderQuantity}):</span>
-                <span className=" text-slate-700">₹ {(subTotal * formData.orderQuantity).toFixed(2)}</span>
+                <span className="text-slate-500">Items Subtotal:</span>
+                <span className=" text-slate-700">₹ {Number(subTotal || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs pt-3 border-t border-slate-100">
-                <span className="text-slate-500">Cost with Profit:</span>
-                <span className=" text-slate-700">₹ {costWithProfit.toFixed(2)}</span>
+                <span className="text-slate-500">Subtotal with Profit ({formData.profitMargin}%):</span>
+                <span className=" text-slate-700">₹ {Number(costWithProfit || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">GST ({formData.cgstRate + formData.sgstRate}%):</span>
-                <span className=" text-slate-700">₹ {gstAmount.toFixed(2)}</span>
+                <span className=" text-slate-700">₹ {Number(gstAmount || 0).toFixed(2)}</span>
               </div>
               <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
                 <div>
-                   <p className="text-sm  text-slate-900">Sales Order Price:</p>
+                   <p className="text-sm  text-slate-900">Total Order Value:</p>
                 </div>
                 <div className="text-right">
-                   <p className="text-2xl  text-emerald-600">₹ {totalAmount.toFixed(2)}</p>
+                   <p className="text-2xl  text-emerald-600">₹ {Number(totalAmount || 0).toFixed(2)}</p>
                 </div>
               </div>
             </div>

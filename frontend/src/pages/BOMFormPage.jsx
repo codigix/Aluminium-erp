@@ -426,7 +426,8 @@ const BOMFormPage = () => {
                   itemCode: item.item_code || '',
                   description: item.drawing_name || item.description || item.item_description || '',
                   drawingNo: item.drawing_no || dwgParam || prev.drawingNo,
-                  drawing_id: item.drawing_id || dwgIdParam || prev.drawing_id
+                  drawing_id: item.drawing_id || dwgIdParam || prev.drawing_id,
+                  quantity: item.quantity || prev.quantity
                 }));
                 return; // Exit early if we found the item by ID
               }

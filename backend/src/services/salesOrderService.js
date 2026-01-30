@@ -1,16 +1,23 @@
 const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
-const listSalesOrders = async (includeWithoutPo = true) => {
-  const whereClause = includeWithoutPo ? '' : 'WHERE so.customer_po_id IS NOT NULL';
+const listSalesOrders = async (includeWithoutPo = true, allStatuses = false) => {
+  let whereClause = allStatuses ? "WHERE 1=1" : "WHERE so.status = 'CREATED'";
+  if (!includeWithoutPo) {
+    whereClause += ' AND (so.customer_po_id IS NOT NULL OR so.quotation_id IS NOT NULL)';
+  }
   const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    `SELECT so.*, c.company_name, 
+            COALESCE(cp.po_number, CONCAT('QRT-', LPAD(qr.id, 4, '0'))) as po_number, 
+            COALESCE(cp.po_date, qr.created_at) as po_date, 
+            cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.phone, ct.name) as contact_person, ct.email as email_address, ct.phone as contact_phone,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     LEFT JOIN quotation_requests qr ON qr.id = so.quotation_id
      LEFT JOIN contacts ct ON ct.company_id = so.company_id AND ct.contact_type = 'PRIMARY'
      ${whereClause}
      ORDER BY so.created_at DESC`
@@ -29,12 +36,16 @@ const listSalesOrders = async (includeWithoutPo = true) => {
 
 const getSalesOrderById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    `SELECT so.*, c.company_name, 
+            COALESCE(cp.po_number, CONCAT('QRT-', LPAD(qr.id, 4, '0'))) as po_number, 
+            COALESCE(cp.po_date, qr.created_at) as po_date, 
+            cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.phone, ct.name) as contact_person, ct.email as email_address, ct.phone as contact_phone,
-            c.contact_email, c.contact_mobile
+            COALESCE(so.customer_po_id, CONCAT('QRT-', so.quotation_id)) as customer_po_id
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     LEFT JOIN quotation_requests qr ON qr.id = so.quotation_id
      LEFT JOIN contacts ct ON ct.company_id = so.company_id AND ct.contact_type = 'PRIMARY'
      WHERE so.id = ?`,
     [id]
@@ -68,7 +79,10 @@ const getIncomingOrders = async (departmentCode) => {
     whereClause = `so.current_department = '${departmentCode}'`;
   }
   
-  const query = `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
+  const query = `SELECT so.*, c.company_name, c.company_code, 
+            COALESCE(cp.po_number, CONCAT('QRT-', LPAD(qr.id, 4, '0'))) as po_number, 
+            COALESCE(cp.po_date, qr.created_at) as po_date, 
+            cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
             sb.material_type as item_group,
@@ -76,6 +90,7 @@ const getIncomingOrders = async (departmentCode) => {
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+     LEFT JOIN quotation_requests qr ON qr.id = so.quotation_id
      LEFT JOIN departments d ON d.code = so.current_department
      LEFT JOIN (
        SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit, status as item_status, rejection_reason as item_rejection_reason
@@ -108,20 +123,30 @@ const createSalesOrder = async (orderData) => {
     status = 'CREATED'
   } = orderData;
 
+  // Handle Quotation-based workflow
+  let actualPoId = null;
+  let quotationId = null;
+  if (customerPoId && String(customerPoId).startsWith('QRT-')) {
+    quotationId = parseInt(String(customerPoId).replace('QRT-', ''));
+  } else if (customerPoId) {
+    actualPoId = customerPoId;
+  }
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
     const [result] = await connection.execute(
       `INSERT INTO sales_orders (
-        customer_po_id, company_id, project_name, drawing_required, 
+        customer_po_id, quotation_id, company_id, project_name, drawing_required, 
         production_priority, target_dispatch_date, status, 
         current_department, request_accepted, cgst_rate, 
         sgst_rate, profit_margin, bom_id, warehouse
       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?)`,
       [
-        customerPoId || null, 
+        actualPoId,
+        quotationId,
         companyId, 
         projectName || null, 
         drawingRequired, 
@@ -138,16 +163,22 @@ const createSalesOrder = async (orderData) => {
 
     const salesOrderId = result.insertId;
 
-    // Use items from request if provided, otherwise copy from Customer PO
+    // Use items from request if provided, otherwise copy from Customer PO or Quotation
     let orderItems = [];
     if (items && items.length > 0) {
       orderItems = items;
-    } else {
+    } else if (actualPoId) {
       const [poItems] = await connection.query(
         'SELECT item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, (cgst_amount + sgst_amount + igst_amount) as tax_value FROM customer_po_items WHERE customer_po_id = ?',
-        [customerPoId]
+        [actualPoId]
       );
       orderItems = poItems;
+    } else if (quotationId) {
+      const [quoteItems] = await connection.query(
+        'SELECT item_code, description, quantity, unit, unit_rate as rate, amount as tax_value FROM quotation_items WHERE quotation_id = ?',
+        [quotationId]
+      );
+      orderItems = quoteItems;
     }
 
     for (const item of orderItems) {
@@ -157,14 +188,14 @@ const createSalesOrder = async (orderData) => {
         [
           salesOrderId, 
           item.item_code, 
-          item.drawing_no, 
+          item.drawing_no || null, 
           item.drawing_id || null,
-          item.revision_no, 
+          item.revision_no || null, 
           item.description, 
           item.quantity, 
-          item.unit, 
-          item.rate, 
-          item.delivery_date, 
+          item.unit || 'NOS', 
+          item.rate || 0, 
+          item.delivery_date || null, 
           item.tax_value || 0,
           item.status || (item.item_status) || 'PENDING',
           item.rejection_reason || (item.item_rejection_reason) || null
@@ -279,9 +310,19 @@ const updateSalesOrder = async (id, orderData) => {
     sgst_rate,
     profit_margin,
     bom_id,
+    customerPoId,
     warehouse,
     status
   } = orderData;
+
+  // Handle Quotation-based workflow
+  let actualPoId = null;
+  let quotationId = null;
+  if (customerPoId && String(customerPoId).startsWith('QRT-')) {
+    quotationId = parseInt(String(customerPoId).replace('QRT-', ''));
+  } else if (customerPoId) {
+    actualPoId = customerPoId;
+  }
 
   const connection = await pool.getConnection();
   try {
@@ -299,6 +340,8 @@ const updateSalesOrder = async (id, orderData) => {
         sgst_rate = ?, 
         profit_margin = ?, 
         bom_id = ?, 
+        customer_po_id = ?,
+        quotation_id = ?,
         warehouse = ?,
         updated_at = NOW()
        WHERE id = ?`,
@@ -313,6 +356,8 @@ const updateSalesOrder = async (id, orderData) => {
         sgst_rate || 0,
         profit_margin || 0,
         bom_id || null,
+        actualPoId,
+        quotationId,
         warehouse || null,
         id
       ]
@@ -625,13 +670,29 @@ const getApprovedDrawings = async () => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_APPROVED', 'BOM_APPROVED')
+     WHERE so.status = 'BOM_APPROVED'
+     AND EXISTS (
+       SELECT 1 FROM sales_order_items soi
+       LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
+       WHERE soi.sales_order_id = so.id 
+       AND COALESCE(soi.item_group, sb.material_type) = 'FG'
+     )
      ORDER BY so.created_at DESC`
   );
   
   for (const order of rows) {
     const [items] = await pool.query(
-      'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
+      `SELECT soi.*, COALESCE(soi.item_group, sb.material_type) as item_group,
+              COALESCE(cd.qty, cd2.qty) as design_qty
+       FROM sales_order_items soi
+       LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
+       LEFT JOIN customer_drawings cd ON cd.id = soi.drawing_id
+       LEFT JOIN (
+         SELECT drawing_no, qty, ROW_NUMBER() OVER (PARTITION BY drawing_no ORDER BY id DESC) as rn
+         FROM customer_drawings
+       ) cd2 ON cd2.drawing_no = soi.drawing_no AND cd2.rn = 1
+       WHERE soi.sales_order_id = ? 
+       AND COALESCE(soi.item_group, sb.material_type) = 'FG'`,
       [order.id]
     );
     order.items = items;

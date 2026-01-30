@@ -240,7 +240,7 @@ const createBOMRequest = async (bomData) => {
       // 1. Update specific sales_order_item
       await connection.execute(
         `UPDATE sales_order_items 
-         SET item_code = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, quantity = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
+         SET item_code = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
          WHERE id = ?`,
         [
           safeItemCode, 
@@ -250,13 +250,21 @@ const createBOMRequest = async (bomData) => {
           description || null, 
           isActive ? 1 : 0, 
           isDefault ? 1 : 0, 
-          quantity || 0, 
           drawingNo || null, 
           drawing_id || null, 
           bom_cost,
           itemId
         ]
       );
+
+      // 2. Update parent sales order status to BOM_SUBMITTED
+      const [itemRows] = await connection.query('SELECT sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
+      if (itemRows.length > 0) {
+        await connection.execute(
+          "UPDATE sales_orders SET status = 'BOM_SUBMITTED', updated_at = NOW() WHERE id = ?",
+          [itemRows[0].sales_order_id]
+        );
+      }
 
       // Clear existing BOM items for this sales order item
       await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);

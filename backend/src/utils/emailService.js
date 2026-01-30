@@ -25,17 +25,17 @@ const createTransporter = () => {
 const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId) => {
   const itemsHTML = (items || [])
     .map((item, idx) => {
-      const isRejected = item.status === 'REJECTED';
+      const isRejected = item.status?.toUpperCase() === 'REJECTED';
       const unitPrice = isRejected ? '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : `₹${(item.quotedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-      const totalLine = isRejected ? '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : `₹${((item.quantity || 1) * (item.quotedPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      const totalLine = isRejected ? '—' : `₹${((item.quantity || 1) * (item.quotedPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
       
       return `
-      <tr>
+      <tr style="${isRejected ? 'background-color: #fef2f2;' : ''}">
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${idx + 1}</td>
         <td style="padding: 10px; border: 1px solid #000;">
-          <div style="font-weight: bold;">${item.drawing_no || '—'}</div>
+          <div style="font-weight: bold; ${isRejected ? 'text-decoration: line-through; color: #999;' : ''}">${item.drawing_no || '—'}</div>
           ${item.description ? `<div style="font-size: 11px; color: #333; margin-top: 4px;">${item.description}</div>` : ''}
-          ${isRejected ? `<div style="font-size: 10px; color: #dc2626; margin-top: 4px; font-weight: bold;">Reason: ${item.rejection_reason || 'Not specified'}</div>` : ''}
+          ${isRejected && item.rejection_reason ? `<div style="font-size: 10px; color: #dc2626; margin-top: 2px;">Reason: ${item.rejection_reason}</div>` : ''}
         </td>
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${item.quantity || 1}</td>
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${item.unit || 'Nos'}</td>

@@ -6,11 +6,11 @@ const getQuotationRequests = async (req, res, next) => {
   try {
     const { status } = req.query;
     let query = `
-      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason,
+      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
              so.project_name, c.company_name, cp.po_number,
              COALESCE(soi.drawing_no, '—') as drawing_no,
              COALESCE(soi.description, so.project_name) as item_description,
-             COALESCE(soi.quantity, 0) as item_qty,
+             COALESCE(cd.qty, cd2.qty) as item_qty,
              COALESCE(soi.unit, 'NOS') as item_unit,
              qr.id as id
       FROM quotation_requests qr
@@ -18,6 +18,11 @@ const getQuotationRequests = async (req, res, next) => {
       JOIN companies c ON c.id = qr.company_id
       LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
       LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+      LEFT JOIN customer_drawings cd ON cd.id = soi.drawing_id
+      LEFT JOIN (
+        SELECT drawing_no, qty, ROW_NUMBER() OVER (PARTITION BY drawing_no ORDER BY id DESC) as rn
+        FROM customer_drawings
+      ) cd2 ON cd2.drawing_no = soi.drawing_no AND cd2.rn = 1
       WHERE 1=1
     `;
     const params = [];
@@ -55,19 +60,32 @@ const approveQuotationRequest = async (req, res, next) => {
 const batchApproveQuotationRequests = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { ids } = req.body;
+    let { ids } = req.body;
+    
+    // ids might be a string if sent via FormData
+    if (typeof ids === 'string') {
+      try {
+        ids = JSON.parse(ids);
+      } catch (e) {
+        ids = ids.split(',').map(id => id.trim());
+      }
+    }
+
     if (!ids || !Array.isArray(ids)) {
       return res.status(400).json({ error: 'IDs array is required' });
     }
+
+    const replyPdfPath = req.file ? `/uploads/${req.file.filename}` : null;
+
     await connection.beginTransaction();
     for (const id of ids) {
       await connection.execute(
-        'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-        ['APPROVAL', id]
+        'UPDATE quotation_requests SET status = ?, reply_pdf = ?, updated_at = NOW() WHERE id = ?',
+        ['APPROVED', replyPdfPath, id]
       );
     }
     await connection.commit();
-    res.json({ message: 'Quotations moved to approval' });
+    res.json({ message: 'Quotations approved successfully' });
   } catch (error) {
     await connection.rollback();
     next(error);
@@ -156,7 +174,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
     const quotationPromises = items.map(item => {
       return new Promise(async (resolve, reject) => {
         try {
-          const lineTotal = (item.quotedPrice || 0) * (item.quantity || 1);
+          const lineTotal = (item.quotedPrice || 0) * (item.quantity || 0);
           const lineTotalInclGst = lineTotal * 1.18;
           const [result] = await connection.execute(
             `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, company_id, status, total_amount, received_amount, rejection_reason, notes, created_at)

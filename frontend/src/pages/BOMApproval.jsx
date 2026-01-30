@@ -54,7 +54,7 @@ const BOMApproval = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
+      const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true&allStatuses=true`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -63,10 +63,10 @@ const BOMApproval = () => {
       const data = await response.json();
       
       if (activeTab === 'pending') {
-        setOrders(data.filter(order => order.status === 'BOM_SUBMITTED'));
+        setOrders(data.filter(order => order.status === 'BOM_SUBMITTED' || order.status === 'DESIGN_APPROVED'));
       } else {
         setOrders(data.filter(order => 
-          ['BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION'].includes(order.status)
+          ['BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'COMPLETED'].includes(order.status)
         ));
       }
     } catch (error) {
