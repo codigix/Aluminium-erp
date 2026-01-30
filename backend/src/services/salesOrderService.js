@@ -1042,6 +1042,43 @@ const updateSalesOrderItem = async (itemId, data) => {
   );
 };
 
+const bulkUpdateItemStatus = async (itemIds, status, reason) => {
+  if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    throw new Error('No item IDs provided');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const placeholders = itemIds.map(() => '?').join(',');
+    await connection.execute(
+      `UPDATE sales_order_items SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id IN (${placeholders})`,
+      [status, status === 'REJECTED' ? reason : null, ...itemIds]
+    );
+
+    if (status === 'REJECTED' && reason) {
+      // Log rejection for each item's order
+      const [items] = await connection.query(`SELECT DISTINCT sales_order_id FROM sales_order_items WHERE id IN (${placeholders})`, itemIds);
+      for (const item of items) {
+        await connection.execute(
+          `INSERT INTO design_rejections (sales_order_id, reason, created_at)
+           VALUES (?, ?, NOW())`,
+          [item.sales_order_id, `Bulk Rejection: ${reason}`]
+        );
+      }
+    }
+
+    await connection.commit();
+    return { updatedCount: itemIds.length };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   listSalesOrders,
   getSalesOrderById,
@@ -1050,6 +1087,7 @@ module.exports = {
   createSalesOrder,
   updateSalesOrderStatus,
   bulkUpdateStatus,
+  bulkUpdateItemStatus,
   acceptRequest,
   rejectRequest,
   transitionToDepartment,

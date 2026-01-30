@@ -312,6 +312,17 @@ const DesignOrders = () => {
             reason: rejectData.reason 
           } : item
         ));
+
+        // Update local state for incoming orders
+        setIncomingOrders(prev => prev.map(order => 
+          order.item_id === rejectData.id ? { 
+            ...order, 
+            item_status: 'REJECTED', 
+            status: 'REJECTED',
+            item_rejection_reason: rejectData.reason,
+            rejection_reason: rejectData.reason 
+          } : order
+        ));
       }
       
       setShowRejectModal(false);
@@ -337,7 +348,7 @@ const DesignOrders = () => {
     if (selectedIncomingOrders.size === incomingOrders.length && incomingOrders.length > 0) {
       setSelectedIncomingOrders(new Set());
     } else {
-      setSelectedIncomingOrders(new Set(incomingOrders.map(o => o.id)));
+      setSelectedIncomingOrders(new Set(incomingOrders.map(o => o.item_id)));
     }
   };
 
@@ -385,26 +396,31 @@ const DesignOrders = () => {
     }
   };
 
-  const handleApproveItem = async (orderId) => {
+  const handleApproveItem = async (itemId) => {
     try {
       setBulkOperationLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/bulk/approve-designs`, {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ orderIds: [orderId] })
+        body: JSON.stringify({ status: 'APPROVED' })
       });
 
-      if (!response.ok) throw new Error('Failed to approve design');
+      if (!response.ok) throw new Error('Failed to approve item');
 
-      successToast('Design accepted and moved to Process tab');
+      successToast('Item approved');
       
       // Update local state if in review modal
       setReviewDetails(prev => prev.map(item => 
-        item.id === orderId ? { ...item, status: 'APPROVED', item_status: 'APPROVED' } : item
+        item.id === itemId ? { ...item, status: 'APPROVED', item_status: 'APPROVED' } : item
+      ));
+
+      // Update local state for incoming orders
+      setIncomingOrders(prev => prev.map(order => 
+        order.item_id === itemId ? { ...order, item_status: 'APPROVED', status: 'APPROVED' } : order
       ));
 
       fetchOrders();
@@ -424,31 +440,33 @@ const DesignOrders = () => {
 
     const result = await Swal.fire({
       title: 'Bulk Accept Designs',
-      text: `Are you sure you want to accept ${selectedIncomingOrders.size} design(s) and move them to the Process tab?`,
+      text: `Are you sure you want to approve ${selectedIncomingOrders.size} selected item(s)?`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#10b981',
-      confirmButtonText: 'Yes, accept all'
+      confirmButtonText: 'Yes, approve all'
     });
 
     if (result.isConfirmed) {
       try {
         setBulkOperationLoading(true);
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/sales-orders/bulk/approve-designs`, {
+        const response = await fetch(`${API_BASE}/sales-orders/bulk/items/status`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ orderIds: Array.from(selectedIncomingOrders) })
+          body: JSON.stringify({ 
+            itemIds: Array.from(selectedIncomingOrders),
+            status: 'APPROVED'
+          })
         });
 
-        if (!response.ok) throw new Error('Failed to approve designs');
+        if (!response.ok) throw new Error('Failed to approve items');
 
-        successToast(`${selectedIncomingOrders.size} designs accepted and moved to Process tab.`);
+        successToast(`${selectedIncomingOrders.size} items approved.`);
         setSelectedIncomingOrders(new Set());
-        setActiveTab('progress');
         fetchIncomingOrders();
         fetchOrders();
       } catch (error) {
@@ -480,18 +498,22 @@ const DesignOrders = () => {
       try {
         setBulkOperationLoading(true);
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/sales-orders/bulk/reject-designs`, {
+        const response = await fetch(`${API_BASE}/sales-orders/bulk/items/status`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ orderIds: Array.from(selectedIncomingOrders), reason: result.value })
+          body: JSON.stringify({ 
+            itemIds: Array.from(selectedIncomingOrders), 
+            status: 'REJECTED',
+            reason: result.value 
+          })
         });
 
-        if (!response.ok) throw new Error('Failed to reject designs');
+        if (!response.ok) throw new Error('Failed to reject items');
 
-        successToast(`${selectedIncomingOrders.size} designs rejected and sent back to Sales.`);
+        successToast(`${selectedIncomingOrders.size} items rejected and sent back to Sales.`);
         setSelectedIncomingOrders(new Set());
         fetchIncomingOrders();
       } catch (error) {
@@ -999,7 +1021,7 @@ const DesignOrders = () => {
                   
                   {Object.entries(groupedIncoming).map(([groupKey, group]) => {
                     const isExpanded = expandedIncomingPo[groupKey];
-                    const allSelected = group.orders.every(o => selectedIncomingOrders.has(o.id));
+                    const allSelected = group.orders.length > 0 && group.orders.every(o => selectedIncomingOrders.has(o.item_id));
 
                     return (
                       <div key={groupKey} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all hover:border-blue-200">
@@ -1015,8 +1037,8 @@ const DesignOrders = () => {
                                 onChange={(e) => {
                                   const newSelected = new Set(selectedIncomingOrders);
                                   group.orders.forEach(o => {
-                                    if (e.target.checked) newSelected.add(o.id);
-                                    else newSelected.delete(o.id);
+                                    if (e.target.checked) newSelected.add(o.item_id);
+                                    else newSelected.delete(o.item_id);
                                   });
                                   setSelectedIncomingOrders(newSelected);
                                 }}
@@ -1051,7 +1073,7 @@ const DesignOrders = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleAcceptAll(group.orders.map(o => o.id));
+                                handleAcceptAll([...new Set(group.orders.map(o => o.id))]);
                               }}
                               className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-xl text-xs  transition-all border border-indigo-100  tracking-tighter"
                             >
@@ -1066,9 +1088,9 @@ const DesignOrders = () => {
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {group.orders.map((order) => (
                                   <div 
-                                    key={order.id} 
+                                    key={order.item_id} 
                                     className={`bg-white rounded-xl border-2 transition-all group relative ${
-                                      selectedIncomingOrders.has(order.id) ? 'border-blue-500 shadow-md ring-4 ring-blue-50' : 'border-slate-100 hover:border-slate-300'
+                                      selectedIncomingOrders.has(order.item_id) ? 'border-blue-500 shadow-md ring-4 ring-blue-50' : 'border-slate-100 hover:border-slate-300'
                                     } ${order.item_status === 'REJECTED' ? 'bg-red-50/30' : ''}`}
                                   >
                                     <div className="p-4">
@@ -1076,10 +1098,10 @@ const DesignOrders = () => {
                                         <div className="flex items-center gap-3">
                                           <input
                                             type="checkbox"
-                                            checked={selectedIncomingOrders.has(order.id)}
+                                            checked={selectedIncomingOrders.has(order.item_id)}
                                             onChange={(e) => {
                                               e.stopPropagation();
-                                              toggleSelectOrder(order.id);
+                                              toggleSelectOrder(order.item_id);
                                             }}
                                             className="w-4 h-4 rounded-md border-slate-300 text-blue-600 focus:ring-blue-500"
                                           />
@@ -1144,9 +1166,9 @@ const DesignOrders = () => {
                                           <Eye className="w-3.5 h-3.5" />
                                           Review
                                         </button>
-                                        {(!(order.item_status || order.status) || (order.item_status || order.status) === 'PENDING') && (
+                                        {(!(order.item_status) || order.item_status === 'PENDING') && (
                                           <button 
-                                            onClick={(e) => { e.stopPropagation(); handleApproveItem(order.id); }}
+                                            onClick={(e) => { e.stopPropagation(); handleApproveItem(order.item_id); }}
                                             disabled={bulkOperationLoading}
                                             className="px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg text-[10px] font-medium border border-emerald-200 transition-all shadow-sm disabled:opacity-50"
                                           >
@@ -1154,9 +1176,9 @@ const DesignOrders = () => {
                                           </button>
                                         )}
                                       </div>
-                                      {(!(order.item_status || order.status) || (order.item_status || order.status) === 'PENDING') && (
+                                      {(!(order.item_status) || order.item_status === 'PENDING') && (
                                         <button 
-                                          onClick={(e) => { e.stopPropagation(); handleRejectItem(order.id); }}
+                                          onClick={(e) => { e.stopPropagation(); handleRejectItem(order.item_id); }}
                                           disabled={bulkOperationLoading}
                                           className="px-3 py-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-[10px] font-medium border border-transparent hover:border-red-200 transition-all disabled:opacity-50"
                                         >
@@ -1194,14 +1216,14 @@ const DesignOrders = () => {
                                   </thead>
                                   <tbody className="divide-y divide-slate-100">
                                     {group.orders.map((order) => (
-                                      <tr key={order.id} className={`hover:bg-slate-50 transition-colors ${selectedIncomingOrders.has(order.id) ? 'bg-blue-50/30' : ''}`}>
+                                      <tr key={order.item_id} className={`hover:bg-slate-50 transition-colors ${selectedIncomingOrders.has(order.item_id) ? 'bg-blue-50/30' : ''}`}>
                                         <td className="px-4 py-3">
                                           <input
                                             type="checkbox"
-                                            checked={selectedIncomingOrders.has(order.id)}
+                                            checked={selectedIncomingOrders.has(order.item_id)}
                                             onChange={(e) => {
                                               e.stopPropagation();
-                                              toggleSelectOrder(order.id);
+                                              toggleSelectOrder(order.item_id);
                                             }}
                                             className="w-4 h-4 rounded-md border-slate-300 text-blue-600 focus:ring-blue-500"
                                           />
@@ -1246,17 +1268,17 @@ const DesignOrders = () => {
                                               <Eye className="w-3.5 h-3.5" />
                                               <span>Review</span>
                                             </button>
-                                            {(!(order.item_status || order.status) || (order.item_status || order.status) === 'PENDING') && (
+                                            {(!(order.item_status) || order.item_status === 'PENDING') && (
                                               <>
                                                 <button 
-                                                  onClick={(e) => { e.stopPropagation(); handleApproveItem(order.id); }}
+                                                  onClick={(e) => { e.stopPropagation(); handleApproveItem(order.item_id); }}
                                                   disabled={bulkOperationLoading}
                                                   className="px-2.5 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 shadow-sm text-[10px] font-medium disabled:opacity-50"
                                                 >
                                                   Approve
                                                 </button>
                                                 <button 
-                                                  onClick={(e) => { e.stopPropagation(); handleRejectItem(order.id); }}
+                                                  onClick={(e) => { e.stopPropagation(); handleRejectItem(order.item_id); }}
                                                   disabled={bulkOperationLoading}
                                                   className="px-2.5 py-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-[10px] font-medium border border-transparent hover:border-red-200 disabled:opacity-50"
                                                 >

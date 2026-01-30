@@ -227,6 +227,16 @@ const updateSalesOrderItemStatus = async (req, res, next) => {
   }
 };
 
+const bulkUpdateItemStatus = async (req, res, next) => {
+  try {
+    const { itemIds, status, reason } = req.body;
+    const result = await salesOrderService.bulkUpdateItemStatus(itemIds, status, reason);
+    res.json({ success: true, message: `${result.updatedCount} items updated`, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listSalesOrders,
   getSalesOrderById,
@@ -235,6 +245,7 @@ module.exports = {
   createSalesOrder,
   updateSalesOrderStatus,
   bulkUpdateStatus,
+  bulkUpdateItemStatus,
   acceptRequest,
   rejectRequest,
   sendOrderToDesign,

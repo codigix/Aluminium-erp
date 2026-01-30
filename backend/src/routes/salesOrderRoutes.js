@@ -13,6 +13,7 @@ router.post('/', authorize(['ORDER_CREATE']), salesOrderController.createSalesOr
 router.post('/bulk/approve-designs', authorize(['STATUS_CHANGE']), salesOrderController.bulkApproveDesigns);
 router.post('/bulk/reject-designs', authorize(['STATUS_CHANGE']), salesOrderController.bulkRejectDesigns);
 router.post('/bulk/update-status', authorize(['STATUS_CHANGE']), salesOrderController.bulkUpdateStatus);
+router.post('/bulk/items/status', authorize(['STATUS_CHANGE']), salesOrderController.bulkUpdateItemStatus);
 router.patch('/:id/status', authorize(['STATUS_CHANGE']), salesOrderController.updateSalesOrderStatus);
 router.post('/:id/send-to-design', authorize(['STATUS_CHANGE']), salesOrderController.sendOrderToDesign);
 router.post('/:id/approve-design', authorize(['STATUS_CHANGE']), salesOrderController.approveDesign);
