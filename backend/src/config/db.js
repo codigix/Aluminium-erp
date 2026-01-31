@@ -632,7 +632,8 @@ const ensureSalesOrderItemColumns = async () => {
       { name: 'is_default', definition: 'TINYINT(1) DEFAULT 0' },
       { name: 'status', definition: "VARCHAR(50) DEFAULT 'PENDING'" },
       { name: 'rejection_reason', definition: 'TEXT' },
-      { name: 'bom_cost', definition: 'DECIMAL(14, 2) DEFAULT 0' }
+      { name: 'bom_cost', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'amount', definition: 'DECIMAL(14, 2) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -647,6 +648,35 @@ const ensureSalesOrderItemColumns = async () => {
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {
       console.error('Sales order item column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureSalesOrderColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM sales_orders');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'contact_email', definition: 'VARCHAR(255) NULL' },
+      { name: 'contact_phone', definition: 'VARCHAR(30) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE sales_orders ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Sales order columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Sales order column sync failed', error.message);
     }
   } finally {
     if (connection) connection.release();
@@ -1131,6 +1161,7 @@ const bootstrapDatabase = async () => {
   await ensureDesignOrderTables();
   await ensureQuotationRequestTables();
   await ensureQuotationRequestStatus();
+  await ensureSalesOrderColumns();
   await ensureSalesOrderItemColumns();
   await ensureSalesOrderStatuses();
   await ensureCustomerDrawingTable();

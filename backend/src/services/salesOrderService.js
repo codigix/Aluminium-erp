@@ -11,7 +11,9 @@ const listSalesOrders = async (includeWithoutPo = true, allStatuses = false) => 
             COALESCE(cp.po_number, CONCAT('QRT-', LPAD(qr.id, 4, '0'))) as po_number, 
             COALESCE(cp.po_date, qr.created_at) as po_date, 
             cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(ct.phone, ct.name) as contact_person, ct.email as email_address, ct.phone as contact_phone,
+            COALESCE(so.contact_email, ct.email) as contact_email, 
+            COALESCE(so.contact_phone, ct.phone) as contact_phone,
+            COALESCE(ct.phone, ct.name) as contact_person,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
@@ -40,7 +42,9 @@ const getSalesOrderById = async (id) => {
             COALESCE(cp.po_number, CONCAT('QRT-', LPAD(qr.id, 4, '0'))) as po_number, 
             COALESCE(cp.po_date, qr.created_at) as po_date, 
             cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(ct.phone, ct.name) as contact_person, ct.email as email_address, ct.phone as contact_phone,
+            COALESCE(so.contact_email, ct.email) as contact_email, 
+            COALESCE(so.contact_phone, ct.phone) as contact_phone,
+            COALESCE(ct.phone, ct.name) as contact_person,
             COALESCE(so.customer_po_id, CONCAT('QRT-', so.quotation_id)) as customer_po_id
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
@@ -120,7 +124,9 @@ const createSalesOrder = async (orderData) => {
     profit_margin = 0,
     bom_id = null,
     warehouse = null,
-    status = 'CREATED'
+    status = 'CREATED',
+    contact_email = null,
+    contact_phone = null
   } = orderData;
 
   // Handle Quotation-based workflow
@@ -138,16 +144,18 @@ const createSalesOrder = async (orderData) => {
 
     const [result] = await connection.execute(
       `INSERT INTO sales_orders (
-        customer_po_id, quotation_id, company_id, project_name, drawing_required, 
+        customer_po_id, quotation_id, company_id, contact_email, contact_phone, project_name, drawing_required, 
         production_priority, target_dispatch_date, status, 
         current_department, request_accepted, cgst_rate, 
         sgst_rate, profit_margin, bom_id, warehouse
       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?)`,
       [
         actualPoId,
         quotationId,
         companyId, 
+        contact_email,
+        contact_phone,
         projectName || null, 
         drawingRequired, 
         productionPriority, 
@@ -182,9 +190,10 @@ const createSalesOrder = async (orderData) => {
     }
 
     for (const item of orderItems) {
+      const itemAmount = item.amount || (Number(item.rate || 0) * Number(item.quantity || 0));
       const [itemResult] = await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status, rejection_reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, amount, delivery_date, tax_value, status, rejection_reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           salesOrderId, 
           item.item_code, 
@@ -195,6 +204,7 @@ const createSalesOrder = async (orderData) => {
           item.quantity, 
           item.unit || 'NOS', 
           item.rate || 0, 
+          itemAmount,
           item.delivery_date || null, 
           item.tax_value || 0,
           item.status || (item.item_status) || 'PENDING',
@@ -312,7 +322,9 @@ const updateSalesOrder = async (id, orderData) => {
     bom_id,
     customerPoId,
     warehouse,
-    status
+    status,
+    contact_email,
+    contact_phone
   } = orderData;
 
   // Handle Quotation-based workflow
@@ -331,6 +343,8 @@ const updateSalesOrder = async (id, orderData) => {
     await connection.execute(
       `UPDATE sales_orders SET 
         company_id = ?, 
+        contact_email = ?,
+        contact_phone = ?,
         project_name = ?, 
         drawing_required = ?, 
         production_priority = ?, 
@@ -347,6 +361,8 @@ const updateSalesOrder = async (id, orderData) => {
        WHERE id = ?`,
       [
         companyId, 
+        contact_email || null,
+        contact_phone || null,
         projectName || null, 
         drawingRequired || 0, 
         productionPriority || 'NORMAL', 
@@ -368,9 +384,10 @@ const updateSalesOrder = async (id, orderData) => {
       await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [id]);
       
       for (const item of items) {
+        const itemAmount = item.amount || (Number(item.rate || 0) * Number(item.quantity || 0));
         await connection.execute(
-          `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, amount, delivery_date, tax_value, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, 
             item.item_code, 
@@ -380,6 +397,7 @@ const updateSalesOrder = async (id, orderData) => {
             item.quantity, 
             item.unit || 'NOS', 
             item.rate, 
+            itemAmount,
             item.delivery_date || null, 
             item.tax_value || 0,
             item.status || 'PENDING'
