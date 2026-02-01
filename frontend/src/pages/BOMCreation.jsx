@@ -140,9 +140,21 @@ const BOMCreation = () => {
         drawings.add(dwgNo);
         if (i.has_bom) totalBOMs++;
         totalItems++;
-        // Only include Finished Goods (FG) in the estimated total value
-        const isFG = (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'));
-        if (isFG) {
+        const group = (i.item_group || '').toLowerCase();
+        const type = (i.material_type || '').toLowerCase();
+        const prodType = (i.product_type || '').toLowerCase();
+
+        const isFG = group === 'fg' || prodType === 'fg' || group.includes('finished') || prodType.includes('finished') || type.includes('finished');
+        
+        // If it's explicitly a Sub Assembly, it's not FG for stats purposes if we only want true Finished Goods
+        const code = (i.item_code || '').toLowerCase();
+        const isExplicitSubAssembly = 
+          group.includes('sub assembly') || group.includes('sub-assembly') || group.includes('subassembly') || group === 'sa' || group.includes('semi-finished') || group.includes('wip') ||
+          type.includes('sub assembly') || type.includes('sub-assembly') || type.includes('subassembly') || type === 'sa' || type.includes('semi-finished') || type.includes('wip') ||
+          prodType.includes('sub assembly') || prodType.includes('sub-assembly') || prodType.includes('subassembly') || prodType === 'sa' || prodType.includes('semi-finished') || prodType.includes('wip') ||
+          code.startsWith('sa-') || code.startsWith('wip-') || code.startsWith('sfg-');
+
+        if (isFG && !isExplicitSubAssembly) {
           totalCost += (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
         }
       });

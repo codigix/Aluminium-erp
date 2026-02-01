@@ -62,12 +62,16 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
     validateGRNItemInput(poQty, acceptedQty);
 
     const [poItem] = await connection.query(
-      'SELECT item_code, description FROM purchase_order_items WHERE id = ?',
+      'SELECT item_code, description, material_name, material_type, item_group, product_type FROM purchase_order_items WHERE id = ?',
       [poItemId]
     );
 
     const itemCode = poItem.length ? poItem[0].item_code : null;
     const itemDescription = poItem.length ? poItem[0].description : null;
+    const materialName = poItem.length ? poItem[0].material_name : null;
+    const materialType = poItem.length ? poItem[0].material_type : null;
+    const itemGroup = poItem.length ? poItem[0].item_group : null;
+    const productType = poItem.length ? poItem[0].product_type : null;
 
     const grnItemStatus = determineGRNItemStatus(poQty, acceptedQty);
     const shortageQty = acceptedQty < poQty ? poQty - acceptedQty : 0;
@@ -78,8 +82,9 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
     const [result] = await connection.execute(
       `INSERT INTO grn_items (
         grn_id, po_item_id, po_qty, received_qty, accepted_qty, rejected_qty,
-        shortage_qty, overage_qty, status, remarks, is_approved
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        shortage_qty, overage_qty, status, remarks, is_approved,
+        material_name, material_type, item_group, product_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         grnId,
         poItemId,
@@ -91,7 +96,11 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
         overageQty,
         grnItemStatus,
         remarks,
-        false
+        false,
+        materialName,
+        materialType,
+        itemGroup,
+        productType
       ]
     );
 
@@ -103,7 +112,7 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
         [grnId]
       );
 
-      await stockService.updateStockBalance(itemCode, poQty, receivedQty, acceptedQty, 0, itemDescription);
+      await stockService.updateStockBalance(itemCode, poQty, receivedQty, acceptedQty, 0, itemDescription, null, materialName, materialType, itemGroup, productType);
 
       await stockService.addStockLedgerEntry(
         itemCode,
@@ -113,7 +122,11 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
         grnId,
         `GRN-${String(grnId).padStart(4, '0')}`,
         remarks,
-        null
+        null,
+        materialName,
+        materialType,
+        itemGroup,
+        productType
       );
     }
 
@@ -377,6 +390,8 @@ const getGRNItemsByGrnId = async (grnId) => {
       poi.amount,
       poi.material_name,
       poi.material_type,
+      poi.item_group,
+      poi.product_type,
       poi.drawing_no,
       gea.id as excess_approval_id,
       gea.status as excess_approval_status,

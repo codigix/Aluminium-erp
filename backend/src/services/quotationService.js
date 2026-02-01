@@ -46,8 +46,8 @@ const createQuotation = async (payload) => {
         totalAmount += amount;
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, drawing_id, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, item_group, product_type, drawing_no, drawing_id, quantity, unit, unit_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -55,6 +55,8 @@ const createQuotation = async (payload) => {
             item.description || null,
             item.material_name || null,
             item.material_type || null,
+            item.item_group || null,
+            item.product_type || null,
             item.drawing_no || null,
             item.drawing_id || null,
             item.quantity || 0,
@@ -188,8 +190,8 @@ const updateQuotation = async (quotationId, payload) => {
         totalAmount += amount;
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, drawing_id, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, item_group, product_type, drawing_no, drawing_id, quantity, unit, unit_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -197,6 +199,8 @@ const updateQuotation = async (quotationId, payload) => {
             item.description || null,
             item.material_name || null,
             item.material_type || null,
+            item.item_group || null,
+            item.product_type || null,
             item.drawing_no || null,
             item.drawing_id || null,
             item.quantity || 0,

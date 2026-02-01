@@ -89,7 +89,10 @@ const getIncomingOrders = async (departmentCode) => {
             cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
-            sb.material_type as item_group,
+            COALESCE(soi.material_name, sb.material_name) as material_name,
+            COALESCE(soi.material_type, sb.material_type) as material_type,
+            COALESCE(soi.item_group, sb.item_group) as item_group,
+            COALESCE(soi.product_type, sb.product_type) as product_type,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
@@ -97,7 +100,8 @@ const getIncomingOrders = async (departmentCode) => {
      LEFT JOIN quotation_requests qr ON qr.id = so.quotation_id
      LEFT JOIN departments d ON d.code = so.current_department
      LEFT JOIN (
-       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit, status as item_status, rejection_reason as item_rejection_reason
+       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit, status as item_status, rejection_reason as item_rejection_reason,
+              material_name, material_type, item_group, product_type
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id
      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
@@ -177,13 +181,13 @@ const createSalesOrder = async (orderData) => {
       orderItems = items;
     } else if (actualPoId) {
       const [poItems] = await connection.query(
-        'SELECT item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, (cgst_amount + sgst_amount + igst_amount) as tax_value FROM customer_po_items WHERE customer_po_id = ?',
+        'SELECT item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, (cgst_amount + sgst_amount + igst_amount) as tax_value, material_name, material_type, item_group, product_type FROM customer_po_items WHERE customer_po_id = ?',
         [actualPoId]
       );
       orderItems = poItems;
     } else if (quotationId) {
       const [quoteItems] = await connection.query(
-        'SELECT item_code, description, quantity, unit, unit_rate as rate, amount as tax_value FROM quotation_items WHERE quotation_id = ?',
+        'SELECT item_code, description, quantity, unit, unit_rate as rate, amount as tax_value, material_name, material_type, item_group, product_type FROM quotation_items WHERE quotation_id = ?',
         [quotationId]
       );
       orderItems = quoteItems;
@@ -192,8 +196,8 @@ const createSalesOrder = async (orderData) => {
     for (const item of orderItems) {
       const itemAmount = item.amount || (Number(item.rate || 0) * Number(item.quantity || 0));
       const [itemResult] = await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, amount, delivery_date, tax_value, status, rejection_reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, amount, delivery_date, tax_value, status, rejection_reason, material_name, material_type, item_group, product_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           salesOrderId, 
           item.item_code, 
@@ -208,7 +212,11 @@ const createSalesOrder = async (orderData) => {
           item.delivery_date || null, 
           item.tax_value || 0,
           item.status || (item.item_status) || 'PENDING',
-          item.rejection_reason || (item.item_rejection_reason) || null
+          item.rejection_reason || (item.item_rejection_reason) || null,
+          item.material_name || null,
+          item.material_type || null,
+          item.item_group || null,
+          item.product_type || null
         ]
       );
 
@@ -219,13 +227,14 @@ const createSalesOrder = async (orderData) => {
         for (const mat of item.materials) {
           await connection.execute(
             `INSERT INTO sales_order_item_materials 
-             (sales_order_item_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (sales_order_item_id, material_name, material_type, item_group, product_type, qty_per_pc, uom, rate, warehouse, operation) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               salesOrderItemId, 
               mat.material_name || mat.materialName || null, 
               mat.material_type || mat.materialType || null, 
               mat.item_group || mat.itemGroup || null,
+              mat.product_type || mat.productType || null,
               mat.qty_per_pc || mat.qtyPerPc || mat.qty || 0, 
               mat.uom || null,
               mat.rate || 0,
@@ -241,11 +250,15 @@ const createSalesOrder = async (orderData) => {
         for (const comp of item.components) {
           await connection.execute(
             `INSERT INTO sales_order_item_components 
-             (sales_order_item_id, component_code, description, quantity, uom, rate, loss_percent, notes) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             (sales_order_item_id, component_code, material_name, material_type, item_group, product_type, description, quantity, uom, rate, loss_percent, notes) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               salesOrderItemId,
               comp.component_code || comp.componentCode || null,
+              comp.material_name || comp.materialName || null,
+              comp.material_type || comp.materialType || null,
+              comp.item_group || comp.itemGroup || null,
+              comp.product_type || comp.productType || null,
               comp.description || null,
               comp.quantity || 0,
               comp.uom || null,
@@ -283,12 +296,15 @@ const createSalesOrder = async (orderData) => {
         for (const s of item.scrap) {
           await connection.execute(
             `INSERT INTO sales_order_item_scrap 
-             (sales_order_item_id, item_code, item_name, input_qty, loss_percent, rate) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
+             (sales_order_item_id, item_code, item_name, material_type, item_group, product_type, input_qty, loss_percent, rate) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               salesOrderItemId,
               s.item_code || s.itemCode || null,
               s.item_name || s.itemName || null,
+              s.material_type || s.materialType || null,
+              s.item_group || s.itemGroup || null,
+              s.product_type || s.productType || null,
               s.input_qty || s.inputQty || 0,
               s.loss_percent || s.lossPercent || 0,
               s.rate || 0
@@ -385,24 +401,122 @@ const updateSalesOrder = async (id, orderData) => {
       
       for (const item of items) {
         const itemAmount = item.amount || (Number(item.rate || 0) * Number(item.quantity || 0));
-        await connection.execute(
-          `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, amount, delivery_date, tax_value, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        const [itemResult] = await connection.execute(
+          `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, amount, delivery_date, tax_value, status, material_name, material_type, item_group, product_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, 
             item.item_code, 
             item.drawing_no || null, 
+            item.drawing_id || null,
             item.revision_no || null, 
             item.description, 
             item.quantity, 
             item.unit || 'NOS', 
-            item.rate, 
+            item.rate || 0, 
             itemAmount,
             item.delivery_date || null, 
             item.tax_value || 0,
-            item.status || 'PENDING'
+            item.status || 'PENDING',
+            item.material_name || null,
+            item.material_type || null,
+            item.item_group || null,
+            item.product_type || null
           ]
         );
+
+        const salesOrderItemId = itemResult.insertId;
+
+        // Re-insert materials if provided
+        if (item.materials && Array.isArray(item.materials)) {
+          for (const mat of item.materials) {
+            await connection.execute(
+              `INSERT INTO sales_order_item_materials 
+               (sales_order_item_id, material_name, material_type, item_group, product_type, qty_per_pc, uom, rate, warehouse, operation) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                salesOrderItemId,
+                mat.material_name || mat.materialName || null,
+                mat.material_type || mat.materialType || null,
+                mat.item_group || mat.itemGroup || null,
+                mat.product_type || mat.productType || null,
+                mat.qty_per_pc || mat.qtyPerPc || mat.qty || 0,
+                mat.uom || null,
+                mat.rate || 0,
+                mat.warehouse || null,
+                mat.operation || null
+              ]
+            );
+          }
+        }
+
+        // Re-insert components if provided
+        if (item.components && Array.isArray(item.components)) {
+          for (const comp of item.components) {
+            await connection.execute(
+              `INSERT INTO sales_order_item_components 
+               (sales_order_item_id, component_code, material_name, material_type, item_group, product_type, description, quantity, uom, rate, loss_percent, notes) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                salesOrderItemId,
+                comp.component_code || comp.componentCode || null,
+                comp.material_name || comp.materialName || null,
+                comp.material_type || comp.materialType || null,
+                comp.item_group || comp.itemGroup || null,
+                comp.product_type || comp.productType || null,
+                comp.description || null,
+                comp.quantity || 0,
+                comp.uom || null,
+                comp.rate || 0,
+                comp.loss_percent || comp.lossPercent || 0,
+                comp.notes || null
+              ]
+            );
+          }
+        }
+
+        // Re-insert operations if provided
+        if (item.operations && Array.isArray(item.operations)) {
+          for (const op of item.operations) {
+            await connection.execute(
+              `INSERT INTO sales_order_item_operations 
+               (sales_order_item_id, operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                salesOrderItemId,
+                op.operation_name || op.operationName || null,
+                op.workstation || null,
+                op.cycle_time_min || op.cycleTimeMin || 0,
+                op.setup_time_min || op.setupTimeMin || 0,
+                op.hourly_rate || op.hourlyRate || 0,
+                op.operation_type || op.operationType || null,
+                op.target_warehouse || op.targetWarehouse || null
+              ]
+            );
+          }
+        }
+
+        // Re-insert scrap if provided
+        if (item.scrap && Array.isArray(item.scrap)) {
+          for (const s of item.scrap) {
+            await connection.execute(
+              `INSERT INTO sales_order_item_scrap 
+               (sales_order_item_id, item_code, item_name, material_type, item_group, product_type, input_qty, loss_percent, rate) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                salesOrderItemId,
+                s.item_code || s.itemCode || null,
+                s.item_name || s.itemName || null,
+                s.material_type || s.materialType || null,
+                s.item_group || s.itemGroup || null,
+                s.product_type || s.productType || null,
+                s.input_qty || s.inputQty || 0,
+                s.loss_percent || s.lossPercent || 0,
+                s.rate || 0
+              ]
+            );
+          }
+        }
       }
     }
 
@@ -764,11 +878,21 @@ const getOrderTimeline = async salesOrderId => {
   );
 
   const [allComponents] = await pool.query(
-    `SELECT * FROM sales_order_item_components 
-     WHERE sales_order_item_id IN (?) 
-     OR (item_code IN (?) AND sales_order_item_id IS NULL)
-     OR (drawing_no IN (?) AND sales_order_item_id IS NULL AND item_code IS NULL)
-     ORDER BY created_at ASC`,
+    `SELECT c.*, 
+            COALESCE(sb.product_type, soi.item_group) as item_group,
+            sb.material_type,
+            sb.product_type
+     FROM sales_order_item_components c
+     LEFT JOIN stock_balance sb ON c.component_code = sb.item_code
+     LEFT JOIN (
+       SELECT item_code, MAX(item_group) as item_group
+       FROM sales_order_items
+       GROUP BY item_code
+     ) soi ON c.component_code = soi.item_code
+     WHERE c.sales_order_item_id IN (?) 
+     OR (c.item_code IN (?) AND c.sales_order_item_id IS NULL)
+     OR (c.drawing_no IN (?) AND c.sales_order_item_id IS NULL AND c.item_code IS NULL)
+     ORDER BY c.created_at ASC`,
     [itemIds, itemCodes.length > 0 ? itemCodes : [null], drawingNos.length > 0 ? drawingNos : [null]]
   );
 

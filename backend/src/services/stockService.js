@@ -130,6 +130,8 @@ const getStockBalance = async (drawingNo = null) => {
       drawing_id,
       revision,
       material_grade,
+      item_group,
+      product_type,
       last_updated
     FROM stock_balance
   `;
@@ -175,6 +177,8 @@ const getStockBalance = async (drawingNo = null) => {
       drawing_id: balance.drawing_id,
       revision: balance.revision,
       material_grade: balance.material_grade,
+      item_group: balance.item_group,
+      product_type: balance.product_type,
       last_updated: balance.last_updated
     });
   }
@@ -184,7 +188,7 @@ const getStockBalance = async (drawingNo = null) => {
 
 const getStockBalanceByItem = async (itemCode) => {
   const [balance] = await pool.query(`
-    SELECT id, item_code, item_description, material_name, material_type, unit, drawing_no, drawing_id, last_updated FROM stock_balance WHERE item_code = ?
+    SELECT id, item_code, item_description, material_name, material_type, item_group, product_type, unit, drawing_no, drawing_id, last_updated FROM stock_balance WHERE item_code = ?
   `, [itemCode]);
 
   if (balance.length === 0) {
@@ -205,6 +209,8 @@ const getStockBalanceByItem = async (itemCode) => {
     item_description: balance[0].item_description,
     material_name: balance[0].material_name,
     material_type: balance[0].material_type,
+    item_group: balance[0].item_group,
+    product_type: balance[0].product_type,
     drawing_no: balance[0].drawing_no,
     drawing_id: balance[0].drawing_id,
     po_qty: poQty,
@@ -217,7 +223,7 @@ const getStockBalanceByItem = async (itemCode) => {
   };
 };
 
-const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocType = null, refDocId = null, refDocNumber = null, remarks = null, userId = null) => {
+const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocType = null, refDocId = null, refDocNumber = null, remarks = null, userId = null, materialName = null, materialType = null, itemGroup = null, productType = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -225,8 +231,10 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     let existingBalance = await getStockBalanceByItem(itemCode);
 
     let newBalance = 0;
-    const matName = existingBalance?.material_name || null;
-    const matType = existingBalance?.material_type || null;
+    const matName = materialName || existingBalance?.material_name || null;
+    const matType = materialType || existingBalance?.material_type || null;
+    const itmGroup = itemGroup || existingBalance?.item_group || null;
+    const prodType = productType || existingBalance?.product_type || null;
 
     if (existingBalance) {
       const currentBalance = parseFloat(existingBalance.current_balance) || 0;
@@ -242,9 +250,9 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
       await connection.execute(`
         INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [itemCode, matName, matType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
+        (item_code, material_name, material_type, item_group, product_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, matName, matType, itmGroup, prodType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
 
       await connection.execute(`
         UPDATE stock_balance 
@@ -259,15 +267,15 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
       await connection.execute(`
         INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [itemCode, matName, matType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
+        (item_code, material_name, material_type, item_group, product_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, matName, matType, itmGroup, prodType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
 
       await connection.execute(`
         INSERT INTO stock_balance 
-        (item_code, current_balance, material_name, material_type)
-        VALUES (?, ?, ?, ?)
-      `, [itemCode, newBalance, matName, matType]);
+        (item_code, current_balance, material_name, material_type, item_group, product_type)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [itemCode, newBalance, matName, matType, itmGroup || matType, prodType]);
     }
 
     await connection.commit();
@@ -291,13 +299,15 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
     console.log(`[Stock] Creating entry for QC:${qcId}, GRN:${grnId}, Item:${itemCode}, Qty:${passQty}`);
 
     const [poItemRows] = await useConnection.query(
-      `SELECT material_name, material_type, drawing_no, drawing_id FROM purchase_order_items poi
+      `SELECT material_name, material_type, item_group, product_type, drawing_no, drawing_id FROM purchase_order_items poi
        JOIN grn_items gi ON poi.id = gi.po_item_id
        WHERE gi.id = ?`,
       [grnItemId]
     );
     const material_name = poItemRows[0]?.material_name || null;
     const material_type = poItemRows[0]?.material_type || null;
+    const item_group = poItemRows[0]?.item_group || null;
+    const product_type = poItemRows[0]?.product_type || null;
     const drawing_no = poItemRows[0]?.drawing_no || null;
     const drawing_id = poItemRows[0]?.drawing_id || null;
 
@@ -319,11 +329,13 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
     }
 
     const [currentBalanceRow] = await useConnection.query(
-      `SELECT current_balance FROM stock_balance WHERE item_code = ? FOR UPDATE`,
+      `SELECT current_balance, item_group, product_type FROM stock_balance WHERE item_code = ? FOR UPDATE`,
       [itemCode]
     );
 
     let newBalance = 0;
+    let finalItemGroup = item_group || currentBalanceRow[0]?.item_group || material_type;
+    let finalProductType = product_type || currentBalanceRow[0]?.product_type;
 
     if (currentBalanceRow.length > 0) {
       newBalance = parseFloat(currentBalanceRow[0].current_balance) || 0;
@@ -332,14 +344,14 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
       await useConnection.execute(
         `INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, drawing_no, drawing_id, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemCode, material_name, material_type, drawing_no, drawing_id, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
+        (item_code, material_name, material_type, item_group, product_type, drawing_no, drawing_id, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemCode, material_name, material_type, finalItemGroup, finalProductType, drawing_no, drawing_id, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
       );
 
       await useConnection.execute(
-        `UPDATE stock_balance SET current_balance = ?, material_name = ?, material_type = ?, drawing_no = ?, drawing_id = ?, last_updated = CURRENT_TIMESTAMP WHERE item_code = ?`,
-        [newBalance, material_name, material_type, drawing_no, drawing_id, itemCode]
+        `UPDATE stock_balance SET current_balance = ?, material_name = ?, material_type = ?, item_group = ?, product_type = ?, drawing_no = ?, drawing_id = ?, last_updated = CURRENT_TIMESTAMP WHERE item_code = ?`,
+        [newBalance, material_name, material_type, finalItemGroup, finalProductType, drawing_no, drawing_id, itemCode]
       );
       console.log(`[Stock] Created ledger entry and updated balance`);
     } else {
@@ -348,15 +360,15 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
       await useConnection.execute(
         `INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, drawing_no, drawing_id, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemCode, material_name, material_type, drawing_no, drawing_id, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
+        (item_code, material_name, material_type, item_group, product_type, drawing_no, drawing_id, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemCode, material_name, material_type, finalItemGroup, finalProductType, drawing_no, drawing_id, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
       );
 
       await useConnection.execute(
-        `INSERT INTO stock_balance (item_code, material_name, material_type, drawing_no, drawing_id, current_balance) VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE current_balance = VALUES(current_balance), material_name = VALUES(material_name), material_type = VALUES(material_type), drawing_no = VALUES(drawing_no), drawing_id = VALUES(drawing_id), last_updated = CURRENT_TIMESTAMP`,
-        [itemCode, material_name, material_type, drawing_no, drawing_id, newBalance]
+        `INSERT INTO stock_balance (item_code, material_name, material_type, item_group, product_type, drawing_no, drawing_id, current_balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE current_balance = VALUES(current_balance), material_name = VALUES(material_name), material_type = VALUES(material_type), item_group = VALUES(item_group), product_type = VALUES(product_type), drawing_no = VALUES(drawing_no), drawing_id = VALUES(drawing_id), last_updated = CURRENT_TIMESTAMP`,
+        [itemCode, material_name, material_type, finalItemGroup, finalProductType, drawing_no, drawing_id, newBalance]
       );
       console.log(`[Stock] Created new balance and ledger entry`);
     }
@@ -377,7 +389,7 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
   }
 };
 
-const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, acceptedQty = null, issuedQty = null, itemDescription = null, unit = null, materialName = null, materialType = null) => {
+const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, acceptedQty = null, issuedQty = null, itemDescription = null, unit = null, materialName = null, materialType = null, itemGroup = null, productType = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -427,6 +439,16 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
       params.push(materialType);
     }
 
+    if (itemGroup !== null && itemGroup !== undefined) {
+      setClauses.push('item_group = ?');
+      params.push(itemGroup);
+    }
+
+    if (productType !== null && productType !== undefined) {
+      setClauses.push('product_type = ?');
+      params.push(productType);
+    }
+
     if (existing) {
       if (setClauses.length > 0) {
         setClauses.push('last_updated = CURRENT_TIMESTAMP');
@@ -438,8 +460,8 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
       }
     } else {
       await connection.execute(`
-        INSERT INTO stock_balance (item_code, item_description, unit, po_qty, received_qty, accepted_qty, issued_qty, material_name, material_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO stock_balance (item_code, item_description, unit, po_qty, received_qty, accepted_qty, issued_qty, material_name, material_type, item_group, product_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         itemCode,
         itemDescription || null,
@@ -449,7 +471,9 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
         acceptedQty || 0,
         issuedQty || 0,
         materialName || null,
-        materialType || null
+        materialType || null,
+        itemGroup || materialType || null,
+        productType || null
       ]);
     }
 
@@ -529,15 +553,17 @@ const createItem = async (itemData) => {
 
     await connection.execute(`
       INSERT INTO stock_balance (
-        item_code, material_name, material_type, unit, 
+        item_code, material_name, material_type, item_group, product_type, unit, 
         valuation_rate, selling_rate, no_of_cavity, 
         weight_per_unit, weight_uom, drawing_no, 
         revision, material_grade
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       itemCode,
       itemData.itemName,
+      itemData.materialType || itemData.itemGroup,
       itemData.itemGroup,
+      itemData.productType || null,
       itemData.defaultUom || 'Nos',
       itemData.valuationRate || 0,
       itemData.sellingRate || 0,
@@ -567,7 +593,8 @@ const updateItem = async (id, itemData) => {
 
     await connection.execute(`
       UPDATE stock_balance SET
-        item_code = ?, material_name = ?, material_type = ?, unit = ?, 
+        item_code = ?, material_name = ?, material_type = ?, 
+        item_group = ?, product_type = ?, unit = ?, 
         valuation_rate = ?, selling_rate = ?, no_of_cavity = ?, 
         weight_per_unit = ?, weight_uom = ?, drawing_no = ?, 
         revision = ?, material_grade = ?, last_updated = CURRENT_TIMESTAMP
@@ -575,7 +602,9 @@ const updateItem = async (id, itemData) => {
     `, [
       itemData.itemCode,
       itemData.itemName,
+      itemData.materialType || itemData.itemGroup,
       itemData.itemGroup,
+      itemData.productType || null,
       itemData.defaultUom || 'Nos',
       itemData.valuationRate || 0,
       itemData.sellingRate || 0,

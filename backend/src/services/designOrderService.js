@@ -22,7 +22,9 @@ const listDesignOrders = async () => {
       soi.status as item_status,
       soi.rejection_reason as item_rejection_reason,
       soi.quantity as total_quantity,
-      sb.material_type as item_group
+      sb.item_group,
+      sb.material_type,
+      sb.product_type
     FROM design_orders do
     JOIN sales_orders so ON do.sales_order_id = so.id
     JOIN sales_order_items soi ON soi.sales_order_id = so.id

@@ -124,6 +124,8 @@ const ensurePurchaseOrderItemColumns = async () => {
       { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
+      { name: 'product_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
       { name: 'drawing_id', definition: 'INT NULL' }
     ];
@@ -159,6 +161,8 @@ const ensureQuotationItemColumns = async () => {
     const requiredColumns = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
+      { name: 'product_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
       { name: 'drawing_id', definition: 'INT NULL' }
     ];
@@ -264,6 +268,8 @@ const ensurePoMaterialRequestColumns = async () => {
       { name: 'accepted_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
+      { name: 'product_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
       { name: 'drawing_id', definition: 'INT NULL' }
     ];
@@ -325,6 +331,7 @@ const ensureStockColumns = async () => {
     const requiredStockCols = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
       { name: 'product_type', definition: 'VARCHAR(100) NULL' },
       { name: 'valuation_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'selling_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
@@ -366,25 +373,33 @@ const ensureStockColumns = async () => {
     await connection.query(`
       UPDATE stock_ledger sl
       JOIN (
-        SELECT item_code, ANY_VALUE(material_name) as material_name, ANY_VALUE(material_type) as material_type 
+        SELECT item_code, ANY_VALUE(material_name) as material_name, ANY_VALUE(material_type) as material_type,
+               ANY_VALUE(item_group) as item_group, ANY_VALUE(product_type) as product_type
         FROM purchase_order_items 
         WHERE material_name IS NOT NULL
         GROUP BY item_code
       ) poi ON sl.item_code = poi.item_code
-      SET sl.material_name = poi.material_name, sl.material_type = poi.material_type
-      WHERE sl.material_name IS NULL
+      SET sl.material_name = poi.material_name, 
+          sl.material_type = poi.material_type,
+          sl.item_group = COALESCE(sl.item_group, poi.item_group, poi.material_type),
+          sl.product_type = COALESCE(sl.product_type, poi.product_type)
+      WHERE sl.material_name IS NULL OR sl.item_group IS NULL
     `);
 
     await connection.query(`
       UPDATE stock_balance sb
       JOIN (
-        SELECT item_code, ANY_VALUE(material_name) as material_name, ANY_VALUE(material_type) as material_type 
+        SELECT item_code, ANY_VALUE(material_name) as material_name, ANY_VALUE(material_type) as material_type,
+               ANY_VALUE(item_group) as item_group, ANY_VALUE(product_type) as product_type
         FROM purchase_order_items 
         WHERE material_name IS NOT NULL
         GROUP BY item_code
       ) poi ON sb.item_code = poi.item_code
-      SET sb.material_name = poi.material_name, sb.material_type = poi.material_type
-      WHERE sb.material_name IS NULL
+      SET sb.material_name = poi.material_name, 
+          sb.material_type = poi.material_type,
+          sb.item_group = COALESCE(sb.item_group, poi.item_group, poi.material_type),
+          sb.product_type = COALESCE(sb.product_type, poi.product_type)
+      WHERE sb.material_name IS NULL OR sb.item_group IS NULL
     `);
 
   } catch (error) {
@@ -622,12 +637,15 @@ const ensureSalesOrderItemColumns = async () => {
     const [columns] = await connection.query('SHOW COLUMNS FROM sales_order_items');
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
+      { name: 'material_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
+      { name: 'product_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
       { name: 'drawing_id', definition: 'INT NULL' },
       { name: 'revision_no', definition: 'VARCHAR(50) NULL' },
       { name: 'drawing_pdf', definition: 'VARCHAR(500) NULL' },
       { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
-      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
       { name: 'is_active', definition: 'TINYINT(1) DEFAULT 1' },
       { name: 'is_default', definition: 'TINYINT(1) DEFAULT 0' },
       { name: 'status', definition: "VARCHAR(50) DEFAULT 'PENDING'" },
@@ -645,6 +663,24 @@ const ensureSalesOrderItemColumns = async () => {
 
     await connection.query(alterSql);
     console.log('Sales order item columns synchronized');
+
+    // Populate existing records if possible from stock or PO
+    await connection.query(`
+      UPDATE sales_order_items soi
+      LEFT JOIN stock_balance sb ON soi.item_code = sb.item_code
+      LEFT JOIN (
+        SELECT item_code, ANY_VALUE(material_name) as material_name, ANY_VALUE(material_type) as material_type,
+               ANY_VALUE(item_group) as item_group, ANY_VALUE(product_type) as product_type
+        FROM purchase_order_items 
+        WHERE material_name IS NOT NULL
+        GROUP BY item_code
+      ) poi ON soi.item_code = poi.item_code
+      SET soi.material_name = COALESCE(soi.material_name, sb.material_name, poi.material_name),
+          soi.material_type = COALESCE(soi.material_type, sb.material_type, poi.material_type),
+          soi.item_group = COALESCE(soi.item_group, sb.item_group, poi.item_group, sb.material_type, poi.material_type),
+          soi.product_type = COALESCE(soi.product_type, sb.product_type, poi.product_type)
+      WHERE soi.material_name IS NULL OR soi.item_group IS NULL
+    `);
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {
       console.error('Sales order item column sync failed', error.message);
@@ -722,6 +758,7 @@ const ensureSalesOrderItemMaterialsTable = async () => {
         material_name VARCHAR(255) NOT NULL,
         material_type VARCHAR(100),
         item_group VARCHAR(100),
+        product_type VARCHAR(100),
         qty_per_pc DECIMAL(12, 4) NOT NULL,
         uom VARCHAR(20) DEFAULT 'KG',
         rate DECIMAL(12, 2) DEFAULT 0,
@@ -753,6 +790,10 @@ const ensureBOMAdditionalTables = async () => {
         sales_order_item_id INT NULL,
         item_code VARCHAR(100) NULL,
         component_code VARCHAR(100),
+        material_name VARCHAR(255),
+        material_type VARCHAR(100),
+        item_group VARCHAR(100),
+        product_type VARCHAR(100),
         description TEXT,
         quantity DECIMAL(12, 4) NOT NULL,
         uom VARCHAR(20),
@@ -792,6 +833,9 @@ const ensureBOMAdditionalTables = async () => {
         item_code VARCHAR(100) NULL,
         scrap_item_code VARCHAR(100),
         item_name VARCHAR(255),
+        material_type VARCHAR(100),
+        item_group VARCHAR(100),
+        product_type VARCHAR(100),
         input_qty DECIMAL(12, 4) DEFAULT 0,
         loss_percent DECIMAL(5, 2) DEFAULT 0,
         rate DECIMAL(12, 2) DEFAULT 0,
@@ -902,7 +946,9 @@ const ensureBOMMaterialsColumns = async () => {
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
       { name: 'rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'material_type', definition: 'VARCHAR(100)' },
       { name: 'item_group', definition: 'VARCHAR(100)' },
+      { name: 'product_type', definition: 'VARCHAR(100)' },
       { name: 'warehouse', definition: 'VARCHAR(100)' },
       { name: 'operation', definition: 'VARCHAR(100)' },
       { name: 'description', definition: 'TEXT' }
@@ -920,6 +966,141 @@ const ensureBOMMaterialsColumns = async () => {
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {
       console.error('BOM Materials column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureBOMAdditionalColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // Update sales_order_item_components
+    const [compCols] = await connection.query('SHOW COLUMNS FROM sales_order_item_components');
+    const existingComp = new Set(compCols.map(c => c.Field));
+    const reqComp = [
+      { name: 'material_name', definition: 'VARCHAR(255)' },
+      { name: 'material_type', definition: 'VARCHAR(100)' },
+      { name: 'item_group', definition: 'VARCHAR(100)' },
+      { name: 'product_type', definition: 'VARCHAR(100)' }
+    ];
+    const missingComp = reqComp.filter(c => !existingComp.has(c.name));
+    if (missingComp.length > 0) {
+      await connection.query(`ALTER TABLE sales_order_item_components ${missingComp.map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`).join(', ')}`);
+    }
+
+    // Update sales_order_item_scrap
+    const [scrapCols] = await connection.query('SHOW COLUMNS FROM sales_order_item_scrap');
+    const existingScrap = new Set(scrapCols.map(c => c.Field));
+    const reqScrap = [
+      { name: 'material_type', definition: 'VARCHAR(100)' },
+      { name: 'item_group', definition: 'VARCHAR(100)' },
+      { name: 'product_type', definition: 'VARCHAR(100)' }
+    ];
+    const missingScrap = reqScrap.filter(c => !existingScrap.has(c.name));
+    if (missingScrap.length > 0) {
+      await connection.query(`ALTER TABLE sales_order_item_scrap ${missingScrap.map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`).join(', ')}`);
+    }
+
+    console.log('BOM Additional columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('BOM Additional column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureMaterialIssueColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM material_issue_items');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'material_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'item_group', definition: 'VARCHAR(100)' },
+      { name: 'product_type', definition: 'VARCHAR(100)' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE material_issue_items ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Material Issue item columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Material Issue column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureGrnItemColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM grn_items');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'material_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
+      { name: 'product_type', definition: 'VARCHAR(100) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE grn_items ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('GRN item columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('GRN item column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureQCInspectionItemColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM qc_inspection_items');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'material_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'material_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'item_group', definition: 'VARCHAR(100) NULL' },
+      { name: 'product_type', definition: 'VARCHAR(100) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE qc_inspection_items ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('QC Inspection item columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('QC Inspection item column sync failed', error.message);
     }
   } finally {
     if (connection) connection.release();
@@ -1085,6 +1266,8 @@ const ensureWorkOrderTables = async () => {
         issue_id INT NOT NULL,
         material_name VARCHAR(255) NOT NULL,
         material_type VARCHAR(100),
+        item_group VARCHAR(100),
+        product_type VARCHAR(100),
         item_code VARCHAR(100),
         quantity DECIMAL(12, 3) NOT NULL,
         uom VARCHAR(20),
@@ -1168,12 +1351,16 @@ const bootstrapDatabase = async () => {
   await ensureSalesOrderItemMaterialsTable();
   await ensureBOMAdditionalTables();
   await ensureBOMMaterialsColumns();
+  await ensureBOMAdditionalColumns();
   await ensureBOMMasterColumns();
   await ensureBOMDrawingColumns();
   await ensureBOMHierarchyColumns();
   await ensureOperationsTable();
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();
+  await ensureMaterialIssueColumns();
+  await ensureGrnItemColumns();
+  await ensureQCInspectionItemColumns();
   await ensureQuotationCommunicationTable();
 };
 

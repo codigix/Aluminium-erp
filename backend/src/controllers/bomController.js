@@ -2,11 +2,18 @@ const bomService = require('../services/bomService');
 
 const getItemMaterials = async (req, res, next) => {
   try {
-    const { itemId } = req.params;
-    const { itemCode, drawingNo } = req.query;
+    let { itemId } = req.params;
+    let { itemCode, drawingNo } = req.query;
     
     // Support fetching by either itemId (sales_order_item_id), itemCode (Master BOM), or drawingNo
-    const effectiveItemId = (itemId === 'null' || itemId === 'undefined' || itemId === 'bom-form') ? null : itemId;
+    if (itemId && itemId.toString().startsWith('MASTER:')) {
+      const parts = itemId.split(':');
+      itemCode = parts[1] || itemCode;
+      drawingNo = parts[2] || drawingNo;
+      itemId = null;
+    }
+
+    const effectiveItemId = (itemId === 'null' || itemId === 'undefined' || itemId === 'bom-form' || !itemId) ? null : itemId;
     
     const materials = await bomService.getItemMaterials(effectiveItemId, itemCode, drawingNo);
     const components = await bomService.getItemComponents(effectiveItemId, itemCode, drawingNo);

@@ -37,7 +37,11 @@ const getQCWithDetails = async (qcId) => {
         received_qty,
         accepted_qty, 
         rejected_qty, 
-        status 
+        status,
+        material_name,
+        material_type,
+        item_group,
+        product_type
        FROM qc_inspection_items WHERE qc_inspection_id = ?`,
       [qcId]
     );
@@ -57,7 +61,11 @@ const getQCWithDetails = async (qcId) => {
       received_qty: parseFloat(item.received_qty) || 0,
       accepted_qty: parseFloat(item.accepted_qty) || 0,
       shortage: Math.max(0, (parseFloat(item.po_qty) || 0) - (parseFloat(item.accepted_qty) || 0)),
-      overage: Math.max(0, (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.po_qty) || 0))
+      overage: Math.max(0, (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.po_qty) || 0)),
+      material_name: item.material_name,
+      material_type: item.material_type,
+      item_group: item.item_group,
+      product_type: item.product_type
     }));
   }
   
@@ -147,7 +155,11 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
         gi.received_qty, 
         gi.accepted_qty, 
         gi.rejected_qty, 
-        gi.status 
+        gi.status,
+        poi.material_name,
+        poi.material_type,
+        poi.item_group,
+        poi.product_type
        FROM grn_items gi
        LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
        WHERE gi.grn_id = ?`,
@@ -157,9 +169,9 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
     for (const item of grnItems) {
       await connection.execute(
         `INSERT INTO qc_inspection_items 
-         (qc_inspection_id, grn_item_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [qcId, item.id, item.item_code, item.po_qty, item.received_qty, item.accepted_qty, item.rejected_qty, 'PENDING']
+         (qc_inspection_id, grn_item_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status, material_name, material_type, item_group, product_type) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [qcId, item.id, item.item_code, item.po_qty, item.received_qty, item.accepted_qty, item.rejected_qty, 'PENDING', item.material_name, item.material_type, item.item_group, item.product_type]
       );
     }
 

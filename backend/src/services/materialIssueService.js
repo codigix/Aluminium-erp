@@ -56,9 +56,9 @@ const createMaterialIssue = async (data, userId) => {
     // 3. Create items and deduct stock
     for (const item of items) {
       await connection.execute(
-        `INSERT INTO material_issue_items (issue_id, material_name, material_type, item_code, quantity, uom, warehouse)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [issueId, item.materialName, item.materialType, item.itemCode || null, item.quantity, item.uom, item.warehouse]
+        `INSERT INTO material_issue_items (issue_id, material_name, material_type, item_group, product_type, item_code, quantity, uom, warehouse)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [issueId, item.materialName, item.materialType, item.itemGroup || null, item.productType || null, item.itemCode || null, item.quantity, item.uom, item.warehouse]
       );
       
       // Deduct from stock
@@ -85,7 +85,11 @@ const createMaterialIssue = async (data, userId) => {
           issueId,
           issueNumber,
           `Issued for Work Order ${workOrderId}`,
-          userId
+          userId,
+          item.materialName,
+          item.materialType,
+          item.itemGroup,
+          item.productType
         );
       }
     }

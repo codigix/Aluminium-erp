@@ -333,6 +333,8 @@ const GRNProcessing = () => {
           description: item.description,
           materialName: item.material_name,
           materialType: item.material_type,
+          itemGroup: item.item_group,
+          productType: item.product_type,
           drawingNo: item.drawing_no,
           poQty: item.quantity,
           acceptedQty: accepted,
@@ -505,7 +507,7 @@ const GRNProcessing = () => {
         <table className="w-full text-xs">
           <thead className="bg-white/80 text-slate-500   tracking-wider">
             <tr>
-              <th className="px-4 py-3 text-left">Material / Description</th>
+              <th className="px-4 py-3 text-left">Item / Classification</th>
               <th className="px-4 py-3 text-left">Type / Drawing</th>
               <th className="px-4 py-3 text-center">PO Qty</th>
               <th className="px-4 py-3 text-center">Accepted</th>
@@ -517,7 +519,8 @@ const GRNProcessing = () => {
             {items.map((item) => (
               <tr key={item.id} className="hover:bg-white/80 transition-colors">
                 <td className="px-4 py-3">
-                  <div className="font-medium text-slate-900">{item.material_name}</div>
+                  <div className="font-medium text-slate-900">{item.material_name || item.item_code}</div>
+                  <div className="text-[10px] text-indigo-500 font-medium">{item.item_group} {item.product_type ? `• ${item.product_type}` : ''}</div>
                   <div className="text-slate-500 truncate max-w-[200px]">{item.description}</div>
                 </td>
                 <td className="px-4 py-3">
@@ -712,8 +715,9 @@ const GRNProcessing = () => {
                           return (
                             <tr key={item.id} className={itemError ? 'bg-red-50/50' : 'hover:bg-slate-50/30'}>
                               <td className="p-2">
-                                <div className=" text-slate-900">{item.material_name}</div>
-                                <div className="text-xs text-slate-500">{item.material_type} • {item.drawing_no || 'No Drawing'}</div>
+                                <div className=" text-slate-900">{item.material_name || item.item_code}</div>
+                                <div className="text-[10px] text-indigo-500 font-medium">{item.item_group} {item.product_type ? `• ${item.product_type}` : ''}</div>
+                                <div className="text-[10px] text-slate-500">{item.material_type} • {item.drawing_no || 'No Drawing'}</div>
                               </td>
                               <td className="p-2 text-center font-medium text-slate-700">{item.quantity}</td>
                               <td className="p-2">

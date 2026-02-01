@@ -10,6 +10,8 @@ const getPendingAllocations = async () => {
       poi.item_code,
       poi.material_name,
       poi.material_type,
+      poi.item_group,
+      poi.product_type,
       gi.received_qty,
       gi.accepted_qty,
       gi.allocated_qty,
@@ -36,7 +38,7 @@ const allocateWarehouse = async (allocationData, userId) => {
     const [grnItems] = await connection.query(`
       SELECT 
         gi.id, gi.grn_id, gi.accepted_qty, gi.allocated_qty, 
-        poi.item_code, poi.material_name, poi.material_type
+        poi.item_code, poi.material_name, poi.material_type, poi.item_group, poi.product_type
       FROM grn_items gi
       JOIN purchase_order_items poi ON gi.po_item_id = poi.id
       WHERE gi.id = ? FOR UPDATE
@@ -79,16 +81,16 @@ const allocateWarehouse = async (allocationData, userId) => {
     // Create OUT entry
     await connection.execute(`
       INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, remarks, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [item.item_code, item.material_name, item.material_type, 'OUT', allocate_qty, 'WAREHOUSE_ALLOCATION', allocResult.insertId, grnNumber, `Transfer from RM-HOLD to ${target_warehouse} (${remarks || ''})`, userId]);
+      (item_code, material_name, material_type, item_group, product_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, remarks, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [item.item_code, item.material_name, item.material_type, item.item_group, item.product_type, 'OUT', allocate_qty, 'WAREHOUSE_ALLOCATION', allocResult.insertId, grnNumber, `Transfer from RM-HOLD to ${target_warehouse} (${remarks || ''})`, userId]);
 
     // Create IN entry
     await connection.execute(`
       INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, remarks, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [item.item_code, item.material_name, item.material_type, 'IN', allocate_qty, 'WAREHOUSE_ALLOCATION', allocResult.insertId, grnNumber, `Transfer to ${target_warehouse} from RM-HOLD (${remarks || ''})`, userId]);
+      (item_code, material_name, material_type, item_group, product_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, remarks, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [item.item_code, item.material_name, item.material_type, item.item_group, item.product_type, 'IN', allocate_qty, 'WAREHOUSE_ALLOCATION', allocResult.insertId, grnNumber, `Transfer to ${target_warehouse} from RM-HOLD (${remarks || ''})`, userId]);
 
     await connection.commit();
     return { success: true, allocationId: allocResult.insertId };

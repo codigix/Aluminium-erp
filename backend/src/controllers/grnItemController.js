@@ -49,14 +49,16 @@ const createGRNWithItems = async (req, res, next) => {
           console.warn(`Creating missing purchase_order_item for: ${item.itemCode}`);
           const [insertResult] = await pool.execute(
             `INSERT INTO purchase_order_items 
-             (purchase_order_id, item_code, description, material_name, material_type, drawing_no, quantity, unit, unit_rate, amount) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (purchase_order_id, item_code, description, material_name, material_type, item_group, product_type, drawing_no, quantity, unit, unit_rate, amount) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               poId, 
               item.itemCode, 
               item.description || '', 
               item.materialName || null,
               item.materialType || null,
+              item.itemGroup || null,
+              item.productType || null,
               item.drawingNo || null,
               item.poQty, 
               'NOS', 

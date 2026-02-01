@@ -297,14 +297,21 @@ const BOMFormPage = () => {
     const productDrawing = selectedItem?.drawing_no || productForm.drawingNo;
 
     // Helper to check if item is a component type
-    const isComponentType = (type) => {
-      const t = (type || '').toLowerCase();
-      return t.includes('semi') || t.includes('assembly') || t.includes('finished') || t.includes('sfg') || t.includes('fg');
+    const isComponentType = (item) => {
+      const group = (item.item_group || '').toLowerCase();
+      const type = (item.material_type || '').toLowerCase();
+      const prodType = (item.product_type || '').toLowerCase();
+      const code = (item.item_code || '').toLowerCase();
+      
+      return group.includes('semi') || group.includes('assembly') || group.includes('finished') || group.includes('sfg') || group.includes('fg') ||
+             type.includes('semi') || type.includes('assembly') || type.includes('finished') || type.includes('sfg') || type.includes('fg') ||
+             prodType.includes('semi') || prodType.includes('assembly') || prodType.includes('finished') || prodType.includes('sfg') || prodType.includes('fg') ||
+             code.startsWith('sa-') || code.startsWith('sfg-') || code.startsWith('wip-') || code.startsWith('fg-');
     };
 
     // 1. Add Stock Items
     stockItems.forEach(item => {
-      if (!isComponentType(item.material_type)) return;
+      if (!isComponentType(item)) return;
 
       if (!showAllDrawings) {
         if (productDrawing && item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== productDrawing) return;
@@ -723,7 +730,8 @@ const BOMFormPage = () => {
         }
         payload.qtyPerPc = parseFloat(formData.qty) || 0;
         payload.qty_per_pc = payload.qtyPerPc;
-        payload.materialType = 'Raw Material';
+        payload.materialType = stockItem?.material_type || 'Raw Material';
+        payload.productType = stockItem?.product_type || null;
         payload.material_name = payload.materialName;
         payload.item_group = payload.itemGroup;
         payload.rate = parseFloat(payload.rate) || 0;
@@ -748,6 +756,10 @@ const BOMFormPage = () => {
           });
           if (!confirm.isConfirmed) return;
         }
+        payload.materialName = linkedItem?.material_name || linkedItem?.description || null;
+        payload.materialType = linkedItem?.material_type || null;
+        payload.itemGroup = linkedItem?.item_group || null;
+        payload.productType = linkedItem?.product_type || null;
         payload.component_code = payload.componentCode;
         payload.loss_percent = payload.lossPercent;
         payload.quantity = parseFloat(payload.quantity) || 0;
@@ -785,6 +797,9 @@ const BOMFormPage = () => {
           });
           if (!confirm.isConfirmed) return;
         }
+        payload.materialType = linkedItem?.material_type || null;
+        payload.itemGroup = linkedItem?.item_group || null;
+        payload.productType = linkedItem?.product_type || null;
         payload.inputQty = parseFloat(payload.inputQty) || 0;
         payload.lossPercent = parseFloat(payload.lossPercent) || 0;
         payload.rate = parseFloat(payload.rate) || 0;
@@ -1692,12 +1707,16 @@ const BOMFormPage = () => {
                           .filter(item => {
                             // Type Filter
                             const type = (item.material_type || '').toLowerCase();
+                            const group = (item.item_group || '').toLowerCase();
+                            const prodType = (item.product_type || '').toLowerCase();
                             const targetGroup = (materialForm.itemGroup || '').toLowerCase();
 
                             if (targetGroup === 'raw material') {
-                              if (!type.includes('raw')) return false;
-                            } else if (targetGroup === 'sub assembly') {
-                              if (!type.includes('sub assembly')) return false;
+                              if (!type.includes('raw') && !group.includes('raw') && !prodType.includes('raw')) return false;
+                            } else if (targetGroup === 'sub assembly' || targetGroup === 'sfg') {
+                              if (!type.includes('assembly') && !group.includes('assembly') && !prodType.includes('assembly') &&
+                                  !type.includes('semi') && !group.includes('semi') && !prodType.includes('semi') &&
+                                  !type.includes('sfg') && !group.includes('sfg') && !prodType.includes('sfg')) return false;
                             }
 
                             if (showAllDrawings) return true;

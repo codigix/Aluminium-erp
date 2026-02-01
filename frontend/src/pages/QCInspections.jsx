@@ -347,22 +347,25 @@ const QCInspections = () => {
               <table className="w-full text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-[10px]  text-slate-500 ">
                   <tr>
-                    <th className="px-4 py-2 text-left">Item Code</th>
+                    <th className="px-4 py-2 text-left">Item / Classification</th>
+                    <th className="px-4 py-2 text-left">Type / Drawing</th>
                     <th className="px-4 py-2 text-right">Ordered</th>
                     <th className="px-4 py-2 text-right">Received</th>
-                    <th className="px-4 py-2 text-right">Shortage</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {qc.items_detail.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50">
                       <td className="px-4 py-2">
-                        <div className=" text-slate-900">{item.item_code}</div>
-                        <div className="text-[10px] text-slate-400 truncate max-w-[200px]">{item.description}</div>
+                        <div className=" text-slate-900 font-medium">{item.material_name || item.item_code}</div>
+                        <div className="text-[10px] text-indigo-500">{item.item_group} {item.product_type ? `• ${item.product_type}` : ''}</div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="text-slate-600">{item.material_type}</div>
+                        <div className="text-indigo-600 font-medium">{item.drawing_no || 'No Drawing'}</div>
                       </td>
                       <td className="px-4 py-2 text-right font-mono text-slate-600">{item.ordered_qty}</td>
                       <td className="px-4 py-2 text-right font-mono  text-emerald-600">{item.received_qty}</td>
-                      <td className="px-4 py-2 text-right font-mono  text-orange-600">{item.shortage || 0}</td>
                     </tr>
                   ))}
                 </tbody>

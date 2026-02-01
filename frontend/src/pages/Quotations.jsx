@@ -56,7 +56,7 @@ const Quotations = () => {
     salesOrderId: '',
     validUntil: '',
     notes: '',
-    items: [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+    items: [{ drawing_no: '', description: '', material_name: '', material_type: '', item_group: '', product_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
   });
   const [recordData, setRecordData] = useState({
     projectId: '',
@@ -65,7 +65,9 @@ const Quotations = () => {
     amount: 0,
     validUntil: '',
     items: [],
-    notes: ''
+    notes: '',
+    item_group: '',
+    product_type: ''
   });
   const [emailData, setEmailData] = useState({
     to: '',
@@ -199,7 +201,7 @@ const Quotations = () => {
   const handleAddItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      items: [...formData.items, { drawing_no: '', description: '', material_name: '', material_type: '', item_group: '', product_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
     });
   };
 
@@ -222,7 +224,7 @@ const Quotations = () => {
     if (!soId) {
       setFormData(prev => ({
         ...prev,
-        items: [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+        items: [{ drawing_no: '', description: '', material_name: '', material_type: '', item_group: '', product_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
       }));
       return;
     }
@@ -249,6 +251,8 @@ const Quotations = () => {
                 description: item.description || '',
                 material_name: mat.material_name || '',
                 material_type: mat.material_type || '',
+                item_group: mat.item_group || '',
+                product_type: mat.product_type || '',
                 quantity: (parseFloat(item.quantity) * parseFloat(mat.qty_per_pc)) || 0,
                 uom: mat.uom || 'NOS',
                 unit_rate: 0
@@ -259,7 +263,7 @@ const Quotations = () => {
 
         setFormData(prev => ({
           ...prev,
-          items: materialItems.length > 0 ? materialItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+          items: materialItems.length > 0 ? materialItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', item_group: '', product_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
         }));
       }
     } catch (error) {
@@ -358,7 +362,7 @@ const Quotations = () => {
   const handleRecordAddEmptyItem = () => {
     setRecordData({
       ...recordData,
-      items: [...recordData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      items: [...recordData.items, { drawing_no: '', description: '', material_name: '', material_type: '', item_group: '', product_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
     });
   };
 
@@ -602,6 +606,8 @@ const Quotations = () => {
       description: item.description || '',
       material_name: item.material_name || '',
       material_type: item.material_type || '',
+      item_group: item.item_group || '',
+      product_type: item.product_type || '',
       quantity: item.quantity || 0,
       uom: item.unit || 'NOS',
       unit_rate: item.unit_rate || 0
@@ -610,7 +616,7 @@ const Quotations = () => {
     setEditFormData({
       vendorId: quotation.vendor_id,
       validUntil: quotation.valid_until ? new Date(quotation.valid_until).toISOString().split('T')[0] : '',
-      items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', item_group: '', product_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
     });
     setShowEditModal(true);
   };
@@ -1048,11 +1054,14 @@ const Quotations = () => {
                     ) : (
                       <div className="space-y-2">
                         <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wider">
-                          <div className="col-span-2">Drawing No</div>
-                          <div className="col-span-3">Description</div>
-                          <div className="col-span-3">Material Name</div>
-                          <div className="col-span-2">Type</div>
+                          <div className="col-span-2">Drawing / Code</div>
+                          <div className="col-span-2">Description</div>
+                          <div className="col-span-2">Material Name</div>
+                          <div className="col-span-1">Mat Type</div>
+                          <div className="col-span-1">Item Group</div>
+                          <div className="col-span-1">Prod Type</div>
                           <div className="col-span-1">Qty</div>
+                          <div className="col-span-1">UOM</div>
                           <div className="col-span-1"></div>
                         </div>
                         {formData.items.map((item, idx) => (
@@ -1081,27 +1090,48 @@ const Quotations = () => {
                               placeholder="Description"
                               value={item.description}
                               onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="text"
                               placeholder="Material Name"
                               value={item.material_name}
                               onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
-                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="text"
                               placeholder="Type"
                               value={item.material_type}
                               onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
-                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Group"
+                              value={item.item_group}
+                              onChange={(e) => handleItemChange(idx, 'item_group', e.target.value)}
+                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Product"
+                              value={item.product_type}
+                              onChange={(e) => handleItemChange(idx, 'product_type', e.target.value)}
+                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="number"
                               placeholder="Qty"
                               value={item.quantity}
                               onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="UOM"
+                              value={item.uom}
+                              onChange={(e) => handleItemChange(idx, 'uom', e.target.value)}
                               className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-1 flex justify-center">
@@ -1197,8 +1227,9 @@ const Quotations = () => {
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
                             <th className="px-3 py-2  text-slate-600">DESCRIPTION</th>
-                            <th className="px-3 py-2  text-slate-600">MATERIAL NAME</th>
-                            <th className="px-3 py-2  text-slate-600" style={{ width: '100px' }}>TYPE</th>
+                            <th className="px-3 py-2  text-slate-600">MATERIAL</th>
+                            <th className="px-3 py-2  text-slate-600">GROUP</th>
+                            <th className="px-3 py-2  text-slate-600">PRODUCT</th>
                             <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '70px' }}>QTY</th>
                             <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '100px' }}>PRICE</th>
                             <th className="px-3 py-2 text-right  text-slate-600" style={{ width: '100px' }}>TOTAL</th>
@@ -1208,7 +1239,7 @@ const Quotations = () => {
                         <tbody className="divide-y divide-slate-100">
                           {recordData.items.length === 0 ? (
                             <tr>
-                              <td colSpan="7" className="px-3 py-8 text-center text-slate-400">
+                              <td colSpan="8" className="px-3 py-8 text-center text-slate-400">
                                 Select a project and vendor to load items, or add manually.
                               </td>
                             </tr>
@@ -1220,39 +1251,63 @@ const Quotations = () => {
                                     type="text"
                                     value={item.description}
                                     onChange={(e) => handleRecordItemChange(idx, 'description', e.target.value)}
-                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
+                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all font-medium"
                                     placeholder="Item description..."
                                   />
-                                  {item.item_code && (
-                                    <div className="text-[10px] text-slate-400 px-2 mt-0.5 flex items-center gap-2">
-                                      Code: {item.item_code}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <input
+                                      type="text"
+                                      value={item.drawing_no || item.item_code || ''}
+                                      onChange={(e) => handleRecordItemChange(idx, 'drawing_no', e.target.value)}
+                                      className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border-none outline-none w-24"
+                                      placeholder="Dwg/Code"
+                                    />
+                                    {(item.drawing_no || item.item_code) && (
                                       <button
                                         type="button"
-                                        onClick={() => handlePreviewByNo(item.item_code)}
+                                        onClick={() => handlePreviewByNo(item.drawing_no || item.item_code)}
                                         className="text-indigo-600 hover:text-indigo-800 transition-colors"
                                         title="Preview Drawing"
                                       >
                                         <Eye className="w-3 h-3" />
                                       </button>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex flex-col gap-1">
+                                    <input
+                                      type="text"
+                                      value={item.material_name}
+                                      onChange={(e) => handleRecordItemChange(idx, 'material_name', e.target.value)}
+                                      className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
+                                      placeholder="Material Name"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={item.material_type}
+                                      onChange={(e) => handleRecordItemChange(idx, 'material_type', e.target.value)}
+                                      className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-[10px] text-slate-500"
+                                      placeholder="Material Type"
+                                    />
+                                  </div>
                                 </td>
                                 <td className="px-3 py-2">
                                   <input
                                     type="text"
-                                    value={item.material_name}
-                                    onChange={(e) => handleRecordItemChange(idx, 'material_name', e.target.value)}
+                                    value={item.item_group}
+                                    onChange={(e) => handleRecordItemChange(idx, 'item_group', e.target.value)}
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
-                                    placeholder="Material..."
+                                    placeholder="Group"
                                   />
                                 </td>
                                 <td className="px-3 py-2">
                                   <input
                                     type="text"
-                                    value={item.material_type}
-                                    onChange={(e) => handleRecordItemChange(idx, 'material_type', e.target.value)}
+                                    value={item.product_type}
+                                    onChange={(e) => handleRecordItemChange(idx, 'product_type', e.target.value)}
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
-                                    placeholder="Type..."
+                                    placeholder="Product"
                                   />
                                 </td>
                                 <td className="px-3 py-2">
