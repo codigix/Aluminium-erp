@@ -3,22 +3,25 @@ const bomService = require('../services/bomService');
 const getItemMaterials = async (req, res, next) => {
   try {
     let { itemId } = req.params;
-    let { itemCode, drawingNo } = req.query;
+    let { itemCode, drawingNo, bomType, assemblyId } = req.query;
     
     // Support fetching by either itemId (sales_order_item_id), itemCode (Master BOM), or drawingNo
     if (itemId && itemId.toString().startsWith('MASTER:')) {
       const parts = itemId.split(':');
+      // Format: MASTER:ITEM_CODE:DRAWING_NO:BOM_TYPE:ASSEMBLY_ID
       itemCode = parts[1] || itemCode;
       drawingNo = parts[2] || drawingNo;
+      bomType = parts[3] || bomType;
+      assemblyId = parts[4] || assemblyId;
       itemId = null;
     }
 
     const effectiveItemId = (itemId === 'null' || itemId === 'undefined' || itemId === 'bom-form' || !itemId) ? null : itemId;
     
-    const materials = await bomService.getItemMaterials(effectiveItemId, itemCode, drawingNo);
-    const components = await bomService.getItemComponents(effectiveItemId, itemCode, drawingNo);
-    const operations = await bomService.getItemOperations(effectiveItemId, itemCode, drawingNo);
-    const scrap = await bomService.getItemScrap(effectiveItemId, itemCode, drawingNo);
+    const materials = await bomService.getItemMaterials(effectiveItemId, itemCode, drawingNo, bomType, assemblyId);
+    const components = await bomService.getItemComponents(effectiveItemId, itemCode, drawingNo, bomType, assemblyId);
+    const operations = await bomService.getItemOperations(effectiveItemId, itemCode, drawingNo, bomType, assemblyId);
+    const scrap = await bomService.getItemScrap(effectiveItemId, itemCode, drawingNo, bomType, assemblyId);
     res.json({ materials, components, operations, scrap });
   } catch (error) {
     next(error);
@@ -135,7 +138,8 @@ const getApprovedBOMs = async (req, res, next) => {
 
 const deleteBOM = async (req, res, next) => {
   try {
-    await bomService.deleteBOM(req.params.itemId);
+    const { bomType, assemblyId } = req.query;
+    await bomService.deleteBOM(req.params.itemId, bomType, assemblyId);
     res.json({ message: 'BOM deleted successfully' });
   } catch (error) {
     next(error);

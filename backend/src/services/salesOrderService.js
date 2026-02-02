@@ -944,12 +944,14 @@ const getOrderTimeline = async salesOrderId => {
   }, {});
 
   // Process each item
+  const processedItems = [];
+
   for (const item of items) {
     // Try order-specific first, then fall back to master (code), then fall back to master (drawing)
-    let materials = materialsByItem[`id_${item.id}`] || materialsByItem[`code_${item.item_code}`] || materialsByItem[`dwg_${item.drawing_no}`] || [];
-    let components = componentsByItem[`id_${item.id}`] || componentsByItem[`code_${item.item_code}`] || componentsByItem[`dwg_${item.drawing_no}`] || [];
-    let operations = operationsByItem[`id_${item.id}`] || operationsByItem[`code_${item.item_code}`] || operationsByItem[`dwg_${item.drawing_no}`] || [];
-    let scrap = scrapByItem[`id_${item.id}`] || scrapByItem[`code_${item.item_code}`] || scrapByItem[`dwg_${item.drawing_no}`] || [];
+    let itemMaterials = materialsByItem[`id_${item.id}`] || materialsByItem[`code_${item.item_code}`] || materialsByItem[`dwg_${item.drawing_no}`] || [];
+    let itemComponents = componentsByItem[`id_${item.id}`] || componentsByItem[`code_${item.item_code}`] || componentsByItem[`dwg_${item.drawing_no}`] || [];
+    let itemOperations = operationsByItem[`id_${item.id}`] || operationsByItem[`code_${item.item_code}`] || operationsByItem[`dwg_${item.drawing_no}`] || [];
+    let itemScrap = scrapByItem[`id_${item.id}`] || scrapByItem[`code_${item.item_code}`] || scrapByItem[`dwg_${item.drawing_no}`] || [];
 
     // Ensure we don't mix order-specific and master if any order-specific exists
     const hasOrderSpecific = (materialsByItem[`id_${item.id}`]?.length > 0 || 
@@ -957,46 +959,91 @@ const getOrderTimeline = async salesOrderId => {
                             operationsByItem[`id_${item.id}`]?.length > 0);
     
     if (hasOrderSpecific) {
-      materials = materialsByItem[`id_${item.id}`] || [];
-      components = componentsByItem[`id_${item.id}`] || [];
-      operations = operationsByItem[`id_${item.id}`] || [];
-      scrap = scrapByItem[`id_${item.id}`] || [];
+      itemMaterials = materialsByItem[`id_${item.id}`] || [];
+      itemComponents = componentsByItem[`id_${item.id}`] || [];
+      itemOperations = operationsByItem[`id_${item.id}`] || [];
+      itemScrap = scrapByItem[`id_${item.id}`] || [];
     }
 
-    item.materials = materials;
-    item.components = components;
-    item.operations = operations;
-    item.scrap = scrap;
+    // Group by bom_type and assembly_id
+    const bomsMap = {};
+    
+    const addToBom = (data, type, assemblyId, field) => {
+      const key = `${type || 'FG'}_${assemblyId || 'null'}`;
+      if (!bomsMap[key]) {
+        bomsMap[key] = { 
+          bom_type: type || 'FG', 
+          assembly_id: assemblyId || null,
+          materials: [], 
+          components: [], 
+          operations: [], 
+          scrap: [] 
+        };
+      }
+      bomsMap[key][field].push(data);
+    };
 
-    // Calculate costs
-    const orderQty = parseFloat(item.quantity || 1);
-    const matCost = materials.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * orderQty * parseFloat(m.rate || 0)), 0);
-    const compCost = components.reduce((sum, c) => {
-      const base = parseFloat(c.quantity || 0) * orderQty * parseFloat(c.rate || 0);
-      const loss = base * (parseFloat(c.loss_percent || 0) / 100);
-      return sum + (base - loss);
-    }, 0);
-    const laborCost = operations.reduce((sum, o) => {
-      const cycle = parseFloat(o.cycle_time_min || 0);
-      const setup = parseFloat(o.setup_time_min || 0);
-      const rate = parseFloat(o.hourly_rate || 0);
-      return sum + (((cycle * orderQty) + setup) / 60 * rate);
-    }, 0);
-    const scrapRecovery = scrap.reduce((sum, s) => {
-      const input = parseFloat(s.input_qty || 0);
-      const loss = parseFloat(s.loss_percent || 0) / 100;
-      const rate = parseFloat(s.rate || 0);
-      return sum + (input * loss * rate);
-    }, 0);
-    
-    const totalOrderCost = matCost + compCost + laborCost - scrapRecovery;
-    const calculatedBomCost = orderQty > 0 ? totalOrderCost / orderQty : 0;
-    
-    item.bom_cost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : calculatedBomCost;
-    item.has_bom = Boolean(materials?.length > 0 || components?.length > 0 || operations?.length > 0 || scrap?.length > 0);
+    itemMaterials.forEach(m => addToBom(m, m.bom_type, m.assembly_id, 'materials'));
+    itemComponents.forEach(c => addToBom(c, c.bom_type, c.assembly_id, 'components'));
+    itemOperations.forEach(o => addToBom(o, o.bom_type, o.assembly_id, 'operations'));
+    itemScrap.forEach(s => addToBom(s, s.bom_type, s.assembly_id, 'scrap'));
+
+    // Ensure at least FG exists if no other BOMs or if it's missing
+    if (Object.keys(bomsMap).length === 0 || !bomsMap['FG_null']) {
+      bomsMap['FG_null'] = { bom_type: 'FG', assembly_id: null, materials: [], components: [], operations: [], scrap: [] };
+    }
+
+    // Convert grouped BOMs back to item entries
+    for (const key in bomsMap) {
+      const bom = bomsMap[key];
+      const materials = bom.materials;
+      const components = bom.components;
+      const operations = bom.operations;
+      const scrap = bom.scrap;
+
+      // Calculate costs for this specific BOM
+      const orderQty = parseFloat(item.quantity || 1);
+      const matCost = materials.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * orderQty * parseFloat(m.rate || 0)), 0);
+      const compCost = components.reduce((sum, c) => {
+        const base = parseFloat(c.quantity || 0) * orderQty * parseFloat(c.rate || 0);
+        const loss = base * (parseFloat(c.loss_percent || 0) / 100);
+        return sum + (base - loss);
+      }, 0);
+      const laborCost = operations.reduce((sum, o) => {
+        const cycle = parseFloat(o.cycle_time_min || 0);
+        const setup = parseFloat(o.setup_time_min || 0);
+        const rate = parseFloat(o.hourly_rate || 0);
+        return sum + (((cycle * orderQty) + setup) / 60 * rate);
+      }, 0);
+      const scrapRecovery = scrap.reduce((sum, s) => {
+        const input = parseFloat(s.input_qty || 0);
+        const loss = parseFloat(s.loss_percent || 0) / 100;
+        const rate = parseFloat(s.rate || 0);
+        return sum + (input * loss * rate);
+      }, 0);
+      
+      const totalOrderCost = matCost + compCost + laborCost - scrapRecovery;
+      const calculatedBomCost = orderQty > 0 ? totalOrderCost / orderQty : 0;
+      
+      const bomEntry = {
+        ...item,
+        id: `${item.id}_${key}`, // Unique ID for frontend
+        original_item_id: item.id,
+        bom_type: bom.bom_type,
+        assembly_id: bom.assembly_id,
+        materials,
+        components,
+        operations,
+        scrap,
+        bom_cost: (item.bom_cost && parseFloat(item.bom_cost) > 0 && bom.bom_type === 'FG') ? parseFloat(item.bom_cost) : calculatedBomCost,
+        has_bom: Boolean(materials?.length > 0 || components?.length > 0 || operations?.length > 0 || scrap?.length > 0)
+      };
+
+      processedItems.push(bomEntry);
+    }
   }
   
-  return items;
+  return processedItems;
 };
 
 

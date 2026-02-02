@@ -778,6 +778,37 @@ const ensureSalesOrderItemMaterialsTable = async () => {
   }
 };
 
+const ensureBOMMultiTypes = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const tables = [
+      'sales_order_item_materials',
+      'sales_order_item_components',
+      'sales_order_item_operations',
+      'sales_order_item_scrap'
+    ];
+
+    for (const table of tables) {
+      const [columns] = await connection.query(`SHOW COLUMNS FROM ${table}`);
+      const existing = new Set(columns.map(c => c.Field));
+      
+      if (!existing.has('bom_type')) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN bom_type ENUM('FG', 'SUB_ASSEMBLY') DEFAULT 'FG'`);
+        console.log(`Added bom_type to ${table}`);
+      }
+      if (!existing.has('assembly_id')) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN assembly_id VARCHAR(100) NULL`);
+        console.log(`Added assembly_id to ${table}`);
+      }
+    }
+  } catch (error) {
+    console.error('BOM multi-type column sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureBOMAdditionalTables = async () => {
   let connection;
   try {
@@ -1355,6 +1386,7 @@ const bootstrapDatabase = async () => {
   await ensureBOMMasterColumns();
   await ensureBOMDrawingColumns();
   await ensureBOMHierarchyColumns();
+  await ensureBOMMultiTypes();
   await ensureOperationsTable();
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();

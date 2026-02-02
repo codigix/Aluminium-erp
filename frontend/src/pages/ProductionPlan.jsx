@@ -686,7 +686,7 @@ const ProductionPlan = () => {
                       </label>
                       <SearchableSelect 
                         options={filteredBOMs.map(bom => ({
-                          label: `${bom.item_code}${bom.drawing_no ? ` (${bom.drawing_no})` : ''} - ${bom.company_name}`,
+                          label: `${bom.item_code}${bom.drawing_no ? ` (${bom.drawing_no})` : ''} [${bom.bom_type}${bom.assembly_id ? ': ' + bom.assembly_id : ''}] - ${bom.company_name}`,
                           value: bom.id.toString()
                         }))}
                         value={selectedBOMId}

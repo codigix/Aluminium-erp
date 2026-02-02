@@ -17,9 +17,13 @@ const BOMCreation = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const isProductionItem = useCallback((item) => {
+    // If it's explicitly a Sub-Assembly BOM entry, it's a production item
+    if (item.bom_type === 'SUB_ASSEMBLY') return true;
+
     const group = (item.item_group || '').toLowerCase().trim();
     const hasItemCode = !!item.item_code;
     return hasItemCode && (
+      item.has_bom ||
       group === 'fg' || 
       group === 'sfg' || 
       group === 'sa' || 
@@ -30,12 +34,15 @@ const BOMCreation = () => {
   }, []);
 
   const isFinishedGood = useCallback((item) => {
+    // If it's a Sub-Assembly BOM entry, it's not a Finished Good
+    if (item.bom_type === 'SUB_ASSEMBLY') return false;
+
     const group = (item.item_group || '').toLowerCase().trim();
     const type = (item.material_type || '').toLowerCase().trim();
     const prodType = (item.product_type || '').toLowerCase().trim();
     const code = (item.item_code || '').toLowerCase().trim();
 
-    const isFG = group === 'fg' || prodType === 'fg' || group.includes('finished') || prodType.includes('finished') || type.includes('finished');
+    const isFG = item.has_bom || group === 'fg' || prodType === 'fg' || group.includes('finished') || prodType.includes('finished') || type.includes('finished');
     
     const isExplicitSubAssembly = 
       group.includes('sub assembly') || group.includes('sub-assembly') || group.includes('subassembly') || group === 'sa' || group === 'sfg' || group.includes('semi-finished') || group.includes('wip') ||
@@ -128,11 +135,11 @@ const BOMCreation = () => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
   };
 
-  const handleDeleteBOM = async (itemId, client) => {
+  const handleDeleteBOM = async (itemId, client, bomType = 'FG', assemblyId = null) => {
     try {
       const result = await Swal.fire({
         title: 'Are you sure?',
-        text: "You want to delete this BOM? This action cannot be undone.",
+        text: `You want to delete this ${bomType === 'FG' ? 'Final' : 'Sub-Assembly'} BOM? This action cannot be undone.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -142,7 +149,10 @@ const BOMCreation = () => {
 
       if (result.isConfirmed) {
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/bom/items/${itemId}`, {
+        let url = `${API_BASE}/bom/items/${itemId}?bomType=${bomType}`;
+        if (assemblyId) url += `&assemblyId=${encodeURIComponent(assemblyId)}`;
+
+        const response = await fetch(url, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -162,41 +172,85 @@ const BOMCreation = () => {
     }
   };
 
+  const getFlattenedItems = useCallback((rawItems) => {
+    const flattened = [];
+    const seen = new Set();
+
+    const processItem = (item) => {
+      const code = item.item_code || item.component_code || item.componentCode;
+      const drawing = cleanText(item.drawing_no || 'N/A');
+      const key = item.id ? `id_${item.id}` : `code_${code}_dwg_${drawing}`;
+      
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      const normalizedItem = {
+        ...item,
+        item_code: code,
+        drawing_no: drawing,
+        // If it's a component from the backend, it might have nested components already
+        has_bom: item.has_bom || (item.components?.length > 0 || item.materials?.length > 0)
+      };
+
+      if (isProductionItem(normalizedItem)) {
+        flattened.push(normalizedItem);
+      }
+
+      if (item.components && Array.isArray(item.components)) {
+        item.components.forEach(c => processItem(c));
+      }
+    };
+
+    rawItems.forEach(i => processItem(i));
+    return flattened;
+  }, [isProductionItem]);
+
   const stats = useMemo(() => {
     let totalDrawings = 0;
-    let totalBOMs = 0;
-    let totalItems = 0;
+    let completedDrawings = 0;
     let totalCost = 0;
 
-      orders.forEach(client => {
+    orders.forEach(client => {
       const allItems = clientData[client.id]?.items || [];
-      const items = allItems.filter(isProductionItem);
+      const items = getFlattenedItems(allItems);
       
-      const drawings = new Set();
-      items.forEach(i => {
+      const drawingGroups = items.reduce((acc, i) => {
         const dwgNo = cleanText(i.drawing_no || 'N/A');
-        drawings.add(dwgNo);
-        if (i.has_bom) totalBOMs++;
-        totalItems++;
+        if (!acc[dwgNo]) acc[dwgNo] = [];
+        acc[dwgNo].push(i);
+        return acc;
+      }, {});
 
+      Object.values(drawingGroups).forEach(dwgItems => {
+        totalDrawings++;
+        const hasFGWithBOM = dwgItems.some(i => isFinishedGood(i) && i.has_bom);
+        const allFinalized = dwgItems.length > 0 && dwgItems.every(i => i.has_bom);
+        
+        // A drawing is completed if it's an FG with BOM OR if all its production items (including SAs) have BOMs
+        if ((hasFGWithBOM && allFinalized) || (!dwgItems.some(isFinishedGood) && allFinalized)) {
+          completedDrawings++;
+        }
+      });
+
+      items.forEach(i => {
         if (isFinishedGood(i)) {
           totalCost += (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
         }
       });
-      totalDrawings += drawings.size;
     });
 
     return {
       totalClients: orders.length,
       totalDrawings,
-      completionRate: totalItems > 0 ? Math.round((totalBOMs / totalItems) * 100) : 0,
+      completionRate: totalDrawings > 0 ? Math.round((completedDrawings / totalDrawings) * 100) : 0,
       totalCost
     };
-  }, [orders, clientData]);
+  }, [orders, clientData, getFlattenedItems, isFinishedGood]);
 
   const filteredOrders = useMemo(() => {
     const baseOrders = orders.filter(o => {
-      const items = (clientData[o.id]?.items || []).filter(isProductionItem);
+      const allItems = clientData[o.id]?.items || [];
+      const items = getFlattenedItems(allItems);
       return items.length > 0;
     });
 
@@ -206,13 +260,14 @@ const BOMCreation = () => {
       const matchClient = o.client_name.toLowerCase().includes(term);
       if (matchClient) return true;
 
-      const items = (clientData[o.id]?.items || []).filter(isProductionItem);
+      const allItems = clientData[o.id]?.items || [];
+      const items = getFlattenedItems(allItems);
       return items.some(i => 
         (i.drawing_no || '').toLowerCase().includes(term) ||
         (i.item_code || '').toLowerCase().includes(term)
       );
     });
-  }, [orders, searchTerm, clientData, isProductionItem]);
+  }, [orders, searchTerm, clientData, getFlattenedItems]);
 
   return (
     <div className="bg-slate-50 min-h-screen pb-12">
@@ -329,7 +384,7 @@ const BOMCreation = () => {
                   filteredOrders.map(client => {
                     const isExpanded = expandedClients[client.id];
                     const allItems = clientData[client.id]?.items || [];
-                    const items = allItems.filter(isProductionItem);
+                    const items = getFlattenedItems(allItems);
                     const clientLoading = clientData[client.id]?.loading;
 
                     const drawingsSet = new Set(items.map(i => cleanText(i.drawing_no || 'N/A')));
@@ -344,7 +399,21 @@ const BOMCreation = () => {
                         }, null)
                       : null;
 
-                    const allBOMsCompleted = items.length > 0 && items.every(i => i.has_bom);
+                    const groupedDrawings = items.reduce((acc, item) => {
+                      const dwg = cleanText(item.drawing_no || 'N/A');
+                      if (!acc[dwg]) acc[dwg] = [];
+                      acc[dwg].push(item);
+                      return acc;
+                    }, {});
+
+                    const allDrawingsCompleted = Object.values(groupedDrawings).length > 0 && 
+                      Object.values(groupedDrawings).every(dwgItems => {
+                        const hasFGWithBOM = dwgItems.some(i => isFinishedGood(i) && i.has_bom);
+                        const allFinalized = dwgItems.every(i => i.has_bom);
+                        return hasFGWithBOM && allFinalized;
+                      });
+
+                    const allBOMsCompleted = allDrawingsCompleted;
 
                     return (
                       <React.Fragment key={client.id}>
@@ -411,9 +480,11 @@ const BOMCreation = () => {
                                       const dwgKey = `${client.id}_${dwgNo}`;
                                       const isDwgExpanded = expandedDrawings[dwgKey];
                                       
-                                      // Only show completed items if they actually have BOM data
-                                      const itemsWithBOM = dwgItems.filter(i => i.has_bom);
-                                      const dwgStatus = itemsWithBOM.length > 0 && itemsWithBOM.length === dwgItems.length ? 'COMPLETED' : 'PENDING';
+                                      // BOM status tracking
+                                      const prodItems = dwgItems.filter(isProductionItem);
+                                      const hasFGWithBOM = prodItems.some(i => isFinishedGood(i) && i.has_bom);
+                                      const allProductionItemsFinalized = prodItems.length > 0 && prodItems.every(i => i.has_bom);
+                                      const dwgStatus = (hasFGWithBOM && allProductionItemsFinalized) ? 'COMPLETED' : 'PENDING';
                                       
                                       const rawDwgId = dwgItems[0].drawing_id;
                                       const drawingId = (rawDwgId && String(rawDwgId).trim().toUpperCase() !== 'N/A') ? rawDwgId : '';
@@ -442,16 +513,19 @@ const BOMCreation = () => {
                                             </div>
                                             
                                             <div className="flex items-center gap-3">
-                                              <div className="text-right mr-4 hidden sm:block">
-                                                <p className="text-[10px] text-slate-400   tracking-wider">BOMs</p>
-                                                <p className="text-sm  text-slate-700">{itemsWithBOM.length}</p>
-                                              </div>
                                               <Link 
-                                                to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}`}
+                                                to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}&bomType=FG`}
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs  shadow-sm hover:bg-indigo-700 transition-all  tracking-wider whitespace-nowrap"
                                               >
-                                                Create BOM
+                                                Create Final BOM
+                                              </Link>
+                                              <Link 
+                                                to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}&bomType=SUB_ASSEMBLY`}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="px-4 py-2 bg-white border border-indigo-200 text-indigo-600 rounded-lg text-xs font-medium shadow-sm hover:bg-indigo-50 transition-all tracking-wider whitespace-nowrap"
+                                              >
+                                                + Add Sub-Assembly
                                               </Link>
                                             </div>
                                           </div>
@@ -459,7 +533,7 @@ const BOMCreation = () => {
                                           {/* BOM Items List (Expanded) */}
                                           {isDwgExpanded && (
                                             <div className="border-t border-slate-100 bg-slate-50/30">
-                                              {dwgItems.filter(i => isProductionItem(i) && i.has_bom).length > 0 ? (
+                                              {dwgItems.filter(i => isProductionItem(i)).length > 0 ? (
                                                 <div className="overflow-x-auto">
                                                   <table className="min-w-full divide-y divide-slate-100">
                                                     <thead className="bg-slate-50/50">
@@ -474,12 +548,19 @@ const BOMCreation = () => {
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100 bg-white">
                                                       {dwgItems
-                                                        .filter(item => isProductionItem(item) && item.has_bom)
+                                                        .filter(item => isProductionItem(item))
                                                         .map((item, idx) => (
                                                           <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                                           <td className="pl-6 py-4">
                                                             <div className="flex flex-col">
-                                                              <span className="text-xs  text-slate-700">{cleanText(item.description || item.material_name || `Item ${idx + 1}`)}</span>
+                                                              <div className="flex items-center gap-2">
+                                                                <span className="text-xs  text-slate-700">{cleanText(item.description || item.material_name || `Item ${idx + 1}`)}</span>
+                                                                {item.bom_type && (
+                                                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase ${item.bom_type === 'FG' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                                                                    {item.bom_type === 'FG' ? 'Final' : `SA: ${item.assembly_id || 'Assy'}`}
+                                                                  </span>
+                                                                )}
+                                                              </div>
                                                               <span className="text-[10px] text-slate-400 font-medium">{item.item_code}</span>
                                                             </div>
                                                           </td>
@@ -510,19 +591,19 @@ const BOMCreation = () => {
                                                             <div className="flex justify-end gap-2">
                                                               {item.has_bom ? (
                                                                 <>
-                                                                  <Link to={`/bom-form/${item.id}?view=true`} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="View BOM">
+                                                                  <Link to={`/bom-form/${item.original_item_id || item.id}?view=true&bomType=${item.bom_type || 'FG'}&assemblyId=${item.assembly_id || ''}`} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="View BOM">
                                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                                                     </svg>
                                                                   </Link>
-                                                                  <Link to={`/bom-form/${item.id}`} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Edit BOM">
+                                                                  <Link to={`/bom-form/${item.original_item_id || item.id}?bomType=${item.bom_type || 'FG'}&assemblyId=${item.assembly_id || ''}`} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Edit BOM">
                                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                     </svg>
                                                                   </Link>
                                                                   <button 
-                                                                    onClick={() => handleDeleteBOM(item.id, client)}
+                                                                    onClick={() => handleDeleteBOM(item.original_item_id || item.id, client, item.bom_type, item.assembly_id)}
                                                                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                                                     title="Delete BOM"
                                                                   >
@@ -533,7 +614,7 @@ const BOMCreation = () => {
                                                                 </>
                                                               ) : (
                                                                 <Link 
-                                                                  to={`/bom-form?item_id=${item.id}&drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}`}
+                                                                  to={`/bom-form?item_id=${item.original_item_id || item.id}&drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&bomType=${item.bom_type || 'FG'}&assemblyId=${item.assembly_id || ''}`}
                                                                   className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" 
                                                                   title="Create BOM for this Item"
                                                                 >

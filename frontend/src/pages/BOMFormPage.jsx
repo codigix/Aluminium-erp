@@ -11,16 +11,17 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
 
-  const selectedOption = options.find(opt => String(opt[valueField]) === String(value));
+  const selectedOption = options.find(opt => {
+    const valStr = String(value);
+    return String(opt[valueField]) === valStr || (valStr.startsWith('code_') && String(opt.label) === valStr.replace('code_', ''));
+  });
 
   useEffect(() => {
     if (!isOpen) {
       const newVal = selectedOption ? selectedOption[labelField] : (value || '');
-      if (searchTerm !== newVal) {
-        setSearchTerm(newVal);
-      }
+      setSearchTerm(newVal);
     }
-  }, [value, selectedOption, isOpen, labelField, searchTerm]);
+  }, [value, selectedOption, isOpen, labelField]);
 
   const filteredOptions = options.filter(opt => {
     const search = String(searchTerm || '').toLowerCase();
@@ -132,6 +133,11 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
             <div className="flex flex-col">
               <span className="text-xs font-medium text-slate-800">
                 {actualType === 'material' ? item.material_name : (item.component_code || item.componentCode)}
+                {item.ref_bom_type && (
+                  <span className="ml-2 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[8px] uppercase font-bold border border-blue-100">
+                    {item.ref_bom_type === 'FG' ? 'Final' : `Sub: ${item.ref_assembly_id || 'Default'}`}
+                  </span>
+                )}
               </span>
               {item.description && (
                 <span className="text-[10px] text-slate-400 truncate max-w-[200px]">{cleanText(item.description)}</span>
@@ -195,7 +201,6 @@ const BOMFormPage = () => {
     operations: [],
     scrap: []
   });
-  const [activeTab, setActiveTab] = useState('general');
   const [collapsedSections, setCollapsedSections] = useState({
     productInfo: false,
     components: false,
@@ -219,11 +224,13 @@ const BOMFormPage = () => {
     description: '',
     isActive: true,
     isDefault: false,
-    quantity: 1
+    quantity: 1,
+    bomType: 'FG',
+    assemblyId: ''
   });
 
-  const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' });
-  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
+  const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', refBomType: 'FG', refAssemblyId: '' });
+  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', refBomType: 'FG', refAssemblyId: '' });
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
@@ -336,28 +343,50 @@ const BOMFormPage = () => {
       }
     });
 
-    // 2. Add Approved Drawings (Sales Order Items)
+    // 2. Add Approved BOMs (including Sub-Assemblies)
+    approvedBOMs.forEach(bom => {
+      if (bom.item_code === currentItemCode) return; // Skip self
+
+      if (!showAllDrawings) {
+        if (productDrawing && bom.drawing_no && bom.drawing_no !== 'N/A' && bom.drawing_no !== productDrawing) return;
+      }
+
+      const bomCost = parseFloat(bom.bom_cost) || 0;
+      const typeLabel = bom.bom_type === 'FG' ? 'Final' : `Sub-Assy: ${bom.assembly_id || 'Default'}`;
+
+      options.push({
+        label: `${bom.item_code} - ${bom.description || 'No Description'} [${typeLabel}]`,
+        value: bom.item_code,
+        subLabel: `Drawing: ${bom.drawing_no} | BOM: ${typeLabel}${bomCost > 0 ? ` [Cost: ₹${bomCost.toFixed(2)}]` : ''}`,
+        rate: bomCost > 0 ? bomCost : (bom.rate || 0),
+        uom: bom.unit || 'Kg',
+        description: bom.description,
+        refBomType: bom.bom_type,
+        refAssemblyId: bom.assembly_id
+      });
+      // We don't use seenCodes here because we want to see multiple BOM versions
+    });
+
+    // 3. Add Approved Drawings (Sales Order Items) that might not have BOMs yet
     approvedDrawings.forEach(item => {
-      // For sales order items, we trust they are components if they are in approvedDrawings
-      // and match the drawing center philosophy
       if (item.item_code === currentItemCode) return; // Skip self
 
       if (!showAllDrawings) {
         if (productDrawing && item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== productDrawing) return;
       }
 
+      // Only add if we haven't seen this code yet (to avoid duplication with stock items)
+      // AND it doesn't already have an entry from approvedBOMs (or we can allow both if we want)
       if (!seenCodes.has(item.item_code)) {
-        // Also check approvedBOMs for these as well, although item.bom_cost might already be there
-        const bomInfo = approvedBOMs.find(b => b.item_code === item.item_code || (b.drawing_no === item.drawing_no && b.drawing_no !== 'N/A'));
-        const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? parseFloat(bomInfo.bom_cost) : 0);
-
         options.push({
           label: `${item.item_code} - ${item.description || item.material_name}`,
           value: item.item_code,
-          subLabel: `Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}`,
-          rate: bomCost > 0 ? bomCost : (item.rate || 0),
+          subLabel: `Drawing: ${item.drawing_no} (Order Item)`,
+          rate: (item.rate || 0),
           uom: item.unit || 'Kg',
-          description: item.description || item.material_name
+          description: item.description || item.material_name,
+          refBomType: 'FG',
+          refAssemblyId: null
         });
         seenCodes.add(item.item_code);
       }
@@ -416,8 +445,13 @@ const BOMFormPage = () => {
     const itemIdParam = params.get('item_id');
 
     const handleInitialParams = async () => {
+      // Clear selected item if no specific item ID/code is present to prevent state leak from previous item
+      if (!itemIdParam && !itemCodeParam) {
+        setSelectedItem(null);
+      }
+
       // Handle itemCode or drawing_no or item_id from URL
-      if (!selectedItem && (stockItems.length > 0 || approvedDrawings.length > 0 || itemIdParam)) {
+      if (stockItems.length > 0 || approvedDrawings.length > 0 || itemIdParam) {
         if (itemIdParam) {
           try {
             const token = localStorage.getItem('authToken');
@@ -530,11 +564,23 @@ const BOMFormPage = () => {
       const itemCodeFromUrl = params.get('itemCode');
       const drawingNoFromUrl = params.get('drawing_no');
       const drawingIdFromUrl = params.get('drawing_id') === 'N/A' ? '' : params.get('drawing_id');
-      const effectiveId = (itemId && itemId !== 'bom-form') 
-        ? itemId 
-        : (selectedItem?.source === 'order' ? selectedItem?.id : null);
+      const viewMode = params.get('view') === 'true';
+      const bomTypeFromUrl = params.get('bomType') || 'FG';
+      const assemblyIdFromUrl = params.get('assemblyId');
+      
+      // Update productForm with URL params if they exist
+      setProductForm(prev => ({
+        ...prev,
+        bomType: bomTypeFromUrl,
+        assemblyId: assemblyIdFromUrl || prev.assemblyId
+      }));
+      const effectiveId = (itemId && itemId !== 'bom-form') ? itemId : null;
 
-      if (effectiveId || itemCodeFromUrl || selectedItem?.item_code || drawingNoFromUrl || productForm.drawingNo) {
+      // IMPORTANT: Only fetch existing BOM details if we are in view mode OR have a specific itemId to edit.
+      // If we are creating a NEW BOM from a drawing header, we should NOT fetch existing data.
+      const shouldFetchBOM = effectiveId || (viewMode && (itemCodeFromUrl || drawingNoFromUrl));
+
+      if (shouldFetchBOM) {
         let currentItem = selectedItem;
         // If we have an ID but not selectedItem data (and it's not the one we just selected)
         if (effectiveId && (!selectedItem || String(selectedItem.id) !== String(effectiveId))) {
@@ -570,13 +616,20 @@ const BOMFormPage = () => {
         const itemCodeParam = itemCodeFromUrl || currentItem?.item_code || currentItem?.itemCode;
         const drawingNoParam = drawingNoFromUrl || currentItem?.drawing_no || currentItem?.drawingNo || productForm.drawingNo;
 
-        let bomUrl = `${API_BASE}/bom/items/${effectiveId || 'null'}`;
+        // Use itemId directly for the URL to ensure we only fetch by ID if specified in URL
+        let bomUrl = `${API_BASE}/bom/items/${(itemId && itemId !== 'bom-form') ? itemId : 'null'}`;
         const queryParams = [];
         if (itemCodeParam) {
           queryParams.push(`itemCode=${encodeURIComponent(itemCodeParam)}`);
         }
         if (drawingNoParam && drawingNoParam !== 'N/A') {
           queryParams.push(`drawingNo=${encodeURIComponent(drawingNoParam)}`);
+        }
+        if (bomTypeFromUrl) {
+          queryParams.push(`bomType=${encodeURIComponent(bomTypeFromUrl)}`);
+        }
+        if (assemblyIdFromUrl) {
+          queryParams.push(`assemblyId=${encodeURIComponent(assemblyIdFromUrl)}`);
         }
 
         if (queryParams.length > 0) {
@@ -627,23 +680,31 @@ const BOMFormPage = () => {
           setBomData({ materials: [], components: [], operations: [], scrap: [] });
         }
       } else {
-        // Reset state if no item/drawing is selected (New BOM mode)
+        // Reset state for New BOM mode
         setBomData({ materials: [], components: [], operations: [], scrap: [] });
-        setSelectedItem(null);
-        setProductForm({
-          itemGroup: 'FG',
-          itemCode: '',
-          drawingNo: '',
-          drawing_id: '',
-          uom: 'Kg',
-          revision: '1',
-          description: '',
-          isActive: true,
-          isDefault: false,
-          quantity: 1
-        });
-        setDrawingFilter('');
-        setFetchedDrawingName('');
+        
+        // If we are NOT auto-selecting from URL params (in useEffect), reset selectedItem
+        if (!itemCodeFromUrl && !drawingNoFromUrl && !params.get('item_id')) {
+           setSelectedItem(null);
+        }
+
+        // Only reset product form if we don't have drawing info in URL
+        if (!drawingNoFromUrl && !itemCodeFromUrl && !params.get('item_id')) {
+          setProductForm({
+            itemGroup: 'FG',
+            itemCode: '',
+            drawingNo: '',
+            drawing_id: '',
+            uom: 'Kg',
+            revision: '1',
+            description: '',
+            isActive: true,
+            isDefault: false,
+            quantity: 1
+          });
+          setDrawingFilter('');
+          setFetchedDrawingName('');
+        }
       }
 
       // Fetch All Approved Drawings for Selection
@@ -727,6 +788,8 @@ const BOMFormPage = () => {
       payload.parent_id = payload.parentId || null;
       payload.itemCode = selectedItem?.item_code || productForm.itemCode;
       payload.drawingNo = selectedItem?.drawing_no || productForm.drawingNo;
+      payload.bomType = productForm.bomType;
+      payload.assemblyId = productForm.assemblyId;
 
       if (section === 'materials') {
         if (!payload.materialName || !payload.qty) {
@@ -972,6 +1035,8 @@ const BOMFormPage = () => {
         operations: bomData.operations,
         scrap: bomData.scrap,
         source: selectedItem?.source || (productForm.drawingNo ? 'order' : 'stock'),
+        bomType: productForm.bomType,
+        assemblyId: productForm.assemblyId || null,
         costing: {
           componentsCost,
           rawMaterialsCost,
@@ -999,7 +1064,7 @@ const BOMFormPage = () => {
       }
 
       await response.json();
-      successToast('BOM created successfully');
+      successToast('BOM saved successfully');
 
       // Instead of resetting and navigating to list, stay on the page in view mode
       // This solves the "did not show saved bom" problem
@@ -1089,7 +1154,7 @@ const BOMFormPage = () => {
               <h1 className="text-xl  flex items-center gap-3">
                 {isReadOnly
                   ? `Viewing BOM: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
-                  : 'Create BOM'}
+                  : (itemId && itemId !== 'bom-form' ? 'Edit BOM' : 'Create BOM')}
                 {selectedItem?.status === 'REJECTED' && (
                   <span className="px-2 py-1 rounded text-[10px]  bg-rose-100 text-rose-600 border border-rose-200 animate-pulse ">
                     Rejected Drawing
@@ -1259,17 +1324,15 @@ const BOMFormPage = () => {
                           };
                         })
                       ].filter(opt => {
-                        const group = (opt.item_group || '').toLowerCase();
-                        const isFinishedOrSub = group.includes('finished') || group.includes('sub') || group.includes('assembly') || group === 'fg' || group === 'sfg';
-
                         if (drawingFilter) {
-                          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
-                          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
-                          return cleanOptDwg === cleanFilterDwg && isFinishedOrSub;
+                          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\(.*$/, '').trim();
+                          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\(.*$/, '').trim();
+                          return cleanOptDwg === cleanFilterDwg;
                         }
-                        return isFinishedOrSub;
+                        return true;
                       })}
-                      value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
+                      value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : (productForm.itemCode ? `code_${productForm.itemCode}` : '')}
+                      disabled={isReadOnly}
                       onChange={(e) => {
                         const [source, id] = e.target.value.split('_');
                         const item = source === 'order'
@@ -1330,17 +1393,15 @@ const BOMFormPage = () => {
                           };
                         })
                       ].filter(opt => {
-                        const group = (opt.item_group || '').toLowerCase();
-                        const isFinishedOrSub = group.includes('finished') || group.includes('sub') || group.includes('assembly') || group === 'fg' || group === 'sfg';
-
                         if (drawingFilter) {
-                          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
-                          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
-                          return cleanOptDwg === cleanFilterDwg && isFinishedOrSub;
+                          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\(.*$/, '').trim();
+                          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\(.*$/, '').trim();
+                          return cleanOptDwg === cleanFilterDwg;
                         }
-                        return isFinishedOrSub;
+                        return true;
                       })}
-                      value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
+                      value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : (productForm.itemCode ? `code_${productForm.itemCode}` : '')}
+                      disabled={isReadOnly}
                       onChange={(e) => {
                         const [source, id] = e.target.value.split('_');
                         const item = source === 'order'
@@ -1432,6 +1493,64 @@ const BOMFormPage = () => {
                     onChange={(e) => setProductForm({ ...productForm, revision: e.target.value })}
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500 ml-1">BOM Type</label>
+                  <div className="flex gap-2">
+                    <select
+                      disabled={isReadOnly}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                      value={productForm.bomType}
+                      onChange={(e) => setProductForm({ ...productForm, bomType: e.target.value })}
+                    >
+                      <option value="FG">Final (FG)</option>
+                      <option value="SUB_ASSEMBLY">Sub-Assembly</option>
+                    </select>
+                    {productForm.bomType === 'FG' && !isReadOnly && (
+                      <button
+                        onClick={() => {
+                          const params = new URLSearchParams(location.search);
+                          params.set('bomType', 'FG');
+                          params.delete('assemblyId');
+                          navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+                          fetchData(true);
+                        }}
+                        className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-medium hover:bg-blue-100 transition-colors border border-blue-200"
+                      >
+                        Load
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {productForm.bomType === 'SUB_ASSEMBLY' && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs  text-slate-500 ml-1">Assembly ID / Unique Name</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        disabled={isReadOnly}
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                        placeholder="e.g. SA-01, FRAME-ASSY"
+                        value={productForm.assemblyId}
+                        onChange={(e) => setProductForm({ ...productForm, assemblyId: e.target.value })}
+                      />
+                      {!isReadOnly && (
+                        <button
+                          onClick={() => {
+                            const params = new URLSearchParams(location.search);
+                            params.set('bomType', 'SUB_ASSEMBLY');
+                            if (productForm.assemblyId) params.set('assemblyId', productForm.assemblyId);
+                            else params.delete('assemblyId');
+                            navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+                            fetchData(true);
+                          }}
+                          className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-medium hover:bg-blue-100 transition-colors border border-blue-200"
+                        >
+                          Load
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mt-5 pt-5 border-t border-slate-100">
@@ -1553,7 +1672,9 @@ const BOMFormPage = () => {
                             componentCode: e.target.value,
                             rate: item ? item.rate : componentForm.rate,
                             uom: item ? item.uom : componentForm.uom,
-                            description: item ? item.description : componentForm.description
+                            description: item ? item.description : componentForm.description,
+                            refBomType: item?.refBomType || 'FG',
+                            refAssemblyId: item?.refAssemblyId || ''
                           });
                         }}
                         subLabelField="subLabel"
@@ -1586,7 +1707,7 @@ const BOMFormPage = () => {
                     </div>
                     <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
                       <button
-                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' })}
+                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', refBomType: 'FG', refAssemblyId: '' })}
                         className="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1596,7 +1717,7 @@ const BOMFormPage = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mt-3 pt-3 border-t border-slate-100">
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Unit Rate (₹)</label>
                       <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.rate} onChange={(e) => setComponentForm({ ...componentForm, rate: e.target.value })} />
@@ -1604,6 +1725,28 @@ const BOMFormPage = () => {
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Process Loss %</label>
                       <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs  text-rose-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({ ...componentForm, lossPercent: e.target.value })} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs  text-slate-500 ml-1">Ref BOM Type</label>
+                      <select
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        value={componentForm.refBomType}
+                        onChange={(e) => setComponentForm({ ...componentForm, refBomType: e.target.value })}
+                      >
+                        <option value="FG">Final (FG)</option>
+                        <option value="SUB_ASSEMBLY">Sub-Assembly</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs  text-slate-500 ml-1">Ref Assembly ID</label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        placeholder="Assembly Name"
+                        value={componentForm.refAssemblyId}
+                        onChange={(e) => setComponentForm({ ...componentForm, refAssemblyId: e.target.value })}
+                        disabled={componentForm.refBomType === 'FG'}
+                      />
                     </div>
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Component Notes</label>
@@ -1793,7 +1936,7 @@ const BOMFormPage = () => {
 
                     <div className="md:col-span-3 space-y-1 flex flex-col justify-end">
                       <button
-                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' })}
+                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', refBomType: 'FG', refAssemblyId: '' })}
                         className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1841,6 +1984,34 @@ const BOMFormPage = () => {
                           <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                         ))}
                       </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 pt-3 border-t border-slate-100">
+                    <div className="space-y-1">
+                      <label className="text-xs  text-slate-500 ml-1">Ref BOM Type</label>
+                      <select
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                        value={materialForm.refBomType}
+                        onChange={(e) => setMaterialForm({ ...materialForm, refBomType: e.target.value })}
+                      >
+                        <option value="FG">Final (FG)</option>
+                        <option value="SUB_ASSEMBLY">Sub-Assembly</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs  text-slate-500 ml-1">Ref Assembly ID</label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                        placeholder="Assembly Name"
+                        value={materialForm.refAssemblyId}
+                        onChange={(e) => setMaterialForm({ ...materialForm, refAssemblyId: e.target.value })}
+                        disabled={materialForm.refBomType === 'FG'}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs  text-slate-500 ml-1">Material Description</label>
+                      <input type="text" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="Enter specifications..." value={materialForm.description} onChange={(e) => setMaterialForm({ ...materialForm, description: e.target.value })} />
                     </div>
                   </div>
                 </div>
@@ -2294,7 +2465,6 @@ const BOMFormPage = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {bomData.scrap.map((s) => {
-                        const stockItem = stockItems.find(i => i.item_code === s.item_code);
                         const inputQty = parseFloat(s.input_qty || 0);
                         const lossPercent = parseFloat(s.loss_percent || 0);
                         const rate = parseFloat(s.rate || 0);
