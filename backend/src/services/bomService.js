@@ -659,58 +659,14 @@ const deleteBOM = async (itemId, bomType = 'FG', assemblyId = null) => {
   try {
     await connection.beginTransaction();
 
-    let effectiveItemCode = null;
-    let effectiveDrawingNo = null;
-    let effectiveItemId = itemId;
-    let effectiveBomType = bomType;
-    let effectiveAssemblyId = assemblyId;
+    // 1. Delete item-specific BOM entries only
+    await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);
+    await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
+    await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
+    await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
 
-    if (itemId && itemId.toString().startsWith('MASTER:')) {
-      const parts = itemId.split(':');
-      // Format: MASTER:ITEM_CODE:DRAWING_NO:BOM_TYPE:ASSEMBLY_ID
-      effectiveItemCode = parts[1] || null;
-      effectiveDrawingNo = parts[2] || null;
-      effectiveBomType = parts[3] || 'FG';
-      effectiveAssemblyId = parts[4] || null;
-      effectiveItemId = null;
-    }
-
-    if (effectiveItemId) {
-      // 1. Get item details to identify related Master BOMs
-      const [items] = await connection.query(
-        'SELECT item_code, drawing_no FROM sales_order_items WHERE id = ?',
-        [effectiveItemId]
-      );
-      
-      if (items.length > 0) {
-        effectiveItemCode = items[0].item_code;
-        effectiveDrawingNo = items[0].drawing_no;
-      }
-
-      // 2. Delete item-specific BOM entries
-      await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ? AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveItemId, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ? AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveItemId, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ? AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveItemId, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ? AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveItemId, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-    }
-
-    // 3. Delete Master BOM entries
-    if (effectiveItemCode) {
-      await connection.execute('DELETE FROM sales_order_item_materials WHERE item_code = ? AND sales_order_item_id IS NULL AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveItemCode, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_components WHERE item_code = ? AND sales_order_item_id IS NULL AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveItemCode, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_operations WHERE item_code = ? AND sales_order_item_id IS NULL AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveItemCode, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_scrap WHERE item_code = ? AND sales_order_item_id IS NULL AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveItemCode, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-    } else if (effectiveDrawingNo) {
-      await connection.execute('DELETE FROM sales_order_item_materials WHERE drawing_no = ? AND sales_order_item_id IS NULL AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveDrawingNo, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_components WHERE drawing_no = ? AND sales_order_item_id IS NULL AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveDrawingNo, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_operations WHERE drawing_no = ? AND sales_order_item_id IS NULL AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveDrawingNo, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-      await connection.execute('DELETE FROM sales_order_item_scrap WHERE drawing_no = ? AND sales_order_item_id IS NULL AND bom_type = ? AND (assembly_id = ? OR (? IS NULL AND assembly_id IS NULL))', [effectiveDrawingNo, effectiveBomType, effectiveAssemblyId, effectiveAssemblyId]);
-    }
-
-    // Reset bom_cost in sales_order_items if it was a specific SO item delete
-    if (effectiveItemId) {
-        await connection.execute('UPDATE sales_order_items SET bom_cost = 0 WHERE id = ?', [effectiveItemId]);
-    }
+    // 2. Reset bom_cost in sales_order_items
+    await connection.execute('UPDATE sales_order_items SET bom_cost = 0 WHERE id = ?', [itemId]);
 
     await connection.commit();
   } catch (error) {

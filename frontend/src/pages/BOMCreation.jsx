@@ -211,31 +211,30 @@ const BOMCreation = () => {
     let totalCost = 0;
 
     orders.forEach(client => {
-      const allItems = clientData[client.id]?.items || [];
-      const items = getFlattenedItems(allItems);
+      const items = clientData[client.id]?.items || [];
+      const drawingsMap = {};
       
-      const drawingGroups = items.reduce((acc, i) => {
+      items.forEach(i => {
         const dwgNo = cleanText(i.drawing_no || 'N/A');
-        if (!acc[dwgNo]) acc[dwgNo] = [];
-        acc[dwgNo].push(i);
-        return acc;
-      }, {});
-
-      Object.values(drawingGroups).forEach(dwgItems => {
-        totalDrawings++;
-        const hasFGWithBOM = dwgItems.some(i => isFinishedGood(i) && i.has_bom);
-        const allFinalized = dwgItems.length > 0 && dwgItems.every(i => i.has_bom);
+        if (!drawingsMap[dwgNo]) drawingsMap[dwgNo] = [];
+        drawingsMap[dwgNo].push(i);
         
-        // A drawing is completed if it's an FG with BOM OR if all its production items (including SAs) have BOMs
-        if ((hasFGWithBOM && allFinalized) || (!dwgItems.some(isFinishedGood) && allFinalized)) {
-          completedDrawings++;
+        // Only include Finished Goods (FG) in the estimated total value
+        const isFG = (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'));
+        if (isFG) {
+          totalCost += (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
         }
       });
 
-      items.forEach(i => {
-        if (isFinishedGood(i)) {
-          totalCost += (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
-        }
+      const drawings = Object.keys(drawingsMap);
+      totalDrawings += drawings.length;
+      
+      drawings.forEach(dwgNo => {
+        const dwgItems = drawingsMap[dwgNo];
+        const hasFGBOM = dwgItems.some(i => 
+          i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
+        );
+        if (hasFGBOM) completedDrawings++;
       });
     });
 
@@ -399,21 +398,17 @@ const BOMCreation = () => {
                         }, null)
                       : null;
 
-                    const groupedDrawings = items.reduce((acc, item) => {
+                    const drawingsMapForStatus = items.reduce((acc, item) => {
                       const dwg = cleanText(item.drawing_no || 'N/A');
                       if (!acc[dwg]) acc[dwg] = [];
                       acc[dwg].push(item);
                       return acc;
                     }, {});
-
-                    const allDrawingsCompleted = Object.values(groupedDrawings).length > 0 && 
-                      Object.values(groupedDrawings).every(dwgItems => {
-                        const hasFGWithBOM = dwgItems.some(i => isFinishedGood(i) && i.has_bom);
-                        const allFinalized = dwgItems.every(i => i.has_bom);
-                        return hasFGWithBOM && allFinalized;
-                      });
-
-                    const allBOMsCompleted = allDrawingsCompleted;
+                    
+                    const drawingsListForStatus = Object.values(drawingsMapForStatus);
+                    const allBOMsCompleted = drawingsListForStatus.length > 0 && drawingsListForStatus.every(dwgItems => 
+                      dwgItems.some(i => i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))
+                    );
 
                     return (
                       <React.Fragment key={client.id}>
@@ -480,11 +475,12 @@ const BOMCreation = () => {
                                       const dwgKey = `${client.id}_${dwgNo}`;
                                       const isDwgExpanded = expandedDrawings[dwgKey];
                                       
-                                      // BOM status tracking
-                                      const prodItems = dwgItems.filter(isProductionItem);
-                                      const hasFGWithBOM = prodItems.some(i => isFinishedGood(i) && i.has_bom);
-                                      const allProductionItemsFinalized = prodItems.length > 0 && prodItems.every(i => i.has_bom);
-                                      const dwgStatus = (hasFGWithBOM && allProductionItemsFinalized) ? 'COMPLETED' : 'PENDING';
+                                      // Drawing status is COMPLETED if at least one FG item has a BOM
+                                      const itemsWithBOM = dwgItems.filter(i => i.has_bom);
+                                      const hasFGBOM = dwgItems.some(i => 
+                                        i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
+                                      );
+                                      const dwgStatus = hasFGBOM ? 'COMPLETED' : 'PENDING';
                                       
                                       const rawDwgId = dwgItems[0].drawing_id;
                                       const drawingId = (rawDwgId && String(rawDwgId).trim().toUpperCase() !== 'N/A') ? rawDwgId : '';
@@ -547,10 +543,8 @@ const BOMCreation = () => {
                                                       </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100 bg-white">
-                                                      {dwgItems
-                                                        .filter(item => isProductionItem(item))
-                                                        .map((item, idx) => (
-                                                          <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                                      {dwgItems.filter(item => item.has_bom).map((item, idx) => (
+                                                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                                           <td className="pl-6 py-4">
                                                             <div className="flex flex-col">
                                                               <div className="flex items-center gap-2">
