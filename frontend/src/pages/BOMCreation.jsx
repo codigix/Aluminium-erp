@@ -468,7 +468,7 @@ const BOMCreation = () => {
                                                           </td>
                                                           <td className="px-4 py-4 text-center">
                                                             <span className="text-xs  text-slate-700">
-                                                              {item.quantity} <span className="text-[10px] text-slate-400 font-normal">{item.unit || 'NOS'}</span>
+                                                              {item.total_quantity || item.quantity} <span className="text-[10px] text-slate-400 font-normal">{item.unit || 'NOS'}</span>
                                                             </span>
                                                           </td>
                                                           <td className="px-4 py-4 text-center">

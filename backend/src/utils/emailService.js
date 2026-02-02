@@ -22,7 +22,7 @@ const createTransporter = () => {
   return nodemailer.createTransport(config);
 };
 
-const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId) => {
+const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, quoteNumber) => {
   const itemsHTML = (items || [])
     .map((item, idx) => {
       const isRejected = item.status === 'REJECTED';
@@ -94,7 +94,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId) 
           <td>
             <strong>Quotation Details:</strong><br>
             Date: ${new Date().toLocaleDateString('en-IN')}<br>
-            Quote No: QT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}
+            Quote No: ${quoteNumber || `QT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`}
           </td>
         </tr>
       </table>
@@ -172,7 +172,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId) 
 const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes, clientId, quoteNumber) => {
   try {
     const transporter = createTransporter();
-    const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId);
+    const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber);
     
     // Generate PDF buffer
     let pdfBuffer;

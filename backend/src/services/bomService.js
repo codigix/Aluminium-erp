@@ -238,9 +238,11 @@ const createBOMRequest = async (bomData) => {
 
     if (itemId) {
       // 1. Update specific sales_order_item
+      // NOTE: We do NOT update 'quantity' here to preserve the original Sales Order/Design quantity.
+      // Quotation quantity is always the Design quantity. Sales never redefines quantity at quotation stage.
       await connection.execute(
         `UPDATE sales_order_items 
-         SET item_code = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, quantity = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
+         SET item_code = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
          WHERE id = ?`,
         [
           safeItemCode, 
@@ -250,7 +252,6 @@ const createBOMRequest = async (bomData) => {
           description || null, 
           isActive ? 1 : 0, 
           isDefault ? 1 : 0, 
-          quantity || 0, 
           drawingNo || null, 
           drawing_id || null, 
           bom_cost,

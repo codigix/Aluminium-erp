@@ -21,13 +21,20 @@ const listDesignOrders = async () => {
       soi.description,
       soi.status as item_status,
       soi.rejection_reason as item_rejection_reason,
-      soi.quantity as total_quantity,
+      COALESCE(
+        poi.quantity, 
+        (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+        soi.quantity
+      ) as total_quantity,
       sb.material_type as item_group
     FROM design_orders do
     JOIN sales_orders so ON do.sales_order_id = so.id
     JOIN sales_order_items soi ON soi.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
+    LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
+         AND soi.item_code = poi.item_code 
+         AND (soi.drawing_no = poi.drawing_no OR (soi.drawing_no IS NULL AND poi.drawing_no IS NULL))
     LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
     WHERE so.request_accepted = 1
     ORDER BY do.created_at DESC

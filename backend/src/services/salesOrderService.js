@@ -631,7 +631,17 @@ const getApprovedDrawings = async () => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      'SELECT *, quantity as design_qty FROM sales_order_items WHERE sales_order_id = ?',
+      `SELECT soi.*, 
+              COALESCE(
+                poi.quantity, 
+                (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+                soi.quantity
+              ) as design_qty 
+       FROM sales_order_items soi
+       LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
+       LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
+            AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
+       WHERE soi.sales_order_id = ? AND soi.item_group = 'FG' AND (soi.bom_cost > 0 OR soi.status = 'REJECTED')`,
       [order.id]
     );
     order.items = items;

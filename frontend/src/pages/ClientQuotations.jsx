@@ -165,17 +165,21 @@ const ClientQuotations = () => {
           };
           initialPrices[clientName] = {};
         }
+        const fgItems = (order.items || []).filter(item => 
+          item.item_group === 'FG' && (Number(item.bom_cost) > 0 || item.status === 'REJECTED')
+        );
+        order.items = fgItems;
         grouped[clientName].orders.push(order);
         
         // Initialize prices from items
         if (order.items) {
           order.items.forEach(item => {
-            if (item.rate && Number(item.rate) > 0) {
-              initialPrices[clientName][item.id] = item.rate;
-            } else if (item.bom_cost && Number(item.bom_cost) > 0) {
+            if (item.bom_cost && Number(item.bom_cost) > 0) {
               const margin = Number(order.profit_margin) || 0;
               const calculatedPrice = Number(item.bom_cost) * (1 + margin / 100);
               initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
+            } else if (item.rate && Number(item.rate) > 0) {
+              initialPrices[clientName][item.id] = item.rate;
             }
           });
         }
