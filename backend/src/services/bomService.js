@@ -702,23 +702,6 @@ const deleteBOM = async (itemId) => {
         await connection.execute('DELETE FROM sales_order_item_operations WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawing_no]);
         await connection.execute('DELETE FROM sales_order_item_scrap WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawing_no]);
       }
-
-      // 4. Also delete for any OTHER sales_order_items that might have inherited this BOM via the same drawing_no
-      // This is because createBOMRequest by drawingNo duplicates the BOM for all items.
-      // If we are deleting the BOM for the drawing, we should probably clear it for all of them.
-      if (drawing_no) {
-        const [matchingItems] = await connection.query(
-          'SELECT id FROM sales_order_items WHERE drawing_no = ? AND id != ?',
-          [drawing_no, itemId]
-        );
-        for (const mItem of matchingItems) {
-          await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [mItem.id]);
-          await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [mItem.id]);
-          await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [mItem.id]);
-          await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [mItem.id]);
-          await connection.execute('UPDATE sales_order_items SET bom_cost = 0 WHERE id = ?', [mItem.id]);
-        }
-      }
     }
 
     // Reset bom_cost in sales_order_items

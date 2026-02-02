@@ -585,7 +585,7 @@ const DesignOrders = () => {
         throw new Error(errorData.message || `Failed to ${isEditingMaterial ? 'update' : 'create'} material`);
       }
 
-      // If we have a target order item, update its item_code (only for creation usually, but good to have)
+      // If we have a target order item, update its item_code and other related fields
       if (targetOrderItemId && !isEditingMaterial) {
         await fetch(`${API_BASE}/sales-orders/items/${targetOrderItemId}`, {
           method: 'PATCH',
@@ -593,7 +593,12 @@ const DesignOrders = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ item_code: materialFormData.itemCode })
+          body: JSON.stringify({ 
+            item_code: materialFormData.itemCode,
+            item_group: materialFormData.itemGroup,
+            material_type: materialFormData.materialGrade, // Mapping materialGrade to material_type
+            product_type: materialFormData.itemGroup // Defaulting product_type to item_group if needed
+          })
         });
       }
       

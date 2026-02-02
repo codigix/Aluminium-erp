@@ -1590,7 +1590,7 @@ function App() {
                 )}
 
                 {activeModule === 'bom-form' && !isProduction && (
-                  <BOMFormPage />
+                  <BOMFormPage key={location.pathname + location.search} />
                 )}
 
                 {activeModule === 'workstation-master' && (

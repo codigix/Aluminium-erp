@@ -1235,6 +1235,18 @@ const updateSalesOrderItem = async (itemId, data) => {
     fields.push('revision_no = ?');
     params.push(data.revision_no);
   }
+  if (data.item_group !== undefined) {
+    fields.push('item_group = ?');
+    params.push(data.item_group);
+  }
+  if (data.material_type !== undefined) {
+    fields.push('material_type = ?');
+    params.push(data.material_type);
+  }
+  if (data.product_type !== undefined) {
+    fields.push('product_type = ?');
+    params.push(data.product_type);
+  }
 
   if (fields.length === 0) return;
 

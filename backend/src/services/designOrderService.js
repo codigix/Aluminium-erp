@@ -22,9 +22,9 @@ const listDesignOrders = async () => {
       soi.status as item_status,
       soi.rejection_reason as item_rejection_reason,
       soi.quantity as total_quantity,
-      sb.item_group,
-      sb.material_type,
-      sb.product_type
+      COALESCE(soi.item_group, sb.item_group) as item_group,
+      COALESCE(soi.material_type, sb.material_type) as material_type,
+      COALESCE(soi.product_type, sb.product_type) as product_type
     FROM design_orders do
     JOIN sales_orders so ON do.sales_order_id = so.id
     JOIN sales_order_items soi ON soi.sales_order_id = so.id

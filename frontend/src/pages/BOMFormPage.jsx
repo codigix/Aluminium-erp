@@ -534,7 +534,7 @@ const BOMFormPage = () => {
         ? itemId 
         : (selectedItem?.source === 'order' ? selectedItem?.id : null);
 
-      if (effectiveId || itemCodeFromUrl || selectedItem?.item_code || drawingNoFromUrl) {
+      if (effectiveId || itemCodeFromUrl || selectedItem?.item_code || drawingNoFromUrl || productForm.drawingNo) {
         let currentItem = selectedItem;
         // If we have an ID but not selectedItem data (and it's not the one we just selected)
         if (effectiveId && (!selectedItem || String(selectedItem.id) !== String(effectiveId))) {
@@ -626,6 +626,24 @@ const BOMFormPage = () => {
         } else if (bomResponse.status === 404) {
           setBomData({ materials: [], components: [], operations: [], scrap: [] });
         }
+      } else {
+        // Reset state if no item/drawing is selected (New BOM mode)
+        setBomData({ materials: [], components: [], operations: [], scrap: [] });
+        setSelectedItem(null);
+        setProductForm({
+          itemGroup: 'FG',
+          itemCode: '',
+          drawingNo: '',
+          drawing_id: '',
+          uom: 'Kg',
+          revision: '1',
+          description: '',
+          isActive: true,
+          isDefault: false,
+          quantity: 1
+        });
+        setDrawingFilter('');
+        setFetchedDrawingName('');
       }
 
       // Fetch All Approved Drawings for Selection

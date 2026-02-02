@@ -16,6 +16,36 @@ const BOMCreation = () => {
   const [expandedDrawings, setExpandedDrawings] = useState({}); // { drawingKey: boolean }
   const [searchTerm, setSearchTerm] = useState('');
 
+  const isProductionItem = useCallback((item) => {
+    const group = (item.item_group || '').toLowerCase().trim();
+    const hasItemCode = !!item.item_code;
+    return hasItemCode && (
+      group === 'fg' || 
+      group === 'sfg' || 
+      group === 'sa' || 
+      group.includes('sub assembly') || 
+      group.includes('sub-assembly') || 
+      group.includes('subassembly')
+    );
+  }, []);
+
+  const isFinishedGood = useCallback((item) => {
+    const group = (item.item_group || '').toLowerCase().trim();
+    const type = (item.material_type || '').toLowerCase().trim();
+    const prodType = (item.product_type || '').toLowerCase().trim();
+    const code = (item.item_code || '').toLowerCase().trim();
+
+    const isFG = group === 'fg' || prodType === 'fg' || group.includes('finished') || prodType.includes('finished') || type.includes('finished');
+    
+    const isExplicitSubAssembly = 
+      group.includes('sub assembly') || group.includes('sub-assembly') || group.includes('subassembly') || group === 'sa' || group === 'sfg' || group.includes('semi-finished') || group.includes('wip') ||
+      type.includes('sub assembly') || type.includes('sub-assembly') || type.includes('subassembly') || type === 'sa' || type === 'sfg' || type.includes('semi-finished') || type.includes('wip') ||
+      prodType.includes('sub assembly') || prodType.includes('sub-assembly') || prodType.includes('subassembly') || prodType === 'sa' || prodType === 'sfg' || prodType.includes('semi-finished') || prodType.includes('wip') ||
+      code.startsWith('sa-') || code.startsWith('wip-') || code.startsWith('sfg-');
+
+    return isFG && !isExplicitSubAssembly;
+  }, []);
+
   const fetchClientDrawings = useCallback(async (client) => {
     try {
       setClientData(prev => ({ ...prev, [client.id]: { ...(prev[client.id] || {}), loading: true } }));
@@ -46,6 +76,7 @@ const BOMCreation = () => {
       }));
     } catch (err) {
       console.error(err);
+      errorToast(`Failed to load drawings: ${err.message}`);
       setClientData(prev => ({ ...prev, [client.id]: { ...(prev[client.id] || {}), loading: false } }));
     }
   }, []);
@@ -76,9 +107,8 @@ const BOMCreation = () => {
       const groupedArray = Object.values(clientGroups).sort((a, b) => a.client_name.localeCompare(b.client_name));
       setOrders(groupedArray);
       
-      for (const client of groupedArray) {
-        fetchClientDrawings(client);
-      }
+      // Batch fetch drawings for all clients
+      await Promise.all(groupedArray.map(client => fetchClientDrawings(client)));
     } catch (error) {
       errorToast(error.message);
     } finally {
@@ -98,7 +128,7 @@ const BOMCreation = () => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
   };
 
-  const handleDeleteBOM = async (itemId) => {
+  const handleDeleteBOM = async (itemId, client) => {
     try {
       const result = await Swal.fire({
         title: 'Are you sure?',
@@ -119,7 +149,13 @@ const BOMCreation = () => {
 
         if (!response.ok) throw new Error('Failed to delete BOM');
         successToast('BOM has been deleted.');
-        fetchOrders();
+        
+        // Refresh only the specific client drawings
+        if (client) {
+          fetchClientDrawings(client);
+        } else {
+          fetchOrders();
+        }
       }
     } catch (error) {
       errorToast(error.message);
@@ -132,29 +168,18 @@ const BOMCreation = () => {
     let totalItems = 0;
     let totalCost = 0;
 
-    orders.forEach(client => {
-      const items = clientData[client.id]?.items || [];
+      orders.forEach(client => {
+      const allItems = clientData[client.id]?.items || [];
+      const items = allItems.filter(isProductionItem);
+      
       const drawings = new Set();
       items.forEach(i => {
         const dwgNo = cleanText(i.drawing_no || 'N/A');
         drawings.add(dwgNo);
         if (i.has_bom) totalBOMs++;
         totalItems++;
-        const group = (i.item_group || '').toLowerCase();
-        const type = (i.material_type || '').toLowerCase();
-        const prodType = (i.product_type || '').toLowerCase();
 
-        const isFG = group === 'fg' || prodType === 'fg' || group.includes('finished') || prodType.includes('finished') || type.includes('finished');
-        
-        // If it's explicitly a Sub Assembly, it's not FG for stats purposes if we only want true Finished Goods
-        const code = (i.item_code || '').toLowerCase();
-        const isExplicitSubAssembly = 
-          group.includes('sub assembly') || group.includes('sub-assembly') || group.includes('subassembly') || group === 'sa' || group.includes('semi-finished') || group.includes('wip') ||
-          type.includes('sub assembly') || type.includes('sub-assembly') || type.includes('subassembly') || type === 'sa' || type.includes('semi-finished') || type.includes('wip') ||
-          prodType.includes('sub assembly') || prodType.includes('sub-assembly') || prodType.includes('subassembly') || prodType === 'sa' || prodType.includes('semi-finished') || prodType.includes('wip') ||
-          code.startsWith('sa-') || code.startsWith('wip-') || code.startsWith('sfg-');
-
-        if (isFG && !isExplicitSubAssembly) {
+        if (isFinishedGood(i)) {
           totalCost += (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
         }
       });
@@ -170,19 +195,24 @@ const BOMCreation = () => {
   }, [orders, clientData]);
 
   const filteredOrders = useMemo(() => {
-    if (!searchTerm) return orders;
+    const baseOrders = orders.filter(o => {
+      const items = (clientData[o.id]?.items || []).filter(isProductionItem);
+      return items.length > 0;
+    });
+
+    if (!searchTerm) return baseOrders;
     const term = searchTerm.toLowerCase();
-    return orders.filter(o => {
+    return baseOrders.filter(o => {
       const matchClient = o.client_name.toLowerCase().includes(term);
       if (matchClient) return true;
 
-      const items = clientData[o.id]?.items || [];
+      const items = (clientData[o.id]?.items || []).filter(isProductionItem);
       return items.some(i => 
         (i.drawing_no || '').toLowerCase().includes(term) ||
         (i.item_code || '').toLowerCase().includes(term)
       );
     });
-  }, [orders, searchTerm, clientData]);
+  }, [orders, searchTerm, clientData, isProductionItem]);
 
   return (
     <div className="bg-slate-50 min-h-screen pb-12">
@@ -298,7 +328,8 @@ const BOMCreation = () => {
                 ) : (
                   filteredOrders.map(client => {
                     const isExpanded = expandedClients[client.id];
-                    const items = clientData[client.id]?.items || [];
+                    const allItems = clientData[client.id]?.items || [];
+                    const items = allItems.filter(isProductionItem);
                     const clientLoading = clientData[client.id]?.loading;
 
                     const drawingsSet = new Set(items.map(i => cleanText(i.drawing_no || 'N/A')));
@@ -428,7 +459,7 @@ const BOMCreation = () => {
                                           {/* BOM Items List (Expanded) */}
                                           {isDwgExpanded && (
                                             <div className="border-t border-slate-100 bg-slate-50/30">
-                                              {dwgItems.length > 0 ? (
+                                              {dwgItems.filter(i => isProductionItem(i) && i.has_bom).length > 0 ? (
                                                 <div className="overflow-x-auto">
                                                   <table className="min-w-full divide-y divide-slate-100">
                                                     <thead className="bg-slate-50/50">
@@ -442,8 +473,10 @@ const BOMCreation = () => {
                                                       </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100 bg-white">
-                                                      {dwgItems.map((item, idx) => (
-                                                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                                      {dwgItems
+                                                        .filter(item => isProductionItem(item) && item.has_bom)
+                                                        .map((item, idx) => (
+                                                          <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                                           <td className="pl-6 py-4">
                                                             <div className="flex flex-col">
                                                               <span className="text-xs  text-slate-700">{cleanText(item.description || item.material_name || `Item ${idx + 1}`)}</span>
@@ -466,7 +499,12 @@ const BOMCreation = () => {
                                                             </span>
                                                           </td>
                                                           <td className="px-4 py-4 text-center">
-                                                            <StatusBadge status={item.has_bom ? "FINALIZED" : "PENDING"} />
+                                                            <div className="flex items-center justify-center gap-1">
+                                                              <StatusBadge status={item.has_bom ? "FINALIZED" : "PENDING"} />
+                                                              {item.has_bom && isFinishedGood(item) && (
+                                                                <span className="text-emerald-500 text-xs">✅</span>
+                                                              )}
+                                                            </div>
                                                           </td>
                                                           <td className="pr-6 py-4">
                                                             <div className="flex justify-end gap-2">
@@ -484,7 +522,7 @@ const BOMCreation = () => {
                                                                     </svg>
                                                                   </Link>
                                                                   <button 
-                                                                    onClick={() => handleDeleteBOM(item.id)}
+                                                                    onClick={() => handleDeleteBOM(item.id, client)}
                                                                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                                                     title="Delete BOM"
                                                                   >
