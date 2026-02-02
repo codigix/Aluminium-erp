@@ -6,7 +6,7 @@ const getQuotationRequests = async (req, res, next) => {
   try {
     const { status } = req.query;
     let query = `
-      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason,
+      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
              so.project_name, c.company_name, cp.po_number,
              COALESCE(soi.drawing_no, '—') as drawing_no,
              COALESCE(soi.description, so.project_name) as item_description,
@@ -43,7 +43,7 @@ const approveQuotationRequest = async (req, res, next) => {
     
     await pool.execute(
       'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-      ['APPROVAL', id]
+      ['APPROVED', id]
     );
 
     res.json({ message: 'Quotation request approved' });
@@ -55,16 +55,36 @@ const approveQuotationRequest = async (req, res, next) => {
 const batchApproveQuotationRequests = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { ids } = req.body;
+    let ids = req.body?.ids;
+    
+    // Handle FormData stringified array
+    if (typeof ids === 'string') {
+      try {
+        ids = JSON.parse(ids);
+      } catch (e) {
+        ids = ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+      }
+    }
+
     if (!ids || !Array.isArray(ids)) {
       return res.status(400).json({ error: 'IDs array is required' });
     }
+
+    const replyPdfPath = req.file ? `/uploads/${req.file.filename}` : null;
+
     await connection.beginTransaction();
     for (const id of ids) {
-      await connection.execute(
-        'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-        ['APPROVAL', id]
-      );
+      if (replyPdfPath) {
+        await connection.execute(
+          'UPDATE quotation_requests SET status = ?, reply_pdf = ?, updated_at = NOW() WHERE id = ?',
+          ['APPROVED', replyPdfPath, id]
+        );
+      } else {
+        await connection.execute(
+          'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+          ['APPROVED', id]
+        );
+      }
     }
     await connection.commit();
     res.json({ message: 'Quotations moved to approval' });
@@ -79,7 +99,7 @@ const batchApproveQuotationRequests = async (req, res, next) => {
 const batchSendToDesign = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { ids } = req.body; // Quotation Request IDs
+    const ids = req.body?.ids; // Quotation Request IDs
     if (!ids || !Array.isArray(ids)) {
       return res.status(400).json({ error: 'IDs array is required' });
     }
@@ -253,7 +273,7 @@ const deleteQuotationRequest = async (req, res, next) => {
 const updateQuotationRates = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { items } = req.body; // Array of { id, rate }
+    const items = req.body?.items; // Array of { id, rate }
 
     if (!items || !Array.isArray(items)) {
       return res.status(400).json({ error: 'Items array is required' });

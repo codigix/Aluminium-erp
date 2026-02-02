@@ -10,11 +10,31 @@ const getCommunications = async (req, res, next) => {
       return res.status(400).json({ error: 'quotationId and type are required' });
     }
 
+    // First, find all quotation IDs that belong to the same batch as the requested quotationId
+    // We define a "batch" as quotations for the same company created within the same 20-second window
+    const [batchInfo] = await pool.query(
+      'SELECT company_id, created_at FROM quotation_requests WHERE id = ?',
+      [quotationId]
+    );
+
+    let idsToFetch = [quotationId];
+
+    if (batchInfo.length > 0) {
+      const { company_id, created_at } = batchInfo[0];
+      const [batchIds] = await pool.query(
+        `SELECT id FROM quotation_requests 
+         WHERE company_id = ? 
+         AND created_at BETWEEN ? - INTERVAL 20 SECOND AND ? + INTERVAL 20 SECOND`,
+        [company_id, created_at, created_at]
+      );
+      idsToFetch = batchIds.map(row => row.id);
+    }
+
     const [rows] = await pool.query(
       `SELECT * FROM quotation_communications 
-       WHERE quotation_id = ? AND quotation_type = ? 
+       WHERE quotation_id IN (${idsToFetch.map(() => '?').join(',')}) AND quotation_type = ? 
        ORDER BY created_at ASC`,
-      [quotationId, type]
+      [...idsToFetch, type]
     );
 
     res.json(rows);

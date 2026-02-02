@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check } from 'lucide-react';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
@@ -79,6 +79,26 @@ const ClientQuotations = () => {
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
+    }
+  };
+
+  const handleRefreshMessages = async () => {
+    if (!selectedQuoteForComm) return;
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      // Trigger sync
+      await fetch(`${API_BASE}/quotations/communications/sync`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      // Wait 1 second for sync to start processing
+      setTimeout(() => {
+        fetchMessages(selectedQuoteForComm.id);
+      }, 1000);
+    } catch (error) {
+      console.error('Error syncing messages:', error);
+      fetchMessages(selectedQuoteForComm.id);
     }
   };
 
@@ -229,6 +249,10 @@ const ClientQuotations = () => {
           // This ensures consistency with the QRT number sent in emails
           if (quote.id < grouped[key].id) {
             grouped[key].id = quote.id;
+          }
+          // Ensure reply_pdf is captured if any quote in the group has it
+          if (quote.reply_pdf) {
+            grouped[key].reply_pdf = quote.reply_pdf;
           }
         }
         grouped[key].quotes.push(quote);
@@ -1025,13 +1049,13 @@ const ClientQuotations = () => {
                                     href={`${API_BASE.replace('/api', '')}${group.reply_pdf}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                                     title="View Reply PDF"
                                   >
-                                    <Check className="w-4 h-4" />
+                                    <FileText className="w-4 h-4" />
                                   </a>
                                 )}
-                                {(activeTab === 'received' || activeTab === 'sent') && !['APPROVED', 'APPROVAL', 'COMPLETED'].includes(group.status) && (
+                                {(activeTab === 'received' || activeTab === 'sent') && !['APPROVED', 'APPROVAL', 'COMPLETED'].includes(group.status) && !group.reply_pdf && (
                                   <button
                                     onClick={() => handleApproveQuote(group)}
                                     className="px-3 py-1 bg-emerald-600 text-white rounded text-[10px]  hover:bg-emerald-700 transition-colors flex items-center gap-1"
@@ -1167,7 +1191,7 @@ const ClientQuotations = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button 
-                  onClick={() => selectedQuoteForComm && fetchMessages(selectedQuoteForComm.id)}
+                  onClick={handleRefreshMessages}
                   className="p-1.5 hover:bg-slate-200 rounded-full transition-colors text-slate-500 hover:text-blue-600"
                   title="Refresh messages"
                 >
