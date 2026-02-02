@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save } from 'lucide-react';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
@@ -149,6 +149,7 @@ const ClientQuotations = () => {
       const data = await response.json();
       
       const grouped = {};
+      const initialPrices = {};
       data.forEach(order => {
         const clientName = order.company_name || 'Unassigned';
         if (!grouped[clientName]) {
@@ -162,10 +163,25 @@ const ClientQuotations = () => {
             created_at: order.created_at,
             orders: []
           };
+          initialPrices[clientName] = {};
         }
         grouped[clientName].orders.push(order);
+        
+        // Initialize prices from items
+        if (order.items) {
+          order.items.forEach(item => {
+            if (item.rate && Number(item.rate) > 0) {
+              initialPrices[clientName][item.id] = item.rate;
+            } else if (item.bom_cost && Number(item.bom_cost) > 0) {
+              const margin = Number(order.profit_margin) || 0;
+              const calculatedPrice = Number(item.bom_cost) * (1 + margin / 100);
+              initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
+            }
+          });
+        }
       });
       setGroupedByClient(grouped);
+      setQuotePricesMap(prev => ({ ...prev, ...initialPrices }));
     } catch (error) {
       console.error(error);
       errorToast(error.message);
@@ -199,6 +215,7 @@ const ClientQuotations = () => {
             company_id: quote.company_id,
             created_at: quote.created_at,
             status: 'SENT', // Default status for group
+            reply_pdf: quote.reply_pdf,
             total_amount: 0,
             received_amount: 0,
             quotes: []
@@ -277,6 +294,7 @@ const ClientQuotations = () => {
             company_id: quote.company_id,
             created_at: quote.created_at,
             status: quote.status,
+            reply_pdf: quote.reply_pdf,
             total_amount: 0,
             received_amount: 0,
             quotes: []
@@ -285,6 +303,11 @@ const ClientQuotations = () => {
           // Use the smallest ID as the representative ID for the group
           if (quote.id < grouped[key].id) {
             grouped[key].id = quote.id;
+          }
+          // If any quote in group is approved, prefer that status for the group view
+          if (quote.status === 'APPROVED' || quote.status === 'APPROVAL') {
+            grouped[key].status = quote.status;
+            if (quote.reply_pdf) grouped[key].reply_pdf = quote.reply_pdf;
           }
         }
         grouped[key].quotes.push(quote);
@@ -322,32 +345,55 @@ const ClientQuotations = () => {
   const handleApproveQuote = async (group) => {
     const result = await Swal.fire({
       title: 'Approve Quotation',
-      text: `Are you sure you want to approve QRT-${String(group.id).padStart(4, '0')}? This will move it to the Customer PO approval stage.`,
-      icon: 'question',
+      text: `Please upload the client's approval/reply PDF for QRT-${String(group.id).padStart(4, '0')}`,
+      icon: 'info',
+      input: 'file',
+      inputAttributes: {
+        'accept': 'application/pdf',
+        'aria-label': 'Upload approval PDF'
+      },
       showCancelButton: true,
-      confirmButtonText: 'Yes, Approve',
-      confirmButtonColor: '#10b981'
+      confirmButtonText: 'Upload & Approve',
+      confirmButtonColor: '#10b981',
+      showLoaderOnConfirm: true,
+      preConfirm: (file) => {
+        if (!file) {
+          Swal.showValidationMessage('Please select a PDF file');
+          return false;
+        }
+        return file;
+      }
     });
 
     if (result.isConfirmed) {
       try {
+        const file = result.value;
         const token = localStorage.getItem('authToken');
         const ids = group.quotes.map(q => q.id);
         
+        const formData = new FormData();
+        formData.append('reply_pdf', file);
+        formData.append('ids', JSON.stringify(ids));
+
         const response = await fetch(`${API_BASE}/quotation-requests/batch-approve`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            'Authorization': `Bearer ${token}`
+            // Content-Type is set automatically for FormData
           },
-          body: JSON.stringify({ ids })
+          body: formData
         });
 
         if (response.ok) {
           successToast('Quotation approved successfully');
-          fetchReceivedQuotations();
+          if (activeTab === 'sent') {
+            fetchSentQuotations();
+          } else {
+            fetchReceivedQuotations();
+          }
         } else {
-          errorToast('Failed to approve quotation');
+          const errorData = await response.json();
+          errorToast(errorData.error || 'Failed to approve quotation');
         }
       } catch (error) {
         console.error('Error approving quotation:', error);
@@ -439,7 +485,7 @@ const ClientQuotations = () => {
         order.items.forEach(item => {
           if (item.status !== 'REJECTED') {
             const price = parseFloat(prices[item.id]) || 0;
-            total += price * (item.quantity || 1);
+            total += price * (parseFloat(item.design_qty) || 0);
           }
         });
       }
@@ -470,6 +516,12 @@ const ClientQuotations = () => {
     const hasPrices = allItems.some(item => item.status !== 'REJECTED' && prices[item.id] && parseFloat(prices[item.id]) > 0);
     if (!hasPrices) {
       errorToast('Please enter quote prices for at least one item');
+      return;
+    }
+
+    const itemsMissingDesignQty = allItems.filter(item => item.status !== 'REJECTED' && !item.design_qty);
+    if (itemsMissingDesignQty.length > 0) {
+      errorToast(`Design quantity missing for: ${itemsMissingDesignQty.map(i => i.drawing_no || i.item_code).join(', ')}. Quotation blocked.`);
       return;
     }
 
@@ -507,7 +559,7 @@ const ClientQuotations = () => {
               salesOrderItemId: item.id,
               drawing_no: item.drawing_no,
               description: item.description,
-              quantity: item.quantity,
+              quantity: item.design_qty,
               unit: item.unit,
               status: item.status,
               rejection_reason: item.rejection_reason,
@@ -563,10 +615,10 @@ const ClientQuotations = () => {
     if (!clientData) return;
 
     const result = await Swal.fire({
-      title: 'Delete Approved Orders',
+      title: 'Delete BOM-Approved Orders',
       html: `
         <div style="text-align: left; font-size: 14px;">
-          <p>Are you sure you want to delete all approved drawings for <strong>${clientData.company_name}</strong>?</p>
+          <p>Are you sure you want to delete all BOM-approved orders for <strong>${clientData.company_name}</strong>?</p>
           <p style="color: #dc2626; margin-top: 12px; font-weight: bold;">This action cannot be undone.</p>
         </div>
       `,
@@ -618,7 +670,7 @@ const ClientQuotations = () => {
         <div className="mb-6 flex justify-between items-end">
           <div>
             <h1 className="text-xl text-slate-900 mb-1">Client Quotations</h1>
-            <p className="text-slate-600 text-xs">Create and track quotations from design-approved drawings</p>
+            <p className="text-slate-600 text-xs">Create and track quotations from BOM-approved orders</p>
           </div>
           <div className="flex bg-slate-200 p-1 rounded-xl">
             <button
@@ -655,7 +707,7 @@ const ClientQuotations = () => {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    Design-Approved Orders
+                    BOM-Approved Orders
                   </>
                 ) : activeTab === 'sent' ? (
                   <>
@@ -697,8 +749,8 @@ const ClientQuotations = () => {
                 <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
-                <p className="text-slate-500 ">No design-approved orders found</p>
-                <p className="text-slate-400 text-sm mt-1">Orders must be approved by Design Engineer first</p>
+                <p className="text-slate-500 ">No BOM-approved orders found</p>
+                <p className="text-slate-400 text-sm mt-1">Orders must have an approved BOM before quotation</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -777,7 +829,9 @@ const ClientQuotations = () => {
                                           <th className="p-2 text-left text-xs  text-slate-700 ">Description</th>
                                           <th className="p-2 text-left text-xs  text-slate-700 ">Qty</th>
                                           <th className="p-2 text-left text-xs  text-slate-700 ">Unit</th>
-                                          <th className="p-2 text-left text-xs  text-slate-700 ">Quote Price</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 ">BOM Cost</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 ">Unit Rate (₹)</th>
+                                          <th className="p-2 text-right text-xs  text-slate-700 pr-4">Quote Price (₹)</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-slate-100">
@@ -808,8 +862,11 @@ const ClientQuotations = () => {
                                                 </div>
                                               </td>
                                               <td className="p-2 text-xs text-slate-600">{item.description || '—'}</td>
-                                              <td className="p-2 text-left text-sm text-slate-900 text-xs">{item.quantity}</td>
+                                              <td className="p-2 text-left text-sm text-slate-900 text-xs">{item.design_qty || <span className="text-red-500 font-bold">MISSING QTY</span>}</td>
                                               <td className="p-2 text-xs text-slate-600">{item.unit || 'Pcs'}</td>
+                                              <td className="p-2 text-xs text-slate-600">
+                                                {item.bom_cost ? `₹${Number(item.bom_cost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                                              </td>
                                               <td className="p-2 text-right">
                                                 {item.status === 'REJECTED' ? (
                                                   <span className="text-red-600  text-[10px]  pr-4">Rejected</span>
@@ -825,9 +882,12 @@ const ClientQuotations = () => {
                                                         handlePriceChange(clientName, item.id, val);
                                                       }
                                                     }}
-                                                    className="w-32 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                                    className="w-24 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                                   />
                                                 )}
+                                              </td>
+                                              <td className="p-2 text-right text-xs font-bold text-slate-900 pr-4">
+                                                ₹{((parseFloat(quotePricesMap[clientName]?.[item.id]) || 0) * (parseFloat(item.design_qty) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                               </td>
                                             </tr>
                                           ))
@@ -901,7 +961,7 @@ const ClientQuotations = () => {
                               <div className="flex flex-col gap-1">
                                 <span className="text-slate-400 text-[10px] font-normal">Incl. GST (18%)</span>
                                 <div className="flex items-center gap-1">
-                                  {activeTab === 'received' ? (
+                                  {(activeTab === 'received' || activeTab === 'sent') ? (
                                     <>
                                       <div className="relative">
                                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-600">₹</span>
@@ -956,7 +1016,18 @@ const ClientQuotations = () => {
                             </td>
                             <td className="p-2">
                               <div className="flex gap-2 items-center">
-                                {activeTab === 'received' && !['APPROVAL', 'COMPLETED'].includes(group.status) && (
+                                {group.reply_pdf && (
+                                  <a
+                                    href={`${API_BASE.replace('/api', '')}${group.reply_pdf}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                    title="View Reply PDF"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </a>
+                                )}
+                                {(activeTab === 'received' || activeTab === 'sent') && !['APPROVED', 'APPROVAL', 'COMPLETED'].includes(group.status) && (
                                   <button
                                     onClick={() => handleApproveQuote(group)}
                                     className="px-3 py-1 bg-emerald-600 text-white rounded text-[10px]  hover:bg-emerald-700 transition-colors flex items-center gap-1"

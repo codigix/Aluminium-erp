@@ -18,7 +18,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
+      'SELECT *, quantity as design_qty FROM sales_order_items WHERE sales_order_id = ?',
       [order.id]
     );
     order.items = items;
@@ -78,7 +78,7 @@ const getIncomingOrders = async (departmentCode) => {
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
      LEFT JOIN (
-       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, unit, status as item_status, rejection_reason as item_rejection_reason
+       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, quantity as design_qty, unit, status as item_status, rejection_reason as item_rejection_reason
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id
      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
@@ -631,7 +631,7 @@ const getApprovedDrawings = async () => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
+      'SELECT *, quantity as design_qty FROM sales_order_items WHERE sales_order_id = ?',
       [order.id]
     );
     order.items = items;
