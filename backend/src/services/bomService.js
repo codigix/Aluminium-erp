@@ -498,56 +498,13 @@ const deleteBOM = async (itemId) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Get item details to identify related Master BOMs
-    const [items] = await connection.query(
-      'SELECT item_code, drawing_no FROM sales_order_items WHERE id = ?',
-      [itemId]
-    );
-    
-    if (items.length > 0) {
-      const { item_code, drawing_no } = items[0];
+    // 1. Delete item-specific BOM entries only
+    await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);
+    await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
+    await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
+    await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
 
-      // 2. Delete item-specific BOM entries
-      await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);
-      await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
-      await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
-      await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
-
-      // 3. Delete Master BOM entries for this item/drawing to prevent fallback
-      // Only if sales_order_item_id is NULL
-      if (item_code) {
-        await connection.execute('DELETE FROM sales_order_item_materials WHERE item_code = ? AND sales_order_item_id IS NULL', [item_code]);
-        await connection.execute('DELETE FROM sales_order_item_components WHERE item_code = ? AND sales_order_item_id IS NULL', [item_code]);
-        await connection.execute('DELETE FROM sales_order_item_operations WHERE item_code = ? AND sales_order_item_id IS NULL', [item_code]);
-        await connection.execute('DELETE FROM sales_order_item_scrap WHERE item_code = ? AND sales_order_item_id IS NULL', [item_code]);
-      }
-      
-      if (drawing_no) {
-        await connection.execute('DELETE FROM sales_order_item_materials WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawing_no]);
-        await connection.execute('DELETE FROM sales_order_item_components WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawing_no]);
-        await connection.execute('DELETE FROM sales_order_item_operations WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawing_no]);
-        await connection.execute('DELETE FROM sales_order_item_scrap WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawing_no]);
-      }
-
-      // 4. Also delete for any OTHER sales_order_items that might have inherited this BOM via the same drawing_no
-      // This is because createBOMRequest by drawingNo duplicates the BOM for all items.
-      // If we are deleting the BOM for the drawing, we should probably clear it for all of them.
-      if (drawing_no) {
-        const [matchingItems] = await connection.query(
-          'SELECT id FROM sales_order_items WHERE drawing_no = ? AND id != ?',
-          [drawing_no, itemId]
-        );
-        for (const mItem of matchingItems) {
-          await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [mItem.id]);
-          await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [mItem.id]);
-          await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [mItem.id]);
-          await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [mItem.id]);
-          await connection.execute('UPDATE sales_order_items SET bom_cost = 0 WHERE id = ?', [mItem.id]);
-        }
-      }
-    }
-
-    // Reset bom_cost in sales_order_items
+    // 2. Reset bom_cost in sales_order_items
     await connection.execute('UPDATE sales_order_items SET bom_cost = 0 WHERE id = ?', [itemId]);
 
     await connection.commit();

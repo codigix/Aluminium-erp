@@ -128,31 +128,41 @@ const BOMCreation = () => {
 
   const stats = useMemo(() => {
     let totalDrawings = 0;
-    let totalBOMs = 0;
-    let totalItems = 0;
+    let completedDrawings = 0;
     let totalCost = 0;
 
     orders.forEach(client => {
       const items = clientData[client.id]?.items || [];
-      const drawings = new Set();
+      const drawingsMap = {};
+      
       items.forEach(i => {
         const dwgNo = cleanText(i.drawing_no || 'N/A');
-        drawings.add(dwgNo);
-        if (i.has_bom) totalBOMs++;
-        totalItems++;
+        if (!drawingsMap[dwgNo]) drawingsMap[dwgNo] = [];
+        drawingsMap[dwgNo].push(i);
+        
         // Only include Finished Goods (FG) in the estimated total value
         const isFG = (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'));
         if (isFG) {
           totalCost += (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
         }
       });
-      totalDrawings += drawings.size;
+
+      const drawings = Object.keys(drawingsMap);
+      totalDrawings += drawings.length;
+      
+      drawings.forEach(dwgNo => {
+        const dwgItems = drawingsMap[dwgNo];
+        const hasFGBOM = dwgItems.some(i => 
+          i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
+        );
+        if (hasFGBOM) completedDrawings++;
+      });
     });
 
     return {
       totalClients: orders.length,
       totalDrawings,
-      completionRate: totalItems > 0 ? Math.round((totalBOMs / totalItems) * 100) : 0,
+      completionRate: totalDrawings > 0 ? Math.round((completedDrawings / totalDrawings) * 100) : 0,
       totalCost
     };
   }, [orders, clientData]);
@@ -301,7 +311,17 @@ const BOMCreation = () => {
                         }, null)
                       : null;
 
-                    const allBOMsCompleted = items.length > 0 && items.every(i => i.has_bom);
+                    const drawingsMapForStatus = items.reduce((acc, item) => {
+                      const dwg = cleanText(item.drawing_no || 'N/A');
+                      if (!acc[dwg]) acc[dwg] = [];
+                      acc[dwg].push(item);
+                      return acc;
+                    }, {});
+                    
+                    const drawingsListForStatus = Object.values(drawingsMapForStatus);
+                    const allBOMsCompleted = drawingsListForStatus.length > 0 && drawingsListForStatus.every(dwgItems => 
+                      dwgItems.some(i => i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))
+                    );
 
                     return (
                       <React.Fragment key={client.id}>
@@ -368,9 +388,12 @@ const BOMCreation = () => {
                                       const dwgKey = `${client.id}_${dwgNo}`;
                                       const isDwgExpanded = expandedDrawings[dwgKey];
                                       
-                                      // Only show completed items if they actually have BOM data
+                                      // Drawing status is COMPLETED if at least one FG item has a BOM
                                       const itemsWithBOM = dwgItems.filter(i => i.has_bom);
-                                      const dwgStatus = itemsWithBOM.length > 0 && itemsWithBOM.length === dwgItems.length ? 'COMPLETED' : 'PENDING';
+                                      const hasFGBOM = dwgItems.some(i => 
+                                        i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
+                                      );
+                                      const dwgStatus = hasFGBOM ? 'COMPLETED' : 'PENDING';
                                       
                                       const rawDwgId = dwgItems[0].drawing_id;
                                       const drawingId = (rawDwgId && String(rawDwgId).trim().toUpperCase() !== 'N/A') ? rawDwgId : '';
@@ -430,7 +453,7 @@ const BOMCreation = () => {
                                                       </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100 bg-white">
-                                                      {dwgItems.map((item, idx) => (
+                                                      {dwgItems.filter(item => item.has_bom).map((item, idx) => (
                                                         <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                                           <td className="pl-6 py-4">
                                                             <div className="flex flex-col">
