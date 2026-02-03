@@ -178,12 +178,22 @@ const createSalesOrder = async (orderData) => {
     }
 
     for (const item of orderItems) {
+      // Determine item_type from item_code prefix or default to FG
+      let itemType = 'FG';
+      if (item.item_code) {
+        if (item.item_code.startsWith('SA-')) itemType = 'SA';
+        else if (item.item_code.startsWith('RM-')) itemType = 'RM';
+        // Note: SFG- items are treated as FG for Production Planning purposes
+      }
+      if (item.item_type) itemType = item.item_type;
+
       const [itemResult] = await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status, rejection_reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales_order_items (sales_order_id, item_code, item_type, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status, rejection_reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           salesOrderId, 
           item.item_code || null, 
+          itemType,
           item.drawing_no || null, 
           item.drawing_id || null,
           item.revision_no || null, 
@@ -369,12 +379,22 @@ const updateSalesOrder = async (id, orderData) => {
       await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [id]);
       
       for (const item of items) {
+        // Determine item_type from item_code prefix or default to FG
+        let itemType = 'FG';
+        if (item.item_code) {
+          if (item.item_code.startsWith('SA-')) itemType = 'SA';
+          else if (item.item_code.startsWith('RM-')) itemType = 'RM';
+          // Note: SFG- items are treated as FG for Production Planning purposes
+        }
+        if (item.item_type) itemType = item.item_type;
+
         await connection.execute(
-          `INSERT INTO sales_order_items (sales_order_id, item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO sales_order_items (sales_order_id, item_code, item_type, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, 
             item.item_code || null, 
+            itemType,
             item.drawing_no || null, 
             item.revision_no || null, 
             item.description || null, 

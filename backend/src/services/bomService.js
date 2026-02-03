@@ -19,7 +19,7 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
 
   if (rows.length === 0 && drawingNo) {
     [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_materials WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL ORDER BY created_at ASC',
+      'SELECT * FROM sales_order_item_materials WHERE drawing_no = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
       [drawingNo]
     );
   }
@@ -45,7 +45,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
 
   if (rows.length === 0 && drawingNo) {
     [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_components WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL ORDER BY created_at ASC',
+      'SELECT * FROM sales_order_item_components WHERE drawing_no = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
       [drawingNo]
     );
   }
@@ -71,7 +71,7 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
 
   if (rows.length === 0 && drawingNo) {
     [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_operations WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL ORDER BY created_at ASC',
+      'SELECT * FROM sales_order_item_operations WHERE drawing_no = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
       [drawingNo]
     );
   }
@@ -97,7 +97,7 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
 
   if (rows.length === 0 && drawingNo) {
     [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_scrap WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL ORDER BY created_at ASC',
+      'SELECT * FROM sales_order_item_scrap WHERE drawing_no = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
       [drawingNo]
     );
   }
@@ -234,6 +234,14 @@ const createBOMRequest = async (bomData) => {
     const isMasterBOM = source === 'stock' || (!itemId && !salesOrderId);
     const safeItemCode = itemCode || null;
 
+    // Determine item_type from item_code prefix or default to FG
+    let itemType = 'FG';
+    if (safeItemCode) {
+      if (safeItemCode.startsWith('SA-')) itemType = 'SA';
+      else if (safeItemCode.startsWith('SFG-')) itemType = 'SFG';
+      else if (safeItemCode.startsWith('RM-')) itemType = 'RM';
+    }
+
     let targetItemId = itemId;
 
     if (itemId) {
@@ -242,10 +250,11 @@ const createBOMRequest = async (bomData) => {
       // Quotation quantity is always the Design quantity. Sales never redefines quantity at quotation stage.
       await connection.execute(
         `UPDATE sales_order_items 
-         SET item_code = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
+         SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
          WHERE id = ?`,
         [
           safeItemCode, 
+          itemType,
           itemGroup || null, 
           uom || null, 
           revision || null, 
@@ -266,35 +275,61 @@ const createBOMRequest = async (bomData) => {
       await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
     } else if (salesOrderId) {
       // User created a NEW BOM for a specific Sales Order from Drawing Header
-      // Create a NEW item in that Sales Order instead of overwriting others
-      const [result] = await connection.execute(
-        `INSERT INTO sales_order_items 
-         (sales_order_id, item_code, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          salesOrderId,
-          safeItemCode,
-          itemGroup || null,
-          uom || null,
-          revision || null,
-          description || null,
-          isActive ? 1 : 0,
-          isDefault ? 1 : 0,
-          quantity || 0,
-          drawingNo || null,
-          drawing_id || null,
-          bom_cost
-        ]
+      // Check if an item with this drawing_no already exists in this Sales Order to avoid duplicates
+      const [existingItems] = await connection.query(
+        'SELECT id FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? LIMIT 1',
+        [salesOrderId, drawingNo]
       );
-      targetItemId = result.insertId;
 
-      // Update sales order status - DISABLED AS PER NEW RULE
-      /*
-      await connection.execute(
-        "UPDATE sales_orders SET status = 'BOM_SUBMITTED', updated_at = NOW() WHERE id = ?",
-        [salesOrderId]
-      );
-      */
+      if (existingItems.length > 0) {
+        targetItemId = existingItems[0].id;
+        await connection.execute(
+          `UPDATE sales_order_items 
+           SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
+           WHERE id = ?`,
+          [
+            safeItemCode, 
+            itemType,
+            itemGroup || null, 
+            uom || null, 
+            revision || null, 
+            description || null, 
+            isActive ? 1 : 0, 
+            isDefault ? 1 : 0, 
+            drawingNo || null, 
+            drawing_id || null, 
+            bom_cost,
+            targetItemId
+          ]
+        );
+        // Clear existing BOM items
+        await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [targetItemId]);
+        await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [targetItemId]);
+        await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [targetItemId]);
+        await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [targetItemId]);
+      } else {
+        const [result] = await connection.execute(
+          `INSERT INTO sales_order_items 
+           (sales_order_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            salesOrderId,
+            safeItemCode,
+            itemType,
+            itemGroup || null,
+            uom || null,
+            revision || null,
+            description || null,
+            isActive ? 1 : 0,
+            isDefault ? 1 : 0,
+            quantity || 0,
+            drawingNo || null,
+            drawing_id || null,
+            bom_cost
+          ]
+        );
+        targetItemId = result.insertId;
+      }
     } else if (drawingNo) {
       // Handle Master BOM by Drawing (no itemId, no salesOrderId)
       // Link this BOM to ALL sales_order_items that have this drawing_no ONLY if they are PENDING (optional logic?)

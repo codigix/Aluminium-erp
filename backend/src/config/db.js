@@ -632,7 +632,8 @@ const ensureSalesOrderItemColumns = async () => {
       { name: 'is_default', definition: 'TINYINT(1) DEFAULT 0' },
       { name: 'status', definition: "VARCHAR(50) DEFAULT 'PENDING'" },
       { name: 'rejection_reason', definition: 'TEXT' },
-      { name: 'bom_cost', definition: 'DECIMAL(14, 2) DEFAULT 0' }
+      { name: 'bom_cost', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'item_type', definition: "VARCHAR(50) DEFAULT 'FG'" }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -644,6 +645,20 @@ const ensureSalesOrderItemColumns = async () => {
 
     await connection.query(alterSql);
     console.log('Sales order item columns synchronized');
+
+    // Update item_type based on item_code prefix for existing records
+    await connection.query(`
+      UPDATE sales_order_items 
+      SET item_type = CASE 
+        WHEN item_code LIKE 'FG-%' THEN 'FG'
+        WHEN item_code LIKE 'SA-%' THEN 'SA'
+        WHEN item_code LIKE 'SFG-%' THEN 'SFG'
+        WHEN item_code LIKE 'RM-%' THEN 'RM'
+        ELSE 'FG'
+      END
+      WHERE item_type = 'FG' OR item_type IS NULL
+    `);
+    console.log('Sales order item types updated based on prefixes');
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {
       console.error('Sales order item column sync failed', error.message);

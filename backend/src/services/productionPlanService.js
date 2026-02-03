@@ -88,18 +88,39 @@ const createProductionPlan = async (planData, createdBy) => {
 
 const getReadySalesOrderItems = async () => {
   // Items that are approved and ready for production
-  // We can filter by status like 'MATERIAL_READY', 'DESIGN_APPROVED', 'CREATED' (if no drawing required)
+  // We pick the LATEST item for each drawing_no to avoid showing old revisions
   const [rows] = await pool.query(
-    `SELECT so.id as sales_order_id, so.project_name, so.production_priority, so.created_at,
-            soi.id as sales_order_item_id, soi.item_code, soi.description, soi.quantity as total_qty, soi.unit,
-            COALESCE(SUM(ppi.planned_qty), 0) as already_planned_qty
-     FROM sales_orders so
-     JOIN sales_order_items soi ON so.id = soi.sales_order_id
-     LEFT JOIN production_plan_items ppi ON soi.id = ppi.sales_order_item_id AND ppi.status != 'CANCELLED'
-     WHERE so.status IN ('MATERIAL_READY', 'DESIGN_APPROVED', 'CREATED', 'DESIGN_IN_REVIEW', 'BOM_APPROVED')
-     AND soi.status != 'Rejected'
-     GROUP BY soi.id
-     HAVING already_planned_qty < total_qty
+    `SELECT so.id as sales_order_id, 
+            COALESCE(o.order_no, CONCAT('SO-', so.id)) as order_no, 
+            so.project_name, 
+            so.production_priority, 
+            so.created_at,
+            soi.id as sales_order_item_id, 
+            soi.item_code as item_code, 
+            soi.item_type as item_type,
+            soi.drawing_no as drawing_no,
+            soi.description as description, 
+            soi.quantity as total_qty, 
+            soi.unit as unit,
+            COALESCE(planned.already_planned_qty, 0) as already_planned_qty
+     FROM (
+       SELECT *, ROW_NUMBER() OVER (PARTITION BY sales_order_id, drawing_no ORDER BY id DESC) as rn
+       FROM sales_order_items
+       WHERE status != 'Rejected' AND (item_type IN ('FG', 'SFG'))
+     ) soi
+     JOIN sales_orders so ON soi.sales_order_id = so.id
+     LEFT JOIN (
+       SELECT quotation_id, order_no FROM orders 
+       WHERE id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
+     ) o ON o.quotation_id = so.id
+     LEFT JOIN (
+       SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+       FROM production_plan_items 
+       WHERE status != 'CANCELLED'
+       GROUP BY sales_order_item_id
+     ) planned ON soi.id = planned.sales_order_item_id
+     WHERE soi.rn = 1
+       AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
      ORDER BY so.production_priority DESC, so.created_at ASC`
   );
   return rows;
@@ -107,13 +128,25 @@ const getReadySalesOrderItems = async () => {
 
 const getProductionReadySalesOrders = async () => {
   const [rows] = await pool.query(
-    `SELECT DISTINCT so.id, so.project_name, cp.po_number, c.company_name, so.created_at
+    `SELECT so.id, 
+            COALESCE(MAX(o.order_no), CONCAT('SO-', so.id)) as order_no, 
+            so.project_name, 
+            cp.po_number, 
+            c.company_name, 
+            so.created_at
      FROM sales_orders so
-     JOIN sales_order_items soi ON so.id = soi.sales_order_id
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-     WHERE so.status IN ('MATERIAL_READY', 'DESIGN_APPROVED', 'CREATED', 'DESIGN_IN_REVIEW', 'BOM_APPROVED')
-     AND soi.status != 'Rejected'
+     LEFT JOIN orders o ON o.quotation_id = so.id
+     WHERE EXISTS (
+       SELECT 1 FROM (
+         SELECT sales_order_id, drawing_no, ROW_NUMBER() OVER (PARTITION BY sales_order_id, drawing_no ORDER BY id DESC) as rn
+         FROM sales_order_items
+         WHERE status != 'Rejected' AND (item_type IN ('FG', 'SFG'))
+       ) soi 
+       WHERE soi.sales_order_id = so.id AND soi.rn = 1
+     )
+     GROUP BY so.id, so.project_name, cp.po_number, c.company_name, so.created_at
      ORDER BY so.created_at DESC`
   );
   return rows;
@@ -121,32 +154,48 @@ const getProductionReadySalesOrders = async () => {
 
 const getSalesOrderFullDetails = async (id) => {
   const [orders] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number
+    `SELECT so.*, c.company_name, cp.po_number, COALESCE(o.order_no, CONCAT('SO-', so.id)) as order_no
      FROM sales_orders so
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
+     LEFT JOIN (
+       SELECT quotation_id, order_no FROM orders 
+       WHERE quotation_id = ? ORDER BY id DESC LIMIT 1
+     ) o ON o.quotation_id = so.id
      WHERE so.id = ?`,
-    [id]
+    [id, id]
   );
 
   if (orders.length === 0) return null;
   const order = orders[0];
 
   const [items] = await pool.query(
-    `SELECT soi.*, 
-            COALESCE(SUM(ppi.planned_qty), 0) as already_planned_qty
-     FROM sales_order_items soi
-     LEFT JOIN production_plan_items ppi ON soi.id = ppi.sales_order_item_id AND ppi.status != 'CANCELLED'
-     WHERE soi.sales_order_id = ?
-     GROUP BY soi.id`,
+    `SELECT soi.id,
+            soi.id as sales_order_item_id,
+            soi.sales_order_id,
+            soi.item_code as item_code,
+            soi.item_type as item_type,
+            soi.drawing_no as drawing_no,
+            soi.description,
+            soi.quantity as quantity,
+            soi.unit,
+            soi.status,
+            soi.rejection_reason,
+            COALESCE(planned.already_planned_qty, 0) as already_planned_qty
+     FROM (
+       SELECT *, ROW_NUMBER() OVER (PARTITION BY sales_order_id, drawing_no ORDER BY id DESC) as rn
+       FROM sales_order_items
+       WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG'))
+     ) soi
+     LEFT JOIN (
+       SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+       FROM production_plan_items 
+       WHERE status != 'CANCELLED'
+       GROUP BY sales_order_item_id
+     ) planned ON soi.id = planned.sales_order_item_id
+     WHERE soi.rn = 1`,
     [id]
   );
-
-  for (let item of items) {
-    item.materials = await bomService.getItemMaterials(item.id, item.item_code, item.drawing_no);
-    item.components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
-    item.operations = await bomService.getItemOperations(item.id, item.item_code, item.drawing_no);
-  }
 
   order.items = items;
   return order;
@@ -161,6 +210,80 @@ const generatePlanCode = async () => {
   return `PP-${year}${month}-${count.toString().padStart(4, '0')}`;
 };
 
+const getItemBOMDetails = async (salesOrderItemId) => {
+  // Fetch the item details first to get item_code and drawing_no
+  const [items] = await pool.query(
+    'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ? AND item_type IN ("FG", "SFG")',
+    [salesOrderItemId]
+  );
+
+  if (items.length === 0) return null;
+  const item = items[0];
+
+  // 1. Fetch ALL materials, components, and operations for this sales_order_item_id
+  const [allMaterials] = await pool.query(
+    'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+    [salesOrderItemId]
+  );
+  const [allComponents] = await pool.query(
+    'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+    [salesOrderItemId]
+  );
+  const [allOperations] = await pool.query(
+    'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+    [salesOrderItemId]
+  );
+
+  // If no data found by sales_order_item_id, fallback to Master BOM by item_code or drawing_no
+  if (allMaterials.length === 0 && allComponents.length === 0 && allOperations.length === 0) {
+    const fallbackMaterials = await bomService.getItemMaterials(null, item.item_code, item.drawing_no);
+    const fallbackComponents = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
+    const fallbackOperations = await bomService.getItemOperations(null, item.item_code, item.drawing_no);
+
+    // If Master BOM found, we need to build a tree from it
+    // But for simplicity and to match user expectation, we return the top-level
+    // and build the tree using a recursive helper if needed.
+    
+    const buildTree = (materials, components, operations, parentId = null) => {
+      const levelMaterials = materials.filter(m => String(m.parent_id) === String(parentId));
+      const levelComponents = components.filter(c => String(c.parent_id) === String(parentId));
+      const levelOperations = operations; // Operations usually apply to the whole item or are top-level
+
+      const treeComponents = levelComponents.map(comp => ({
+        ...comp,
+        ...buildTree(materials, components, operations, comp.id)
+      }));
+
+      return {
+        materials: levelMaterials,
+        components: treeComponents,
+        operations: parentId === null ? levelOperations : [] // Only return operations at top level for now
+      };
+    };
+
+    return buildTree(fallbackMaterials, fallbackComponents, fallbackOperations, null);
+  }
+
+  // 2. Build tree from SO-specific data
+  const buildTree = (materials, components, operations, parentId = null) => {
+    const levelMaterials = materials.filter(m => String(m.parent_id) === String(parentId));
+    const levelComponents = components.filter(c => String(c.parent_id) === String(parentId));
+    
+    const treeComponents = levelComponents.map(comp => ({
+      ...comp,
+      ...buildTree(materials, components, operations, comp.id)
+    }));
+
+    return {
+      materials: levelMaterials,
+      components: treeComponents,
+      operations: parentId === null ? operations : []
+    };
+  };
+
+  return buildTree(allMaterials, allComponents, allOperations, null);
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
@@ -168,5 +291,6 @@ module.exports = {
   getReadySalesOrderItems,
   getProductionReadySalesOrders,
   getSalesOrderFullDetails,
-  generatePlanCode
+  generatePlanCode,
+  getItemBOMDetails
 };

@@ -154,20 +154,37 @@ const ProductionPlan = () => {
     }
   };
 
-  const toggleItemSelection = (item) => {
-    const exists = newPlan.items.find(i => i.salesOrderItemId === item.sales_order_item_id);
+  const toggleItemSelection = async (item) => {
+    const salesOrderItemId = item.id || item.sales_order_item_id;
+    const exists = newPlan.items.find(i => i.salesOrderItemId === salesOrderItemId);
+    
     if (exists) {
       setNewPlan(prev => ({
         ...prev,
-        items: prev.items.filter(i => i.salesOrderItemId !== item.sales_order_item_id)
+        items: prev.items.filter(i => i.salesOrderItemId !== salesOrderItemId)
       }));
     } else {
+      // Fetch BOM details for this item
+      let bomDetails = { materials: [], components: [], operations: [] };
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          bomDetails = await response.json();
+        }
+      } catch (error) {
+        console.error('Error fetching BOM details:', error);
+      }
+
       setNewPlan(prev => ({
         ...prev,
         items: [...prev.items, {
           salesOrderId: item.sales_order_id,
-          salesOrderItemId: item.sales_order_item_id,
+          salesOrderItemId: salesOrderItemId,
           projectName: item.project_name,
+          orderNo: item.order_no,
           itemCode: item.item_code,
           description: item.description,
           plannedQty: (item.total_qty || item.quantity) - (item.already_planned_qty || 0),
@@ -176,13 +193,39 @@ const ProductionPlan = () => {
           workstationId: '',
           plannedStartDate: prev.startDate,
           plannedEndDate: prev.endDate,
-          // Store additional details for display
-          materials: item.materials || [],
-          components: item.components || [],
-          operations: item.operations || []
+          // Store fetched BOM details
+          materials: bomDetails.materials || [],
+          components: bomDetails.components || [],
+          operations: bomDetails.operations || []
         }]
       }));
     }
+  };
+
+  const renderBOMItem = (comp, level = 0, parentQty = 1) => {
+    const currentQty = comp.quantity * parentQty;
+    return (
+      <React.Fragment key={`${level}-${comp.id || comp.component_code}`}>
+        <li className="list-disc ml-2">
+          <span className="font-medium">{comp.component_code}</span> - {comp.description} ({(currentQty).toFixed(3)} {comp.uom})
+          {((comp.materials && comp.materials.length > 0) || (comp.components && comp.components.length > 0) || (comp.operations && comp.operations.length > 0)) && (
+            <ul className="pl-4 mt-1 border-l border-slate-200 space-y-1 mb-2">
+              {comp.materials?.map((m, i) => (
+                <li key={`m-${i}`} className="text-[9px] text-slate-500">
+                  <span className="text-slate-400">└ Material:</span> {m.material_name} ({(m.qty_per_pc * currentQty).toFixed(3)} {m.uom})
+                </li>
+              ))}
+              {comp.components?.map((c, i) => renderBOMItem(c, level + 1, currentQty))}
+              {comp.operations?.map((o, i) => (
+                <li key={`o-${i}`} className="text-[9px] text-slate-500">
+                  <span className="text-slate-400">└ Op:</span> {o.operation_name} ({o.workstation})
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      </React.Fragment>
+    );
   };
 
   const handleItemChange = (index, field, value) => {
@@ -305,7 +348,7 @@ const ProductionPlan = () => {
             <FormControl label="Search Sales Order">
               <SearchableSelect 
                 options={productionReadyOrders.map(so => ({
-                  label: `${so.project_name} (${so.po_number || 'No PO'}) - ${so.company_name}`,
+                  label: `${so.order_no} - ${so.company_name} ${so.project_name ? `(${so.project_name})` : ''}`,
                   value: so.id.toString()
                 }))}
                 value={selectedOrderId}
@@ -371,16 +414,21 @@ const ProductionPlan = () => {
                 <thead className="bg-slate-50 sticky top-0">
                   <tr className="text-left text-[10px] text-slate-500 ">
                     <th className="p-2 w-10">Select</th>
+                    <th className="p-2">Order No</th>
                     <th className="p-2">Project</th>
                     <th className="p-2">Item</th>
                     <th className="p-2 text-center">Pending Qty</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {(selectedOrderDetails ? selectedOrderDetails.items : readyItems).map(item => {
+                  {(selectedOrderDetails ? selectedOrderDetails.items : readyItems)
+                    .filter(item => item.item_type === 'FG' || item.item_type === 'SFG' || !item.item_type)
+                    .map(item => {
                     const salesOrderItemId = item.id || item.sales_order_item_id;
                     const salesOrderId = item.sales_order_id;
                     const isSelected = newPlan.items.some(i => i.salesOrderItemId === salesOrderItemId);
+                    const orderNo = item.order_no || selectedOrderDetails?.order_no;
+                    const projectName = item.project_name || selectedOrderDetails?.project_name;
                     
                     return (
                       <tr key={salesOrderItemId} className="hover:bg-slate-50">
@@ -393,12 +441,14 @@ const ProductionPlan = () => {
                               ...item,
                               sales_order_item_id: salesOrderItemId,
                               sales_order_id: salesOrderId,
-                              project_name: item.project_name || selectedOrderDetails?.project_name
+                              project_name: projectName,
+                              order_no: orderNo
                             })}
                             className={`rounded border-slate-300 text-indigo-600 ${item.status === 'Rejected' ? 'opacity-50 cursor-not-allowed' : ''}`}
                           />
                         </td>
-                        <td className="p-2 font-medium">{item.project_name || selectedOrderDetails?.project_name}</td>
+                        <td className="p-2 font-medium text-slate-700">{orderNo || 'N/A'}</td>
+                        <td className="p-2 text-slate-600 truncate max-w-[150px]">{projectName || 'N/A'}</td>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
                             <div className="text-xs  text-indigo-600">{item.item_code}</div>
@@ -421,8 +471,9 @@ const ProductionPlan = () => {
                       </tr>
                     );
                   })}
-                  {((selectedOrderDetails ? selectedOrderDetails.items : readyItems).length === 0) && (
-                    <tr><td colSpan="4" className="p-4 text-center text-slate-400 italic">No items ready for production</td></tr>
+                  {((selectedOrderDetails ? selectedOrderDetails.items : readyItems)
+                    .filter(item => item.item_type === 'FG' || item.item_type === 'SFG' || !item.item_type).length === 0) && (
+                    <tr><td colSpan="5" className="p-4 text-center text-slate-400 italic">No items ready for production</td></tr>
                   )}
                 </tbody>
               </table>
@@ -438,9 +489,9 @@ const ProductionPlan = () => {
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-[10px]  text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded ">
-                          {item.itemCode}
+                          {item.orderNo} | {item.itemCode}
                         </span>
-                        <h4 className="text-xs font-medium text-slate-800 mt-1">{item.projectName}</h4>
+                        <h4 className="text-xs font-medium text-slate-800 mt-1">{item.projectName || 'N/A'}</h4>
                       </div>
                       <button 
                         type="button"
@@ -498,9 +549,7 @@ const ProductionPlan = () => {
                       <div>
                         <h5 className="text-[10px]  text-slate-500 ">Sub-assemblies</h5>
                         <ul className="text-[10px] text-slate-600 list-disc pl-4 mt-1">
-                          {item.components?.map((c, i) => (
-                            <li key={i}>{c.component_code} - {c.description} ({c.quantity} {c.uom})</li>
-                          ))}
+                          {item.components?.map((c, i) => renderBOMItem(c, 0, item.plannedQty || 0))}
                           {(!item.components || item.components.length === 0) && <li className="list-none pl-0 italic text-slate-400">None</li>}
                         </ul>
                       </div>
@@ -508,7 +557,7 @@ const ProductionPlan = () => {
                         <h5 className="text-[10px]  text-slate-500 ">Raw Materials</h5>
                         <ul className="text-[10px] text-slate-600 list-disc pl-4 mt-1">
                           {item.materials?.map((m, i) => (
-                            <li key={i}>{m.material_name} ({m.qty_per_pc} {m.uom})</li>
+                            <li key={i}>{m.material_name} ({(m.qty_per_pc * (item.plannedQty || 0)).toFixed(3)} {m.uom})</li>
                           ))}
                           {(!item.materials || item.materials.length === 0) && <li className="list-none pl-0 italic text-slate-400">None</li>}
                         </ul>

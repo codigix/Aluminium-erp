@@ -65,6 +65,16 @@ const getNextPlanCode = async (req, res, next) => {
   }
 };
 
+const getItemBOMDetails = async (req, res, next) => {
+  try {
+    const bomDetails = await productionPlanService.getItemBOMDetails(req.params.salesOrderItemId);
+    if (!bomDetails) return res.status(404).json({ message: 'BOM details not found' });
+    res.json(bomDetails);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
@@ -72,5 +82,6 @@ module.exports = {
   getReadySalesOrderItems,
   getProductionReadySalesOrders,
   getSalesOrderFullDetails,
-  getNextPlanCode
+  getNextPlanCode,
+  getItemBOMDetails
 };
