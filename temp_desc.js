@@ -1,9 +1,12 @@
-require('dotenv').config({ path: './backend/.env' });
 const pool = require('./backend/src/config/db');
-pool.query('DESCRIBE sales_order_items').then(([rows]) => {
-    console.log(JSON.stringify(rows, null, 2));
-    process.exit(0);
-}).catch(err => {
+async function run() {
+  try {
+    const [rows] = await pool.query('DESCRIBE quotation_requests');
+    console.table(rows);
+  } catch (err) {
     console.error(err);
-    process.exit(1);
-});
+  } finally {
+    process.exit(0);
+  }
+}
+run();

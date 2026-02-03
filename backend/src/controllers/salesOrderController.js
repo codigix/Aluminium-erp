@@ -161,7 +161,8 @@ const bulkRejectDesigns = async (req, res, next) => {
 
 const getApprovedDrawings = async (req, res, next) => {
   try {
-    const rows = await salesOrderService.getApprovedDrawings();
+    const { company_id } = req.query;
+    const rows = await salesOrderService.getApprovedDrawings(company_id);
     res.json(rows);
   } catch (error) {
     next(error);

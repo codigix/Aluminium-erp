@@ -288,11 +288,13 @@ const createBOMRequest = async (bomData) => {
       );
       targetItemId = result.insertId;
 
-      // Update sales order status
+      // Update sales order status - DISABLED AS PER NEW RULE
+      /*
       await connection.execute(
         "UPDATE sales_orders SET status = 'BOM_SUBMITTED', updated_at = NOW() WHERE id = ?",
         [salesOrderId]
       );
+      */
     } else if (drawingNo) {
       // Handle Master BOM by Drawing (no itemId, no salesOrderId)
       // Link this BOM to ALL sales_order_items that have this drawing_no ONLY if they are PENDING (optional logic?)

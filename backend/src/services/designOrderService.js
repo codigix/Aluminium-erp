@@ -91,10 +91,12 @@ const updateDesignOrderStatus = async (designOrderId, status) => {
       const [doRows] = await connection.query('SELECT sales_order_id FROM design_orders WHERE id = ?', [designOrderId]);
       if (doRows.length > 0) {
         const salesOrderId = doRows[0].sales_order_id;
+        /*
         await connection.execute(
           "UPDATE sales_orders SET status = 'DESIGN_APPROVED', current_department = 'PROCUREMENT', updated_at = NOW() WHERE id = ?",
           [salesOrderId]
         );
+        */
       }
     }
 

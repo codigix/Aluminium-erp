@@ -609,9 +609,8 @@ const bulkRejectDesigns = async (orderIds, reason) => {
   }
 };
 
-const getApprovedDrawings = async () => {
-  const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, c.company_code, c.id as company_id_check,
+const getApprovedDrawings = async (companyId = null) => {
+  let query = `SELECT so.*, c.company_name, c.company_code, c.id as company_id_check,
      IFNULL(ct.email, '') as email,
      IFNULL(ct.phone, '') as phone,
      IFNULL(ct.name, '') as contact_person,
@@ -625,9 +624,17 @@ const getApprovedDrawings = async () => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_APPROVED', 'BOM_APPROVED')
-     ORDER BY so.created_at DESC`
-  );
+     WHERE so.status IN ('DESIGN_APPROVED', 'BOM_APPROVED')`;
+  
+  const params = [];
+  if (companyId) {
+    query += ` AND so.company_id = ?`;
+    params.push(companyId);
+  }
+  
+  query += ` ORDER BY so.created_at DESC`;
+  
+  const [rows] = await pool.query(query, params);
   
   for (const order of rows) {
     const [items] = await pool.query(

@@ -21,6 +21,7 @@ const SalesOrders = () => {
   const [orders, setOrders] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [boms, setBoms] = useState([]);
+  const [quotations, setQuotations] = useState([]);
   const [user, setUser] = useState(null);
   const [previewDrawing, setPreviewDrawing] = useState(null);
 
@@ -32,7 +33,7 @@ const SalesOrders = () => {
     customerId: '',
     customerEmail: '',
     customerPhone: '',
-    bomId: '',
+    customerPoId: '',
     orderQuantity: 1,
     warehouse: '',
     status: 'Draft',
@@ -94,6 +95,104 @@ const SalesOrders = () => {
     }
   };
 
+  const fetchApprovedQuotations = async (companyId) => {
+    if (!companyId) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const [quotesRes, approvedRes] = await Promise.all([
+        fetch(`${API_BASE}/quotation-requests?status=APPROVED,COMPLETED,ACCEPTED&company_id=${companyId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/sales-orders/approved-drawings?company_id=${companyId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
+      let allOptions = [];
+
+      if (quotesRes.ok) {
+        const data = await quotesRes.json();
+        // Ensure data is array before filtering
+        const companyQuotes = Array.isArray(data) ? data.filter(q => String(q.company_id) === String(companyId)) : [];
+        
+        const grouped = {};
+        companyQuotes.forEach(quote => {
+          const date = new Date(quote.created_at);
+          const roundedTime = Math.floor(date.getTime() / 10000) * 10000;
+          const key = `${quote.company_id}_${roundedTime}`;
+          
+          if (!grouped[key]) {
+            grouped[key] = {
+              id: quote.id || quote.qr_id,
+              uniqueKey: key,
+              company_id: quote.company_id,
+              created_at: quote.created_at,
+              status: quote.status,
+              po_number: quote.po_number,
+              items: []
+            };
+          }
+          grouped[key].items.push(quote);
+        });
+        allOptions = Object.values(grouped);
+      }
+
+      if (approvedRes.ok) {
+        const data = await approvedRes.json();
+        const companyApproved = Array.isArray(data) ? data.filter(o => String(o.company_id) === String(companyId)) : [];
+        
+        companyApproved.forEach(order => {
+          const fgItems = (order.items || []).filter(item => item.item_group === 'FG');
+          if (fgItems.length > 0) {
+            const key = `APPROVED_${order.id}`;
+            allOptions.push({
+              id: order.id,
+              uniqueKey: key,
+              company_id: order.company_id,
+              created_at: order.created_at,
+              status: 'APPROVED_DRAWING',
+              po_number: order.po_number,
+              isApprovedDrawing: true,
+              items: fgItems.map(item => ({
+                id: item.id,
+                drawing_no: item.drawing_no,
+                item_description: item.description,
+                item_qty: item.quantity,
+                item_group: item.item_group,
+                total_amount: (Number(item.bom_cost) || 0) * (Number(item.quantity) || 1)
+              }))
+            });
+          }
+        });
+      }
+
+      setQuotations(allOptions);
+    } catch (err) {
+      console.error('Error fetching quotations:', err);
+    }
+  };
+
+  const handleCustomerPoChange = (uniqueKey) => {
+    const group = quotations.find(q => q.uniqueKey === uniqueKey);
+    if (!group) return;
+
+    const items = group.items.map(item => ({
+      item_code: item.drawing_no || 'Standard',
+      drawing_no: item.drawing_no,
+      description: item.item_description,
+      type: item.item_group || 'Standard',
+      quantity: Number(item.item_qty) || 1,
+      rate: (Number(item.total_amount) || 0) / (Number(item.item_qty) || 1),
+      amount: Number(item.total_amount) || 0
+    }));
+
+    setFormData(prev => ({
+      ...prev,
+      customerPoId: uniqueKey,
+      items
+    }));
+  };
+
   const fetchBoms = async () => {
     try {
       const token = localStorage.getItem('authToken');
@@ -133,7 +232,7 @@ const SalesOrders = () => {
           customerId: data.company_id || '',
           customerEmail: data.contact_email || data.customer_email || '',
           customerPhone: data.contact_mobile || data.customer_phone || '',
-          bomId: data.bom_id || '',
+          customerPoId: data.customer_po_id || data.bom_id || '',
           orderQuantity: data.items?.[0]?.quantity || 1,
           warehouse: data.warehouse || '',
           status: data.status || 'Draft',
@@ -142,6 +241,9 @@ const SalesOrders = () => {
           profitMargin: data.profit_margin || 0,
           items: data.items || []
         });
+        if (data.company_id) {
+          fetchApprovedQuotations(data.company_id);
+        }
         setFormMode('edit');
         setViewMode('form');
       }
@@ -463,12 +565,17 @@ const SalesOrders = () => {
                   value={formData.customerId}
                   onChange={(e) => {
                     const company = companies.find(c => String(c.id) === String(e.target.value));
+                    const primaryContact = company?.contacts?.find(ct => ct.contact_type === 'PRIMARY') || company?.contacts?.[0];
                     setFormData({
                       ...formData, 
                       customerId: e.target.value,
-                      customerEmail: company?.contact_email || '',
-                      customerPhone: company?.contact_mobile || ''
+                      customerEmail: primaryContact?.email || company?.contact_email || '',
+                      customerPhone: primaryContact?.phone || company?.contact_mobile || '',
+                      customerPoId: ''
                     });
+                    if (e.target.value) {
+                      fetchApprovedQuotations(e.target.value);
+                    }
                   }}
                   placeholder="Select customer..."
                   disabled={formMode === 'view'}
@@ -493,61 +600,35 @@ const SalesOrders = () => {
             </div>
           </Card>
 
-          {/* BOM & Inventory */}
-          <Card title="BOM & Inventory" subtitle="Production template and storage">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-              <FormControl label="Select BOM *">
+          {/* Customer Purchase Order and storage */}
+          <Card title="Customer Purchase Order and storage" subtitle="PO & Inventory">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+              <FormControl label="Select Customer PO *">
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <SearchableSelect 
-                      options={boms
-                        .filter(b => b.item_group === 'FG' || b.item_group === 'Finished Goods' || !b.item_group)
-                        .map(b => ({ value: b.id, label: `${b.drawing_no} - ${b.description}` }))}
-                      value={formData.bomId}
-                      onChange={(e) => handleBomChange(e.target.value)}
-                      placeholder="Select BOM..."
+                      options={quotations.map(q => ({ 
+                        value: q.uniqueKey, 
+                        label: `${q.isApprovedDrawing ? `DRW: ${q.id}` : `QRT-${q.id.toString().padStart(4, '0')}`} ${q.po_number ? `(PO: ${q.po_number})` : ''} - ${q.status}` 
+                      }))}
+                      value={formData.customerPoId}
+                      onChange={(e) => handleCustomerPoChange(e.target.value)}
+                      placeholder="Select Customer PO..."
                       disabled={formMode === 'view'}
                     />
                   </div>
-                  {formData.bomId && (
+                  {formData.customerPoId && (
                     <button
                       type="button"
-                      onClick={() => {
-                        const bom = boms.find(b => String(b.id) === String(formData.bomId));
-                        if (bom) {
-                          setPreviewDrawing({
-                            item_code: bom.item_code,
-                            description: bom.description
-                          });
-                        }
-                      }}
                       className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100"
-                      title="Preview Drawing"
+                      title="View Details"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </button>
                   )}
                 </div>
-              </FormControl>
-              <FormControl label="Order Quantity *">
-                <input 
-                  type="number"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
-                  value={formData.orderQuantity}
-                  onChange={(e) => {
-                    const newQty = Number(e.target.value);
-                    const newItems = formData.items.map(item => ({
-                        ...item,
-                        quantity: newQty,
-                        amount: newQty * item.rate
-                    }));
-                    setFormData({...formData, orderQuantity: newQty, items: newItems});
-                  }}
-                  disabled={formMode === 'view'}
-                />
               </FormControl>
               <FormControl label="Warehouse">
                 <select 
@@ -565,17 +646,16 @@ const SalesOrders = () => {
             </div>
           </Card>
 
-          {/* BOM Details Table */}
-          {selectedBom && (
-            <Card title="BOM Details" subtitle="Items included in selected BOM">
+          {/* Items included in selected PO */}
+          {formData.customerPoId && (
+            <Card title="Items included in selected PO" subtitle="Order Items">
               <div className="p-4 bg-blue-50/50 rounded-xl mb-4 border border-blue-100 flex items-center gap-4">
                 <div className="p-3 bg-white rounded-xl shadow-sm border border-blue-100">
                     <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 </div>
                 <div>
-                  <p className="text-sm  text-slate-900">Finished Goods <span className="text-slate-400 font-normal ml-1">(1)</span></p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Product: <span className=" text-slate-700">{selectedBom.description}</span></p>
-                  <p className="text-[10px] text-indigo-600 font-mono">BOM ID: {selectedBom.drawing_no}</p>
+                  <p className="text-sm  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>
+                  <p className="text-[10px] text-indigo-600 font-mono">PO Number: {formData.customerPoId.split('_')[0]}</p>
                 </div>
               </div>
 
@@ -593,24 +673,16 @@ const SalesOrders = () => {
                   <tbody className="divide-y divide-slate-50">
                     {formData.items.map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-3 font-mono text-indigo-600">{item.item_code}</td>
-                        <td className="px-4 py-3 text-slate-500">{item.type}</td>
-                        <td className="px-4 py-3 text-center">
-                          <input 
-                            type="number" 
-                            className="w-16 text-center border-none bg-transparent focus:ring-0 p-0 " 
-                            value={item.quantity}
-                            onChange={(e) => {
-                                const newItems = [...formData.items];
-                                newItems[idx].quantity = Number(e.target.value);
-                                newItems[idx].amount = newItems[idx].quantity * newItems[idx].rate;
-                                setFormData({...formData, items: newItems});
-                            }}
-                            disabled={formMode === 'view'}
-                          />
+                        <td className="px-4 py-3 font-mono text-indigo-600">
+                          {item.drawing_no || item.item_code}
+                          <div className="text-[10px] text-slate-400 font-sans mt-0.5">{item.description}</div>
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-600">₹ {item.rate.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right  text-emerald-600">₹ {item.amount.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-slate-500">{item.type || 'Standard'}</td>
+                        <td className="px-4 py-3 text-center">
+                          {item.quantity}
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-600">₹ {(item.rate || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right  text-emerald-600">₹ {(item.amount || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -670,18 +742,14 @@ const SalesOrders = () => {
           </Card>
 
           {/* Price Summary */}
-          <Card title="Cost Breakdown">
+          <Card title="Order Summary">
             <div className="space-y-3 p-4">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Finished Goods Total Cost (Unit):</span>
+                <span className="text-slate-500">Items Subtotal:</span>
                 <span className=" text-slate-700">₹ {subTotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Finished Goods Cost × Sales Quantity ({formData.orderQuantity}):</span>
-                <span className=" text-slate-700">₹ {(subTotal * formData.orderQuantity).toFixed(2)}</span>
-              </div>
               <div className="flex justify-between text-xs pt-3 border-t border-slate-100">
-                <span className="text-slate-500">Cost with Profit:</span>
+                <span className="text-slate-500">Subtotal with Profit ({formData.profitMargin}%):</span>
                 <span className=" text-slate-700">₹ {costWithProfit.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs">
@@ -690,7 +758,7 @@ const SalesOrders = () => {
               </div>
               <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
                 <div>
-                   <p className="text-sm  text-slate-900">Sales Order Price:</p>
+                   <p className="text-sm  text-slate-900">Total Order Value:</p>
                 </div>
                 <div className="text-right">
                    <p className="text-2xl  text-emerald-600">₹ {totalAmount.toFixed(2)}</p>
