@@ -17,6 +17,8 @@ const ProductionPlan = () => {
   const [productionReadyOrders, setProductionReadyOrders] = useState([]);
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [availableBoms, setAvailableBoms] = useState([]);
+  const [selectedBomId, setSelectedBomId] = useState('');
   
   const [newPlan, setNewPlan] = useState({
     planCode: '',
@@ -116,6 +118,8 @@ const ProductionPlan = () => {
     fetchNextCode();
     setSelectedOrderId('');
     setSelectedOrderDetails(null);
+    setAvailableBoms([]);
+    setSelectedBomId('');
     setNewPlan({
       planCode: '',
       planDate: new Date().toISOString().split('T')[0],
@@ -129,6 +133,9 @@ const ProductionPlan = () => {
 
   const handleOrderSelect = async (orderId) => {
     setSelectedOrderId(orderId);
+    setSelectedBomId('');
+    setAvailableBoms([]);
+    
     if (!orderId) {
       setSelectedOrderDetails(null);
       return;
@@ -143,14 +150,38 @@ const ProductionPlan = () => {
         const data = await response.json();
         setSelectedOrderDetails(data);
         
-        // Filter readyItems to only show items from this SO
-        const filteredReadyItems = readyItems.filter(item => item.sales_order_id === parseInt(orderId));
-        // If some items are already selected but not in this SO, we might want to keep them or clear them.
-        // Usually, selecting a SO means we focus on its items.
+        // Populate available BOMs from SO items
+        const boms = data.items || [];
+        setAvailableBoms(boms);
+        
+        // If only one BOM, auto-select it
+        if (boms.length === 1) {
+          const singleBomId = boms[0].id.toString();
+          setSelectedBomId(singleBomId);
+          // Auto-select the item for production if it's in readyItems
+          const itemInReady = readyItems.find(ri => ri.sales_order_item_id === parseInt(singleBomId));
+          if (itemInReady) {
+            toggleItemSelection(itemInReady);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching SO details:', error);
       errorToast('Failed to fetch sales order details');
+    }
+  };
+
+  const handleBomSelect = (bomId) => {
+    setSelectedBomId(bomId);
+    if (!bomId) return;
+
+    // When a BOM is selected, find the item in readyItems and select it
+    const itemInReady = readyItems.find(ri => ri.sales_order_item_id === parseInt(bomId));
+    if (itemInReady) {
+      const exists = newPlan.items.find(i => i.salesOrderItemId === parseInt(bomId));
+      if (!exists) {
+        toggleItemSelection(itemInReady);
+      }
     }
   };
 
@@ -344,7 +375,7 @@ const ProductionPlan = () => {
         title="Create Production Plan"
       >
         <form onSubmit={handleSubmit} className="">
-          <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
             <FormControl label="Search Sales Order">
               <SearchableSelect 
                 options={productionReadyOrders.map(so => ({
@@ -356,6 +387,22 @@ const ProductionPlan = () => {
                 placeholder="Search and select sales order..."
                 allowCustom={false}
               />
+            </FormControl>
+
+            <FormControl label="Select BOM">
+              <select
+                className={`w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-white ${availableBoms.length <= 1 ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={selectedBomId}
+                onChange={(e) => handleBomSelect(e.target.value)}
+                disabled={availableBoms.length <= 1}
+              >
+                <option value="">{availableBoms.length === 0 ? 'No BOMs Available' : 'Select BOM...'}</option>
+                {availableBoms.map(bom => (
+                  <option key={bom.id} value={bom.id}>
+                    {bom.item_code} - {bom.description} ({bom.drawing_no})
+                  </option>
+                ))}
+              </select>
             </FormControl>
           </div>
 
@@ -417,7 +464,7 @@ const ProductionPlan = () => {
                     <th className="p-2">Order No</th>
                     <th className="p-2">Project</th>
                     <th className="p-2">Item</th>
-                    <th className="p-2 text-center">Pending Qty</th>
+                    <th className="p-2 text-center">Design Qty</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -466,7 +513,7 @@ const ProductionPlan = () => {
                           )}
                         </td>
                         <td className="p-2 text-center  text-slate-700">
-                          {(item.total_qty || item.quantity) - (item.already_planned_qty || 0)} {item.unit}
+                          {item.total_qty || item.quantity} {item.unit}
                         </td>
                       </tr>
                     );

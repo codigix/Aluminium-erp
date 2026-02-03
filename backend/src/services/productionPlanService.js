@@ -89,9 +89,10 @@ const createProductionPlan = async (planData, createdBy) => {
 const getReadySalesOrderItems = async () => {
   // Items that are approved and ready for production
   // We pick the LATEST item for each drawing_no to avoid showing old revisions
+  // We join with customer_po_items to get the original Design Quantity if available
   const [rows] = await pool.query(
     `SELECT so.id as sales_order_id, 
-            COALESCE(o.order_no, CONCAT('SO-', so.id)) as order_no, 
+            o.order_no as order_no, 
             so.project_name, 
             so.production_priority, 
             so.created_at,
@@ -100,7 +101,7 @@ const getReadySalesOrderItems = async () => {
             soi.item_type as item_type,
             soi.drawing_no as drawing_no,
             soi.description as description, 
-            soi.quantity as total_qty, 
+            COALESCE(poi.quantity, cd.qty, soi.quantity) as total_qty, 
             soi.unit as unit,
             COALESCE(planned.already_planned_qty, 0) as already_planned_qty
      FROM (
@@ -109,7 +110,9 @@ const getReadySalesOrderItems = async () => {
        WHERE status != 'Rejected' AND (item_type IN ('FG', 'SFG'))
      ) soi
      JOIN sales_orders so ON soi.sales_order_id = so.id
-     LEFT JOIN (
+     LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id AND soi.drawing_no = poi.drawing_no
+     LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
+     JOIN (
        SELECT quotation_id, order_no FROM orders 
        WHERE id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
      ) o ON o.quotation_id = so.id
@@ -120,7 +123,7 @@ const getReadySalesOrderItems = async () => {
        GROUP BY sales_order_item_id
      ) planned ON soi.id = planned.sales_order_item_id
      WHERE soi.rn = 1
-       AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
+       AND (COALESCE(planned.already_planned_qty, 0) < COALESCE(poi.quantity, cd.qty, soi.quantity))
      ORDER BY so.production_priority DESC, so.created_at ASC`
   );
   return rows;
@@ -129,7 +132,7 @@ const getReadySalesOrderItems = async () => {
 const getProductionReadySalesOrders = async () => {
   const [rows] = await pool.query(
     `SELECT so.id, 
-            COALESCE(MAX(o.order_no), CONCAT('SO-', so.id)) as order_no, 
+            o.order_no, 
             so.project_name, 
             cp.po_number, 
             c.company_name, 
@@ -137,7 +140,7 @@ const getProductionReadySalesOrders = async () => {
      FROM sales_orders so
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-     LEFT JOIN orders o ON o.quotation_id = so.id
+     JOIN orders o ON o.quotation_id = so.id
      WHERE EXISTS (
        SELECT 1 FROM (
          SELECT sales_order_id, drawing_no, ROW_NUMBER() OVER (PARTITION BY sales_order_id, drawing_no ORDER BY id DESC) as rn
@@ -146,7 +149,7 @@ const getProductionReadySalesOrders = async () => {
        ) soi 
        WHERE soi.sales_order_id = so.id AND soi.rn = 1
      )
-     GROUP BY so.id, so.project_name, cp.po_number, c.company_name, so.created_at
+     GROUP BY so.id, so.project_name, cp.po_number, c.company_name, so.created_at, o.order_no
      ORDER BY so.created_at DESC`
   );
   return rows;
@@ -154,11 +157,11 @@ const getProductionReadySalesOrders = async () => {
 
 const getSalesOrderFullDetails = async (id) => {
   const [orders] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, COALESCE(o.order_no, CONCAT('SO-', so.id)) as order_no
+    `SELECT so.*, c.company_name, cp.po_number, o.order_no
      FROM sales_orders so
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-     LEFT JOIN (
+     JOIN (
        SELECT quotation_id, order_no FROM orders 
        WHERE quotation_id = ? ORDER BY id DESC LIMIT 1
      ) o ON o.quotation_id = so.id
@@ -177,7 +180,7 @@ const getSalesOrderFullDetails = async (id) => {
             soi.item_type as item_type,
             soi.drawing_no as drawing_no,
             soi.description,
-            soi.quantity as quantity,
+            COALESCE(poi.quantity, cd.qty, soi.quantity) as quantity,
             soi.unit,
             soi.status,
             soi.rejection_reason,
@@ -187,6 +190,9 @@ const getSalesOrderFullDetails = async (id) => {
        FROM sales_order_items
        WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG'))
      ) soi
+     LEFT JOIN sales_orders so ON so.id = soi.sales_order_id
+     LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id AND soi.drawing_no = poi.drawing_no
+     LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
      LEFT JOIN (
        SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
        FROM production_plan_items 
