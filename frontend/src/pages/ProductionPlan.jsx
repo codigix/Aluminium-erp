@@ -173,15 +173,62 @@ const ProductionPlan = () => {
 
   const handleBomSelect = (bomId) => {
     setSelectedBomId(bomId);
-    if (!bomId) return;
+    if (!bomId) {
+      setNewPlan(prev => ({ ...prev, items: [] }));
+      return;
+    }
 
     // When a BOM is selected, find the item in readyItems and select it
-    const itemInReady = readyItems.find(ri => ri.sales_order_item_id === parseInt(bomId));
+    // The user wants STRICT behavior: only this item should be in the plan
+    const itemsToSearch = selectedOrderDetails ? selectedOrderDetails.items : readyItems;
+    const itemInReady = itemsToSearch.find(item => (item.id || item.sales_order_item_id).toString() === bomId.toString());
+    
     if (itemInReady) {
-      const exists = newPlan.items.find(i => i.salesOrderItemId === parseInt(bomId));
-      if (!exists) {
-        toggleItemSelection(itemInReady);
-      }
+      // Clear existing items and only add this one
+      const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id;
+      const orderNo = itemInReady.order_no || selectedOrderDetails?.order_no;
+      const projectName = itemInReady.project_name || selectedOrderDetails?.project_name;
+      
+      // We call toggleItemSelection but we need to ensure it's the ONLY one.
+      // Actually, it's better to manually set it to ensure "checked" state and "ONE ROW ONLY".
+      
+      const fetchAndSetItem = async () => {
+        let bomDetails = { materials: [], components: [], operations: [] };
+        try {
+          const token = localStorage.getItem('authToken');
+          const response = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (response.ok) {
+            bomDetails = await response.json();
+          }
+        } catch (error) {
+          console.error('Error fetching BOM details:', error);
+        }
+
+        setNewPlan(prev => ({
+          ...prev,
+          items: [{
+            salesOrderId: itemInReady.sales_order_id,
+            salesOrderItemId: salesOrderItemId,
+            projectName: projectName,
+            orderNo: orderNo,
+            itemCode: itemInReady.item_code,
+            description: itemInReady.description,
+            plannedQty: (itemInReady.total_qty || itemInReady.quantity) - (itemInReady.already_planned_qty || 0),
+            totalQty: itemInReady.total_qty || itemInReady.quantity,
+            alreadyPlannedQty: itemInReady.already_planned_qty || 0,
+            workstationId: '',
+            plannedStartDate: prev.startDate,
+            plannedEndDate: prev.endDate,
+            materials: bomDetails.materials || [],
+            components: bomDetails.components || [],
+            operations: bomDetails.operations || []
+          }]
+        }));
+      };
+      
+      fetchAndSetItem();
     }
   };
 
@@ -470,6 +517,7 @@ const ProductionPlan = () => {
                 <tbody className="divide-y divide-slate-100">
                   {(selectedOrderDetails ? selectedOrderDetails.items : readyItems)
                     .filter(item => item.item_type === 'FG' || item.item_type === 'SFG' || !item.item_type)
+                    .filter(item => !selectedBomId || (item.id || item.sales_order_item_id).toString() === selectedBomId.toString())
                     .map(item => {
                     const salesOrderItemId = item.id || item.sales_order_item_id;
                     const salesOrderId = item.sales_order_id;
