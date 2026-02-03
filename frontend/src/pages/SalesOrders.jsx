@@ -91,7 +91,7 @@ const SalesOrders = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders`, {
+      const response = await fetch(`${API_BASE}/order`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -128,7 +128,7 @@ const SalesOrders = () => {
         fetch(`${API_BASE}/quotation-requests?status=APPROVED,COMPLETED,ACCEPTED&company_id=${companyId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`${API_BASE}/sales-orders/approved-drawings?company_id=${companyId}`, {
+        fetch(`${API_BASE}/order/approved-drawings?company_id=${companyId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -248,8 +248,9 @@ const SalesOrders = () => {
 
   const handleEditOrder = async (order) => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/${order.id}`, {
+      const response = await fetch(`${API_BASE}/order/${order.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -270,25 +271,18 @@ const SalesOrders = () => {
         let mappedPoId = data.customer_po_id || data.quotation_id || '';
         if (data.source_type === 'DRAWING' && data.quotation_id) {
           mappedPoId = `APPROVED_${data.quotation_id}`;
-        } else if (data.source_type === 'QUOTATION' && data.quotation_id) {
-          // For quotation, we might need to find the key from quotations list
-          // But since quotations are fetched later, we might need to handle this in a useEffect
-          // Or if the key is predictable:
-          // mappedPoId = ...; 
         }
-
-        const subTotalVal = (formattedItems || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
         setFormData({
           ...initialFormState,
           id: data.id,
-          series: `SO-${String(data.id).padStart(4, '0')}`,
-          orderDate: data.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          deliveryDate: data.target_dispatch_date ? data.target_dispatch_date.split('T')[0] : '',
+          series: data.order_no || `ORD-${String(data.id).padStart(4, '0')}`,
+          orderDate: data.order_date?.split('T')[0] || data.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+          deliveryDate: data.delivery_date ? data.delivery_date.split('T')[0] : (data.target_dispatch_date ? data.target_dispatch_date.split('T')[0] : ''),
           orderType: 'Sales',
-          customerId: data.company_id || '',
-          customerEmail: data.email_address || data.customer_email || data.contact_email || '',
-          customerPhone: data.contact_phone || data.customer_phone || data.contact_mobile || '',
+          customerId: data.client_id || data.company_id || '',
+          customerEmail: data.contact_email || data.email_address || '',
+          customerPhone: data.contact_mobile || data.contact_phone || '',
           customerPoId: mappedPoId,
           sourceType: data.source_type || 'DIRECT',
           orderQuantity: formattedItems?.[0]?.quantity || 1,
@@ -297,10 +291,14 @@ const SalesOrders = () => {
           cgstRate: Number(data.cgst_rate) || 0,
           sgstRate: Number(data.sgst_rate) || 0,
           profitMargin: Number(data.profit_margin) || 0,
+          subtotal: Number(data.subtotal) || 0,
+          gst: Number(data.gst) || 0,
+          grand_total: Number(data.grand_total) || 0,
           items: formattedItems
         });
-        if (data.company_id) {
-          fetchApprovedQuotations(data.company_id);
+        const companyId = data.client_id || data.company_id;
+        if (companyId) {
+          fetchApprovedQuotations(companyId);
         }
         setFormMode('edit');
         setViewMode('form');
@@ -308,6 +306,8 @@ const SalesOrders = () => {
     } catch (err) {
       console.error('Error fetching order details:', err);
       errorToast('Failed to fetch order details');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -330,7 +330,7 @@ const SalesOrders = () => {
     if (result.isConfirmed) {
       try {
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/sales-orders/${id}`, {
+        const response = await fetch(`${API_BASE}/order/${id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -350,31 +350,26 @@ const SalesOrders = () => {
     try {
       const token = localStorage.getItem('authToken');
       const method = formMode === 'create' ? 'POST' : 'PUT';
-      const url = formMode === 'create' ? `${API_BASE}/sales-orders` : `${API_BASE}/sales-orders/${formData.id}`;
+      const url = formMode === 'create' ? `${API_BASE}/order` : `${API_BASE}/order/${formData.id}`;
+
+      // Calculate totals for the new schema
+      const subTotalVal = (formData.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      const profitMarginVal = Number(formData.profitMargin) || 0;
+      const costWithProfit = subTotalVal * (1 + (profitMarginVal / 100));
+      const cgstRateVal = Number(formData.cgstRate) || 0;
+      const sgstRateVal = Number(formData.sgstRate) || 0;
+      const gstAmount = costWithProfit * ((cgstRateVal + sgstRateVal) / 100);
+      const grandTotal = costWithProfit + gstAmount;
 
       // Extract numeric IDs from the uniqueKey
       const selectedPo = quotations.find(q => q.uniqueKey === formData.customerPoId);
       
-      let sourceType = formData.sourceType || 'DIRECT';
       let quotationId = null;
-      let numericPoId = null;
 
       if (selectedPo) {
-        if (selectedPo.isApprovedDrawing) {
-          sourceType = 'DRAWING';
-          quotationId = selectedPo.dbId;
-        } else if (selectedPo.uniqueKey.includes('_') && !selectedPo.uniqueKey.startsWith('APPROVED_')) {
-          sourceType = 'QUOTATION';
-          quotationId = selectedPo.dbId;
-        } else {
-          sourceType = 'PO';
-          numericPoId = selectedPo.dbId;
-        }
+        quotationId = selectedPo.dbId;
       } else if (formData.customerPoId) {
-          // Fallback if selectedPo not found but we have a numeric ID (for existing orders)
-          if (sourceType === 'DRAWING') quotationId = formData.customerPoId;
-          else if (sourceType === 'QUOTATION') quotationId = formData.customerPoId;
-          else if (sourceType === 'PO') numericPoId = formData.customerPoId;
+          quotationId = formData.customerPoId;
       }
 
       const response = await fetch(url, {
@@ -384,18 +379,20 @@ const SalesOrders = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          companyId: formData.customerId,
-          customerPoId: numericPoId,
+          client_id: formData.customerId,
           quotation_id: quotationId,
-          source_type: sourceType,
-          targetDispatchDate: formData.deliveryDate || null,
+          order_date: formData.orderDate,
+          delivery_date: formData.deliveryDate || null,
           status: formData.status,
-          items: formData.items,
-          cgst_rate: formData.cgstRate,
-          sgst_rate: formData.sgstRate,
-          profit_margin: formData.profitMargin,
-          bom_id: formData.bomId,
-          warehouse: formData.warehouse
+          source_type: formData.sourceType || 'DIRECT',
+          warehouse: formData.warehouse,
+          cgst_rate: cgstRateVal,
+          sgst_rate: sgstRateVal,
+          profit_margin: profitMarginVal,
+          subtotal: costWithProfit,
+          gst: gstAmount,
+          grand_total: grandTotal,
+          items: formData.items
         })
       });
 
@@ -472,27 +469,33 @@ const SalesOrders = () => {
   const columns = [
     {
       label: 'Order No',
-      key: 'id',
+      key: 'order_no',
       sortable: true,
-      render: (val) => <span className="font-mono text-indigo-600">SO-{String(val).padStart(4, '0')}</span>
+      render: (val, row) => <span className="font-mono text-indigo-600">{val || `ORD-${String(row.id).padStart(4, '0')}`}</span>
     },
     {
       label: 'Customer',
-      key: 'company_name',
+      key: 'client',
       sortable: true,
       render: (val) => <span className=" text-slate-900">{val}</span>
     },
     {
       label: 'Order Date',
-      key: 'created_at',
+      key: 'order_date',
       sortable: true,
-      render: (val) => <span>{new Date(val).toLocaleDateString()}</span>
+      render: (val, row) => <span>{new Date(val || row.created_at).toLocaleDateString()}</span>
     },
     {
       label: 'Delivery Date',
-      key: 'target_dispatch_date',
+      key: 'delivery_date',
       sortable: true,
       render: (val) => <span>{val ? new Date(val).toLocaleDateString() : '—'}</span>
+    },
+    {
+      label: 'Grand Total',
+      key: 'grand_total',
+      sortable: true,
+      render: (val) => <span className="font-medium text-slate-900">₹{Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
     },
     {
       label: 'Status',

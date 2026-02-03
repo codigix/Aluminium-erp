@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const companyRoutes = require('./routes/companyRoutes');
 const customerPoRoutes = require('./routes/customerPoRoutes');
 const salesOrderRoutes = require('./routes/salesOrderRoutes');
+const orderRoutes = require('./routes/orderRoutes');
 const designOrderRoutes = require('./routes/designOrderRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const authRoutes = require('./routes/authRoutes');
@@ -50,7 +51,8 @@ app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_D
 const allowedProdApis = [
   '/api/auth/login',
   '/api/quotations/communications',
-  '/api/quotation-requests'
+  '/api/quotation-requests',
+  '/api/order'
 ];
 
 const productionApiGuard = (req, res, next) => {
@@ -95,6 +97,7 @@ app.use('/api/access', departmentDocumentRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/customer-pos', customerPoRoutes);
 app.use('/api/sales-orders', salesOrderRoutes);
+app.use('/api/order', orderRoutes);
 app.use('/api/design-orders', designOrderRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/quotations/communications', quotationCommunicationRoutes);

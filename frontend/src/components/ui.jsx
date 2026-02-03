@@ -237,8 +237,9 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
   }, [data, sortConfig]);
 
   const filteredData = sortedData.filter(item => {
+    const searchLower = String(searchTerm || '').toLowerCase();
     return Object.values(item).some(val => 
-      String(val).toLowerCase().includes(searchTerm.toLowerCase())
+      String(val).toLowerCase().includes(searchLower)
     );
   });
 

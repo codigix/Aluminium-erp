@@ -2,7 +2,11 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
 const listSalesOrders = async (includeWithoutPo = true) => {
-  const whereClause = includeWithoutPo ? '' : 'WHERE so.customer_po_id IS NOT NULL';
+  let whereClause = 'WHERE so.is_sales_order = 1';
+  if (!includeWithoutPo) {
+    whereClause += ' AND so.customer_po_id IS NOT NULL';
+  }
+  
   const [rows] = await pool.query(
     `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,

@@ -1115,6 +1115,67 @@ const ensureQuotationCommunicationTable = async () => {
   }
 };
 
+const ensureOrdersTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        order_no VARCHAR(50) UNIQUE,
+        client_id INT,
+        quotation_id INT,
+        order_date DATE,
+        delivery_date DATE,
+        status VARCHAR(30) DEFAULT 'Created',
+        source_type VARCHAR(50) DEFAULT 'DIRECT',
+        warehouse VARCHAR(100),
+        cgst_rate DECIMAL(5,2) DEFAULT 0,
+        sgst_rate DECIMAL(5,2) DEFAULT 0,
+        profit_margin DECIMAL(5,2) DEFAULT 0,
+        subtotal DECIMAL(12,2) DEFAULT 0,
+        gst DECIMAL(12,2) DEFAULT 0,
+        grand_total DECIMAL(12,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_client (client_id),
+        INDEX idx_quotation (quotation_id)
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS order_items (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        order_id INT NOT NULL,
+        item_code VARCHAR(100),
+        drawing_no VARCHAR(120),
+        description TEXT,
+        type VARCHAR(100),
+        quantity DECIMAL(12,3) DEFAULT 0,
+        rate DECIMAL(12,2) DEFAULT 0,
+        amount DECIMAL(12,2) DEFAULT 0,
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Ensure columns exist for existing tables
+    const [columns] = await connection.query('SHOW COLUMNS FROM orders');
+    const existing = new Set(columns.map(c => c.Field));
+    
+    if (!existing.has('source_type')) await connection.query('ALTER TABLE orders ADD COLUMN source_type VARCHAR(50) DEFAULT "DIRECT"');
+    if (!existing.has('warehouse')) await connection.query('ALTER TABLE orders ADD COLUMN warehouse VARCHAR(100)');
+    if (!existing.has('cgst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN cgst_rate DECIMAL(5,2) DEFAULT 0');
+    if (!existing.has('sgst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN sgst_rate DECIMAL(5,2) DEFAULT 0');
+    if (!existing.has('profit_margin')) await connection.query('ALTER TABLE orders ADD COLUMN profit_margin DECIMAL(5,2) DEFAULT 0');
+
+    console.log('Orders and Order Items tables synchronized');
+  } catch (error) {
+    console.error('Orders table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureSalesOrderColumns = async () => {
   let connection;
   try {
@@ -1139,6 +1200,13 @@ const ensureSalesOrderColumns = async () => {
     if (!existingColumns.has('source_type')) {
       console.log('[ensureSalesOrderColumns] Adding source_type column...');
       await connection.query('ALTER TABLE sales_orders ADD COLUMN source_type VARCHAR(50) DEFAULT "DIRECT"');
+    }
+
+    if (!existingColumns.has('is_sales_order')) {
+      console.log('[ensureSalesOrderColumns] Adding is_sales_order column...');
+      await connection.query('ALTER TABLE sales_orders ADD COLUMN is_sales_order TINYINT(1) DEFAULT 0');
+      // Set existing ones to 1 as they were created as sales orders before this split
+      await connection.query('UPDATE sales_orders SET is_sales_order = 1');
     }
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {
@@ -1179,6 +1247,7 @@ const bootstrapDatabase = async () => {
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();
   await ensureQuotationCommunicationTable();
+  await ensureOrdersTable();
 };
 
 bootstrapDatabase();
