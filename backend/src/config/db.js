@@ -1115,6 +1115,40 @@ const ensureQuotationCommunicationTable = async () => {
   }
 };
 
+const ensureSalesOrderColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    const [columns] = await connection.query('SHOW COLUMNS FROM sales_orders');
+    const existingColumns = new Set(columns.map(c => c.Field));
+    const customerPoIdCol = columns.find(c => c.Field === 'customer_po_id');
+    
+    if (customerPoIdCol && customerPoIdCol.Null === 'NO') {
+      console.log('[ensureSalesOrderColumns] Making customer_po_id nullable...');
+      try {
+        await connection.query('ALTER TABLE sales_orders MODIFY customer_po_id INT NULL');
+      } catch (e) { console.error(e.message); }
+    }
+
+    if (!existingColumns.has('quotation_id')) {
+      console.log('[ensureSalesOrderColumns] Adding quotation_id column...');
+      await connection.query('ALTER TABLE sales_orders ADD COLUMN quotation_id INT NULL');
+    }
+
+    if (!existingColumns.has('source_type')) {
+      console.log('[ensureSalesOrderColumns] Adding source_type column...');
+      await connection.query('ALTER TABLE sales_orders ADD COLUMN source_type VARCHAR(50) DEFAULT "DIRECT"');
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Sales order column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -1131,6 +1165,7 @@ const bootstrapDatabase = async () => {
   await ensureDesignOrderTables();
   await ensureQuotationRequestTables();
   await ensureQuotationRequestStatus();
+  await ensureSalesOrderColumns();
   await ensureSalesOrderItemColumns();
   await ensureSalesOrderStatuses();
   await ensureCustomerDrawingTable();

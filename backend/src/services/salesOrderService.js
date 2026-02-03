@@ -5,13 +5,17 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   const whereClause = includeWithoutPo ? '' : 'WHERE so.customer_po_id IS NOT NULL';
   const [rows] = await pool.query(
     `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(ct.phone, ct.name) as contact_person, ct.email as email_address, ct.phone as contact_phone,
+            COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-     LEFT JOIN contacts ct ON ct.company_id = so.company_id AND ct.contact_type = 'PRIMARY'
+     LEFT JOIN (
+       SELECT company_id, email, phone, name, 
+              ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+       FROM contacts
+     ) ct ON ct.company_id = c.id AND ct.rn = 1
      ${whereClause}
      ORDER BY so.created_at DESC`
   );
@@ -30,12 +34,15 @@ const listSalesOrders = async (includeWithoutPo = true) => {
 const getSalesOrderById = async (id) => {
   const [rows] = await pool.query(
     `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(ct.phone, ct.name) as contact_person, ct.email as email_address, ct.phone as contact_phone,
-            c.contact_email, c.contact_mobile
+            COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-     LEFT JOIN contacts ct ON ct.company_id = so.company_id AND ct.contact_type = 'PRIMARY'
+     LEFT JOIN (
+       SELECT company_id, email, phone, name, 
+              ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+       FROM contacts
+     ) ct ON ct.company_id = c.id AND ct.rn = 1
      WHERE so.id = ?`,
     [id]
   );
@@ -105,8 +112,21 @@ const createSalesOrder = async (orderData) => {
     profit_margin = 0,
     bom_id = null,
     warehouse = null,
-    status = 'CREATED'
+    status = 'CREATED',
+    quotation_id = null,
+    source_type = 'DIRECT'
   } = orderData;
+
+  // Ensure customerPoId is a valid positive integer or null
+  // We use Number() and check for truthiness to handle strings like "null", "undefined", or 0
+  let validatedPoId = null;
+  if (source_type === 'PO' && customerPoId && !isNaN(Number(customerPoId)) && Number(customerPoId) > 0) {
+    validatedPoId = Number(customerPoId);
+  }
+  
+  const finalQuotationId = (quotation_id && !isNaN(Number(quotation_id))) ? Number(quotation_id) : null;
+  
+  console.log('[createSalesOrder] Received data:', { customerPoId, validatedPoId, quotation_id: finalQuotationId, source_type, companyId, status });
 
   const connection = await pool.getConnection();
   try {
@@ -117,12 +137,13 @@ const createSalesOrder = async (orderData) => {
         customer_po_id, company_id, project_name, drawing_required, 
         production_priority, target_dispatch_date, status, 
         current_department, request_accepted, cgst_rate, 
-        sgst_rate, profit_margin, bom_id, warehouse
+        sgst_rate, profit_margin, bom_id, warehouse,
+        quotation_id, source_type
       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        customerPoId || null, 
-        companyId, 
+        validatedPoId, 
+        companyId || null, 
         projectName || null, 
         drawingRequired, 
         productionPriority, 
@@ -132,7 +153,9 @@ const createSalesOrder = async (orderData) => {
         sgst_rate,
         profit_margin,
         bom_id,
-        warehouse
+        warehouse,
+        finalQuotationId,
+        source_type
       ]
     );
 
@@ -145,7 +168,7 @@ const createSalesOrder = async (orderData) => {
     } else {
       const [poItems] = await connection.query(
         'SELECT item_code, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, (cgst_amount + sgst_amount + igst_amount) as tax_value FROM customer_po_items WHERE customer_po_id = ?',
-        [customerPoId]
+        [validatedPoId]
       );
       orderItems = poItems;
     }
@@ -156,15 +179,15 @@ const createSalesOrder = async (orderData) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           salesOrderId, 
-          item.item_code, 
-          item.drawing_no, 
+          item.item_code || null, 
+          item.drawing_no || null, 
           item.drawing_id || null,
-          item.revision_no, 
-          item.description, 
-          item.quantity, 
-          item.unit, 
-          item.rate, 
-          item.delivery_date, 
+          item.revision_no || null, 
+          item.description || null, 
+          item.quantity || 0, 
+          item.unit || null, 
+          item.rate || 0, 
+          item.delivery_date || null, 
           item.tax_value || 0,
           item.status || (item.item_status) || 'PENDING',
           item.rejection_reason || (item.item_rejection_reason) || null
@@ -269,6 +292,7 @@ const createSalesOrder = async (orderData) => {
 
 const updateSalesOrder = async (id, orderData) => {
   const { 
+    customerPoId,
     companyId, 
     projectName, 
     drawingRequired, 
@@ -280,8 +304,20 @@ const updateSalesOrder = async (id, orderData) => {
     profit_margin,
     bom_id,
     warehouse,
-    status
+    status,
+    quotation_id = null,
+    source_type = 'DIRECT'
   } = orderData;
+
+  // Ensure customerPoId is a valid positive integer or null
+  let validatedPoId = null;
+  if (source_type === 'PO' && customerPoId && !isNaN(Number(customerPoId)) && Number(customerPoId) > 0) {
+    validatedPoId = Number(customerPoId);
+  }
+  
+  const finalQuotationId = (quotation_id && !isNaN(Number(quotation_id))) ? Number(quotation_id) : null;
+  
+  console.log('[updateSalesOrder] Received data:', { id, customerPoId, validatedPoId, quotation_id: finalQuotationId, source_type, companyId, status });
 
   const connection = await pool.getConnection();
   try {
@@ -290,6 +326,7 @@ const updateSalesOrder = async (id, orderData) => {
     await connection.execute(
       `UPDATE sales_orders SET 
         company_id = ?, 
+        customer_po_id = ?,
         project_name = ?, 
         drawing_required = ?, 
         production_priority = ?, 
@@ -300,20 +337,25 @@ const updateSalesOrder = async (id, orderData) => {
         profit_margin = ?, 
         bom_id = ?, 
         warehouse = ?,
+        quotation_id = ?,
+        source_type = ?,
         updated_at = NOW()
        WHERE id = ?`,
       [
-        companyId, 
+        companyId || null, 
+        validatedPoId,
         projectName || null, 
         drawingRequired || 0, 
         productionPriority || 'NORMAL', 
         targetDispatchDate || null, 
-        status,
+        status || null,
         cgst_rate || 0,
         sgst_rate || 0,
         profit_margin || 0,
         bom_id || null,
         warehouse || null,
+        finalQuotationId,
+        source_type,
         id
       ]
     );
@@ -328,13 +370,13 @@ const updateSalesOrder = async (id, orderData) => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, 
-            item.item_code, 
+            item.item_code || null, 
             item.drawing_no || null, 
             item.revision_no || null, 
-            item.description, 
-            item.quantity, 
+            item.description || null, 
+            item.quantity || 0, 
             item.unit || 'NOS', 
-            item.rate, 
+            item.rate || 0, 
             item.delivery_date || null, 
             item.tax_value || 0,
             item.status || 'PENDING'

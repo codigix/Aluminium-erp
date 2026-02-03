@@ -31,10 +31,11 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
     }
   }, [value, selectedOption, isOpen, labelField, searchTerm]);
 
+  const safeSearchTerm = String(searchTerm || '').toLowerCase();
   const filteredOptions = options.filter(opt => 
-    String(opt[labelField] || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    String(opt[valueField] || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (subLabelField && String(opt[subLabelField] || '').toLowerCase().includes(searchTerm.toLowerCase()))
+    String(opt[labelField] || '').toLowerCase().includes(safeSearchTerm) ||
+    String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
+    (subLabelField && String(opt[subLabelField] || '').toLowerCase().includes(safeSearchTerm))
   );
 
   useEffect(() => {

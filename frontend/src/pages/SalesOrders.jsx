@@ -40,6 +40,7 @@ const SalesOrders = () => {
     cgstRate: 9,
     sgstRate: 9,
     profitMargin: 0,
+    sourceType: 'DIRECT',
     items: []
   };
 
@@ -61,6 +62,30 @@ const SalesOrders = () => {
       fetchBoms();
     }
   }, []);
+
+  useEffect(() => {
+    // Attempt to match customerPoId with uniqueKey from quotations if it's a simple ID
+    if (formData.customerPoId && (formMode === 'edit' || formMode === 'view')) {
+      const match = quotations.find(q => {
+        if (q.uniqueKey === formData.customerPoId) return true;
+        
+        // If it's a numeric ID, try to match by dbId and sourceType
+        const isNumeric = /^\d+$/.test(String(formData.customerPoId));
+        if (isNumeric) {
+          const id = Number(formData.customerPoId);
+          if (q.dbId === id) {
+             if (formData.sourceType === 'DRAWING') return q.isApprovedDrawing;
+             if (formData.sourceType === 'QUOTATION') return !q.isApprovedDrawing;
+          }
+        }
+        return false;
+      });
+      
+      if (match && match.uniqueKey !== formData.customerPoId) {
+        setFormData(prev => ({ ...prev, customerPoId: match.uniqueKey }));
+      }
+    }
+  }, [quotations, formMode, formData.sourceType]);
 
   const fetchOrders = async () => {
     try {
@@ -124,6 +149,7 @@ const SalesOrders = () => {
           if (!grouped[key]) {
             grouped[key] = {
               id: quote.id || quote.qr_id,
+              dbId: quote.id || quote.qr_id,
               uniqueKey: key,
               company_id: quote.company_id,
               created_at: quote.created_at,
@@ -147,6 +173,7 @@ const SalesOrders = () => {
             const key = `APPROVED_${order.id}`;
             allOptions.push({
               id: order.id,
+              dbId: order.id,
               uniqueKey: key,
               company_id: order.company_id,
               created_at: order.created_at,
@@ -176,15 +203,20 @@ const SalesOrders = () => {
     const group = quotations.find(q => q.uniqueKey === uniqueKey);
     if (!group) return;
 
-    const items = group.items.map(item => ({
-      item_code: item.drawing_no || 'Standard',
-      drawing_no: item.drawing_no,
-      description: item.item_description,
-      type: item.item_group || 'Standard',
-      quantity: Number(item.item_qty) || 1,
-      rate: (Number(item.total_amount) || 0) / (Number(item.item_qty) || 1),
-      amount: Number(item.total_amount) || 0
-    }));
+    const items = group.items.map(item => {
+      const qty = Number(item.item_qty) || 1;
+      const totalAmount = Number(item.total_amount) || 0;
+      const rate = qty > 0 ? totalAmount / qty : 0;
+      return {
+        item_code: item.drawing_no || 'Standard',
+        drawing_no: item.drawing_no,
+        description: item.item_description,
+        type: item.item_group || 'Standard',
+        quantity: qty,
+        rate: rate,
+        amount: totalAmount
+      };
+    });
 
     setFormData(prev => ({
       ...prev,
@@ -222,24 +254,50 @@ const SalesOrders = () => {
       });
       if (response.ok) {
         const data = await response.json();
+        
+        // Prepare items with calculated amount if missing
+        const formattedItems = (data.items || []).map(item => {
+          const qty = Number(item.quantity) || 0;
+          const rate = Number(item.rate) || 0;
+          return {
+            ...item,
+            quantity: qty,
+            rate: rate,
+            amount: Number(item.amount) || (qty * rate)
+          };
+        });
+
+        let mappedPoId = data.customer_po_id || data.quotation_id || '';
+        if (data.source_type === 'DRAWING' && data.quotation_id) {
+          mappedPoId = `APPROVED_${data.quotation_id}`;
+        } else if (data.source_type === 'QUOTATION' && data.quotation_id) {
+          // For quotation, we might need to find the key from quotations list
+          // But since quotations are fetched later, we might need to handle this in a useEffect
+          // Or if the key is predictable:
+          // mappedPoId = ...; 
+        }
+
+        const subTotalVal = (formattedItems || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
         setFormData({
           ...initialFormState,
           id: data.id,
           series: `SO-${String(data.id).padStart(4, '0')}`,
           orderDate: data.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          deliveryDate: data.target_dispatch_date || '',
+          deliveryDate: data.target_dispatch_date ? data.target_dispatch_date.split('T')[0] : '',
           orderType: 'Sales',
           customerId: data.company_id || '',
-          customerEmail: data.contact_email || data.customer_email || '',
-          customerPhone: data.contact_mobile || data.customer_phone || '',
-          customerPoId: data.customer_po_id || data.bom_id || '',
-          orderQuantity: data.items?.[0]?.quantity || 1,
+          customerEmail: data.email_address || data.customer_email || data.contact_email || '',
+          customerPhone: data.contact_phone || data.customer_phone || data.contact_mobile || '',
+          customerPoId: mappedPoId,
+          sourceType: data.source_type || 'DIRECT',
+          orderQuantity: formattedItems?.[0]?.quantity || 1,
           warehouse: data.warehouse || '',
           status: data.status || 'Draft',
-          cgstRate: data.cgst_rate || 0,
-          sgstRate: data.sgst_rate || 0,
-          profitMargin: data.profit_margin || 0,
-          items: data.items || []
+          cgstRate: Number(data.cgst_rate) || 0,
+          sgstRate: Number(data.sgst_rate) || 0,
+          profitMargin: Number(data.profit_margin) || 0,
+          items: formattedItems
         });
         if (data.company_id) {
           fetchApprovedQuotations(data.company_id);
@@ -294,6 +352,31 @@ const SalesOrders = () => {
       const method = formMode === 'create' ? 'POST' : 'PUT';
       const url = formMode === 'create' ? `${API_BASE}/sales-orders` : `${API_BASE}/sales-orders/${formData.id}`;
 
+      // Extract numeric IDs from the uniqueKey
+      const selectedPo = quotations.find(q => q.uniqueKey === formData.customerPoId);
+      
+      let sourceType = formData.sourceType || 'DIRECT';
+      let quotationId = null;
+      let numericPoId = null;
+
+      if (selectedPo) {
+        if (selectedPo.isApprovedDrawing) {
+          sourceType = 'DRAWING';
+          quotationId = selectedPo.dbId;
+        } else if (selectedPo.uniqueKey.includes('_') && !selectedPo.uniqueKey.startsWith('APPROVED_')) {
+          sourceType = 'QUOTATION';
+          quotationId = selectedPo.dbId;
+        } else {
+          sourceType = 'PO';
+          numericPoId = selectedPo.dbId;
+        }
+      } else if (formData.customerPoId) {
+          // Fallback if selectedPo not found but we have a numeric ID (for existing orders)
+          if (sourceType === 'DRAWING') quotationId = formData.customerPoId;
+          else if (sourceType === 'QUOTATION') quotationId = formData.customerPoId;
+          else if (sourceType === 'PO') numericPoId = formData.customerPoId;
+      }
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -302,6 +385,9 @@ const SalesOrders = () => {
         },
         body: JSON.stringify({
           companyId: formData.customerId,
+          customerPoId: numericPoId,
+          quotation_id: quotationId,
+          source_type: sourceType,
           targetDispatchDate: formData.deliveryDate || null,
           status: formData.status,
           items: formData.items,
@@ -465,9 +551,12 @@ const SalesOrders = () => {
 
   // Form View
   const selectedBom = boms.find(b => String(b.id) === String(formData.bomId));
-  const subTotal = formData.items.reduce((sum, item) => sum + (item.amount || 0), 0);
-  const costWithProfit = subTotal * (1 + (formData.profitMargin / 100));
-  const gstAmount = costWithProfit * ((formData.cgstRate + formData.sgstRate) / 100);
+  const subTotal = (formData.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const profitMarginVal = Number(formData.profitMargin) || 0;
+  const costWithProfit = subTotal * (1 + (profitMarginVal / 100));
+  const cgstRateVal = Number(formData.cgstRate) || 0;
+  const sgstRateVal = Number(formData.sgstRate) || 0;
+  const gstAmount = costWithProfit * ((cgstRateVal + sgstRateVal) / 100);
   const totalAmount = costWithProfit + gstAmount;
 
   return (
@@ -647,7 +736,7 @@ const SalesOrders = () => {
           </Card>
 
           {/* Items included in selected PO */}
-          {formData.customerPoId && (
+          {formData.items.length > 0 && (
             <Card title="Items included in selected PO" subtitle="Order Items">
               <div className="p-4 bg-blue-50/50 rounded-xl mb-4 border border-blue-100 flex items-center gap-4">
                 <div className="p-3 bg-white rounded-xl shadow-sm border border-blue-100">
@@ -655,7 +744,7 @@ const SalesOrders = () => {
                 </div>
                 <div>
                   <p className="text-sm  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>
-                  <p className="text-[10px] text-indigo-600 font-mono">PO Number: {formData.customerPoId.split('_')[0]}</p>
+                  <p className="text-[10px] text-indigo-600 font-mono">PO Number: {formData.customerPoId ? (String(formData.customerPoId).includes('_') ? formData.customerPoId.split('_')[1] : formData.customerPoId) : 'N/A'}</p>
                 </div>
               </div>
 
@@ -681,8 +770,8 @@ const SalesOrders = () => {
                         <td className="px-4 py-3 text-center">
                           {item.quantity}
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-600">₹ {(item.rate || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right  text-emerald-600">₹ {(item.amount || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">₹ {(Number(item.rate) || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right  text-emerald-600">₹ {(Number(item.amount) || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -746,22 +835,22 @@ const SalesOrders = () => {
             <div className="space-y-3 p-4">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Items Subtotal:</span>
-                <span className=" text-slate-700">₹ {subTotal.toFixed(2)}</span>
+                <span className=" text-slate-700">₹ {(Number(subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between text-xs pt-3 border-t border-slate-100">
-                <span className="text-slate-500">Subtotal with Profit ({formData.profitMargin}%):</span>
-                <span className=" text-slate-700">₹ {costWithProfit.toFixed(2)}</span>
+                <span className="text-slate-500">Subtotal with Profit ({profitMarginVal}%):</span>
+                <span className=" text-slate-700">₹ {(Number(costWithProfit) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500">GST ({formData.cgstRate + formData.sgstRate}%):</span>
-                <span className=" text-slate-700">₹ {gstAmount.toFixed(2)}</span>
+                <span className="text-slate-500">GST ({cgstRateVal + sgstRateVal}%):</span>
+                <span className=" text-slate-700">₹ {(Number(gstAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
                 <div>
                    <p className="text-sm  text-slate-900">Total Order Value:</p>
                 </div>
                 <div className="text-right">
-                   <p className="text-2xl  text-emerald-600">₹ {totalAmount.toFixed(2)}</p>
+                   <p className="text-2xl  text-emerald-600 font-bold">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>

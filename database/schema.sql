@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS customer_po_items (
 
 CREATE TABLE IF NOT EXISTS sales_orders (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  customer_po_id INT NOT NULL,
+  customer_po_id INT NULL,
   company_id INT NOT NULL,
   project_name VARCHAR(255),
   drawing_required TINYINT(1) DEFAULT 0,
