@@ -246,6 +246,52 @@ const updateWorkOrderStatus = async (id, status) => {
   }
 };
 
+const deleteWorkOrder = async (id) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Check if any material issues exist
+    const [miRows] = await connection.query('SELECT id FROM material_issues WHERE work_order_id = ?', [id]);
+    if (miRows.length > 0) {
+      throw new Error('Cannot delete Work Order with linked material issues.');
+    }
+
+    // 2. Check if any job cards are completed or in progress
+    const [jcRows] = await connection.query('SELECT id FROM job_cards WHERE work_order_id = ? AND status NOT IN ("DRAFT", "PENDING")', [id]);
+    if (jcRows.length > 0) {
+      throw new Error('Cannot delete Work Order with active or completed job cards.');
+    }
+
+    // 3. Get production plan item id to revert status
+    const [woRows] = await connection.query('SELECT production_plan_item_id FROM work_orders WHERE id = ?', [id]);
+    if (woRows.length === 0) throw new Error('Work Order not found');
+    const productionPlanItemId = woRows[0].production_plan_item_id;
+
+    // 4. Delete associated job cards
+    await connection.execute('DELETE FROM job_cards WHERE work_order_id = ?', [id]);
+
+    // 5. Delete the work order
+    await connection.execute('DELETE FROM work_orders WHERE id = ?', [id]);
+
+    // 6. Revert Production Plan Item status if applicable
+    if (productionPlanItemId) {
+      await connection.execute(
+        'UPDATE production_plan_items SET status = "PENDING" WHERE id = ?',
+        [productionPlanItemId]
+      );
+    }
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const generateWoNumber = async () => {
   return `WO-${Date.now()}`;
 };
@@ -256,5 +302,6 @@ module.exports = {
   createWorkOrder,
   getWorkOrderById,
   updateWorkOrderStatus,
+  deleteWorkOrder,
   generateWoNumber
 };

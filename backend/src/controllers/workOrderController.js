@@ -51,10 +51,20 @@ const createWorkOrdersFromPlan = async (req, res) => {
   }
 };
 
+const deleteWorkOrder = async (req, res) => {
+  try {
+    await workOrderService.deleteWorkOrder(req.params.id);
+    res.json({ success: true, message: 'Work Order deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listWorkOrders,
   createWorkOrder,
   createWorkOrdersFromPlan,
   updateStatus,
-  getNextWoNumber
+  getNextWoNumber,
+  deleteWorkOrder
 };

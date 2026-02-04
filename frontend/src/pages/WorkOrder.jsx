@@ -167,7 +167,8 @@ const WorkOrder = () => {
           successToast('Work Order deleted');
           fetchWorkOrders();
         } else {
-          errorToast('Failed to delete');
+          const errorData = await response.json();
+          errorToast(errorData.error || 'Failed to delete');
         }
       }
     } catch (error) {
