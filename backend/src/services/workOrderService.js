@@ -63,21 +63,7 @@ const createWorkOrdersFromPlan = async (planId) => {
       );
 
       const workOrderId = result.insertId;
-
-      // Create Job Cards from BOM Operations
-      const bomOperationsRaw = await bomService.getItemOperations(salesOrderItemId, itemCode);
-      
-      for (const op of bomOperationsRaw) {
-        const [masterOps] = await connection.query('SELECT id FROM operations WHERE operation_name = ?', [op.operation_name]);
-        const [masterWs] = await connection.query('SELECT id FROM workstations WHERE workstation_name = ?', [op.workstation]);
-        
-        await connection.execute(
-          `INSERT INTO job_cards (work_order_id, operation_id, workstation_id, planned_qty, status)
-           VALUES (?, ?, ?, ?, 'PENDING')`,
-          [workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, quantity]
-        );
-      }
-
+      await createJobCardsForWorkOrder(workOrderId, connection, 'DRAFT');
       return workOrderId;
     };
 
@@ -109,7 +95,8 @@ const createWorkOrdersFromPlan = async (planId) => {
 const createWorkOrder = async (data) => {
   const { 
     woNumber, productionPlanItemId, salesOrderId, salesOrderItemId, 
-    workstationId, quantity, startDate, endDate, priority, remarks 
+    workstationId, quantity, startDate, endDate, priority, remarks,
+    status = 'RELEASED'
   } = data;
 
   const connection = await pool.getConnection();
@@ -118,7 +105,7 @@ const createWorkOrder = async (data) => {
 
     // 0. Check if item is rejected and fetch its details
     const [itemRows] = await connection.query(
-      'SELECT item_code, drawing_no, status FROM sales_order_items WHERE id = ?',
+      'SELECT item_code, description, item_type, drawing_no, status FROM sales_order_items WHERE id = ?',
       [salesOrderItemId]
     );
     if (itemRows.length === 0) throw new Error('Sales Order Item not found');
@@ -131,47 +118,21 @@ const createWorkOrder = async (data) => {
     // 1. Create the Work Order
     const [result] = await connection.execute(
       `INSERT INTO work_orders 
-       (wo_number, production_plan_item_id, sales_order_id, sales_order_item_id, workstation_id, quantity, start_date, end_date, priority, remarks, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RELEASED')`,
-      [woNumber, productionPlanItemId || null, salesOrderId, salesOrderItemId, workstationId || null, quantity, startDate, endDate, priority, remarks]
+       (wo_number, production_plan_item_id, sales_order_id, sales_order_item_id, workstation_id, 
+        item_code, item_name, source_type, quantity, start_date, end_date, priority, remarks, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        woNumber, productionPlanItemId || null, salesOrderId, salesOrderItemId, workstationId || null, 
+        item.item_code, item.description || item.item_code, item.item_type || 'FG', 
+        quantity, startDate, endDate, priority, remarks, status
+      ]
     );
 
     const workOrderId = result.insertId;
 
-    // 2. Fetch Operations from BOM using multi-tier logic
-    const bomOperationsRaw = await bomService.getItemOperations(salesOrderItemId, item.item_code, item.drawing_no);
-    
-    // We still need to join with master operations/workstations for the master IDs
-    const bomOperations = [];
-    for (const op of bomOperationsRaw) {
-      const [masterOps] = await connection.query(
-        'SELECT id FROM operations WHERE operation_name = ?',
-        [op.operation_name]
-      );
-      const [masterWs] = await connection.query(
-        'SELECT id FROM workstations WHERE workstation_name = ?',
-        [op.workstation]
-      );
-      bomOperations.push({
-        ...op,
-        master_operation_id: masterOps[0]?.id || null,
-        master_workstation_id: masterWs[0]?.id || null
-      });
-    }
-
-    if (bomOperations.length === 0) {
-      throw new Error('Cannot create Work Order: No operations found in BOM for this item. Please define BOM operations first.');
-    }
-
-    // 3. Create Job Cards for each operation
-    for (const op of bomOperations) {
-      await connection.execute(
-        `INSERT INTO job_cards 
-         (work_order_id, operation_id, workstation_id, planned_qty, status)
-         VALUES (?, ?, ?, ?, 'PENDING')`,
-        [workOrderId, op.master_operation_id || null, op.master_workstation_id || null, quantity]
-      );
-    }
+    // 2. Create Job Cards with appropriate status
+    const jcInitialStatus = status === 'RELEASED' ? 'PENDING' : 'DRAFT';
+    await createJobCardsForWorkOrder(workOrderId, connection, jcInitialStatus);
 
     // 4. Update Production Plan Item status if applicable
     if (productionPlanItemId) {
@@ -204,8 +165,85 @@ const getWorkOrderById = async (id) => {
   return rows[0];
 };
 
+const generateJobCardNo = async (connection) => {
+  const [rows] = await connection.query('SELECT COUNT(*) as count FROM job_cards');
+  const count = rows[0].count + 1;
+  return `JC-${String(count).padStart(4, '0')}`;
+};
+
+const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus = 'DRAFT') => {
+  // 1. Fetch WO details
+  const [woRows] = await connection.query(
+    'SELECT item_code, bom_no, quantity, sales_order_item_id, source_type FROM work_orders WHERE id = ?',
+    [workOrderId]
+  );
+  if (woRows.length === 0) return;
+  const wo = woRows[0];
+
+  // 2. Check if Job Cards already exist
+  const [existingJc] = await connection.query('SELECT id FROM job_cards WHERE work_order_id = ?', [workOrderId]);
+  if (existingJc.length > 0) return;
+
+  // 3. Fetch Operations from BOM
+  // IMPORTANT: For Sub-Assemblies (SA), we should fetch operations for the specific item_code 
+  // from the master BOM, as sales_order_item_id refers to the parent FG item.
+  let bomOperationsRaw = [];
+  if (wo.source_type === 'SA' || !wo.sales_order_item_id) {
+    bomOperationsRaw = await bomService.getItemOperations(null, wo.item_code);
+  } else {
+    // For FG, try to get SO-specific operations first
+    bomOperationsRaw = await bomService.getItemOperations(wo.sales_order_item_id, wo.item_code);
+  }
+  
+  if (bomOperationsRaw.length === 0) {
+    console.warn(`No operations found for item ${wo.item_code} in BOM`);
+    return;
+  }
+
+  // 4. Create Job Cards
+  for (const op of bomOperationsRaw) {
+    const [masterOps] = await connection.query(
+      'SELECT id FROM operations WHERE operation_name = ?',
+      [op.operation_name]
+    );
+    const [masterWs] = await connection.query(
+      'SELECT id FROM workstations WHERE workstation_name = ?',
+      [op.workstation]
+    );
+
+    const jcNo = await generateJobCardNo(connection);
+
+    await connection.execute(
+      `INSERT INTO job_cards 
+       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus]
+    );
+  }
+};
+
 const updateWorkOrderStatus = async (id, status) => {
-  await pool.execute('UPDATE work_orders SET status = ? WHERE id = ?', [status, id]);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    await connection.execute('UPDATE work_orders SET status = ? WHERE id = ?', [status, id]);
+
+    if (status === 'RELEASED') {
+      // Move any DRAFT job cards to PENDING
+      await connection.execute('UPDATE job_cards SET status = "PENDING" WHERE work_order_id = ? AND status = "DRAFT"', [id]);
+      
+      // Also ensure JCs exist (if they weren't created earlier for some reason)
+      await createJobCardsForWorkOrder(id, connection, 'PENDING');
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const generateWoNumber = async () => {

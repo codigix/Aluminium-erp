@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { 
+  ClipboardList, Activity, CheckCircle, TrendingUp, 
+  Play, Check, Edit2, Trash2, Search, Filter,
+  Clock, Package, User, Monitor, AlertCircle, ChevronDown, ChevronRight
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -15,6 +20,8 @@ const JobCard = () => {
   const [operations, setOperations] = useState([]);
   const [workstations, setWorkstations] = useState([]);
   const [previewDrawing, setPreviewDrawing] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedWOs, setExpandedWOs] = useState(new Set());
 
   const [formData, setFormData] = useState({
     jcNumber: '',
@@ -25,6 +32,21 @@ const JobCard = () => {
     plannedQty: 0,
     remarks: ''
   });
+
+  const calculateEfficiency = (jc) => {
+    if (!jc.start_time || jc.status === 'PENDING') return 0;
+    const startTime = new Date(jc.start_time);
+    const endTime = jc.end_time ? new Date(jc.end_time) : new Date();
+    const actualTimeMinutes = (endTime - startTime) / (1000 * 60);
+    if (actualTimeMinutes <= 0) return 0;
+    
+    let stdTimeInMinutes = parseFloat(jc.std_time || 0);
+    if (jc.time_uom === 'Hr') stdTimeInMinutes *= 60;
+    else if (jc.time_uom === 'Sec') stdTimeInMinutes /= 60;
+    
+    const totalStdTime = stdTimeInMinutes * parseFloat(jc.accepted_qty || 0);
+    return Math.round((totalStdTime / actualTimeMinutes) * 100);
+  };
 
   useEffect(() => {
     fetchJobCards();
@@ -42,6 +64,8 @@ const JobCard = () => {
       if (response.ok) {
         const data = await response.json();
         setJobCards(data);
+        // Start with all WOs collapsed by default
+        setExpandedWOs(new Set());
       }
     } catch (error) {
       console.error('Error fetching job cards:', error);
@@ -95,29 +119,74 @@ const JobCard = () => {
     }
   };
 
-  const handleWOSelect = (woId) => {
-    const wo = workOrders.find(w => w.id.toString() === woId);
-    setSelectedWO(wo);
-    setFormData(prev => ({ 
-      ...prev, 
-      workOrderId: woId, 
-      plannedQty: wo?.quantity || 0 
-    }));
+  const toggleWO = (woId) => {
+    const id = String(woId);
+    const newExpanded = new Set(expandedWOs);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedWOs(newExpanded);
   };
 
-  const handleOperationSelect = (opId) => {
-    const op = operations.find(o => o.id.toString() === opId);
-    setFormData(prev => ({ 
-      ...prev, 
-      operationId: opId, 
-      workstationId: op?.workstation_id || prev.workstationId 
-    }));
-  };
+  const filteredJobCards = useMemo(() => {
+    // Only show Job Cards for Assembly (FG)
+    const assemblyOnly = jobCards.filter(jc => jc.source_type === 'FG');
+    
+    if (!searchQuery) return assemblyOnly;
+    const query = searchQuery.toLowerCase();
+    return assemblyOnly.filter(jc => 
+      jc.jc_number?.toLowerCase().includes(query) ||
+      jc.wo_number?.toLowerCase().includes(query) ||
+      jc.operation_name?.toLowerCase().includes(query) ||
+      jc.operator_name?.toLowerCase().includes(query)
+    );
+  }, [jobCards, searchQuery]);
+
+  const groupedJobCards = useMemo(() => {
+    return filteredJobCards.reduce((acc, jc) => {
+      const woId = String(jc.work_order_id);
+      if (!acc[woId]) {
+        acc[woId] = {
+          id: woId,
+          wo_number: jc.wo_number,
+          item_name: jc.item_name,
+          priority: jc.priority,
+          wo_quantity: jc.wo_quantity,
+          wo_status: jc.wo_status,
+          wo_end_date: jc.wo_end_date,
+          cards: []
+        };
+      }
+      acc[woId].cards.push(jc);
+      return acc;
+    }, {});
+  }, [filteredJobCards]);
+
+  const stats = useMemo(() => {
+    const assemblyOnly = jobCards.filter(jc => jc.source_type === 'FG');
+    const total = assemblyOnly.length;
+    const inProduction = assemblyOnly.filter(jc => jc.status === 'IN_PROGRESS').length;
+    const completed = assemblyOnly.filter(jc => jc.status === 'COMPLETED').length;
+    const activeWOs = new Set(assemblyOnly.filter(jc => jc.status !== 'COMPLETED').map(jc => jc.work_order_id)).size;
+    const totalEfficiency = assemblyOnly.length > 0 
+      ? Math.round(assemblyOnly.reduce((acc, jc) => acc + calculateEfficiency(jc), 0) / assemblyOnly.length) 
+      : 0;
+
+    return [
+      { label: 'Total Operations', value: total, subValue: `${activeWOs} Active Work Orders`, icon: ClipboardList, color: 'indigo' },
+      { label: 'In Production', value: inProduction, subValue: '+12% Current Throughput', icon: Activity, color: 'amber' },
+      { label: 'Completed', value: completed, subValue: '+5% Finalized Today', icon: CheckCircle, color: 'emerald' },
+      { label: 'Efficiency', value: `${totalEfficiency}%`, subValue: 'Completion Rate', icon: TrendingUp, color: 'purple' }
+    ];
+  }, [jobCards]);
 
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [selectedJC, setSelectedJC] = useState(null);
   const [progressData, setProgressData] = useState({
     producedQty: 0,
+    acceptedQty: 0,
     rejectedQty: 0,
     remarks: ''
   });
@@ -126,6 +195,7 @@ const JobCard = () => {
     setSelectedJC(jc);
     setProgressData({
       producedQty: 0,
+      acceptedQty: 0,
       rejectedQty: 0,
       remarks: jc.remarks || ''
     });
@@ -161,21 +231,29 @@ const JobCard = () => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('authToken');
+      const payload = {
+        producedQty: parseFloat(selectedJC.produced_qty || 0) + parseFloat(progressData.producedQty),
+        acceptedQty: parseFloat(selectedJC.accepted_qty || 0) + parseFloat(progressData.acceptedQty),
+        rejectedQty: parseFloat(selectedJC.rejected_qty || 0) + parseFloat(progressData.rejectedQty),
+        remarks: progressData.remarks
+      };
+
+      if (progressData.markCompleted) {
+        payload.status = 'COMPLETED';
+        payload.endTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      }
+
       const response = await fetch(`${API_BASE}/job-cards/${selectedJC.id}/progress`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          producedQty: parseFloat(selectedJC.produced_qty || 0) + parseFloat(progressData.producedQty),
-          rejectedQty: parseFloat(selectedJC.rejected_qty || 0) + parseFloat(progressData.rejectedQty),
-          remarks: progressData.remarks
-        })
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
-        successToast('Progress logged successfully');
+        successToast(progressData.markCompleted ? 'Operation completed successfully' : 'Progress logged successfully');
         setIsProgressModalOpen(false);
         fetchJobCards();
       }
@@ -224,208 +302,294 @@ const JobCard = () => {
     }
   };
 
-  const columns = [
-    {
-      label: 'JC Number',
-      key: 'jc_number',
-      sortable: true,
-      render: (val, row) => <span className=" text-slate-900">{val || `JC-${row.id.toString().padStart(4, '0')}`}</span>
-    },
-    {
-      label: 'WO Reference',
-      key: 'wo_number',
-      sortable: true,
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-800">{val}</span>
-            <button 
-              onClick={() => setPreviewDrawing({
-                item_code: row.item_code,
-                description: row.description || row.wo_item_description
-              })}
-              className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-              title="Preview Drawing"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] p-6 space-y-6">
+      {/* Header Section */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100">
+            <ClipboardList className="w-6 h-6" />
           </div>
-          {row.item_status === 'Rejected' && (
-            <span className="w-fit px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 animate-pulse  border border-rose-200 mt-1">
-              Rejected Drawing
-            </span>
-          )}
-        </div>
-      )
-    },
-    {
-      label: 'Operation / Workstation',
-      key: 'operation_name',
-      sortable: true,
-      render: (val, row) => (
-        <div>
-          <div className=" text-indigo-600">{val || 'Manual Operation'}</div>
-          <div className="text-[10px] text-slate-500">{row.workstation_name || 'General Station'}</div>
-        </div>
-      )
-    },
-    {
-      label: 'Operator',
-      key: 'operator_name',
-      sortable: true,
-      render: (val, row) => <span className="text-slate-600 font-medium">{val || row.assigned_to || 'Unassigned'}</span>
-    },
-    {
-      label: 'Qty (P/A)',
-      key: 'planned_qty',
-      className: 'text-center',
-      render: (val, row) => (
-        <div className="flex flex-col items-center">
-          <div className=" text-slate-700">{val} / {row.produced_qty}</div>
-          <div className="w-24 bg-slate-100 rounded-full h-1 mt-1">
-            <div 
-              className="bg-indigo-500 h-1 rounded-full transition-all" 
-              style={{ width: `${Math.min(100, (row.produced_qty / val) * 100)}%` }}
-            ></div>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight text-[28px]">Job Cards</h1>
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full border border-indigo-100 uppercase tracking-wider">
+                Live Operations
+              </span>
+            </div>
+            <p className="text-slate-500 font-medium text-sm mt-1">
+              Manufacturing Intelligence <ChevronRight className="w-3 h-3 inline mx-1" /> <span className="text-indigo-600">Operational Controls</span>
+            </p>
           </div>
         </div>
-      )
-    },
-    {
-      label: 'Status',
-      key: 'status',
-      sortable: true,
-      render: (val) => <StatusBadge status={val} />
-    },
-    {
-      label: 'Actions',
-      key: 'id',
-      className: 'text-right',
-      render: (_, row) => (
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          {row.status === 'PENDING' && (
-            <button 
-              onClick={() => handleUpdateStatus(row.id, 'IN_PROGRESS')}
-              disabled={row.item_status === 'Rejected'}
-              className={`text-xs  px-2 py-1 rounded ${
-                row.item_status === 'Rejected' 
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                  : 'text-emerald-600 hover:text-emerald-900 hover:bg-emerald-50'
-              }`}
-            >
-              Start
-            </button>
-          )}
-          {row.status === 'IN_PROGRESS' && (
-            <>
-              <button 
-                onClick={() => handleLogProgress(row)}
-                className="text-indigo-600 hover:text-indigo-900 text-xs  px-2 py-1 rounded hover:bg-indigo-50"
-              >
-                Log
-              </button>
-              <button 
-                onClick={() => handleUpdateStatus(row.id, 'COMPLETED')}
-                className="text-amber-600 hover:text-amber-900 text-xs  px-2 py-1 rounded hover:bg-amber-50"
-              >
-                Done
-              </button>
-            </>
-          )}
-          <button className="p-1 text-slate-400 hover:text-slate-600">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-            </svg>
+        
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">System Status</span>
+            <span className="text-sm font-bold text-slate-900">{new Date().toLocaleTimeString()}</span>
+          </div>
+          <button className="flex items-center gap-2 px-4 py-2.5 text-rose-600 hover:bg-rose-50 rounded-xl transition-all font-bold text-sm">
+            <Trash2 className="w-4 h-4" />
+            Reset Queue
+          </button>
+          <button 
+            onClick={handleCreateNew}
+            className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-bold text-sm shadow-lg shadow-slate-200"
+          >
+            <Play className="w-4 h-4" />
+            Create Job Card
           </button>
         </div>
-      )
-    }
-  ];
+      </div>
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl text-slate-900">Job Cards</h2>
-          <p className="text-sm text-slate-500">Track individual operations and shop floor activities</p>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {stats.map((stat, i) => (
+          <Card key={i} className="border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-all">
+            <div className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
+                </div>
+                <p className="text-[10px] font-medium text-slate-400 mt-1">
+                  {stat.subValue}
+                </p>
+              </div>
+              <div className={`w-14 h-14 bg-${stat.color}-50 text-${stat.color}-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                <stat.icon className="w-7 h-7" />
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Search by Work Order ID or Item name..."
+            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
-        <button 
-          onClick={handleCreateNew}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-          </svg>
-          New Job Card
+        <button className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
+          <Filter className="w-4 h-4" />
+          All Operational States
+          <ChevronDown className="w-4 h-4 ml-2" />
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium  tracking-wider">Active Jobs</p>
-            <p className="text-xl text-slate-900 mt-1">{jobCards.filter(jc => jc.status === 'IN_PROGRESS').length}</p>
-          </div>
-        </Card>
-        <Card>
-          <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium  tracking-wider">Pending</p>
-            <p className="text-2xl  text-amber-600 mt-1">
-              {jobCards.filter(jc => jc.status === 'PENDING').length}
-            </p>
-          </div>
-        </Card>
-        <Card>
-          <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium  tracking-wider">Completed</p>
-            <p className="text-2xl  text-emerald-600 mt-1">
-              {jobCards.filter(jc => jc.status === 'COMPLETED').length}
-            </p>
-          </div>
-        </Card>
-        <Card>
-          <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium  tracking-wider">Average Progress</p>
-            <p className="text-2xl  text-indigo-600 mt-1">
-              {jobCards.length ? Math.round(jobCards.reduce((acc, jc) => acc + (jc.produced_qty / jc.planned_qty), 0) / jobCards.length * 100) : 0}%
-            </p>
-          </div>
-        </Card>
+      {/* Grouped Content */}
+      <div className="space-y-6">
+        {Object.values(groupedJobCards).map((group) => {
+          const isExpanded = expandedWOs.has(String(group.id));
+          return (
+            <div key={group.id} className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+              {/* Group Header */}
+              <div 
+                className={`px-8 py-6 flex items-center justify-between cursor-pointer group transition-colors ${
+                  isExpanded ? 'bg-slate-50/50 border-b border-slate-100' : 'hover:bg-slate-50'
+                }`}
+                onClick={() => toggleWO(group.id)}
+              >
+                <div className="flex items-center gap-5">
+                  <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100 group-hover:scale-110 transition-all">
+                    <Package className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="text-lg font-bold text-slate-900">{group.item_name || 'Project Item'}</h3>
+                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider border ${
+                        group.wo_status === 'RELEASED' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                        group.wo_status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                        group.wo_status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                        'bg-white text-slate-500 border-slate-200'
+                      }`}>
+                        {group.wo_status || 'draft'}
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{group.wo_number}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-12">
+                  <div className="hidden md:block">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Priority Level</p>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      group.priority === 'HIGH' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                      'bg-amber-50 text-amber-600 border border-amber-100'
+                    }`}>
+                      {group.priority || 'medium'}
+                    </span>
+                  </div>
+                  <div className="hidden sm:block">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Quantity</p>
+                    <p className="text-sm font-bold text-slate-900">{group.wo_quantity} <span className="text-slate-400 font-medium">Units</span></p>
+                  </div>
+                  <div className="hidden lg:block">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Scheduled End</p>
+                    <div className="flex items-center gap-2 text-indigo-600">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-sm font-bold">
+                        {group.wo_end_date ? new Date(group.wo_end_date).toLocaleDateString() : '-'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={`p-2 rounded-xl bg-indigo-50 text-indigo-600 transition-transform ${isExpanded ? 'rotate-180' : 'rotate-0'}`}>
+                    <ChevronDown className="w-5 h-5" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Operations List */}
+              {isExpanded && (
+                <div className="p-8 pt-0 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="grid grid-cols-12 px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <div className="col-span-4">Operational Phase</div>
+                    <div className="col-span-2">Assignment</div>
+                    <div className="col-span-2">Status</div>
+                    <div className="col-span-2">Metrics</div>
+                    <div className="col-span-2 text-right pr-4">Action</div>
+                  </div>
+
+                  {group.cards.map((jc) => {
+                    const efficiency = calculateEfficiency(jc);
+                    return (
+                      <div key={jc.id} className="grid grid-cols-12 items-center bg-slate-50/30 hover:bg-slate-50 border border-slate-100/50 rounded-2xl p-6 transition-all group/row">
+                        {/* Operation Name */}
+                        <div className="col-span-4 flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                            jc.status === 'IN_PROGRESS' ? 'bg-indigo-100 text-indigo-600 animate-pulse' : 
+                            jc.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' : 'bg-white text-slate-400 border border-slate-200'
+                          }`}>
+                            <Activity className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900 group-hover/row:text-indigo-600 transition-colors">
+                              {jc.operation_name}
+                            </h4>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                              {jc.job_card_no || `JC-${jc.id.toString().padStart(4, '0')}`}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Assignment */}
+                        <div className="col-span-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <User className="w-3 h-3 text-slate-400" />
+                            <span className="text-xs font-bold text-slate-600">
+                              {jc.operator_name || 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Monitor className="w-3 h-3 text-slate-400" />
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {jc.workstation_name || 'Unassigned'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Status */}
+                        <div className="col-span-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-1.5 h-1.5 rounded-full ${
+                              jc.status === 'IN_PROGRESS' ? 'bg-indigo-500 animate-pulse' :
+                              jc.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-slate-300'
+                            }`}></div>
+                            <span className="px-2 py-0.5 bg-white text-slate-500 text-[10px] font-bold rounded uppercase tracking-wider border border-slate-200">
+                              {jc.status?.toLowerCase() || 'draft'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Metrics */}
+                        <div className="col-span-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Efficiency</span>
+                            <span className={`text-[10px] font-bold ${efficiency >= 80 ? 'text-emerald-500' : efficiency >= 50 ? 'text-amber-500' : 'text-slate-400'}`}>
+                              {efficiency}%
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-xs font-bold text-slate-900">{parseFloat(jc.produced_qty || 0).toFixed(2)}</span>
+                            <span className="text-[10px] font-medium text-slate-400">/ {parseFloat(jc.planned_qty || 0).toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="col-span-2 flex items-center justify-end gap-2">
+                          {jc.status === 'PENDING' && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleUpdateStatus(jc.id, 'IN_PROGRESS'); }}
+                              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all font-bold text-xs group/btn shadow-sm"
+                            >
+                              <Play className="w-3.5 h-3.5 group-hover/btn:fill-current" />
+                              Start
+                            </button>
+                          )}
+                          {jc.status === 'IN_PROGRESS' && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleLogProgress(jc); }}
+                              className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all font-bold text-xs group/btn shadow-sm"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              Update
+                            </button>
+                          )}
+                          <button 
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <Card>
-        <DataTable 
-          columns={columns}
-          data={jobCards}
-          loading={loading}
-          searchPlaceholder="Search job cards, operators, operations..."
-        />
-      </Card>
-
+      {/* Existing Modals */}
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         title="Create Job Card"
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-6 p-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormControl label="Job Card Number">
               <input 
                 type="text" 
                 value={formData.jcNumber} 
                 disabled 
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm  text-slate-600"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-400 uppercase tracking-widest cursor-not-allowed"
               />
             </FormControl>
-            <FormControl label="Work Order">
+            <FormControl label="Work Order" required>
               <select 
                 value={formData.workOrderId} 
-                onChange={(e) => handleWOSelect(e.target.value)}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
-                required
+                onChange={(e) => {
+                  const wo = workOrders.find(w => String(w.id) === e.target.value);
+                  setSelectedWO(wo);
+                  setFormData(prev => ({ ...prev, workOrderId: e.target.value, plannedQty: wo?.quantity || 0 }));
+                }}
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
               >
                 <option value="">Select Work Order</option>
                 {workOrders.map(wo => (
@@ -435,13 +599,15 @@ const JobCard = () => {
             </FormControl>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormControl label="Operation">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormControl label="Operation" required>
               <select 
                 value={formData.operationId}
-                onChange={(e) => handleOperationSelect(e.target.value)}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
-                required
+                onChange={(e) => {
+                  const op = operations.find(o => String(o.id) === e.target.value);
+                  setFormData(prev => ({ ...prev, operationId: e.target.value, workstationId: op?.workstation_id || prev.workstationId }));
+                }}
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
               >
                 <option value="">Select Operation</option>
                 {operations.map(op => (
@@ -453,7 +619,7 @@ const JobCard = () => {
               <select 
                 value={formData.workstationId}
                 onChange={(e) => setFormData(prev => ({ ...prev, workstationId: e.target.value }))}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
               >
                 <option value="">Select Workstation</option>
                 {workstations.map(ws => (
@@ -463,52 +629,51 @@ const JobCard = () => {
             </FormControl>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormControl label="Operator Name">
               <input 
                 type="text" 
                 value={formData.assignedTo}
                 onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                placeholder="Person assigned..."
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="Search Operator..."
               />
             </FormControl>
-            <FormControl label="Planned Quantity">
-              <input 
-                type="number" 
-                value={formData.plannedQty}
-                onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                required
-              />
-            </FormControl>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-            <FormControl label="Remarks">
-              <input 
-                type="text" 
-                value={formData.remarks}
-                onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                placeholder="Job instructions..."
-              />
+            <FormControl label="Planned Quantity" required>
+              <div className="relative">
+                <input 
+                  type="number" 
+                  value={formData.plannedQty}
+                  onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
+                  className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unit</span>
+              </div>
             </FormControl>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <FormControl label="Job Remarks">
+            <textarea 
+              value={formData.remarks}
+              onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none h-24"
+              placeholder="Enter specific instructions for the operator..."
+            />
+          </FormControl>
+
+          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
             <button 
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
+              className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors uppercase tracking-widest"
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm"
+              className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-sm shadow-lg shadow-indigo-100 uppercase tracking-widest"
             >
-              Create Job Card
+              Initialize Job Card
             </button>
           </div>
         </form>
@@ -517,64 +682,99 @@ const JobCard = () => {
       <Modal
         isOpen={isProgressModalOpen}
         onClose={() => setIsProgressModalOpen(false)}
-        title={`Log Progress - ${selectedJC?.jc_number || 'Job Card'}`}
+        title={`Execution Update - ${selectedJC?.jc_number}`}
       >
-        <form onSubmit={submitProgress} className="space-y-4">
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
-            <div className="flex justify-between text-xs font-medium text-slate-500  tracking-wider mb-2">
+        <form onSubmit={submitProgress} className="space-y-6 p-2">
+          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+            <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">
               <span>Operation: {selectedJC?.operation_name}</span>
-              <span>Planned: {selectedJC?.planned_qty}</span>
+              <span>Work Order: {selectedJC?.wo_number}</span>
             </div>
-            <div className="flex justify-between text-sm  text-slate-700">
-              <span>Produced: {selectedJC?.produced_qty}</span>
-              <span>Rejected: {selectedJC?.rejected_qty}</span>
+            <div className="grid grid-cols-2 gap-8">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Target Quantity</p>
+                <p className="text-xl font-bold text-slate-900">{selectedJC?.planned_qty} <span className="text-xs text-slate-400 font-medium tracking-normal uppercase">Units</span></p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Completed So Far</p>
+                <p className="text-xl font-bold text-emerald-600">{(selectedJC?.produced_qty || 0).toFixed(2)}</p>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormControl label="Produced Quantity">
-              <input
-                type="number"
-                step="0.001"
-                value={progressData.producedQty}
-                onChange={(e) => setProgressData(prev => ({ ...prev, producedQty: e.target.value }))}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                required
-              />
+          <div className="grid grid-cols-3 gap-6">
+            <FormControl label="Produced" required>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.001"
+                  value={progressData.producedQty}
+                  onChange={(e) => setProgressData(prev => ({ ...prev, producedQty: e.target.value }))}
+                  className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">TOTAL</span>
+              </div>
             </FormControl>
-            <FormControl label="Rejected Quantity">
-              <input
-                type="number"
-                step="0.001"
-                value={progressData.rejectedQty}
-                onChange={(e) => setProgressData(prev => ({ ...prev, rejectedQty: e.target.value }))}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
-              />
+            <FormControl label="Accepted" required>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.001"
+                  value={progressData.acceptedQty}
+                  onChange={(e) => setProgressData(prev => ({ ...prev, acceptedQty: e.target.value }))}
+                  className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-emerald-600 focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-500">GOOD</span>
+              </div>
+            </FormControl>
+            <FormControl label="Rejected">
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.001"
+                  value={progressData.rejectedQty}
+                  onChange={(e) => setProgressData(prev => ({ ...prev, rejectedQty: e.target.value }))}
+                  className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-rose-600 focus:ring-2 focus:ring-rose-500 outline-none"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-rose-500">FAIL</span>
+              </div>
             </FormControl>
           </div>
 
-          <FormControl label="Remarks / Notes">
+          <FormControl label="Production Notes">
             <textarea
               value={progressData.remarks}
               onChange={(e) => setProgressData(prev => ({ ...prev, remarks: e.target.value }))}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm w-full h-24"
-              placeholder="Any issues or notes from the floor..."
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none h-32"
+              placeholder="Report any downtime or quality observations..."
             ></textarea>
           </FormControl>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex items-center gap-3 p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+            <input 
+              type="checkbox" 
+              id="markCompleted"
+              className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              onChange={(e) => setProgressData(prev => ({ ...prev, markCompleted: e.target.checked }))}
+            />
+            <label htmlFor="markCompleted" className="text-sm font-bold text-indigo-900 cursor-pointer">
+              Mark this operation as COMPLETED
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsProgressModalOpen(false)}
-              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
+              className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors uppercase tracking-widest"
             >
-              Cancel
+              Dismiss
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm"
+              className="px-8 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-bold text-sm shadow-lg shadow-slate-200 uppercase tracking-widest"
             >
-              Log Progress
+              Post Update
             </button>
           </div>
         </form>
@@ -590,4 +790,5 @@ const JobCard = () => {
 };
 
 export default JobCard;
+
 

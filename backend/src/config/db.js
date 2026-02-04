@@ -1122,16 +1122,18 @@ const ensureWorkOrderTables = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS job_cards (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        job_card_no VARCHAR(50) UNIQUE,
         work_order_id INT NOT NULL,
         operation_id INT,
         workstation_id INT,
         assigned_to INT,
         planned_qty DECIMAL(12, 3),
         produced_qty DECIMAL(12, 3) DEFAULT 0,
+        accepted_qty DECIMAL(12, 3) DEFAULT 0,
         rejected_qty DECIMAL(12, 3) DEFAULT 0,
         start_time TIMESTAMP NULL,
         end_time TIMESTAMP NULL,
-        status ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'PENDING',
+        status ENUM('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT',
         remarks TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1141,6 +1143,15 @@ const ensureWorkOrderTables = async () => {
         FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
+
+    // Ensure missing columns and status enum in job_cards
+    const [jcCols] = await connection.query('SHOW COLUMNS FROM job_cards');
+    const existingJcCols = new Set(jcCols.map(c => c.Field));
+    if (!existingJcCols.has('job_card_no')) await connection.query('ALTER TABLE job_cards ADD COLUMN job_card_no VARCHAR(50) UNIQUE AFTER id');
+    if (!existingJcCols.has('accepted_qty')) await connection.query('ALTER TABLE job_cards ADD COLUMN accepted_qty DECIMAL(12, 3) DEFAULT 0 AFTER produced_qty');
+    
+    // Update status enum if necessary
+    await connection.query("ALTER TABLE job_cards MODIFY COLUMN status ENUM('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT'");
 
     console.log('Work Order and Job Card tables synchronized');
 
