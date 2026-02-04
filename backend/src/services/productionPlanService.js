@@ -217,77 +217,106 @@ const generatePlanCode = async () => {
 };
 
 const getItemBOMDetails = async (salesOrderItemId) => {
-  // Fetch the item details first to get item_code and drawing_no
+  // Fetch the item details first - expand item_type to include SA/SFG/FG
   const [items] = await pool.query(
-    'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ? AND item_type IN ("FG", "SFG")',
+    'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ? AND item_type IN ("FG", "SFG", "SA")',
     [salesOrderItemId]
   );
 
   if (items.length === 0) return null;
   const item = items[0];
 
-  // 1. Fetch ALL materials, components, and operations for this sales_order_item_id
-  const [allMaterials] = await pool.query(
-    'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-    [salesOrderItemId]
-  );
-  const [allComponents] = await pool.query(
-    'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-    [salesOrderItemId]
-  );
-  const [allOperations] = await pool.query(
-    'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-    [salesOrderItemId]
-  );
+  // Helper function to recursively fetch BOM details
+  const fetchRecursiveBOM = async (itemCode, drawingNo, soItemId = null, parentId = null) => {
+    let materials = [];
+    let components = [];
+    let operations = [];
 
-  // If no data found by sales_order_item_id, fallback to Master BOM by item_code or drawing_no
-  if (allMaterials.length === 0 && allComponents.length === 0 && allOperations.length === 0) {
-    const fallbackMaterials = await bomService.getItemMaterials(null, item.item_code, item.drawing_no);
-    const fallbackComponents = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
-    const fallbackOperations = await bomService.getItemOperations(null, item.item_code, item.drawing_no);
+    // 1. Try to fetch SO-specific data if soItemId is provided
+    if (soItemId) {
+      const [soMaterials] = await pool.query(
+        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? AND parent_id <=> ?',
+        [soItemId, parentId]
+      );
+      const [soComponents] = await pool.query(
+        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? AND parent_id <=> ?',
+        [soItemId, parentId]
+      );
+      
+      materials = soMaterials;
+      components = soComponents;
 
-    // If Master BOM found, we need to build a tree from it
-    // But for simplicity and to match user expectation, we return the top-level
-    // and build the tree using a recursive helper if needed.
-    
-    const buildTree = (materials, components, operations, parentId = null) => {
-      const levelMaterials = materials.filter(m => String(m.parent_id) === String(parentId));
-      const levelComponents = components.filter(c => String(c.parent_id) === String(parentId));
-      const levelOperations = operations; // Operations usually apply to the whole item or are top-level
+      // Operations are usually top-level
+      if (parentId === null) {
+        const [soOperations] = await pool.query(
+          'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ?',
+          [soItemId]
+        );
+        operations = soOperations;
+      }
+    }
 
-      const treeComponents = levelComponents.map(comp => ({
-        ...comp,
-        ...buildTree(materials, components, operations, comp.id)
-      }));
+    // 2. Fallback to Master BOM for missing parts
+    // We check materials and components independently to avoid one blocking the other's fallback
+    if (materials.length === 0 || components.length === 0 || (parentId === null && operations.length === 0)) {
+      const masterMaterials = await bomService.getItemMaterials(null, itemCode, drawingNo);
+      const masterComponents = await bomService.getItemComponents(null, itemCode, drawingNo);
+      
+      // If we are at the top level of a standalone item BOM call, parent_id must be null
+      // If we are recursing within a Master BOM identity, we use parentId
+      const targetParentId = soItemId ? (parentId || null) : (parentId || null);
 
+      if (materials.length === 0) {
+        materials = masterMaterials.filter(m => m.parent_id === targetParentId);
+      }
+      if (components.length === 0) {
+        components = masterComponents.filter(c => c.parent_id === targetParentId);
+      }
+      if (operations.length === 0) {
+        operations = await bomService.getItemOperations(null, itemCode, drawingNo);
+      }
+    }
+
+    // 3. Recursively resolve components
+    const resolvedComponents = await Promise.all(components.map(async (comp) => {
+      // Logic for determining if this component should be exploded
+      const isSubAssembly = comp.component_code && (
+        comp.component_code.startsWith('FG-') || 
+        comp.component_code.startsWith('SA-') || 
+        comp.component_code.startsWith('SFG-') || 
+        comp.component_code.startsWith('RM-PANEL') ||
+        comp.drawing_no
+      );
+
+      if (isSubAssembly) {
+        // If this component came from a Master BOM (no sales_order_item_id),
+        // we must stay in Master BOM context for its children or reset context for its own BOM
+        const nextSoItemId = comp.sales_order_item_id ? soItemId : null;
+        
+        // We pass comp.id if we want children of this record in the same BOM
+        // BUT if it's a standalone assembly, its materials are usually at its own top level (parent_id null)
+        // Our fetchRecursiveBOM fallback handles this by checking masterMaterials for itemCode
+        const subDetails = await fetchRecursiveBOM(comp.component_code, comp.drawing_no, nextSoItemId, comp.id);
+        
+        return {
+          ...comp,
+          materials: subDetails.materials,
+          components: subDetails.components,
+          operations: subDetails.operations
+        };
+      }
       return {
-        materials: levelMaterials,
-        components: treeComponents,
-        operations: parentId === null ? levelOperations : [] // Only return operations at top level for now
+        ...comp,
+        materials: [],
+        components: [],
+        operations: []
       };
-    };
-
-    return buildTree(fallbackMaterials, fallbackComponents, fallbackOperations, null);
-  }
-
-  // 2. Build tree from SO-specific data
-  const buildTree = (materials, components, operations, parentId = null) => {
-    const levelMaterials = materials.filter(m => String(m.parent_id) === String(parentId));
-    const levelComponents = components.filter(c => String(c.parent_id) === String(parentId));
-    
-    const treeComponents = levelComponents.map(comp => ({
-      ...comp,
-      ...buildTree(materials, components, operations, comp.id)
     }));
 
-    return {
-      materials: levelMaterials,
-      components: treeComponents,
-      operations: parentId === null ? operations : []
-    };
+    return { materials, components: resolvedComponents, operations };
   };
 
-  return buildTree(allMaterials, allComponents, allOperations, null);
+  return fetchRecursiveBOM(item.item_code, item.drawing_no, salesOrderItemId, null);
 };
 
 module.exports = {
