@@ -227,6 +227,17 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       items, subAssemblies, materials, operations 
     } = planData;
 
+    // Rule: Production Plan cannot complete until all Work Orders are Completed
+    if (status === 'COMPLETED') {
+      const [pendingWOs] = await connection.query(
+        'SELECT wo_number FROM work_orders WHERE plan_id = ? AND status != "COMPLETED"',
+        [planId]
+      );
+      if (pendingWOs.length > 0) {
+        throw new Error(`Cannot complete Production Plan. Some Work Orders are not yet completed: ${pendingWOs.map(wo => wo.wo_number).join(', ')}`);
+      }
+    }
+
     const safeStartDate = startDate || null;
     const safeEndDate = endDate || null;
 

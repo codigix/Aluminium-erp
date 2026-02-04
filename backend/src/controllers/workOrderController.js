@@ -38,9 +38,23 @@ const getNextWoNumber = async (req, res) => {
   }
 };
 
+const createWorkOrdersFromPlan = async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const workOrderIds = await workOrderService.createWorkOrdersFromPlan(planId);
+    res.status(201).json({ 
+      message: `${workOrderIds.length} work orders created successfully`,
+      workOrderIds 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listWorkOrders,
   createWorkOrder,
+  createWorkOrdersFromPlan,
   updateStatus,
   getNextWoNumber
 };

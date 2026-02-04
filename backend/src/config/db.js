@@ -1082,23 +1082,42 @@ const ensureWorkOrderTables = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         wo_number VARCHAR(50) UNIQUE NOT NULL,
         production_plan_item_id INT,
-        sales_order_id INT NOT NULL,
-        sales_order_item_id INT NOT NULL,
+        plan_id INT,
+        sales_order_id INT,
+        sales_order_item_id INT,
+        item_code VARCHAR(120),
+        item_name VARCHAR(255),
+        bom_no VARCHAR(100),
+        source_type ENUM('FG', 'SA') DEFAULT 'FG',
         workstation_id INT,
         quantity DECIMAL(12, 3) NOT NULL,
         start_date DATE,
         end_date DATE,
         priority ENUM('LOW', 'NORMAL', 'HIGH', 'URGENT') DEFAULT 'NORMAL',
-        status ENUM('RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED') DEFAULT 'RELEASED',
+        status ENUM('DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED') DEFAULT 'DRAFT',
         remarks TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (production_plan_item_id) REFERENCES production_plan_items(id) ON DELETE SET NULL,
+        FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE SET NULL,
         FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE SET NULL,
         FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL
       )
     `);
+
+    // Ensure missing columns in work_orders
+    const [woCols] = await connection.query('SHOW COLUMNS FROM work_orders');
+    const existingWoCols = new Set(woCols.map(c => c.Field));
+    if (!existingWoCols.has('plan_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN plan_id INT AFTER production_plan_item_id');
+    if (!existingWoCols.has('item_code')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_code VARCHAR(120) AFTER sales_order_item_id');
+    if (!existingWoCols.has('item_name')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_name VARCHAR(255) AFTER item_code');
+    if (!existingWoCols.has('bom_no')) await connection.query('ALTER TABLE work_orders ADD COLUMN bom_no VARCHAR(100) AFTER item_name');
+    if (!existingWoCols.has('source_type')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_type ENUM("FG", "SA") DEFAULT "FG" AFTER bom_no');
+    
+    // Update status enum and make sales_order_item_id nullable
+    await connection.query("ALTER TABLE work_orders MODIFY COLUMN sales_order_item_id INT NULL");
+    await connection.query("ALTER TABLE work_orders MODIFY COLUMN status ENUM('DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED') DEFAULT 'DRAFT'");
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS job_cards (

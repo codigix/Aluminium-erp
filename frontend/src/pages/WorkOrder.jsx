@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { 
+  FileText, Edit2, Trash2, Activity, Clock, 
+  AlertCircle, CheckCircle2, MoreVertical, Search, Filter, Plus
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
 
@@ -14,6 +19,7 @@ const formatDisplayDate = value => {
 };
 
 const WorkOrder = () => {
+  const navigate = useNavigate();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -255,65 +261,203 @@ const WorkOrder = () => {
     }
   ];
 
+  const handleDelete = async (id) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Delete Work Order?',
+        text: "This action cannot be undone.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/work-orders/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          successToast('Work Order deleted');
+          fetchWorkOrders();
+        } else {
+          errorToast('Failed to delete');
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl text-slate-900">Work Orders</h2>
-          <p className="text-sm text-slate-500">Manage manufacturing orders and production progress</p>
+    <div className="min-h-screen bg-slate-50/50 p-6">
+      {/* Header Section */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Active Work Orders</h1>
+            <p className="text-slate-500 text-sm font-medium mt-1">Real-time production tracking</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-bold uppercase tracking-wider">{workOrders.length} Orders Active</span>
+            </div>
+            <button 
+              onClick={handleCreateNew}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-sm hover:shadow-indigo-100"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-sm font-bold">New Work Order</span>
+            </button>
+          </div>
         </div>
-        <button 
-          onClick={handleCreateNew}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-          </svg>
-          Create Work Order
-        </button>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-white">
-          <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium  tracking-wider">Total Active</p>
-            <p className="text-xl text-slate-900 mt-1">{workOrders.length}</p>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          {[
+            { label: 'Total Orders', value: workOrders.length, icon: FileText, color: 'indigo' },
+            { label: 'In Progress', value: workOrders.filter(w => w.status === 'IN_PROGRESS').length, icon: Activity, color: 'blue' },
+            { label: 'Pending', value: workOrders.filter(w => w.status === 'DRAFT' || w.status === 'RELEASED').length, icon: Clock, color: 'amber' },
+            { label: 'Completed', value: workOrders.filter(w => w.status === 'COMPLETED').length, icon: CheckCircle2, color: 'emerald' }
+          ].map((stat, i) => (
+            <Card key={i} className="border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-all">
+              <div className="p-5 flex items-center gap-4">
+                <div className={`w-12 h-12 bg-${stat.color}-50 text-${stat.color}-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                  <stat.icon className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</p>
+                  <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Work Orders List */}
+        <Card className="border-none shadow-sm bg-white rounded-3xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50/50 border-b border-slate-100">
+                <tr>
+                  <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Order Identity</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status & Priority</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Progress</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {workOrders.map((wo) => (
+                  <tr key={wo.id} className="group hover:bg-slate-50/30 transition-colors">
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900 tracking-tight">{wo.wo_number}</div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                              {new Date(wo.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div>
+                        <div className="text-sm font-bold text-slate-800 tracking-tight">{wo.item_name || wo.item_code}</div>
+                        <div className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                          BOM-{wo.bom_no || 'NA'}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded w-fit uppercase tracking-tighter">
+                          <Clock className="w-3 h-3" />
+                          {wo.status?.toLowerCase() || 'draft'}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-2 h-2 rounded-full ${
+                            wo.priority === 'HIGH' ? 'bg-rose-500' : 
+                            wo.priority === 'URGENT' ? 'bg-purple-500' : 'bg-amber-500'
+                          }`}></div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                            {wo.priority?.toLowerCase() || 'medium'} priority
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="max-w-[120px] mx-auto">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-bold text-slate-900">
+                            {wo.completed_job_cards || 0} / <span className="text-slate-400 font-medium">
+                              {Math.round(((wo.completed_job_cards || 0) / (wo.total_job_cards || 1)) * 100)}%
+                            </span>
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+                            style={{ width: `${Math.round(((wo.completed_job_cards || 0) / (wo.total_job_cards || 1)) * 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
+                          <Activity className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(wo.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {workOrders.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded-2xl flex items-center justify-center">
+                          <FileText className="w-6 h-6" />
+                        </div>
+                        <p className="text-slate-400 text-sm italic font-medium">No manufacturing sequences found</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </Card>
-        <Card>
-          <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium  tracking-wider">In Progress</p>
-            <p className="text-2xl  text-blue-600 mt-1">
-              {workOrders.filter(wo => wo.status === 'IN_PROGRESS').length}
-            </p>
-          </div>
-        </Card>
-        <Card>
-          <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium  tracking-wider">Completed</p>
-            <p className="text-2xl  text-emerald-600 mt-1">
-              {workOrders.filter(wo => wo.status === 'COMPLETED').length}
-            </p>
-          </div>
-        </Card>
-        <Card>
-          <div className="p-4">
-            <p className="text-xs text-slate-500 font-medium  tracking-wider">Pending</p>
-            <p className="text-2xl  text-amber-600 mt-1">
-              {workOrders.filter(wo => wo.status === 'CREATED').length}
-            </p>
+          
+          {/* Pagination Footer */}
+          <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Showing {workOrders.length} manufacturing sequences
+            </span>
+            <div className="flex items-center gap-2">
+              <button className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">Previous</button>
+              <button className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-900 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-colors">Next</button>
+            </div>
           </div>
         </Card>
       </div>
-
-      <Card>
-        <DataTable 
-          columns={columns}
-          data={workOrders}
-          loading={loading}
-          searchPlaceholder="Search work orders, items, projects..."
-        />
-      </Card>
 
       <Modal 
         isOpen={isModalOpen} 

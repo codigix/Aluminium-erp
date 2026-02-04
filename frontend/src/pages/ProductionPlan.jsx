@@ -178,6 +178,42 @@ const ProductionPlan = () => {
     }
   };
 
+  const handleCreateWorkOrders = async (planId) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Create Work Orders?',
+        text: "This will generate work orders for all finished goods and sub-assemblies in this plan.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, create them!',
+        cancelButtonText: 'Cancel'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/work-orders/create-from-plan/${planId}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          successToast(data.message || 'Work orders created successfully');
+          // Refresh plan details to show updated status
+          handleViewPlan(planId);
+        } else {
+          const error = await response.json();
+          errorToast(error.error || 'Failed to create work orders');
+        }
+      }
+    } catch (error) {
+      console.error('Error creating work orders:', error);
+      errorToast('An unexpected error occurred');
+    }
+  };
+
   const handleCreateNew = () => {
     fetchReadyItems();
     fetchReadyOrders();
@@ -715,7 +751,16 @@ const ProductionPlan = () => {
               )}
             </button>
           ))}
-          <div className="ml-auto">
+          <div className="ml-auto flex gap-3">
+            {isViewing && newPlan.operationalStatus !== 'Completed' && (
+              <button 
+                onClick={() => handleCreateWorkOrders(newPlan.id)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-xs font-semibold transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Work Orders
+              </button>
+            )}
             <button className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 text-xs font-semibold transition-colors shadow-sm">
               Production Progress
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
