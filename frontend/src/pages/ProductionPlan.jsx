@@ -616,7 +616,7 @@ const ProductionPlan = () => {
           ...op,
           operation_name: op.operation_name || op.name,
           workstation: op.workstation || op.workstation_name,
-          base_hour: op.base_hour || op.base_time,
+          base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0'),
           itemCode: op.itemCode || op.source_item
         }))
       : [
@@ -625,13 +625,13 @@ const ProductionPlan = () => {
             itemCode: item.itemCode,
             operation_name: op.operation_name || op.name,
             workstation: op.workstation || op.workstation_name,
-            base_hour: op.base_hour || op.base_time
+            base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0')
           }))),
           ...explodedOperations.map(op => ({
             ...op,
             operation_name: op.operation_name || op.name,
             workstation: op.workstation || op.workstation_name,
-            base_hour: op.base_hour || op.base_time
+            base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0')
           }))
         ];
 
@@ -1287,6 +1287,7 @@ const ProductionPlan = () => {
 
       const payload = {
         ...newPlan,
+        targetQty: newPlan.targetQuantity || 0,
         planDate: newPlan.planDate || today,
         startDate: newPlan.startDate || null,
         endDate: newPlan.endDate || null,
@@ -1324,7 +1325,7 @@ const ProductionPlan = () => {
           ...op,
           step: (idx + 1).toString().padStart(2, '0'),
           operationName: op.operation_name || null,
-          baseTime: op.base_hour || op.baseTime || 0,
+          baseTime: op.base_hour ?? op.baseTime ?? 0,
           sourceItem: op.itemCode || op.source_item || null
         }))
       };

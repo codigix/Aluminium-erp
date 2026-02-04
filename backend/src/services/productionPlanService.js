@@ -82,7 +82,7 @@ const createProductionPlan = async (planData, createdBy) => {
 
     const { 
       planCode, planDate, startDate, endDate, remarks, 
-      salesOrderId, bomNo, targetQty, namingSeries,
+      salesOrderId, bomNo, targetQty, targetQuantity, namingSeries,
       finishedGoods, subAssemblies, materials, operations 
     } = planData;
 
@@ -105,7 +105,7 @@ const createProductionPlan = async (planData, createdBy) => {
         remarks || null, 
         salesOrderId || null, 
         bomNo || null, 
-        targetQty || 0, 
+        targetQty || targetQuantity || 0, 
         namingSeries || 'PP',
         createdBy || null
       ]
@@ -199,8 +199,8 @@ const createProductionPlan = async (planData, createdBy) => {
             op.step || op.stepNo || 0,
             op.operationName || null,
             op.workstation || null,
-            op.baseTime || 0,
-            op.sourceItem || null
+            op.baseTime || op.base_time || 0,
+            op.sourceItem || op.source_item || null
           ]
         );
       }
@@ -223,7 +223,7 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
 
     const { 
       planDate, startDate, endDate, remarks, 
-      targetQty, namingSeries, status,
+      targetQty, targetQuantity, namingSeries, status,
       items, subAssemblies, materials, operations 
     } = planData;
 
@@ -238,7 +238,7 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       WHERE id = ?`,
       [
         planDate, safeStartDate, safeEndDate, remarks, 
-        targetQty || 0, namingSeries || 'PP', status || 'DRAFT',
+        targetQty || targetQuantity || 0, namingSeries || 'PP', status || 'DRAFT',
         planId
       ]
     );
@@ -309,7 +309,7 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
             mat.warehouse || null,
             mat.bomRef || null,
             mat.sourceAssembly || null,
-            mat.materialCategory || mat.material_category || 'CORE',
+            mat.materialCategory || mat.material_category || mat.category || 'CORE',
             mat.status || '--'
           ]
         );
