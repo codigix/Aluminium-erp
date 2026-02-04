@@ -113,9 +113,32 @@ const deleteDesignOrder = async (designOrderId) => {
   await pool.execute('DELETE FROM design_orders WHERE id = ?', [designOrderId]);
 };
 
+const getDesignOrderItemsBySalesOrder = async (salesOrderId) => {
+  const [rows] = await pool.query(`
+    SELECT 
+      soi.item_code,
+      soi.id as item_id,
+      soi.drawing_no,
+      soi.description,
+      COALESCE(
+        poi.quantity, 
+        (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+        soi.quantity
+      ) as qty
+    FROM sales_order_items soi
+    JOIN sales_orders so ON soi.sales_order_id = so.id
+    LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
+         AND soi.item_code = poi.item_code 
+         AND (soi.drawing_no = poi.drawing_no OR (soi.drawing_no IS NULL AND poi.drawing_no IS NULL))
+    WHERE soi.sales_order_id = ? AND (soi.item_type IN ('FG', 'SFG'))
+  `, [salesOrderId]);
+  return rows;
+};
+
 module.exports = {
   listDesignOrders,
   createDesignOrder,
   updateDesignOrderStatus,
-  deleteDesignOrder
+  deleteDesignOrder,
+  getDesignOrderItemsBySalesOrder
 };

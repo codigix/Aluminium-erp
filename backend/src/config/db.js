@@ -962,12 +962,24 @@ const ensureProductionPlanTables = async () => {
         end_date DATE,
         status ENUM('DRAFT', 'PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') DEFAULT 'DRAFT',
         remarks TEXT,
+        sales_order_id INT,
+        bom_no VARCHAR(100),
+        target_qty DECIMAL(12, 3),
+        naming_series VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         created_by INT,
         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
+
+    // Ensure missing columns in production_plans
+    const [ppCols] = await connection.query('SHOW COLUMNS FROM production_plans');
+    const existingPpCols = new Set(ppCols.map(c => c.Field));
+    if (!existingPpCols.has('sales_order_id')) await connection.query('ALTER TABLE production_plans ADD COLUMN sales_order_id INT AFTER remarks');
+    if (!existingPpCols.has('bom_no')) await connection.query('ALTER TABLE production_plans ADD COLUMN bom_no VARCHAR(100) AFTER sales_order_id');
+    if (!existingPpCols.has('target_qty')) await connection.query('ALTER TABLE production_plans ADD COLUMN target_qty DECIMAL(12, 3) AFTER bom_no');
+    if (!existingPpCols.has('naming_series')) await connection.query('ALTER TABLE production_plans ADD COLUMN naming_series VARCHAR(50) AFTER target_qty');
 
     // Create production_plan_items table
     await connection.query(`
@@ -976,7 +988,10 @@ const ensureProductionPlanTables = async () => {
         plan_id INT NOT NULL,
         sales_order_id INT NOT NULL,
         sales_order_item_id INT NOT NULL,
+        item_code VARCHAR(120),
+        bom_no VARCHAR(100),
         planned_qty DECIMAL(12, 3) NOT NULL,
+        warehouse VARCHAR(100),
         workstation_id INT,
         planned_start_date DATE,
         planned_end_date DATE,
@@ -987,6 +1002,65 @@ const ensureProductionPlanTables = async () => {
         FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
         FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE,
         FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Ensure missing columns in production_plan_items
+    const [ppiCols] = await connection.query('SHOW COLUMNS FROM production_plan_items');
+    const existingPpiCols = new Set(ppiCols.map(c => c.Field));
+    if (!existingPpiCols.has('item_code')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN item_code VARCHAR(120) AFTER sales_order_item_id');
+    if (!existingPpiCols.has('bom_no')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN bom_no VARCHAR(100) AFTER item_code');
+    if (!existingPpiCols.has('warehouse')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN warehouse VARCHAR(100) AFTER planned_qty');
+    if (!existingPpiCols.has('design_qty')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN design_qty DECIMAL(12, 3) AFTER bom_no');
+    if (!existingPpiCols.has('uom')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN uom VARCHAR(20) AFTER design_qty');
+
+    // Create production_plan_sub_assemblies table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS production_plan_sub_assemblies (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        plan_id INT NOT NULL,
+        item_code VARCHAR(120) NOT NULL,
+        required_qty DECIMAL(12, 3) NOT NULL,
+        bom_no VARCHAR(100),
+        target_warehouse VARCHAR(100),
+        scheduled_date DATE,
+        manufacturing_type VARCHAR(50) DEFAULT 'In House',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create production_plan_materials table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS production_plan_materials (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        plan_id INT NOT NULL,
+        item_code VARCHAR(120),
+        material_name VARCHAR(255) NOT NULL,
+        required_qty DECIMAL(12, 3) NOT NULL,
+        uom VARCHAR(20),
+        warehouse VARCHAR(100),
+        bom_ref VARCHAR(100),
+        source_assembly VARCHAR(120),
+        material_category ENUM('CORE', 'EXPLODED') NOT NULL,
+        status VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create production_plan_operations table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS production_plan_operations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        plan_id INT NOT NULL,
+        step_no VARCHAR(10),
+        operation_name VARCHAR(100) NOT NULL,
+        workstation VARCHAR(100),
+        base_time DECIMAL(12, 2) DEFAULT 0,
+        source_item VARCHAR(120),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE
       )
     `);
 

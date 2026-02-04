@@ -3,6 +3,7 @@ const pool = require('../config/db');
 const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
+  
   if (parsedItemId) {
     [rows] = await pool.query(
       'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
@@ -10,18 +11,24 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
     );
   }
   
-  if (rows.length === 0 && itemCode) {
-    [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_materials WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-      [itemCode]
-    );
-  }
-
-  if (rows.length === 0 && drawingNo) {
-    [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_materials WHERE drawing_no = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-      [drawingNo]
-    );
+  // If we didn't find SO-specific materials, or we are specifically looking for Master materials
+  if (rows.length === 0) {
+    if (itemCode && drawingNo) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IS NULL AND (item_code = ? OR drawing_no = ?) ORDER BY created_at ASC',
+        [itemCode, drawingNo]
+      );
+    } else if (itemCode) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IS NULL AND item_code = ? ORDER BY created_at ASC',
+        [itemCode]
+      );
+    } else if (drawingNo) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IS NULL AND drawing_no = ? ORDER BY created_at ASC',
+        [drawingNo]
+      );
+    }
   }
   return rows;
 };
@@ -29,6 +36,7 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
 const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
+  
   if (parsedItemId) {
     [rows] = await pool.query(
       'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
@@ -36,18 +44,23 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     );
   }
   
-  if (rows.length === 0 && itemCode) {
-    [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_components WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-      [itemCode]
-    );
-  }
-
-  if (rows.length === 0 && drawingNo) {
-    [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_components WHERE drawing_no = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-      [drawingNo]
-    );
+  if (rows.length === 0) {
+    if (itemCode && drawingNo) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id IS NULL AND (item_code = ? OR drawing_no = ?) ORDER BY created_at ASC',
+        [itemCode, drawingNo]
+      );
+    } else if (itemCode) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id IS NULL AND item_code = ? ORDER BY created_at ASC',
+        [itemCode]
+      );
+    } else if (drawingNo) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id IS NULL AND drawing_no = ? ORDER BY created_at ASC',
+        [drawingNo]
+      );
+    }
   }
   return rows;
 };
@@ -55,6 +68,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
 const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
+  
   if (parsedItemId) {
     [rows] = await pool.query(
       'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
@@ -62,18 +76,23 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
     );
   }
   
-  if (rows.length === 0 && itemCode) {
-    [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_operations WHERE item_code = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-      [itemCode]
-    );
-  }
-
-  if (rows.length === 0 && drawingNo) {
-    [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_operations WHERE drawing_no = ? AND sales_order_item_id IS NULL ORDER BY created_at ASC',
-      [drawingNo]
-    );
+  if (rows.length === 0) {
+    if (itemCode && drawingNo) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id IS NULL AND (item_code = ? OR drawing_no = ?) ORDER BY created_at ASC',
+        [itemCode, drawingNo]
+      );
+    } else if (itemCode) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id IS NULL AND item_code = ? ORDER BY created_at ASC',
+        [itemCode]
+      );
+    } else if (drawingNo) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id IS NULL AND drawing_no = ? ORDER BY created_at ASC',
+        [drawingNo]
+      );
+    }
   }
   return rows;
 };

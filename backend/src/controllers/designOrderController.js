@@ -30,8 +30,19 @@ const deleteOrder = async (req, res) => {
   }
 };
 
+const getDesignOrderItemsBySalesOrder = async (req, res) => {
+  try {
+    const { salesOrderId } = req.params;
+    const items = await designOrderService.getDesignOrderItemsBySalesOrder(salesOrderId);
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   listDesignOrders,
   updateStatus,
-  deleteOrder
+  deleteOrder,
+  getDesignOrderItemsBySalesOrder
 };

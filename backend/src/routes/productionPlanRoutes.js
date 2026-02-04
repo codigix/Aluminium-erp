@@ -13,5 +13,7 @@ router.get('/sales-order/:id', authorize(['PROD_VIEW']), productionPlanControlle
 router.get('/item-bom/:salesOrderItemId', authorize(['PROD_VIEW']), productionPlanController.getItemBOMDetails);
 router.get('/:id', authorize(['PROD_VIEW']), productionPlanController.getProductionPlanById);
 router.post('/', authorize(['PROD_MANAGE']), productionPlanController.createProductionPlan);
+router.put('/:id', authorize(['PROD_MANAGE']), productionPlanController.updateProductionPlan);
+router.delete('/:id', authorize(['PROD_MANAGE']), productionPlanController.deleteProductionPlan);
 
 module.exports = router;

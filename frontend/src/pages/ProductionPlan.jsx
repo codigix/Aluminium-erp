@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
+import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Eye } from 'lucide-react';
+import { 
+  Eye, BarChart2, Settings, Send, Edit2, FileText, Trash2, 
+  Search, Filter, Plus, Zap, CheckCircle2, FileJson, 
+  MoreVertical, Activity, Layers, Target, Clock, AlertCircle
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -11,6 +15,7 @@ const ProductionPlan = () => {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
   const [activeTab, setActiveTab] = useState('Basic Info');
   const [readyItems, setReadyItems] = useState([]);
   const [workstations, setWorkstations] = useState([]);
@@ -18,8 +23,10 @@ const ProductionPlan = () => {
   const [productionReadyOrders, setProductionReadyOrders] = useState([]);
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [designOrderItems, setDesignOrderItems] = useState([]);
   const [availableBoms, setAvailableBoms] = useState([]);
   const [selectedBomId, setSelectedBomId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [newPlan, setNewPlan] = useState({
     planCode: '',
@@ -29,7 +36,7 @@ const ProductionPlan = () => {
     remarks: '',
     namingSeries: 'PP',
     operationalStatus: 'Draft',
-    targetQuantity: 1,
+    targetQuantity: 0,
     items: []
   });
 
@@ -38,8 +45,22 @@ const ProductionPlan = () => {
     fetchWorkstations();
   }, []);
 
+  // Sync item quantities with header target quantity
+  useEffect(() => {
+    if (newPlan.targetQuantity > 0) {
+      setNewPlan(prev => ({
+        ...prev,
+        items: prev.items.map(item => ({
+          ...item,
+          plannedQty: prev.targetQuantity
+        }))
+      }));
+    }
+  }, [newPlan.targetQuantity]);
+
   const fetchPlans = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/production-plans`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -52,6 +73,47 @@ const ProductionPlan = () => {
       console.error('Error fetching plans:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeletePlan = async (id) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Delete Production Plan?',
+        text: "This action cannot be undone and will delete all associated data.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel',
+        background: '#ffffff',
+        customClass: {
+          title: 'text-lg font-bold text-slate-900',
+          content: 'text-sm text-slate-600',
+          confirmButton: 'px-4 py-2 text-xs font-bold uppercase tracking-wider',
+          cancelButton: 'px-4 py-2 text-xs font-bold uppercase tracking-wider'
+        }
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/production-plans/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          successToast('Plan deleted successfully');
+          fetchPlans();
+        } else {
+          const error = await response.json();
+          errorToast(error.message || 'Failed to delete plan');
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting plan:', error);
+      errorToast('An unexpected error occurred');
     }
   };
 
@@ -122,8 +184,10 @@ const ProductionPlan = () => {
     fetchNextCode();
     setSelectedOrderId('');
     setSelectedOrderDetails(null);
+    setDesignOrderItems([]);
     setAvailableBoms([]);
     setSelectedBomId('');
+    setIsViewing(false);
     setNewPlan({
       planCode: '',
       planDate: new Date().toISOString().split('T')[0],
@@ -132,16 +196,173 @@ const ProductionPlan = () => {
       remarks: '',
       namingSeries: 'PP',
       operationalStatus: 'Draft',
-      targetQuantity: 1,
+      targetQuantity: 0,
       items: []
     });
     setIsCreating(true);
+  };
+
+  const handleViewPlan = async (id) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Fetch BOM details for each item to support explosion in UI
+        const itemsWithBom = await Promise.all(data.items.map(async item => {
+          let bomDetails = { materials: [], components: [], operations: [] };
+          try {
+            const bomResp = await fetch(`${API_BASE}/production-plans/item-bom/${item.sales_order_item_id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (bomResp.ok) {
+              bomDetails = await bomResp.json();
+            }
+          } catch (e) {
+            console.error('Error fetching BOM for item:', item.item_code);
+          }
+
+          return {
+            salesOrderId: item.sales_order_id,
+            salesOrderItemId: item.sales_order_item_id,
+            projectName: item.project_name,
+            orderNo: item.order_no,
+            itemCode: item.item_code,
+            description: item.description,
+            plannedQty: item.planned_qty,
+            totalQty: item.design_qty,
+            designQty: item.design_qty,
+            alreadyPlannedQty: 0,
+            workstationId: item.workstation_id,
+            plannedStartDate: item.planned_start_date,
+            plannedEndDate: item.planned_end_date,
+            materials: bomDetails.materials || [],
+            components: bomDetails.components || [],
+            operations: bomDetails.operations || []
+          };
+        }));
+
+        setNewPlan({
+          id: data.id,
+          planCode: data.plan_code,
+          planDate: data.plan_date?.split('T')[0],
+          startDate: data.start_date?.split('T')[0],
+          endDate: data.end_date?.split('T')[0],
+          remarks: data.remarks || '',
+          namingSeries: data.naming_series || 'PP',
+          operationalStatus: data.status,
+          targetQuantity: data.target_qty,
+          items: itemsWithBom,
+          subAssemblies: data.subAssemblies,
+          materials: data.materials,
+          operations: data.operations
+        });
+        
+        setSelectedOrderId(data.sales_order_id?.toString() || '');
+        setSelectedBomId(data.bom_no?.toString() || '');
+
+        if (data.items && data.items.length > 0) {
+          const boms = data.items.map(item => ({
+            id: item.sales_order_item_id,
+            item_code: item.item_code,
+            description: item.description
+          }));
+          setAvailableBoms(boms);
+        }
+
+        setIsViewing(true);
+        setIsCreating(true);
+      }
+    } catch (error) {
+      console.error('Error fetching plan details:', error);
+      errorToast('Failed to fetch plan details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditPlan = async (id) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Fetch BOM details for each item to support explosion in UI
+        const itemsWithBom = await Promise.all(data.items.map(async item => {
+          let bomDetails = { materials: [], components: [], operations: [] };
+          try {
+            const bomResp = await fetch(`${API_BASE}/production-plans/item-bom/${item.sales_order_item_id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (bomResp.ok) {
+              bomDetails = await bomResp.json();
+            }
+          } catch (e) {
+            console.error('Error fetching BOM for item:', item.item_code);
+          }
+
+          return {
+            salesOrderId: item.sales_order_id,
+            salesOrderItemId: item.sales_order_item_id,
+            projectName: item.project_name,
+            orderNo: item.order_no,
+            itemCode: item.item_code,
+            description: item.description,
+            plannedQty: item.planned_qty,
+            totalQty: item.design_qty,
+            designQty: item.design_qty,
+            alreadyPlannedQty: 0,
+            workstationId: item.workstation_id,
+            plannedStartDate: item.planned_start_date,
+            plannedEndDate: item.planned_end_date,
+            materials: bomDetails.materials || [],
+            components: bomDetails.components || [],
+            operations: bomDetails.operations || []
+          };
+        }));
+
+        setNewPlan({
+          id: data.id,
+          planCode: data.plan_code,
+          planDate: data.plan_date?.split('T')[0],
+          startDate: data.start_date?.split('T')[0],
+          endDate: data.end_date?.split('T')[0],
+          remarks: data.remarks || '',
+          namingSeries: data.naming_series || 'PP',
+          operationalStatus: data.status,
+          targetQuantity: data.target_qty,
+          items: itemsWithBom,
+          subAssemblies: data.subAssemblies,
+          materials: data.materials,
+          operations: data.operations
+        });
+        
+        setSelectedOrderId(data.sales_order_id?.toString() || '');
+        setSelectedBomId(data.bom_no?.toString() || '');
+        setIsViewing(false);
+        setIsCreating(true);
+      }
+    } catch (error) {
+      console.error('Error fetching plan details:', error);
+      errorToast('Failed to fetch plan details');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOrderSelect = async (orderId) => {
     setSelectedOrderId(orderId);
     setSelectedBomId('');
     setAvailableBoms([]);
+    setDesignOrderItems([]);
     
     if (!orderId) {
       setSelectedOrderDetails(null);
@@ -150,6 +371,16 @@ const ProductionPlan = () => {
 
     try {
       const token = localStorage.getItem('authToken');
+      
+      // Fetch Design Order Items
+      const designResp = await fetch(`${API_BASE}/design-orders/by-sales-order/${orderId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (designResp.ok) {
+        const designData = await designResp.json();
+        setDesignOrderItems(designData);
+      }
+
       const response = await fetch(`${API_BASE}/production-plans/sales-order/${orderId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -191,13 +422,18 @@ const ProductionPlan = () => {
     const itemInReady = itemsToSearch.find(item => (item.id || item.sales_order_item_id).toString() === bomId.toString());
     
     if (itemInReady) {
+      // Find matching design order item to get quantity
+      const designItem = designOrderItems.find(d => 
+        d.item_code === itemInReady.item_code && 
+        (d.drawing_no === itemInReady.drawing_no || (!d.drawing_no && !itemInReady.drawing_no))
+      );
+      
+      const designQty = designItem ? designItem.qty : (itemInReady.total_qty || itemInReady.quantity || 1);
+
       // Clear existing items and only add this one
       const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id;
       const orderNo = itemInReady.order_no || selectedOrderDetails?.order_no;
       const projectName = itemInReady.project_name || selectedOrderDetails?.project_name;
-      
-      // We call toggleItemSelection but we need to ensure it's the ONLY one.
-      // Actually, it's better to manually set it to ensure "checked" state and "ONE ROW ONLY".
       
       const fetchAndSetItem = async () => {
         let bomDetails = { materials: [], components: [], operations: [] };
@@ -207,7 +443,10 @@ const ProductionPlan = () => {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (response.ok) {
-            bomDetails = await response.json();
+            const data = await response.json();
+            if (data) {
+              bomDetails = data;
+            }
           }
         } catch (error) {
           console.error('Error fetching BOM details:', error);
@@ -215,6 +454,7 @@ const ProductionPlan = () => {
 
         setNewPlan(prev => ({
           ...prev,
+          targetQuantity: designQty,
           items: [{
             salesOrderId: itemInReady.sales_order_id,
             salesOrderItemId: salesOrderItemId,
@@ -222,8 +462,9 @@ const ProductionPlan = () => {
             orderNo: orderNo,
             itemCode: itemInReady.item_code,
             description: itemInReady.description,
-            plannedQty: (itemInReady.total_qty || itemInReady.quantity) - (itemInReady.already_planned_qty || 0),
+            plannedQty: designQty,
             totalQty: itemInReady.total_qty || itemInReady.quantity,
+            designQty: designQty,
             alreadyPlannedQty: itemInReady.already_planned_qty || 0,
             workstationId: '',
             plannedStartDate: prev.startDate,
@@ -263,8 +504,17 @@ const ProductionPlan = () => {
         console.error('Error fetching BOM details:', error);
       }
 
+      // Find matching design order item to get quantity
+      const designItem = designOrderItems.find(d => 
+        d.item_code === item.item_code && 
+        (d.drawing_no === item.drawing_no || (!d.drawing_no && !item.drawing_no))
+      );
+      
+      const designQty = designItem ? designItem.qty : (item.total_qty || item.quantity || 1);
+
       setNewPlan(prev => ({
         ...prev,
+        targetQuantity: designQty,
         items: [...prev.items, {
           salesOrderId: item.sales_order_id,
           salesOrderItemId: salesOrderItemId,
@@ -272,8 +522,9 @@ const ProductionPlan = () => {
           orderNo: item.order_no,
           itemCode: item.item_code,
           description: item.description,
-          plannedQty: (item.total_qty || item.quantity) - (item.already_planned_qty || 0),
+          plannedQty: designQty,
           totalQty: item.total_qty || item.quantity,
+          designQty: designQty,
           alreadyPlannedQty: item.already_planned_qty || 0,
           workstationId: '',
           plannedStartDate: prev.startDate,
@@ -287,8 +538,7 @@ const ProductionPlan = () => {
     }
   };
 
-  const renderCreateForm = () => {
-    // Calculate materials explosion
+  const calculatePlanDetails = () => {
     const coreMaterials = newPlan.items.flatMap(item => 
       (item.materials || []).map(mat => ({
         ...mat,
@@ -299,35 +549,115 @@ const ProductionPlan = () => {
 
     const getExplodedMaterials = () => {
       const exploded = [];
+      const operations = [];
+      const subAssemblies = [];
+      
       const traverse = (components, parentPlannedQty = 1) => {
+        if (!components || !Array.isArray(components)) return;
+        
         components.forEach(comp => {
-          const currentCompQty = comp.quantity * parentPlannedQty;
-          if (comp.materials && comp.materials.length > 0) {
+          const compQty = parseFloat(comp.quantity) || 0;
+          const currentCompQty = compQty * parentPlannedQty;
+          
+          // Collect Sub-Assemblies
+          subAssemblies.push({
+            ...comp,
+            parentPlannedQty: parentPlannedQty,
+            itemCode: comp.component_code || comp.item_code,
+            bomNo: comp.bom_no || 'BOM-SUB'
+          });
+
+          // Collect Materials
+          if (comp.materials && Array.isArray(comp.materials)) {
             comp.materials.forEach(mat => {
+              const matQty = parseFloat(mat.qty_per_pc) || 0;
               exploded.push({
                 ...mat,
-                source_assembly: comp.component_code || comp.item_code,
+                source_assembly: comp.component_code || comp.item_code || 'Sub-Assembly',
                 bom_no: comp.bom_no || 'BOM-SUB',
-                totalRequiredQty: mat.qty_per_pc * currentCompQty
+                totalRequiredQty: matQty * currentCompQty
               });
             });
           }
-          if (comp.components && comp.components.length > 0) {
+
+          // Collect Operations from sub-assemblies
+          if (comp.operations && Array.isArray(comp.operations)) {
+            comp.operations.forEach(op => {
+              operations.push({
+                ...op,
+                itemCode: comp.component_code || comp.item_code
+              });
+            });
+          }
+
+          // Recurse
+          if (comp.components && Array.isArray(comp.components)) {
             traverse(comp.components, currentCompQty);
           }
         });
       };
+      
       newPlan.items.forEach(item => {
         if (item.components) {
           traverse(item.components, item.plannedQty || 1);
         }
       });
-      return exploded;
+      
+      return { exploded, operations, subAssemblies };
     };
 
-    const explodedMaterials = getExplodedMaterials();
-    const totalMaterialCount = coreMaterials.length + explodedMaterials.length;
+    const { exploded: explodedMaterials, operations: explodedOperations, subAssemblies: explodedSubAssemblies } = getExplodedMaterials();
+    
+    // Use directly fetched data if in viewing mode, otherwise use calculated ones
+    const materialsToDisplay = isViewing ? (newPlan.materials || []) : [...coreMaterials, ...explodedMaterials];
+    const subAssembliesToDisplay = isViewing ? (newPlan.subAssemblies || []) : explodedSubAssemblies;
+    const operationsToDisplay = isViewing 
+      ? (newPlan.operations || []).map(op => ({
+          ...op,
+          operation_name: op.operation_name || op.name,
+          workstation: op.workstation || op.workstation_name,
+          base_hour: op.base_hour || op.base_time,
+          itemCode: op.itemCode || op.source_item
+        }))
+      : [
+          ...newPlan.items.flatMap(item => (item.operations || []).map(op => ({ 
+            ...op, 
+            itemCode: item.itemCode,
+            operation_name: op.operation_name || op.name,
+            workstation: op.workstation || op.workstation_name,
+            base_hour: op.base_hour || op.base_time
+          }))),
+          ...explodedOperations.map(op => ({
+            ...op,
+            operation_name: op.operation_name || op.name,
+            workstation: op.workstation || op.workstation_name,
+            base_hour: op.base_hour || op.base_time
+          }))
+        ];
 
+    return { 
+      materialsToDisplay, 
+      subAssembliesToDisplay, 
+      operationsToDisplay,
+      coreMaterials,
+      explodedMaterials,
+      explodedOperations,
+      explodedSubAssemblies
+    };
+  };
+
+  const renderCreateForm = () => {
+    const { 
+      materialsToDisplay, 
+      subAssembliesToDisplay, 
+      operationsToDisplay,
+      coreMaterials,
+      explodedMaterials,
+      explodedOperations
+    } = calculatePlanDetails();
+
+    const totalMaterialCount = materialsToDisplay.length;
+    
     return (
       <div className="space-y-6 max-w-[1400px] mx-auto pb-20">
         {/* Header Section */}
@@ -339,9 +669,9 @@ const ProductionPlan = () => {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-400">PP /</span>
-                <h1 className="text-lg font-semibold text-slate-900">NEW PRODUCTION PLAN</h1>
+                <h1 className="text-lg font-semibold text-slate-900">{isViewing ? `VIEW PLAN: ${newPlan.planCode}` : 'NEW PRODUCTION PLAN'}</h1>
               </div>
-              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-medium rounded capitalize">draft</span>
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-medium rounded capitalize">{isViewing ? newPlan.operationalStatus : 'draft'}</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -349,14 +679,16 @@ const ProductionPlan = () => {
               onClick={() => setIsCreating(false)}
               className="px-4 py-2 text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors"
             >
-              Discard Changes
+              {isViewing ? 'Close' : 'Discard Changes'}
             </button>
-            <button 
-              onClick={handleSubmit}
-              className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium transition-colors shadow-sm"
-            >
-              Save Strategic Plan
-            </button>
+            {!isViewing && (
+              <button 
+                onClick={handleSubmit}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium transition-colors shadow-sm"
+              >
+                Save Strategic Plan
+              </button>
+            )}
           </div>
         </div>
 
@@ -424,14 +756,16 @@ const ProductionPlan = () => {
                   type="text" 
                   value={newPlan.namingSeries} 
                   onChange={(e) => setNewPlan(prev => ({ ...prev, namingSeries: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                  disabled={isViewing}
+                  className={`w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 />
               </FormControl>
               <FormControl label="Operational Status">
                 <select 
                   value={newPlan.operationalStatus}
                   onChange={(e) => setNewPlan(prev => ({ ...prev, operationalStatus: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none"
+                  disabled={isViewing}
+                  className={`w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 >
                   <option value="Draft">Draft</option>
                   <option value="In Progress">In Progress</option>
@@ -450,8 +784,9 @@ const ProductionPlan = () => {
                     onChange={(e) => handleOrderSelect(e.target.value)}
                     placeholder="Search and select sales order..."
                     allowCustom={false}
+                    disabled={isViewing}
                   />
-                  {selectedOrderId && (
+                  {selectedOrderId && !isViewing && (
                     <button 
                       onClick={() => handleOrderSelect('')}
                       className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
@@ -464,10 +799,10 @@ const ProductionPlan = () => {
               <FormControl label="Select BOM">
                 <div className="relative">
                   <select
-                    className={`w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${availableBoms.length <= 1 && selectedOrderId ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${(availableBoms.length <= 1 && selectedOrderId) || isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={selectedBomId}
                     onChange={(e) => handleBomSelect(e.target.value)}
-                    disabled={availableBoms.length <= 1 && selectedOrderId}
+                    disabled={(availableBoms.length <= 1 && selectedOrderId) || isViewing}
                   >
                     <option value="">{availableBoms.length === 0 ? (selectedOrderId ? 'No BOMs Available' : 'Select Order First') : 'Select BOM...'}</option>
                     {availableBoms.map(bom => (
@@ -487,10 +822,12 @@ const ProductionPlan = () => {
                     type="number" 
                     value={newPlan.targetQuantity}
                     onChange={(e) => setNewPlan(prev => ({ ...prev, targetQuantity: parseFloat(e.target.value) }))}
-                    className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-l-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-l-lg text-sm font-medium focus:outline-none cursor-not-allowed transition-all"
+                    readOnly
                   />
                   <span className="px-4 py-2.5 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg text-xs font-semibold text-slate-400">UNIT</span>
                 </div>
+                <p className="text-[10px] text-indigo-600 mt-1 font-medium">Quantity fetched from Design Order</p>
               </FormControl>
             </div>
           </div>
@@ -523,6 +860,7 @@ const ProductionPlan = () => {
                     <th className="px-4 py-3 font-medium">No.</th>
                     <th className="px-4 py-3 font-medium">Item Code</th>
                     <th className="px-4 py-3 font-medium text-center">BOM No</th>
+                    <th className="px-4 py-3 font-medium text-center">Design Qty</th>
                     <th className="px-4 py-3 font-medium text-center">Planned Qty</th>
                     <th className="px-4 py-3 font-medium text-center">UOM</th>
                     <th className="px-4 py-3 font-medium">Finished Goods Warehouse</th>
@@ -550,6 +888,9 @@ const ProductionPlan = () => {
                           {item.bom_no || 'BOM-' + (item.salesOrderItemId || 'REF')}
                         </span>
                       </td>
+                      <td className="px-4 py-4 text-center font-bold text-slate-700">
+                        {Number(item.designQty || item.totalQty || item.quantity || 0).toFixed(3)}
+                      </td>
                       <td className="px-4 py-4 text-center font-bold text-indigo-600">{item.plannedQty}</td>
                       <td className="px-4 py-4 text-center text-slate-400 text-xs">Nos</td>
                       <td className="px-4 py-4">
@@ -568,7 +909,7 @@ const ProductionPlan = () => {
                   ))}
                   {newPlan.items.length === 0 && (
                     <tr>
-                      <td colSpan="7" className="px-4 py-12 text-center text-slate-400 italic text-sm">
+                      <td colSpan="8" className="px-4 py-12 text-center text-slate-400 italic text-sm">
                         No finished goods selected. Please select a sales order and BOM.
                       </td>
                     </tr>
@@ -590,7 +931,7 @@ const ProductionPlan = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-rose-600">04</span>
                   <h2 className="text-base font-bold text-slate-800">Sub Assemblies</h2>
-                  <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-full ml-2 uppercase tracking-tight">{newPlan.items.reduce((acc, item) => acc + (item.components?.length || 0), 0)} ITEMS</span>
+                  <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-full ml-2 uppercase tracking-tight">{subAssembliesToDisplay.length} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Manufacturing breakdown of intermediate components</p>
               </div>
@@ -614,7 +955,7 @@ const ProductionPlan = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {newPlan.items.flatMap(item => (item.components || []).map(comp => ({ ...comp, parentPlannedQty: item.plannedQty || 1 }))).map((comp, idx) => (
+                  {subAssembliesToDisplay.map((sa, idx) => (
                     <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-4 text-slate-400 font-medium">{idx + 1}</td>
                       <td className="px-4 py-4">
@@ -623,52 +964,61 @@ const ProductionPlan = () => {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                           </div>
                           <div>
-                            <div className="font-bold text-slate-800 text-xs">{comp.component_code}</div>
-                            <div className="text-[10px] text-slate-400">{comp.description}</div>
+                            <div className="font-bold text-slate-800 text-xs">{sa.itemCode || sa.item_code}</div>
+                            <div className="text-[10px] text-slate-400">{sa.description || 'Sub-Assembly'}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2 text-slate-600">
                           <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="text-xs font-medium">Work In Progress - NC</span>
+                          <span className="text-xs font-medium">{sa.targetWarehouse || sa.target_warehouse || 'Work In Progress - NC'}</span>
                         </div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2 text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                          <span className="text-xs font-medium">2026-02-04</span>
+                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
+                          <span className="text-xs font-medium">{isViewing ? (sa.scheduled_date ? sa.scheduled_date.split('T')[0] : '-') : '2026-02-04'}</span>
                         </div>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <div className="font-bold text-rose-600">{(comp.quantity * comp.parentPlannedQty).toFixed(0)}</div>
+                        <div className="font-bold text-rose-600">{Number(sa.requiredQty || sa.required_qty || (sa.quantity * sa.parentPlannedQty) || 0).toFixed(0)}</div>
                         <div className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">NOS</div>
                       </td>
                       <td className="px-4 py-4">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 text-rose-600 text-[10px] font-bold rounded border border-slate-100">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          {comp.bom_no || 'BOM-SUB-' + idx}
+                          {sa.bomNo || sa.bom_no}
                         </span>
                       </td>
                       <td className="px-4 py-4">
                         <div className="space-y-1">
-                          {comp.materials?.map((mat, mIdx) => (
+                          {!isViewing ? (sa.materials?.map((mat, mIdx) => (
                             <div key={mIdx} className="flex items-center gap-2 text-[10px]">
                               <span className="w-1 h-1 bg-amber-400 rounded-full"></span>
                               <span className="font-medium text-slate-700">{mat.material_name}:</span>
-                              <span className="text-slate-500">{(mat.qty_per_pc * comp.quantity * comp.parentPlannedQty).toFixed(3)} {mat.uom}</span>
+                              <span className="text-slate-500">{(mat.qty_per_pc * sa.quantity * sa.parentPlannedQty).toFixed(3)} {mat.uom}</span>
                             </div>
-                          ))}
-                          {(!comp.materials || comp.materials.length === 0) && (
+                          ))) : (
+                            <span className="text-[10px] text-slate-400 italic">Consolidated in Materials tab</span>
+                          )}
+                          {!isViewing && (!sa.materials || sa.materials.length === 0) && (
                             <span className="text-[10px] text-slate-400 italic">No direct materials</span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-full border border-rose-100">In House</span>
+                        <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-full border border-rose-100">{sa.manufacturingType || sa.manufacturing_type || 'In House'}</span>
                       </td>
                     </tr>
                   ))}
+                  {subAssembliesToDisplay.length === 0 && (
+                    <tr>
+                      <td colSpan="8" className="px-4 py-12 text-center text-slate-400 italic text-sm">
+                        No sub assemblies required.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -713,32 +1063,30 @@ const ProductionPlan = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {coreMaterials.map((mat, idx) => (
+                    {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'CORE') : coreMaterials).map((mat, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="px-4 py-3">
                           <div className="font-bold text-slate-800 text-xs">{mat.material_name}</div>
                           <div className="text-[10px] text-slate-400">{mat.description || 'Direct Material'}</div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="font-bold text-amber-600">{mat.totalRequiredQty.toFixed(2)}</div>
-                          <div className="text-[8px] text-slate-400 font-bold uppercase">{mat.uom}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 text-slate-400 italic">
-                            <svg className="w-4 h-4 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                            <span className="text-[10px]">{mat.warehouse || '-'}</span>
+                          <div className="font-bold text-amber-600">
+                            {Number(isViewing ? mat.required_qty : mat.totalRequiredQty).toFixed(3)}
                           </div>
+                          <div className="text-[9px] text-slate-400 font-bold uppercase">{isViewing ? mat.uom : mat.unit}</div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 text-indigo-600 text-[10px] font-bold rounded border border-slate-100">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            {mat.bom_no}
-                          </span>
+                          <div className="text-xs text-slate-600 font-medium">{mat.warehouse || 'Store - NC'}</div>
                         </td>
-                        <td className="px-4 py-3 text-center text-slate-300">--</td>
+                        <td className="px-4 py-3">
+                          <span className="text-[10px] text-slate-400 font-medium">{isViewing ? mat.bom_ref : mat.bom_no}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase">{isViewing ? mat.status : '--'}</span>
+                        </td>
                       </tr>
                     ))}
-                    {coreMaterials.length === 0 && (
+                    {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'CORE') : coreMaterials).length === 0 && (
                       <tr>
                         <td colSpan="5" className="px-4 py-8 text-center text-slate-400 italic text-xs">No core materials required</td>
                       </tr>
@@ -765,31 +1113,33 @@ const ProductionPlan = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {explodedMaterials.map((mat, idx) => (
+                    {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).map((mat, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="px-4 py-3">
                           <div className="font-bold text-slate-800 text-xs uppercase tracking-tight">{mat.material_name}</div>
                           <div className="text-[10px] text-slate-400 italic font-medium">{mat.description || 'Raw Material'}</div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="font-bold text-rose-600">{mat.totalRequiredQty.toFixed(2)}</div>
-                          <div className="text-[8px] text-slate-400 font-bold uppercase">{mat.uom}</div>
+                          <div className="font-bold text-rose-600">
+                            {Number(isViewing ? mat.required_qty : mat.totalRequiredQty).toFixed(3)}
+                          </div>
+                          <div className="text-[8px] text-slate-400 font-bold uppercase">{isViewing ? mat.uom : mat.unit}</div>
                         </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 text-[9px] font-bold rounded-lg border border-rose-100">
                             <svg className="w-3 h-3 rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                            {mat.source_assembly}
+                            {isViewing ? mat.source_assembly : mat.source_assembly}
                           </span>
                         </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 text-indigo-600 text-[10px] font-bold rounded border border-slate-100">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            {mat.bom_no}
+                            {isViewing ? mat.bom_ref : mat.bom_no}
                           </span>
                         </td>
                       </tr>
                     ))}
-                    {explodedMaterials.length === 0 && (
+                    {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).length === 0 && (
                       <tr>
                         <td colSpan="4" className="px-4 py-8 text-center text-slate-400 italic text-xs">No exploded components available</td>
                       </tr>
@@ -813,7 +1163,7 @@ const ProductionPlan = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-indigo-600">05</span>
                   <h2 className="text-base font-bold text-slate-800">Operations</h2>
-                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-full ml-2 uppercase tracking-tight">{newPlan.items.reduce((acc, item) => acc + (item.operations?.length || 0), 0)} OPERATIONS</span>
+                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-full ml-2 uppercase tracking-tight">{operationsToDisplay.length} OPERATIONS</span>
                 </div>
                 <p className="text-xs text-slate-400">Sequential manufacturing steps and workstation routing</p>
               </div>
@@ -834,7 +1184,7 @@ const ProductionPlan = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {newPlan.items.flatMap(item => (item.operations || []).map(op => ({ ...op, itemCode: item.itemCode }))).map((op, idx) => (
+                  {operationsToDisplay.map((op, idx) => (
                     <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-4 text-slate-400 font-medium">0{idx + 1}</td>
                       <td className="px-4 py-4">
@@ -853,7 +1203,7 @@ const ProductionPlan = () => {
                       </td>
                       <td className="px-4 py-4">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 text-indigo-600 text-[10px] font-bold rounded border border-slate-100">
-                          {op.itemCode}
+                          {op.itemCode || op.source_item}
                         </span>
                       </td>
                     </tr>
@@ -896,13 +1246,15 @@ const ProductionPlan = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
               Material Request
             </button>
-            <button 
-              onClick={handleSubmit}
-              className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-xs font-bold transition-all shadow-lg shadow-slate-200"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
-              Save Strategic Plan
-            </button>
+            {!isViewing && (
+              <button 
+                onClick={handleSubmit}
+                className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-xs font-bold transition-all shadow-lg shadow-slate-200"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                {newPlan.id ? 'Update Strategic Plan' : 'Save Strategic Plan'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -924,17 +1276,74 @@ const ProductionPlan = () => {
 
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/production-plans`, {
-        method: 'POST',
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Calculate latest details to ensure sub-assemblies and materials are included
+      const { 
+        materialsToDisplay, 
+        subAssembliesToDisplay, 
+        operationsToDisplay 
+      } = calculatePlanDetails();
+
+      const payload = {
+        ...newPlan,
+        planDate: newPlan.planDate || today,
+        startDate: newPlan.startDate || null,
+        endDate: newPlan.endDate || null,
+        salesOrderId: selectedOrderId,
+        bomNo: selectedBomId,
+        finishedGoods: newPlan.items.map(item => ({
+          ...item,
+          designQty: item.designQty || item.totalQty || item.quantity || 0,
+          uom: item.uom || 'Nos',
+          plannedStartDate: item.plannedStartDate || newPlan.startDate || today
+        })),
+        items: newPlan.items.map(item => ({
+          ...item,
+          designQty: item.designQty || item.totalQty || item.quantity || 0,
+          uom: item.uom || 'Nos',
+          plannedStartDate: item.plannedStartDate || newPlan.startDate || today
+        })),
+        subAssemblies: subAssembliesToDisplay.map(sa => ({
+          ...sa,
+          requiredQty: parseFloat(sa.quantity || 0) * (sa.parentPlannedQty || 1),
+          bomNo: sa.bomNo || sa.bom_no || null,
+          itemCode: sa.itemCode || sa.subAssemblyItemCode || null,
+          scheduledDate: sa.scheduledDate || sa.scheduled_date || newPlan.startDate || today
+        })),
+        materials: materialsToDisplay.map(m => ({
+          ...m,
+          itemCode: m.item_code || m.item || null,
+          materialName: m.material_name || m.item || null,
+          requiredQty: m.required_qty || m.totalRequiredQty || 0,
+          bomRef: m.bom_ref || m.bom_no || null,
+          sourceAssembly: m.source_assembly || null,
+          category: m.material_category || null
+        })),
+        operations: operationsToDisplay.map((op, idx) => ({
+          ...op,
+          step: (idx + 1).toString().padStart(2, '0'),
+          operationName: op.operation_name || null,
+          baseTime: op.base_hour || op.baseTime || 0,
+          sourceItem: op.itemCode || op.source_item || null
+        }))
+      };
+      
+      const url = newPlan.id 
+        ? `${API_BASE}/production-plans/${newPlan.id}`
+        : `${API_BASE}/production-plans`;
+        
+      const response = await fetch(url, {
+        method: newPlan.id ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(newPlan)
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
-        successToast('Production plan created successfully');
+        successToast(`Production plan ${newPlan.id ? 'updated' : 'created'} successfully`);
         setIsCreating(false);
         fetchPlans();
       } else {
@@ -995,32 +1404,263 @@ const ProductionPlan = () => {
     }
   ];
 
+  const filteredPlans = plans.filter(plan => 
+    plan.plan_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    plan.order_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    plan.project_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (isCreating) {
     return renderCreateForm();
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl text-slate-900">Production Plan</h2>
-          <p className="text-sm text-slate-500">Manage and schedule production activities</p>
+    <div className="p-1 space-y-6">
+      {/* Header Section */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-200">
+            <Layers className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              Production <span className="text-indigo-600">Intelligence</span>
+            </h1>
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+              <Activity className="w-3 h-3 text-indigo-500" />
+              <span>Planning & Strategy Center</span>
+              <span className="w-1 h-1 bg-slate-300 rounded-full" />
+              <Clock className="w-3 h-3" />
+              <span>{new Date().toLocaleTimeString()}</span>
+            </div>
+          </div>
         </div>
-        <button 
-          onClick={handleCreateNew}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm"
-        >
-          Create Production Plan
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => {/* Reset logic if needed */}}
+            className="flex items-center gap-2 px-4 py-2 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-bold transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+            Reset System
+          </button>
+          <button 
+            onClick={handleCreateNew}
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all text-sm font-bold shadow-xl shadow-slate-200"
+          >
+            <Plus className="w-4 h-4" />
+            New Strategic Plan
+          </button>
+        </div>
       </div>
 
-      <Card>
-        <DataTable 
-          columns={columns}
-          data={plans}
-          loading={loading}
-          searchPlaceholder="Search plans..."
-        />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {[
+          { label: 'Active Strategies', value: plans.filter(p => p.status !== 'Draft').length, icon: Layers, color: 'indigo', sub: 'Total registered plans' },
+          { label: 'Execution Phase', value: '0', icon: Zap, color: 'blue', sub: 'Plans in active production' },
+          { label: 'Optimization Complete', value: '0', icon: CheckCircle2, color: 'emerald', sub: 'Successfully closed plans' },
+          { label: 'Draft Formulation', value: plans.filter(p => p.status === 'Draft').length, icon: FileText, color: 'slate', sub: 'Pending validation' }
+        ].map((stat, i) => (
+          <Card key={i} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300 border-none bg-white shadow-sm ring-1 ring-slate-100">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`w-12 h-12 rounded-2xl bg-${stat.color}-50 text-${stat.color}-600 flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
+                  <stat.icon className="w-6 h-6" />
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-black text-slate-900">{stat.value}</div>
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{stat.label}</div>
+                <div className="text-[10px] text-slate-400 font-medium">{stat.sub}</div>
+              </div>
+            </div>
+            <div className={`absolute bottom-0 left-0 right-0 h-1 bg-${stat.color}-500/10 group-hover:bg-${stat.color}-500 transition-colors`} />
+          </Card>
+        ))}
+      </div>
+
+      {/* Content Section */}
+      <Card className="border-none shadow-sm ring-1 ring-slate-100 bg-white rounded-2xl overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                <BarChart2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 tracking-tight uppercase">Strategy Pipeline</h2>
+                <p className="text-[11px] text-slate-400 font-medium">Manage and monitor manufacturing execution</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="SEARCH STRATEGIES..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold tracking-widest text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none w-64 transition-all"
+                />
+              </div>
+              <button className="p-2 bg-slate-50 text-slate-400 hover:text-slate-600 rounded-xl border border-slate-100 transition-all">
+                <Filter className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left border-b border-slate-50">
+                  <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Plan ID</th>
+                  <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">Origin & Status</th>
+                  <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">Timeline</th>
+                  <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">Production Progress</th>
+                  <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">Operations</th>
+                  <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="py-12 text-center text-slate-400 text-xs italic font-medium">Loading strategic intelligence...</td>
+                  </tr>
+                ) : filteredPlans.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="py-12 text-center text-slate-400 text-xs italic font-medium">No plans matching search criteria</td>
+                  </tr>
+                ) : filteredPlans.map((plan) => (
+                  <tr key={plan.id} className="group hover:bg-slate-50/50 transition-all duration-200">
+                    <td className="py-5 px-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-slate-900 text-white rounded-lg flex items-center justify-center shadow-md shadow-slate-200">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-black text-slate-800 tracking-tight">{plan.plan_code}</div>
+                          <div className="text-[10px] text-slate-400 font-medium">
+                            {plan.item_code ? `${plan.item_code} - ${plan.item_description}` : (plan.project_name || 'Global Manufacturing')}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-5 px-4">
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
+                            <Layers className="w-2.5 h-2.5" />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-600">{plan.order_no || 'N/A'}</span>
+                        </div>
+                        <div className="flex">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter border flex items-center gap-1
+                            ${plan.status === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
+                              plan.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                              'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
+                          >
+                            <span className={`w-1 h-1 rounded-full ${plan.status === 'Draft' ? 'bg-amber-400' : plan.status === 'Completed' ? 'bg-emerald-400' : 'bg-indigo-400'}`} />
+                            {plan.status}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-5 px-4">
+                      <div className="flex items-center gap-2 group/time">
+                        <div className="w-8 h-8 rounded-lg border border-slate-100 bg-white flex items-center justify-center text-slate-400 group-hover/time:border-indigo-100 group-hover/time:text-indigo-500 transition-colors">
+                          <Clock className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">
+                            {plan.start_date ? new Date(plan.start_date).toLocaleDateString() : '-'}
+                          </div>
+                          <div className="text-[9px] text-slate-400 font-medium">No work orders</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-5 px-4">
+                      <div className="w-48">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">0% Complete</span>
+                          <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-tighter">0/0 OPS</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden p-0.5">
+                          <div className="h-full w-0 bg-indigo-500 rounded-full" />
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <Clock className="w-3 h-3 text-indigo-400" />
+                          <span className="text-[9px] text-indigo-600 font-bold uppercase tracking-tighter">No work orders</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-5 px-4">
+                      <div className="flex items-center -space-x-2">
+                        {[1].map((_, i) => (
+                          <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-[10px] font-black shadow-sm ring-1 ring-indigo-100 relative group/op">
+                            1
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[8px] font-bold rounded opacity-0 group-hover/op:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                              Active Operations
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-5 px-4">
+                      <div className="flex items-center justify-end gap-1 transition-all duration-200">
+                        <button 
+                          onClick={() => handleViewPlan(plan.id)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" 
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Analytics">
+                          <BarChart2 className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Settings">
+                          <Settings className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Transmit">
+                          <Send className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleEditPlan(plan.id)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" 
+                          title="Edit Strategy"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Documents">
+                          <FileText className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeletePlan(plan.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" 
+                          title="Archive Strategy"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer Section */}
+          <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              Showing {filteredPlans.length} of {plans.length} strategic formulations
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter">Neural Link Active</span>
+            </div>
+          </div>
+        </div>
       </Card>
     </div>
   );

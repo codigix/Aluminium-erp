@@ -28,6 +28,15 @@ const createProductionPlan = async (req, res, next) => {
   }
 };
 
+const updateProductionPlan = async (req, res, next) => {
+  try {
+    await productionPlanService.updateProductionPlan(req.params.id, req.body, req.user.id);
+    res.json({ message: 'Production plan updated successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getReadySalesOrderItems = async (req, res, next) => {
   try {
     const items = await productionPlanService.getReadySalesOrderItems();
@@ -75,13 +84,24 @@ const getItemBOMDetails = async (req, res, next) => {
   }
 };
 
+const deleteProductionPlan = async (req, res, next) => {
+  try {
+    await productionPlanService.deleteProductionPlan(req.params.id);
+    res.json({ message: 'Production plan deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
   createProductionPlan,
+  updateProductionPlan,
   getReadySalesOrderItems,
   getProductionReadySalesOrders,
   getSalesOrderFullDetails,
   getNextPlanCode,
-  getItemBOMDetails
+  getItemBOMDetails,
+  deleteProductionPlan
 };
