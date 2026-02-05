@@ -873,7 +873,9 @@ const getOrderTimeline = async salesOrderId => {
     const calculatedBomCost = orderQty > 0 ? totalOrderCost / orderQty : 0;
     
     item.bom_cost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : calculatedBomCost;
-    item.has_bom = Boolean(materials?.length > 0 || components?.length > 0 || operations?.length > 0 || scrap?.length > 0);
+    // Fix: has_bom should only be true if an order-specific BOM exists. 
+    // This prevents "template leakage" and makes the delete button work correctly (by only showing it for order-specific BOMs).
+    item.has_bom = hasOrderSpecific;
   }
   
   return items;
