@@ -1644,7 +1644,16 @@ const ProductionPlan = () => {
                       <div className="w-48">
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            {plan.total_ops > 0 ? Math.round((plan.completed_ops / plan.total_ops) * 100) : 0}% Complete
+                            {(() => {
+                              const total = plan.total_ops || 0;
+                              const woCount = plan.wo_count || 0;
+                              const status = (plan.status || '').toUpperCase();
+                              
+                              if (total > 0) return 100;
+                              if (woCount > 0) return 80;
+                              if (status === 'COMPLETED') return 50;
+                              return 0;
+                            })()}% Complete
                           </span>
                           <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-tighter">
                             {plan.completed_ops}/{plan.total_ops} OPS
@@ -1653,7 +1662,18 @@ const ProductionPlan = () => {
                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden p-0.5">
                           <div 
                             className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
-                            style={{ width: `${plan.total_ops > 0 ? (plan.completed_ops / plan.total_ops) * 100 : 0}%` }}
+                            style={{ 
+                              width: `${(() => {
+                                const total = plan.total_ops || 0;
+                                const woCount = plan.wo_count || 0;
+                                const status = (plan.status || '').toUpperCase();
+                                
+                                if (total > 0) return 100;
+                                if (woCount > 0) return 80;
+                                if (status === 'COMPLETED') return 50;
+                                return 0;
+                              })()}%` 
+                            }}
                           />
                         </div>
                         <div className="flex items-center gap-1.5 mt-1.5">
