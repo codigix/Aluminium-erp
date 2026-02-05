@@ -453,7 +453,7 @@ const BOMCreation = () => {
                                                       </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100 bg-white">
-                                                      {dwgItems.filter(item => item.has_bom).map((item, idx) => (
+                                                      {dwgItems.map((item, idx) => (
                                                         <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                                           <td className="pl-6 py-4">
                                                             <div className="flex flex-col">

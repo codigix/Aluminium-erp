@@ -296,7 +296,7 @@ const createBOMRequest = async (bomData) => {
       // User created a NEW BOM for a specific Sales Order from Drawing Header
       // Check if an item with this drawing_no already exists in this Sales Order to avoid duplicates
       const [existingItems] = await connection.query(
-        'SELECT id FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? LIMIT 1',
+        'SELECT id FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? AND (bom_cost IS NULL OR bom_cost = 0) LIMIT 1',
         [salesOrderId, drawingNo]
       );
 

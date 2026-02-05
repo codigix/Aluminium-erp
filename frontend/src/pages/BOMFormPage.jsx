@@ -793,8 +793,8 @@ const BOMFormPage = () => {
         payload.loss_percent = payload.lossPercent;
       }
 
-      if (itemId && itemId !== 'bom-form') {
-        // Direct API update for existing BOMs
+      if (effectiveItemId) {
+        // Direct API update for existing BOMs or SO-linked items
         const response = await fetch(`${API_BASE}/bom/items/${effectiveItemId}/${section}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -806,16 +806,19 @@ const BOMFormPage = () => {
         }
         await fetchData(false);
       } else {
-        // Local state update for new BOMs (especially from stock source)
+        // Local state update for new BOMs (especially from drawing/stock source)
         const newItem = {
           ...payload,
-          id: Date.now(), // Temporary ID for local management
+          id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           isLocal: true
         };
-        setBomData(prev => ({
-          ...prev,
-          [section]: [...(prev[section] || []), newItem]
-        }));
+        setBomData(prev => {
+          const currentItems = Array.isArray(prev[section]) ? prev[section] : [];
+          return {
+            ...prev,
+            [section]: [...currentItems, newItem]
+          };
+        });
       }
 
       setFormState(initialForm);
