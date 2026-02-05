@@ -130,9 +130,28 @@ const getJobCardById = async (id) => {
   return rows[0];
 };
 
+const updateJobCard = async (id, data) => {
+  const { 
+    workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks 
+  } = data;
+
+  await pool.execute(
+    `UPDATE job_cards 
+     SET work_order_id = ?, operation_id = ?, workstation_id = ?, assigned_to = ?, planned_qty = ?, remarks = ?
+     WHERE id = ?`,
+    [workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks, id]
+  );
+};
+
+const deleteJobCard = async (id) => {
+  await pool.execute('DELETE FROM job_cards WHERE id = ?', [id]);
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
   updateJobCardProgress,
-  getJobCardById
+  getJobCardById,
+  updateJobCard,
+  deleteJobCard
 };

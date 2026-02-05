@@ -28,8 +28,28 @@ const updateProgress = async (req, res) => {
   }
 };
 
+const updateJobCard = async (req, res) => {
+  try {
+    await jobCardService.updateJobCard(req.params.id, req.body);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const deleteJobCard = async (req, res) => {
+  try {
+    await jobCardService.deleteJobCard(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
-  updateProgress
+  updateProgress,
+  updateJobCard,
+  deleteJobCard
 };

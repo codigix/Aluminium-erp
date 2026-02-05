@@ -15,6 +15,7 @@ const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_
 const JobCard = () => {
   const [searchParams] = useSearchParams();
   const [jobCards, setJobCards] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [workOrders, setWorkOrders] = useState([]);
@@ -55,6 +56,7 @@ const JobCard = () => {
     fetchWorkOrders();
     fetchOperations();
     fetchWorkstations();
+    fetchUsers();
 
     const filterWO = searchParams.get('filter_work_order');
     if (filterWO) {
@@ -131,6 +133,21 @@ const JobCard = () => {
       }
     } catch (error) {
       console.error('Error fetching workstations:', error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
     }
   };
 
@@ -282,6 +299,7 @@ const JobCard = () => {
 
   const handleCreateNew = () => {
     setFormData({
+      id: null,
       jcNumber: `JC-${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth() + 1).toString().padStart(2, '0')}-${(jobCards.length + 1).toString().padStart(3, '0')}`,
       workOrderId: '',
       operationId: '',
@@ -294,12 +312,63 @@ const JobCard = () => {
     setIsModalOpen(true);
   };
 
+  const handleDelete = async (id) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: "You won't be able to revert this!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/job-cards/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          successToast('Job Card deleted successfully');
+          fetchJobCards();
+        } else {
+          errorToast('Failed to delete Job Card');
+        }
+      }
+    } catch (error) {
+      errorToast('Network error');
+    }
+  };
+
+  const handleEdit = (jc) => {
+    setFormData({
+      id: jc.id,
+      jcNumber: jc.job_card_no,
+      workOrderId: jc.work_order_id,
+      operationId: jc.operation_id,
+      workstationId: jc.workstation_id,
+      assignedTo: jc.assigned_to,
+      plannedQty: jc.planned_qty,
+      remarks: jc.remarks || ''
+    });
+    const wo = workOrders.find(w => String(w.id) === String(jc.work_order_id));
+    setSelectedWO(wo);
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/job-cards`, {
-        method: 'POST',
+      const isEdit = formData.id;
+      const url = isEdit ? `${API_BASE}/job-cards/${formData.id}` : `${API_BASE}/job-cards`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -308,12 +377,12 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        successToast('Job Card created successfully');
+        successToast(`Job Card ${isEdit ? 'updated' : 'created'} successfully`);
         setIsModalOpen(false);
         fetchJobCards();
       } else {
         const error = await response.json();
-        errorToast(error.error || 'Failed to create Job Card');
+        errorToast(error.error || `Failed to ${isEdit ? 'update' : 'create'} Job Card`);
       }
     } catch (error) {
       errorToast('Network error');
@@ -567,13 +636,13 @@ const JobCard = () => {
                           )}
                           <button 
                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); handleEdit(jc); }}
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button 
                             className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(jc.id); }}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -592,7 +661,7 @@ const JobCard = () => {
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        title="Create Job Card"
+        title={formData.id ? "Edit Job Card" : "Create Job Card"}
       >
         <form onSubmit={handleSubmit} className="space-y-6 p-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -654,13 +723,18 @@ const JobCard = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormControl label="Operator Name">
-              <input 
-                type="text" 
+              <select 
                 value={formData.assignedTo}
                 onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
-                placeholder="Search Operator..."
-              />
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+              >
+                <option value="">Select Operator</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.first_name} {user.last_name} ({user.username})
+                  </option>
+                ))}
+              </select>
             </FormControl>
             <FormControl label="Planned Quantity" required>
               <div className="relative">
@@ -696,7 +770,7 @@ const JobCard = () => {
               type="submit"
               className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-sm shadow-lg shadow-indigo-100 uppercase tracking-widest"
             >
-              Initialize Job Card
+              {formData.id ? "Update Job Card" : "Initialize Job Card"}
             </button>
           </div>
         </form>
