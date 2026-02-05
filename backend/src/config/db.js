@@ -1082,6 +1082,7 @@ const ensureWorkOrderTables = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         wo_number VARCHAR(50) UNIQUE NOT NULL,
         production_plan_item_id INT,
+        parent_wo_id INT,
         plan_id INT,
         sales_order_id INT,
         sales_order_item_id INT,
@@ -1099,6 +1100,7 @@ const ensureWorkOrderTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (production_plan_item_id) REFERENCES production_plan_items(id) ON DELETE SET NULL,
+        FOREIGN KEY (parent_wo_id) REFERENCES work_orders(id) ON DELETE SET NULL,
         FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE SET NULL,
         FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
         FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE SET NULL,
@@ -1110,6 +1112,7 @@ const ensureWorkOrderTables = async () => {
     const [woCols] = await connection.query('SHOW COLUMNS FROM work_orders');
     const existingWoCols = new Set(woCols.map(c => c.Field));
     if (!existingWoCols.has('plan_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN plan_id INT AFTER production_plan_item_id');
+    if (!existingWoCols.has('parent_wo_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN parent_wo_id INT AFTER production_plan_item_id');
     if (!existingWoCols.has('item_code')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_code VARCHAR(120) AFTER sales_order_item_id');
     if (!existingWoCols.has('item_name')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_name VARCHAR(255) AFTER item_code');
     if (!existingWoCols.has('bom_no')) await connection.query('ALTER TABLE work_orders ADD COLUMN bom_no VARCHAR(100) AFTER item_name');

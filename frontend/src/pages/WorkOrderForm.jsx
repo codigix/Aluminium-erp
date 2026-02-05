@@ -21,9 +21,13 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
     quantity: 1,
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
+    deliveryCommitment: 'Pending Schedule',
     priority: 'NORMAL',
     remarks: '',
     bomId: '',
+    planId: '',
+    item_code: '',
+    item_name: '',
     status: 'DRAFT'
   });
 
@@ -31,28 +35,62 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
   const [boms, setBoms] = useState([]);
   const [selectedSO, setSelectedSO] = useState(null);
   const [items, setItems] = useState([]);
+  const [operations, setOperations] = useState([]);
+  const [inventory, setInventory] = useState([]);
+
+  const isLocked = Boolean(formData.planId);
 
   useEffect(() => {
     fetchInitialData();
-    if (workOrderId) {
-      fetchWorkOrderDetails(workOrderId);
+    const effectiveWorkOrderId = workOrderId || location.state?.workOrderId;
+    if (effectiveWorkOrderId) {
+      fetchWorkOrderDetails(effectiveWorkOrderId);
     } else {
       fetchNextWONumber();
     }
-  }, [workOrderId]);
+  }, [workOrderId, location.state?.workOrderId]);
+
+  useEffect(() => {
+    // Only fetch BOM details if NOT linked to a production plan
+    // If linked to a plan, operations/materials are fetched via fetchPlanDetails
+    if (formData.bomId && !formData.planId) {
+      fetchBOMDetails(formData.bomId);
+    } else if (!formData.bomId && !formData.planId) {
+      setOperations([]);
+      setInventory([]);
+    }
+  }, [formData.bomId, formData.planId]);
 
   const fetchInitialData = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const [soRes, bomRes] = await Promise.all([
+      const [soRes, bomRes, itemRes] = await Promise.all([
         fetch(`${API_BASE}/sales-orders`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/boms`, { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${API_BASE}/boms/approved`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/items`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
       
       if (soRes.ok) setSalesOrders(await soRes.json());
       if (bomRes.ok) setBoms(await bomRes.json());
+      if (itemRes.ok) setItems(await itemRes.json());
     } catch (error) {
       console.error('Error fetching initial data:', error);
+    }
+  };
+
+  const fetchBOMDetails = async (bomId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/boms/${bomId}/materials`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOperations(data.operations || []);
+        setInventory(data.materials || []);
+      }
+    } catch (error) {
+      console.error('Error fetching BOM details:', error);
     }
   };
 
@@ -81,19 +119,28 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
       if (response.ok) {
         const data = await response.json();
         setFormData({
-          woNumber: data.wo_number,
-          salesOrderId: data.sales_order_id,
-          salesOrderItemId: data.sales_order_item_id,
-          quantity: data.quantity,
+          woNumber: data.wo_number || '',
+          salesOrderId: data.sales_order_id || '',
+          salesOrderItemId: data.sales_order_item_id || '',
+          quantity: data.quantity || 1,
           startDate: data.start_date?.split('T')[0] || '',
           endDate: data.end_date?.split('T')[0] || '',
-          priority: data.priority,
+          deliveryCommitment: data.delivery_commitment || 'Pending Schedule',
+          priority: data.priority || 'NORMAL',
           remarks: data.remarks || '',
-          bomId: data.bom_id || '',
-          status: data.status
+          bomId: data.bom_no || '',
+          planId: data.plan_id || '',
+          item_code: data.item_code || '',
+          item_name: data.description || data.item_name || '',
+          status: data.status || 'DRAFT'
         });
         if (data.sales_order_id) {
           fetchSODetails(data.sales_order_id);
+        }
+        if (data.plan_id) {
+          fetchPlanDetails(data.plan_id, data.item_code);
+        } else if (data.bom_no) {
+          fetchBOMDetails(data.bom_no);
         }
       }
     } catch (error) {
@@ -120,25 +167,79 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
     }
   };
 
+  const fetchPlanDetails = async (planId, itemCode) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/${planId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.end_date) {
+          setFormData(prev => ({ ...prev, deliveryCommitment: data.end_date.split('T')[0] }));
+        }
+
+        // Filter operations for this item
+        if (data.operations) {
+          const itemOps = data.operations.filter(op => 
+            String(op.source_item || op.sourceItem || op.itemCode || op.item_code) === String(itemCode)
+          );
+          if (itemOps.length > 0) {
+            setOperations(itemOps.map(op => ({
+              operation_name: op.operation_name || op.operationName,
+              workstation: op.workstation,
+              base_time: op.base_time || op.baseTime,
+              source_item: op.source_item || op.sourceItem || op.itemCode || op.item_code
+            })));
+          }
+        }
+
+        // Filter materials for this item/assembly
+        if (data.materials) {
+          const itemMats = data.materials.filter(m => 
+            String(m.source_assembly || m.sourceAssembly) === String(itemCode)
+          );
+          if (itemMats.length > 0) {
+            setInventory(itemMats.map(m => ({
+              item_code: m.item_code || m.itemCode,
+              material_name: m.material_name || m.materialName,
+              required_qty: m.required_qty || m.requiredQty,
+              uom: m.uom,
+              source_assembly: m.source_assembly || m.sourceAssembly
+            })));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching Plan details:', error);
+    }
+  };
+
   const handleSOChange = (soId) => {
     setFormData(prev => ({ ...prev, salesOrderId: soId, salesOrderItemId: '' }));
     fetchSODetails(soId);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (newStatus) => {
     setSaving(true);
     try {
       const token = localStorage.getItem('authToken');
       const url = workOrderId ? `${API_BASE}/work-orders/${workOrderId}` : `${API_BASE}/work-orders`;
       const method = workOrderId ? 'PUT' : 'POST';
       
+      const payload = {
+        ...formData,
+        status: newStatus || formData.status
+      };
+
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
@@ -202,34 +303,50 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
               Close
             </button>
             <button 
-              onClick={handleSubmit}
+              onClick={() => handleSubmit(formData.status === 'DRAFT' ? 'RELEASED' : formData.status)}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all text-sm font-bold shadow-sm"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-bold shadow-sm ${
+                formData.status === 'DRAFT' 
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
+                  : 'bg-slate-900 hover:bg-slate-800 text-white'
+              }`}
             >
               <Play className="w-4 h-4" />
-              {saving ? 'Saving...' : 'Release to Production'}
+              {saving ? 'Processing...' : (formData.status === 'DRAFT' ? 'Release to Production' : 'Update Work Order')}
             </button>
           </div>
         </div>
 
         {/* Tab Navigation */}
         <div className="max-w-[1600px] mx-auto px-6">
-          <div className="flex items-center gap-8">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 py-4 text-xs font-bold uppercase tracking-widest transition-all relative ${
-                  activeTab === tab.id ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-                {activeTab === tab.id && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
-                )}
-              </button>
-            ))}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-8">
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 py-4 text-xs font-bold uppercase tracking-widest transition-all relative ${
+                    activeTab === tab.id ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
+                  {activeTab === tab.id && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-900 text-white rounded-lg border border-slate-800 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Execution Pulse</span>
+              </div>
+              <div className="h-3 w-px bg-slate-700 mx-1" />
+              <span className="text-[10px] font-bold text-indigo-400">0%</span>
+              <Activity className="w-3 h-3 text-indigo-400" />
+            </div>
           </div>
         </div>
       </div>
@@ -253,11 +370,23 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                     <div className="grid grid-cols-2 gap-x-8 gap-y-6">
                       <FormControl label="Target Item to Manufacture" required>
                         <SearchableSelect 
-                          options={items.map(i => ({ label: i.item_code, value: i.id, subLabel: i.description }))}
+                          options={
+                            isLocked && formData.item_code
+                              ? [{ label: `${formData.item_code} - ${formData.item_name || 'Planned Item'}`, value: formData.salesOrderItemId, subLabel: 'Planned Item' }, ...items.map(i => ({ label: i.item_code, value: i.id, subLabel: i.description }))]
+                              : items.map(i => ({ label: i.item_code, value: i.id, subLabel: i.description }))
+                          }
                           value={formData.salesOrderItemId}
+                          disabled={isLocked}
                           onChange={(e) => {
                             const item = items.find(i => String(i.id) === String(e.target.value));
-                            setFormData(prev => ({ ...prev, salesOrderItemId: e.target.value, quantity: item ? item.quantity : 1 }));
+                            const matchingBOM = boms.find(b => String(b.item_id) === String(item?.item_id) || b.item_code === item?.item_code);
+                            
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              salesOrderItemId: e.target.value, 
+                              quantity: item ? item.quantity : 1,
+                              bomId: matchingBOM ? matchingBOM.id : prev.bomId
+                            }));
                           }}
                           placeholder="Search Products..."
                         />
@@ -265,8 +394,13 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                       
                       <FormControl label="Bill of Materials (BOM)">
                         <SearchableSelect 
-                          options={boms.map(b => ({ label: b.bom_number || `BOM-${b.id}`, value: b.id, subLabel: b.item_code }))}
+                          options={
+                            isLocked && formData.bomId
+                              ? [{ label: formData.bomId, value: formData.bomId, subLabel: 'Planned BOM' }, ...boms.map(b => ({ label: b.bom_number || `BOM-${b.id}`, value: b.id, subLabel: b.item_code }))]
+                              : boms.map(b => ({ label: b.bom_number || `BOM-${b.id}`, value: b.id, subLabel: b.item_code }))
+                          }
                           value={formData.bomId}
+                          disabled={isLocked}
                           onChange={(e) => setFormData(prev => ({ ...prev, bomId: e.target.value }))}
                           placeholder="Select BOM..."
                         />
@@ -277,8 +411,9 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                           <div className="relative">
                             <input 
                               type="number"
-                              className="w-full pl-3 pr-12 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                              className={`w-full pl-3 pr-12 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all ${isLocked ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                               value={formData.quantity}
+                              disabled={isLocked}
                               onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">UNIT</span>
@@ -287,8 +422,9 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
 
                         <FormControl label="Priority Level">
                           <select 
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                            className={`w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
                             value={formData.priority}
+                            disabled={isLocked}
                             onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
                           >
                             <option value="LOW">Low Priority</option>
@@ -302,8 +438,13 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                       <FormControl label="Sales Order Reference">
                         <div className="relative">
                           <SearchableSelect 
-                            options={salesOrders.map(so => ({ label: `${so.project_name} (${so.po_number || 'No PO'})`, value: so.id, subLabel: so.company_name }))}
+                            options={
+                              isLocked && formData.salesOrderId && !salesOrders.some(so => String(so.id) === String(formData.salesOrderId))
+                                ? [{ label: `SO-${formData.salesOrderId}`, value: formData.salesOrderId, subLabel: 'Planned SO' }, ...salesOrders.map(so => ({ label: `${so.project_name} (${so.po_number || 'No PO'})`, value: so.id, subLabel: so.company_name }))]
+                                : salesOrders.map(so => ({ label: `${so.project_name} (${so.po_number || 'No PO'})`, value: so.id, subLabel: so.company_name }))
+                            }
                             value={formData.salesOrderId}
+                            disabled={isLocked}
                             onChange={(e) => handleSOChange(e.target.value)}
                             placeholder="SO-REFERENCE"
                           />
@@ -328,32 +469,46 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                   <div className="grid grid-cols-3 gap-6">
                     <Card className="p-6 border-slate-200/60 shadow-sm">
                       <FormControl label="Planned Start Date" required>
-                        <input 
-                          type="date"
-                          className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                          value={formData.startDate}
-                          onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
-                        />
+                        <div className="relative">
+                          <input 
+                            type="date"
+                            className={`w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
+                            value={formData.startDate}
+                            disabled={isLocked}
+                            onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                          />
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <Clock className="w-4 h-4 text-slate-300" />
+                          </div>
+                        </div>
                       </FormControl>
                     </Card>
 
                     <Card className="p-6 border-slate-200/60 shadow-sm">
                       <FormControl label="Planned Completion Date" required>
-                        <input 
-                          type="date"
-                          className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                          value={formData.endDate}
-                          onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                        />
+                        <div className="relative">
+                          <input 
+                            type="date"
+                            className={`w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
+                            value={formData.endDate}
+                            disabled={isLocked}
+                            onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
+                            placeholder="dd-mm-yyyy"
+                          />
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <Clock className="w-4 h-4 text-slate-300" />
+                          </div>
+                        </div>
                       </FormControl>
                     </Card>
 
-                    <Card className="p-6 bg-slate-50 border-dashed border-slate-200 shadow-none flex flex-col justify-center">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Delivery Commitment</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-slate-600">Pending Schedule</span>
-                        <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-bold rounded border border-amber-100 uppercase tracking-tighter">Target</span>
-                      </div>
+                    <Card className="p-6 border-slate-200/60 shadow-sm">
+                      <FormControl label="Delivery Commitment">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-slate-700">{formData.deliveryCommitment}</span>
+                          <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-bold rounded uppercase tracking-wider">Target</span>
+                        </div>
+                      </FormControl>
                     </Card>
                   </div>
                 </section>
@@ -367,15 +522,46 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                     <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">03 Operation Sequence</h2>
                   </div>
 
-                  <Card className="p-12 border-slate-200/60 shadow-sm border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-slate-100">
-                      <Activity className="w-6 h-6 text-slate-300 animate-pulse" />
-                    </div>
-                    <h3 className="text-sm font-bold text-slate-600">Production Logic Not Found</h3>
-                    <p className="text-xs text-slate-400 mt-1 max-w-[300px]">
-                      Release job cards or link a BOM to define the manufacturing operations for this order.
-                    </p>
-                  </Card>
+                  {operations.length > 0 ? (
+                    <Card className="border-slate-200/60 shadow-sm overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Step</th>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Operation</th>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Workstation</th>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-right">Base Time</th>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Source Item</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {operations.map((op, i) => (
+                            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-6 py-4 font-bold text-slate-400">{(i + 1).toString().padStart(2, '0')}</td>
+                              <td className="px-6 py-4 font-bold text-slate-700">{op.operation_name}</td>
+                              <td className="px-6 py-4 text-slate-500">{op.workstation || 'Unassigned'}</td>
+                              <td className="px-6 py-4 text-slate-900 font-bold text-right">{op.base_time} <span className="text-slate-400 font-medium">Hrs</span></td>
+                              <td className="px-6 py-4">
+                                <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">
+                                  {op.source_item || formData.item_code || 'Main Item'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </Card>
+                  ) : (
+                    <Card className="p-12 border-slate-200/60 shadow-sm border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-slate-100">
+                        <Activity className="w-6 h-6 text-slate-300 animate-pulse" />
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-600">Production Logic Not Found</h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-[300px]">
+                        Release job cards or link a BOM to define the manufacturing operations for this order.
+                      </p>
+                    </Card>
+                  )}
                 </section>
 
                 {/* 04 Required Inventory */}
@@ -387,15 +573,55 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                     <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">04 Required Inventory</h2>
                   </div>
 
-                  <Card className="p-12 border-slate-200/60 shadow-sm border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-slate-100">
-                      <Search className="w-6 h-6 text-slate-300" />
-                    </div>
-                    <h3 className="text-sm font-bold text-slate-600">Stock Requirements Empty</h3>
-                    <p className="text-xs text-slate-400 mt-1 max-w-[300px]">
-                      Associate a Bill of Materials (BOM) to generate the required material consumption list.
-                    </p>
-                  </Card>
+                  {inventory.length > 0 ? (
+                    <Card className="border-slate-200/60 shadow-sm overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Material</th>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-right">Required Qty</th>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Source Assembly</th>
+                            <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {inventory.map((inv, i) => (
+                            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="font-bold text-slate-700">{inv.material_name}</div>
+                                <div className="text-[10px] text-slate-400">{inv.item_code}</div>
+                              </td>
+                              <td className="px-6 py-4 text-slate-900 font-bold text-right">
+                                {inv.required_qty || (inv.qty_per_pc * formData.quantity).toFixed(2)} 
+                                <span className="ml-1 text-slate-400 font-medium uppercase">{inv.uom}</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="px-2 py-1 bg-rose-50 text-rose-600 rounded text-[10px] font-bold border border-rose-100">
+                                  {inv.source_assembly || '-'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="flex items-center gap-1.5 text-slate-500">
+                                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                                  Available
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </Card>
+                  ) : (
+                    <Card className="p-12 border-slate-200/60 shadow-sm border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-slate-100">
+                        <Search className="w-6 h-6 text-slate-300" />
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-600">Stock Requirements Empty</h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-[300px]">
+                        Associate a Bill of Materials (BOM) to generate the required material consumption list.
+                      </p>
+                    </Card>
+                  )}
 
                   <div className="mt-6 bg-indigo-600 rounded-2xl overflow-hidden relative">
                     <div className="absolute top-0 right-0 w-64 h-full bg-white/5 skew-x-12 -mr-12" />

@@ -9,6 +9,7 @@ router.get('/', authorize(['PROD_VIEW']), workOrderController.listWorkOrders);
 router.post('/', authorize(['PROD_MANAGE']), workOrderController.createWorkOrder);
 router.post('/create-from-plan/:planId', authorize(['PROD_MANAGE']), workOrderController.createWorkOrdersFromPlan);
 router.get('/next-number', authorize(['PROD_VIEW']), workOrderController.getNextWoNumber);
+router.get('/:id', authorize(['PROD_VIEW']), workOrderController.getWorkOrderById);
 router.patch('/:id/status', authorize(['PROD_MANAGE']), workOrderController.updateStatus);
 router.delete('/:id', authorize(['PROD_MANAGE']), workOrderController.deleteWorkOrder);
 

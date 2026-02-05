@@ -9,6 +9,18 @@ const listWorkOrders = async (req, res) => {
   }
 };
 
+const getWorkOrderById = async (req, res) => {
+  try {
+    const workOrder = await workOrderService.getWorkOrderById(req.params.id);
+    if (!workOrder) {
+      return res.status(404).json({ error: 'Work Order not found' });
+    }
+    res.json(workOrder);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const createWorkOrder = async (req, res) => {
   try {
     const id = await workOrderService.createWorkOrder(req.body);
@@ -62,6 +74,7 @@ const deleteWorkOrder = async (req, res) => {
 
 module.exports = {
   listWorkOrders,
+  getWorkOrderById,
   createWorkOrder,
   createWorkOrdersFromPlan,
   updateStatus,

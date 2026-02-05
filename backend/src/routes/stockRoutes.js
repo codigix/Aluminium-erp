@@ -3,6 +3,15 @@ const router = express.Router();
 const stockService = require('../services/stockService');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
+router.get('/', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW']), async (req, res) => {
+  try {
+    const items = await stockService.getStockBalance();
+    res.json(items);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 router.get('/items/next-code', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const { itemName, itemGroup } = req.query;

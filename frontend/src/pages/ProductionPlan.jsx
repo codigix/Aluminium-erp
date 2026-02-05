@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
@@ -12,6 +13,7 @@ import { successToast, errorToast } from '../utils/toast';
 const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const ProductionPlan = () => {
+  const navigate = useNavigate();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -201,8 +203,15 @@ const ProductionPlan = () => {
         if (response.ok) {
           const data = await response.json();
           successToast(data.message || 'Work orders created successfully');
-          // Refresh plan details to show updated status
-          handleViewPlan(planId);
+          
+          // Navigate to the first created work order (usually the FG one)
+          if (data.workOrderIds && data.workOrderIds.length > 0) {
+            navigate('/work-order-form', { state: { workOrderId: data.workOrderIds[0] } });
+          } else if (data.workOrderId) {
+            navigate('/work-order-form', { state: { workOrderId: data.workOrderId } });
+          } else {
+            handleViewPlan(planId);
+          }
         } else {
           const error = await response.json();
           errorToast(error.error || 'Failed to create work orders');
@@ -1283,7 +1292,10 @@ const ProductionPlan = () => {
             </div>
           </div>
           <div className="flex items-center gap-3 mr-4">
-            <button className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 text-xs font-bold transition-all border border-emerald-100">
+            <button 
+              onClick={() => handleCreateWorkOrders(newPlan.id)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 text-xs font-bold transition-all border border-emerald-100"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
               Work Orders
             </button>
@@ -1622,35 +1634,44 @@ const ProductionPlan = () => {
                           <div className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">
                             {plan.start_date ? new Date(plan.start_date).toLocaleDateString() : '-'}
                           </div>
-                          <div className="text-[9px] text-slate-400 font-medium">No work orders</div>
+                          <div className="text-[9px] text-slate-400 font-medium">
+                            {plan.wo_count > 0 ? `${plan.wo_count} Active Work Orders` : 'No work orders'}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="py-5 px-4">
                       <div className="w-48">
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">0% Complete</span>
-                          <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-tighter">0/0 OPS</span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            {plan.total_ops > 0 ? Math.round((plan.completed_ops / plan.total_ops) * 100) : 0}% Complete
+                          </span>
+                          <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                            {plan.completed_ops}/{plan.total_ops} OPS
+                          </span>
                         </div>
                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden p-0.5">
-                          <div className="h-full w-0 bg-indigo-500 rounded-full" />
+                          <div 
+                            className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+                            style={{ width: `${plan.total_ops > 0 ? (plan.completed_ops / plan.total_ops) * 100 : 0}%` }}
+                          />
                         </div>
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <Clock className="w-3 h-3 text-indigo-400" />
-                          <span className="text-[9px] text-indigo-600 font-bold uppercase tracking-tighter">No work orders</span>
+                          <span className="text-[9px] text-indigo-600 font-bold uppercase tracking-tighter">
+                            {plan.wo_count > 0 ? `${plan.wo_count} Linked Orders` : 'No work orders'}
+                          </span>
                         </div>
                       </div>
                     </td>
                     <td className="py-5 px-4">
                       <div className="flex items-center -space-x-2">
-                        {[1].map((_, i) => (
-                          <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-[10px] font-black shadow-sm ring-1 ring-indigo-100 relative group/op">
-                            1
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[8px] font-bold rounded opacity-0 group-hover/op:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                              Active Operations
-                            </div>
+                        <div className="w-8 h-8 rounded-full border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-[10px] font-black shadow-sm ring-1 ring-indigo-100 relative group/op">
+                          {plan.total_ops}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[8px] font-bold rounded opacity-0 group-hover/op:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                            Total Operations
                           </div>
-                        ))}
+                        </div>
                       </div>
                     </td>
                     <td className="py-5 px-4">

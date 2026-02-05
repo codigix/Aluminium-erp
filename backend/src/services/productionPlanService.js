@@ -5,7 +5,10 @@ const listProductionPlans = async () => {
   const [rows] = await pool.query(
     `SELECT pp.*, u.username as creator_name, 
             o.order_no, so.project_name,
-            soi.item_code, soi.description as item_description
+            soi.item_code, soi.description as item_description,
+            (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id) as wo_count,
+            (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id) as total_ops,
+            (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
      LEFT JOIN sales_orders so ON pp.sales_order_id = so.id

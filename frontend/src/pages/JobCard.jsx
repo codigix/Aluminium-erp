@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
@@ -12,6 +13,7 @@ import { successToast, errorToast } from '../utils/toast';
 const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
 
 const JobCard = () => {
+  const [searchParams] = useSearchParams();
   const [jobCards, setJobCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,6 +55,11 @@ const JobCard = () => {
     fetchWorkOrders();
     fetchOperations();
     fetchWorkstations();
+
+    const filterWO = searchParams.get('filter_work_order');
+    if (filterWO) {
+      setSearchQuery(filterWO);
+    }
   }, []);
 
   const fetchJobCards = async () => {
@@ -64,8 +71,16 @@ const JobCard = () => {
       if (response.ok) {
         const data = await response.json();
         setJobCards(data);
-        // Start with all WOs collapsed by default
-        setExpandedWOs(new Set());
+        
+        const filterWO = searchParams.get('filter_work_order');
+        if (filterWO) {
+          const targetJC = data.find(jc => jc.wo_number === filterWO);
+          if (targetJC) {
+            setExpandedWOs(new Set([String(targetJC.work_order_id)]));
+          }
+        } else {
+          setExpandedWOs(new Set());
+        }
       }
     } catch (error) {
       console.error('Error fetching job cards:', error);
@@ -131,12 +146,13 @@ const JobCard = () => {
   };
 
   const filteredJobCards = useMemo(() => {
-    // Only show Job Cards for Assembly (FG)
-    const assemblyOnly = jobCards.filter(jc => jc.source_type === 'FG');
+    // Show Job Cards for Finished Goods (FG) only, exclude Sub-Assemblies (SA)
+    const allowedSourceTypes = ['FG'];
+    const filteredBySource = jobCards.filter(jc => allowedSourceTypes.includes(jc.source_type));
     
-    if (!searchQuery) return assemblyOnly;
+    if (!searchQuery) return filteredBySource;
     const query = searchQuery.toLowerCase();
-    return assemblyOnly.filter(jc => 
+    return filteredBySource.filter(jc => 
       jc.jc_number?.toLowerCase().includes(query) ||
       jc.wo_number?.toLowerCase().includes(query) ||
       jc.operation_name?.toLowerCase().includes(query) ||
@@ -156,6 +172,7 @@ const JobCard = () => {
           wo_quantity: jc.wo_quantity,
           wo_status: jc.wo_status,
           wo_end_date: jc.wo_end_date,
+          source_type: jc.source_type,
           cards: []
         };
       }
@@ -165,13 +182,14 @@ const JobCard = () => {
   }, [filteredJobCards]);
 
   const stats = useMemo(() => {
-    const assemblyOnly = jobCards.filter(jc => jc.source_type === 'FG');
-    const total = assemblyOnly.length;
-    const inProduction = assemblyOnly.filter(jc => jc.status === 'IN_PROGRESS').length;
-    const completed = assemblyOnly.filter(jc => jc.status === 'COMPLETED').length;
-    const activeWOs = new Set(assemblyOnly.filter(jc => jc.status !== 'COMPLETED').map(jc => jc.work_order_id)).size;
-    const totalEfficiency = assemblyOnly.length > 0 
-      ? Math.round(assemblyOnly.reduce((acc, jc) => acc + calculateEfficiency(jc), 0) / assemblyOnly.length) 
+    const allowedSourceTypes = ['FG'];
+    const filteredBySource = jobCards.filter(jc => allowedSourceTypes.includes(jc.source_type));
+    const total = filteredBySource.length;
+    const inProduction = filteredBySource.filter(jc => jc.status === 'IN_PROGRESS').length;
+    const completed = filteredBySource.filter(jc => jc.status === 'COMPLETED').length;
+    const activeWOs = new Set(filteredBySource.filter(jc => jc.status !== 'COMPLETED').map(jc => jc.work_order_id)).size;
+    const totalEfficiency = filteredBySource.length > 0 
+      ? Math.round(filteredBySource.reduce((acc, jc) => acc + calculateEfficiency(jc), 0) / filteredBySource.length) 
       : 0;
 
     return [
@@ -412,6 +430,11 @@ const JobCard = () => {
                       }`}>
                         {group.wo_status || 'draft'}
                       </span>
+                      {group.source_type === 'SA' && (
+                        <span className="px-2 py-0.5 bg-purple-50 text-purple-600 border border-purple-100 text-[10px] font-bold rounded uppercase tracking-wider">
+                          Sub-Assembly
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{group.wo_number}</p>
                   </div>
@@ -697,7 +720,7 @@ const JobCard = () => {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Completed So Far</p>
-                <p className="text-xl font-bold text-emerald-600">{(selectedJC?.produced_qty || 0).toFixed(2)}</p>
+                <p className="text-xl font-bold text-emerald-600">{Number(selectedJC?.produced_qty || 0).toFixed(2)}</p>
               </div>
             </div>
           </div>

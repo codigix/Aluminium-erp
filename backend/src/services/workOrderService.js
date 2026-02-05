@@ -29,54 +29,79 @@ const createWorkOrdersFromPlan = async (planId) => {
     
     // 3. Fetch Sub Assemblies
     const [subAssemblies] = await connection.query('SELECT * FROM production_plan_sub_assemblies WHERE plan_id = ?', [planId]);
+    const [planOps] = await connection.query('SELECT * FROM production_plan_operations WHERE plan_id = ?', [planId]);
 
     const createdWorkOrders = [];
+    const saWorkOrderIds = [];
+    let parentWoId = null;
 
     // Helper to create WO
-    const createWO = async (itemData, sourceType) => {
+    const createWO = async (itemData, sourceType, parentId = null) => {
       const itemCode = itemData.item_code;
       const itemName = itemData.description || itemData.item_code; // Fallback
       const bomNo = itemData.bom_no;
       const quantity = itemData.planned_qty || itemData.required_qty;
       const salesOrderItemId = itemData.sales_order_item_id || null;
-      const productionPlanItemId = itemData.id;
+      const productionPlanItemId = sourceType === 'FG' ? itemData.id : null;
+      const startDate = itemData.planned_start_date || plan.start_date;
+      const endDate = itemData.planned_end_date || plan.end_date;
 
       // Check if WO already exists for this plan and item
       const [existing] = await connection.query(
         'SELECT id FROM work_orders WHERE plan_id = ? AND item_code = ?',
         [planId, itemCode]
       );
-      if (existing.length > 0) return null;
+      if (existing.length > 0) return existing[0].id;
 
       const woNumber = await generateWoNumber();
       
       const [result] = await connection.execute(
         `INSERT INTO work_orders 
-         (wo_number, plan_id, production_plan_item_id, sales_order_id, sales_order_item_id, 
-          item_code, item_name, bom_no, source_type, quantity, status, priority)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NORMAL')`,
+         (wo_number, plan_id, production_plan_item_id, parent_wo_id, sales_order_id, sales_order_item_id, 
+          item_code, item_name, bom_no, source_type, quantity, start_date, end_date, status, priority)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
         [
-          woNumber, planId, sourceType === 'FG' ? productionPlanItemId : null, 
+          woNumber, planId, productionPlanItemId, parentId,
           plan.sales_order_id, salesOrderItemId,
-          itemCode, itemName, bomNo, sourceType, quantity
+          itemCode, itemName, bomNo, sourceType, quantity,
+          startDate, endDate, plan.production_priority || 'NORMAL'
         ]
       );
 
       const workOrderId = result.insertId;
-      await createJobCardsForWorkOrder(workOrderId, connection, 'DRAFT');
+      
+      // Only create Job Cards for Finished Goods (FG), not for Sub-Assemblies (SA)
+      if (sourceType !== 'SA') {
+        await createJobCardsForWorkOrder(workOrderId, connection, 'DRAFT', planOps.filter(op => op.source_item === itemCode));
+      }
+      
       return workOrderId;
     };
 
-    // Process Finished Goods
-    for (const item of items) {
-      const woId = await createWO(item, 'FG');
-      if (woId) createdWorkOrders.push(woId);
-    }
-
-    // Process Sub Assemblies
+    // 1. Process Sub Assemblies FIRST
     for (const sa of subAssemblies) {
       const woId = await createWO(sa, 'SA');
-      if (woId) createdWorkOrders.push(woId);
+      if (woId) {
+        createdWorkOrders.push(woId);
+        saWorkOrderIds.push(woId);
+      }
+    }
+
+    // 2. Process Finished Goods SECOND
+    for (const item of items) {
+      const woId = await createWO(item, 'FG');
+      if (woId) {
+        createdWorkOrders.push(woId);
+        if (!parentWoId) parentWoId = woId; // Use first FG as parent for linking
+      }
+    }
+
+    // 3. Link SAs to parent FG if applicable
+    if (parentWoId && saWorkOrderIds.length > 0) {
+      await connection.query(
+        'UPDATE work_orders SET parent_wo_id = ? WHERE id IN (?)',
+        [parentWoId, saWorkOrderIds]
+      );
     }
 
     // Update Plan status
@@ -154,10 +179,13 @@ const createWorkOrder = async (data) => {
 
 const getWorkOrderById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT wo.*, so.project_name, soi.item_code, soi.description, w.workstation_name
+    `SELECT wo.*, so.project_name, 
+            COALESCE(soi.item_code, wo.item_code) as item_code, 
+            COALESCE(soi.description, wo.item_name) as description, 
+            w.workstation_name
      FROM work_orders wo
-     JOIN sales_orders so ON wo.sales_order_id = so.id
-     JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
      WHERE wo.id = ?`,
     [id]
@@ -171,7 +199,7 @@ const generateJobCardNo = async (connection) => {
   return `JC-${String(count).padStart(4, '0')}`;
 };
 
-const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus = 'DRAFT') => {
+const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus = 'DRAFT', providedOperations = null) => {
   // 1. Fetch WO details
   const [woRows] = await connection.query(
     'SELECT item_code, bom_no, quantity, sales_order_item_id, source_type FROM work_orders WHERE id = ?',
@@ -184,24 +212,30 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
   const [existingJc] = await connection.query('SELECT id FROM job_cards WHERE work_order_id = ?', [workOrderId]);
   if (existingJc.length > 0) return;
 
-  // 3. Fetch Operations from BOM
-  // IMPORTANT: For Sub-Assemblies (SA), we should fetch operations for the specific item_code 
-  // from the master BOM, as sales_order_item_id refers to the parent FG item.
-  let bomOperationsRaw = [];
-  if (wo.source_type === 'SA' || !wo.sales_order_item_id) {
-    bomOperationsRaw = await bomService.getItemOperations(null, wo.item_code);
+  // 3. Get Operations
+  let operationsToUse = [];
+  if (providedOperations && providedOperations.length > 0) {
+    operationsToUse = providedOperations.map(op => ({
+      operation_name: op.operation_name,
+      workstation: op.workstation,
+      base_time: op.base_time
+    }));
   } else {
-    // For FG, try to get SO-specific operations first
-    bomOperationsRaw = await bomService.getItemOperations(wo.sales_order_item_id, wo.item_code);
+    // Fetch from BOM if not provided
+    if (wo.source_type === 'SA' || !wo.sales_order_item_id) {
+      operationsToUse = await bomService.getItemOperations(null, wo.item_code);
+    } else {
+      operationsToUse = await bomService.getItemOperations(wo.sales_order_item_id, wo.item_code);
+    }
   }
   
-  if (bomOperationsRaw.length === 0) {
-    console.warn(`No operations found for item ${wo.item_code} in BOM`);
+  if (operationsToUse.length === 0) {
+    console.warn(`No operations found for item ${wo.item_code}`);
     return;
   }
 
   // 4. Create Job Cards
-  for (const op of bomOperationsRaw) {
+  for (const op of operationsToUse) {
     const [masterOps] = await connection.query(
       'SELECT id FROM operations WHERE operation_name = ?',
       [op.operation_name]
@@ -251,24 +285,20 @@ const deleteWorkOrder = async (id) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Check if any material issues exist
-    const [miRows] = await connection.query('SELECT id FROM material_issues WHERE work_order_id = ?', [id]);
-    if (miRows.length > 0) {
-      throw new Error('Cannot delete Work Order with linked material issues.');
-    }
-
-    // 2. Check if any job cards are completed or in progress
-    const [jcRows] = await connection.query('SELECT id FROM job_cards WHERE work_order_id = ? AND status NOT IN ("DRAFT", "PENDING")', [id]);
-    if (jcRows.length > 0) {
-      throw new Error('Cannot delete Work Order with active or completed job cards.');
-    }
-
-    // 3. Get production plan item id to revert status
+    // 1. Get production plan item id to revert status
     const [woRows] = await connection.query('SELECT production_plan_item_id FROM work_orders WHERE id = ?', [id]);
     if (woRows.length === 0) throw new Error('Work Order not found');
     const productionPlanItemId = woRows[0].production_plan_item_id;
 
-    // 4. Delete associated job cards
+    // 2. Delete associated material issues and their items
+    await connection.execute(`
+      DELETE mii FROM material_issue_items mii
+      JOIN material_issues mi ON mii.issue_id = mi.id
+      WHERE mi.work_order_id = ?
+    `, [id]);
+    await connection.execute('DELETE FROM material_issues WHERE work_order_id = ?', [id]);
+
+    // 3. Delete associated job cards
     await connection.execute('DELETE FROM job_cards WHERE work_order_id = ?', [id]);
 
     // 5. Delete the work order
