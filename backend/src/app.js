@@ -104,7 +104,7 @@ app.use('/api/quotations/communications', quotationCommunicationRoutes);
 app.use('/api/quotations', quotationRoutes);
 app.use('/api/quotation-requests', quotationRequestRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
-app.use('/api/boms', bomRoutes);
+app.use('/api/bom', bomRoutes);
 app.use('/api/items', stockRoutes);
 app.use('/api/drawings', drawingRoutes);
 app.use('/api/po-receipts', poReceiptRoutes);

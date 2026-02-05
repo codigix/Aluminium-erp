@@ -122,6 +122,7 @@ const DesignOrders = () => {
       acc[key] = {
         po_number: poKey,
         company_name: companyKey,
+        project_name: order.project_name || '',
         orders: []
       };
     }
@@ -857,6 +858,7 @@ const DesignOrders = () => {
         po_number: poKey,
         customer_po_id: order.customer_po_id,
         company_name: companyKey,
+        project_name: order.project_name || '',
         orders: []
       };
     }
@@ -1052,20 +1054,20 @@ const DesignOrders = () => {
                             </div>
                             <div>
                               <h3 className="text-sm  text-slate-900 flex items-center gap-2">
-                                {group.company_name}
+                                {group.po_number === 'NO-PO' ? (group.project_name || 'Direct Design Request') : `PO: ${group.po_number}`}
                                 <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] ">
-                                  {group.orders.length} ITEMS
+                                  {group.orders.length} Drawings
                                 </span>
                               </h3>
-                              <p className="text-[10px] text-slate-500  tracking-tight mt-0.5">
-                                {group.po_number === 'NO-PO' ? 'DESIGN REQUEST' : `PO: ${group.po_number}`}
+                              <p className="text-[10px] text-blue-500 font-semibold tracking-tight mt-0.5">
+                                {group.company_name} {group.po_number !== 'NO-PO' && group.project_name && `| ${group.project_name}`}
                               </p>
                             </div>
                           </div>
                           
                           <div className="flex items-center gap-4 mt-4 md:mt-0 ml-auto md:ml-0">
                             <div className="text-right">
-                              <p className="text-[9px] text-slate-400   ">Total Qty</p>
+                              <p className="text-[9px] text-slate-400   ">Total Quantity</p>
                               <p className="text-sm  text-slate-800">
                                 {group.orders.reduce((sum, o) => sum + (Number(o.item_qty) || 1), 0)}
                               </p>
@@ -1109,7 +1111,7 @@ const DesignOrders = () => {
                                             <p className="text-sm  text-slate-900 truncate max-w-[150px]">
                                               {order.drawing_no || 'NO DRAWING NO'}
                                             </p>
-                                            <p className="text-[10px] text-slate-400   tracking-wider">Drawing Ref</p>
+                                            <p className="text-[10px] text-slate-400   tracking-wider">{order.item_code || 'No Item Code'}</p>
                                           </div>
                                         </div>
                                         <div className="text-right">
@@ -1231,7 +1233,7 @@ const DesignOrders = () => {
                                         <td className="px-4 py-3">
                                           <div className="flex flex-col">
                                             <span className="text-xs font-medium text-slate-900">{order.drawing_no || 'NO DRAWING NO'}</span>
-                                            <span className="text-[9px] text-slate-400 tracking-wider">Drawing Ref</span>
+                                            <span className="text-[9px] text-slate-400 tracking-wider">{order.item_code || 'No Item Code'}</span>
                                           </div>
                                         </td>
                                         <td className="px-4 py-3">
@@ -1412,12 +1414,14 @@ const DesignOrders = () => {
                         </div>
                         <div>
                           <h3 className="text-sm  text-slate-900 flex items-center gap-2">
-                            {group.po_number === 'NO-PO' ? 'Direct Design Request' : `PO: ${group.po_number}`}
+                            {group.po_number === 'NO-PO' ? (group.project_name || 'Direct Design Request') : `PO: ${group.po_number}`}
                             <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[10px]  tracking-wider ">
                               {group.orders.length} Drawings
                             </span>
                           </h3>
-                          <p className="text-xs text-indigo-500 font-semibold mt-0.5 tracking-wide">{group.company_name}</p>
+                          <p className="text-xs text-indigo-500 font-semibold mt-0.5 tracking-wide">
+                            {group.company_name} {group.po_number !== 'NO-PO' && group.project_name && `| ${group.project_name}`}
+                          </p>
                         </div>
                       </div>
                       
