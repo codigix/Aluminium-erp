@@ -174,24 +174,29 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const sa of subAssemblies) {
         await connection.execute(
           `INSERT INTO production_plan_sub_assemblies 
-           (plan_id, item_code, required_qty, bom_no, target_warehouse, scheduled_date, manufacturing_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, required_qty, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            sa.itemCode || sa.subAssemblyItemCode || null,
+            sa.itemCode || sa.subAssemblyItemCode || sa.item_code || null,
             sa.requiredQty || 0,
-            sa.bomNo || null,
-            sa.targetWarehouse || null,
-            sa.scheduledDate || safeStartDate || null,
-            sa.manufacturingType || 'In House'
+            sa.bomNo || sa.bom_no || null,
+            sa.targetWarehouse || sa.target_warehouse || null,
+            sa.scheduledDate || sa.scheduled_date || safeStartDate || null,
+            sa.manufacturingType || sa.manufacturing_type || 'In House',
+            sa.sourceFg || sa.source_fg || null
           ]
         );
       }
     }
 
     // 4. Save Materials
-    if (materials && Array.isArray(materials)) {
-      for (const mat of materials) {
+    if (materials) {
+      const materialList = Array.isArray(materials) 
+        ? materials 
+        : [...(materials.coreMaterials || []), ...(materials.explodedComponents || [])];
+
+      for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
            (plan_id, item_code, material_name, required_qty, uom, warehouse, bom_ref, source_assembly, material_category, status)
@@ -314,38 +319,43 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const sa of subAssemblies) {
         await connection.execute(
           `INSERT INTO production_plan_sub_assemblies 
-           (plan_id, item_code, required_qty, bom_no, target_warehouse, scheduled_date, manufacturing_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, required_qty, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            sa.itemCode || null,
+            sa.itemCode || sa.subAssemblyItemCode || sa.item_code || null,
             sa.requiredQty || 0,
-            sa.bomNo || null,
-            sa.targetWarehouse || null,
-            sa.scheduledDate || safeStartDate || null,
-            sa.manufacturingType || 'In House'
+            sa.bomNo || sa.bom_no || null,
+            sa.targetWarehouse || sa.target_warehouse || null,
+            sa.scheduledDate || sa.scheduled_date || safeStartDate || null,
+            sa.manufacturingType || sa.manufacturing_type || 'In House',
+            sa.sourceFg || sa.source_fg || null
           ]
         );
       }
     }
 
     // 5. Re-save Materials
-    if (materials && Array.isArray(materials)) {
-      for (const mat of materials) {
+    if (materials) {
+      const materialList = Array.isArray(materials) 
+        ? materials 
+        : [...(materials.coreMaterials || []), ...(materials.explodedComponents || [])];
+
+      for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
            (plan_id, item_code, material_name, required_qty, uom, warehouse, bom_ref, source_assembly, material_category, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            mat.itemCode || null,
-            mat.materialName || null,
+            mat.itemCode || mat.item || null,
+            mat.materialName || mat.item || null,
             mat.requiredQty || 0,
-            mat.uom || 'Nos',
+            mat.uom || mat.unit || 'Nos',
             mat.warehouse || null,
             mat.bomRef || null,
             mat.sourceAssembly || null,
-            mat.materialCategory || mat.material_category || mat.category || 'CORE',
+            mat.materialCategory || mat.material_category || mat.category || (mat.sourceAssembly ? 'EXPLODED' : 'CORE'),
             mat.status || '--'
           ]
         );
@@ -623,7 +633,15 @@ const getItemBOMDetails = async (salesOrderItemId) => {
   const processedBOMs = new Set();
 
   // Helper function to recursively explode BOM and flatten results
-  const explodeBOM = async (itemCode, drawingNo, soItemId = null, parentId = null, qtyMultiplier = 1, depth = 0) => {
+  const explodeBOM = async (
+    itemCode,
+    drawingNo,
+    soItemId = null,
+    parentId = null,
+    qtyMultiplier = 1,
+    depth = 0,
+    parentType = 'FG'
+  ) => {
     const currentIdentity = `${itemCode}-${drawingNo || ''}`;
     const bomContextKey = `${currentIdentity}-${soItemId || 'MASTER'}-${parentId || 'TOP'}`;
 
@@ -639,9 +657,23 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     if (soItemId || parentId) {
       const targetSoId = soItemId || null;
       const [soM] = await pool.query('SELECT * FROM sales_order_item_materials WHERE sales_order_item_id <=> ? AND parent_id <=> ?', [targetSoId, parentId]);
-      const [soC] = await pool.query('SELECT * FROM sales_order_item_components WHERE sales_order_item_id <=> ? AND parent_id <=> ?', [targetSoId, parentId]);
+      
+      // Join with sales_order_items to get item_type for components
+      const [soC] = await pool.query(`
+        SELECT c.*, soi.item_type 
+        FROM sales_order_item_components c
+        LEFT JOIN sales_order_items soi ON (c.component_code = soi.item_code OR (c.drawing_no = soi.drawing_no AND c.drawing_no IS NOT NULL))
+        AND soi.sales_order_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?)
+        WHERE c.sales_order_item_id <=> ? AND c.parent_id <=> ?`, [targetSoId || soItemId, targetSoId, parentId]);
+      
+      // Normalize item_type
+      const soCWithTypes = soC.map(c => ({
+        ...c,
+        item_type: (c.item_type === 'SA' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : (c.item_type || 'FG')
+      }));
+      
       materials = soM;
-      components = soC;
+      components = soCWithTypes;
       
       // Operations are usually flat for the item, fetch if matches item identity
       const [soO] = await pool.query('SELECT * FROM sales_order_item_operations WHERE sales_order_item_id <=> ? AND (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))', [targetSoId, itemCode, drawingNo]);
@@ -652,7 +684,16 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     if (materials.length === 0 || components.length === 0 || operations.length === 0) {
       // Fetch Master BOM data
       const masterM = await bomService.getItemMaterials(null, itemCode, drawingNo);
+      
+      // For master components, we need to try to find their item_type as well
       const masterC = await bomService.getItemComponents(null, itemCode, drawingNo);
+      const masterCWithTypes = await Promise.all(masterC.map(async c => {
+        const cCode = c.component_code || c.item_code;
+        const [typeRow] = await pool.query('SELECT item_type FROM sales_order_items WHERE item_code = ? AND sales_order_id IS NULL LIMIT 1', [cCode]);
+        const baseType = typeRow.length > 0 ? typeRow[0].item_type : 'FG';
+        return { ...c, item_type: (baseType === 'SA' || cCode.startsWith('SA-')) ? 'Sub Assembly' : baseType };
+      }));
+
       const masterO = await bomService.getItemOperations(null, itemCode, drawingNo);
 
       // Fetch Any BOM data as secondary fallback
@@ -666,7 +707,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       }
 
       if (components.length === 0) {
-        components = masterC.filter(c => !c.parent_id);
+        components = masterCWithTypes.filter(c => !c.parent_id);
         if (components.length === 0 && anyBOM) components = (anyBOM.components || []).filter(c => !c.parent_id);
       }
 
@@ -677,23 +718,27 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     }
 
     // Process Materials
-    const category = depth === 0 ? 'CORE' : 'EXPLODED';
     materials.forEach(m => {
-      const mKey = `${m.material_name}-${m.material_code || ''}`;
+      // Logic fix: level 0 (FG) is CORE, everything else is EXPLODED
+      const isFG = depth === 0;
+      const material_category = isFG ? 'CORE' : 'EXPLODED';
+      const source_assembly = isFG ? null : itemCode;
+      
+      const mKey = `${m.material_name}-${m.material_code || ''}-${material_category}-${source_assembly || ''}`;
       const existing = materialMap.get(mKey);
       const reqQty = (m.qty_per_pc || 0) * qtyMultiplier;
-      
+
       if (existing) {
         existing.required_qty += reqQty;
         existing.totalRequiredQty += reqQty;
       } else {
         materialMap.set(mKey, {
           ...m,
-          material_category: category,
+          material_category,
           required_qty: reqQty,
           totalRequiredQty: reqQty,
-          source_assembly: itemCode,
-          bom_no: m.bom_no || drawingNo || 'BOM-REF'
+          source_assembly,
+          bom_ref: m.bom_no || drawingNo || 'BOM-REF'
         });
       }
     });
@@ -703,7 +748,8 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const opsWithSource = operations.map(o => ({
         ...o,
         source_item: itemCode,
-        itemCode: itemCode
+        itemCode: itemCode,
+        base_time: o.base_hour || o.base_time || (o.cycle_time_min ? (parseFloat(o.cycle_time_min) / 60).toFixed(2) : 1)
       }));
       
       // Store in global flat map
@@ -714,64 +760,76 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     // Process Components
     const componentResults = [];
-    if (!visitedItems.has(currentIdentity)) {
-      visitedItems.add(currentIdentity);
+    
+    for (const comp of components) {
+      const compCode = comp.component_code || comp.item_code;
+      const compDrawing = comp.drawing_no;
+      const compQty = parseFloat(comp.quantity || 0);
+      const totalCompQty = compQty * qtyMultiplier;
+
+      const cKey = `${compCode}-${compDrawing || ''}`;
       
-      for (const comp of components) {
-        const compCode = comp.component_code || comp.item_code;
-        const compDrawing = comp.drawing_no;
-        const compQty = parseFloat(comp.quantity || 0);
-        const totalCompQty = compQty * qtyMultiplier;
+      let nextSoItemId = null;
+      let nextParentId = null;
 
-        const cKey = `${compCode}-${compDrawing || ''}`;
+      if (soItemId) {
+        const [found] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))
+           AND sales_order_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?) 
+           LIMIT 1`,
+          [compCode, compDrawing, soItemId]
+        );
         
-        let nextSoItemId = null;
-        let nextParentId = null;
-
-        if (soItemId) {
-          const [found] = await pool.query(
-            `SELECT id FROM sales_order_items 
-             WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))
-             AND sales_order_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?) 
-             LIMIT 1`,
-            [compCode, compDrawing, soItemId]
-          );
-          
-          if (found.length > 0) {
-            nextSoItemId = found[0].id;
-            nextParentId = null;
-          } else {
-            nextSoItemId = soItemId;
-            nextParentId = comp.id;
-          }
+        if (found.length > 0) {
+          nextSoItemId = found[0].id;
+          nextParentId = null;
+        } else {
+          nextSoItemId = soItemId;
+          nextParentId = comp.id;
         }
-
-        const subDetails = await explodeBOM(compCode, compDrawing, nextSoItemId, nextParentId, totalCompQty, depth + 1);
-        
-        const componentData = {
-          ...comp,
-          item_code: compCode,
-          required_qty: totalCompQty,
-          bom_no: comp.bom_no || compDrawing || 'BOM-SUB',
-          materials: subDetails.materials,
-          operations: subDetails.operations
-        };
-
-        if (!componentMap.has(cKey)) {
-          componentMap.set(cKey, componentData);
-        }
-        componentResults.push(componentData);
       }
+
+      const subDetails = await explodeBOM(
+        compCode,
+        compDrawing,
+        nextSoItemId,
+        nextParentId,
+        totalCompQty,
+        depth + 1,
+        'Sub Assembly'
+      );
+      
+      const componentData = {
+        ...comp,
+        itemCode: compCode,
+        item_code: compCode,
+        required_qty: totalCompQty,
+        bomNo: comp.bom_no || compDrawing || 'BOM-SUB',
+        bom_no: comp.bom_no || compDrawing || 'BOM-SUB',
+        sourceFg: item.item_code,
+        materials: subDetails.materials,
+        operations: subDetails.operations
+      };
+
+      if (!componentMap.has(cKey)) {
+        componentMap.set(cKey, componentData);
+      }
+      componentResults.push(componentData);
     }
 
     return {
-      materials: materials,
+      materials: materials.map(m => ({
+        ...m,
+        qty_per_pc: m.qty_per_pc || 0,
+        required_qty: (m.qty_per_pc || 0) * qtyMultiplier
+      })),
       operations: (operationMap.get(currentIdentity) || []),
       components: componentResults
     };
   };
 
-  await explodeBOM(item.item_code, item.drawing_no, soItemIdForLookup, null, 1, 0);
+  await explodeBOM(item.item_code, item.drawing_no, soItemIdForLookup, null, 1, 0, 'FG');
 
   return {
     materials: Array.from(materialMap.values()),

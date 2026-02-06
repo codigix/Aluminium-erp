@@ -951,6 +951,7 @@ const ProductionPlan = () => {
                     <th className="px-4 py-3 font-medium">Scheduled Date</th>
                     <th className="px-4 py-3 font-medium text-center">Required Qty</th>
                     <th className="px-4 py-3 font-medium">Bom No</th>
+                    <th className="px-4 py-3 font-medium">Source FG</th>
                     <th className="px-4 py-3 font-medium">Raw Materials</th>
                     <th className="px-4 py-3 font-medium text-center">Manufacturing Type</th>
                   </tr>
@@ -990,6 +991,11 @@ const ProductionPlan = () => {
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 text-rose-600 text-[10px] font-bold rounded border border-slate-100">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                           {sa.bomNo || sa.bom_no}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          {sa.sourceFg || sa.source_fg || '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4">
