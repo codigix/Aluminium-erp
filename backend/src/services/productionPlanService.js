@@ -42,7 +42,7 @@ const getProductionPlanById = async (id) => {
 
   const [items] = await pool.query(
     `SELECT ppi.*, 
-            COALESCE(so.project_name, o_direct.customer_name) as project_name, 
+            COALESCE(so.project_name, c_direct.company_name) as project_name, 
             COALESCE(soi.item_code, oi.item_code) as item_code, 
             COALESCE(soi.description, oi.description) as description, 
             COALESCE(soi.drawing_no, oi.drawing_no) as drawing_no, 
@@ -60,6 +60,7 @@ const getProductionPlanById = async (id) => {
        WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
      ) o ON o.quotation_id = so.id
      LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
+     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      WHERE ppi.plan_id = ?`,
     [id]
   );
@@ -97,9 +98,13 @@ const createProductionPlan = async (planData, createdBy) => {
 
     const { 
       planCode, planDate, startDate, endDate, remarks, 
-      salesOrderId, bomNo, targetQty, targetQuantity, namingSeries,
+      salesOrderId, salesOrder, bomNo, bom, targetQty, targetQuantity, namingSeries,
       finishedGoods, subAssemblies, materials, operations 
     } = planData;
+
+    const finalSalesOrderId = salesOrderId || (salesOrder && salesOrder.id) || null;
+    const finalBomNo = bomNo || (bom && bom.bomNo) || null;
+    const finalTargetQty = targetQty || targetQuantity || (bom && bom.targetQty) || 0;
 
     // Fix empty date values to be null
     const safeStartDate = startDate || null;
@@ -118,9 +123,9 @@ const createProductionPlan = async (planData, createdBy) => {
         safeStartDate || null, 
         safeEndDate || null, 
         remarks || null, 
-        salesOrderId || null, 
-        bomNo || null, 
-        targetQty || targetQuantity || 0, 
+        finalSalesOrderId, 
+        finalBomNo, 
+        finalTargetQty, 
         namingSeries || 'PP',
         createdBy || null
       ]
@@ -137,20 +142,20 @@ const createProductionPlan = async (planData, createdBy) => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
           [
             planId,
-            item.salesOrderId || salesOrderId || null,
+            item.salesOrderId || finalSalesOrderId,
             item.salesOrderItemId || null,
             item.itemCode || null,
-            item.bomNo || bomNo || null,
-            item.designQty || targetQty || 0,
+            item.bomNo || finalBomNo,
+            item.designQty || finalTargetQty || 0,
             item.uom || 'Nos',
-            item.plannedQty || targetQty || 0,
+            item.plannedQty || finalTargetQty || 0,
             item.warehouse || null,
             item.plannedStartDate || safeStartDate || null
           ]
         );
 
         // Update Sales Order status
-        const currentSOId = item.salesOrderId || salesOrderId;
+        const currentSOId = item.salesOrderId || finalSalesOrderId;
         if (currentSOId) {
           // Try updating sales_orders
           const [soResult] = await connection.execute(
@@ -229,7 +234,7 @@ const createProductionPlan = async (planData, createdBy) => {
             op.step || op.stepNo || 0,
             op.operationName || null,
             op.workstation || null,
-            op.baseTime || op.base_time || 0,
+            op.baseTime || op.base_time || op.baseTimeHrs || op.base_hour || 0,
             op.sourceItem || op.source_item || null
           ]
         );
@@ -253,9 +258,14 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
 
     const { 
       planDate, startDate, endDate, remarks, 
+      salesOrderId, salesOrder, bomNo, bom,
       targetQty, targetQuantity, namingSeries, status,
       items, subAssemblies, materials, operations 
     } = planData;
+
+    const finalSalesOrderId = salesOrderId || (salesOrder && salesOrder.id) || null;
+    const finalBomNo = bomNo || (bom && bom.bomNo) || null;
+    const finalTargetQty = targetQty || targetQuantity || (bom && bom.targetQty) || 0;
 
     // Rule: Production Plan cannot complete until all Work Orders are Completed
     if (status === 'COMPLETED') {
@@ -275,11 +285,13 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
     await connection.execute(
       `UPDATE production_plans SET 
         plan_date = ?, start_date = ?, end_date = ?, remarks = ?, 
-        target_qty = ?, naming_series = ?, status = ?
+        target_qty = ?, naming_series = ?, status = ?,
+        sales_order_id = ?, bom_no = ?
       WHERE id = ?`,
       [
         planDate, safeStartDate, safeEndDate, remarks, 
-        targetQty || targetQuantity || 0, namingSeries || 'PP', status || 'DRAFT',
+        finalTargetQty, namingSeries || 'PP', status || 'DRAFT',
+        finalSalesOrderId, finalBomNo,
         planId
       ]
     );
@@ -299,13 +311,13 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            item.salesOrderId || null,
+            item.salesOrderId || finalSalesOrderId,
             item.salesOrderItemId || null,
             item.itemCode || null,
-            item.bomNo || null,
-            item.designQty || 0,
+            item.bomNo || finalBomNo,
+            item.designQty || finalTargetQty || 0,
             item.uom || 'Nos',
-            item.plannedQty || 0,
+            item.plannedQty || finalTargetQty || 0,
             item.warehouse || null,
             item.plannedStartDate || safeStartDate || null,
             item.status || 'PENDING'
@@ -374,7 +386,7 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
             op.step || op.stepNo || 0,
             op.operationName || op.operation_name || null,
             op.workstation || null,
-            op.baseTime || op.base_time || 0,
+            op.baseTime || op.base_time || op.baseTimeHrs || op.base_hour || 0,
             op.sourceItem || op.itemCode || op.source_item || null
           ]
         );

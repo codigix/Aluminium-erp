@@ -986,8 +986,8 @@ const ensureProductionPlanTables = async () => {
       CREATE TABLE IF NOT EXISTS production_plan_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         plan_id INT NOT NULL,
-        sales_order_id INT NOT NULL,
-        sales_order_item_id INT NOT NULL,
+        sales_order_id INT NULL,
+        sales_order_item_id INT NULL,
         item_code VARCHAR(120),
         bom_no VARCHAR(100),
         planned_qty DECIMAL(12, 3) NOT NULL,
@@ -999,15 +999,33 @@ const ensureProductionPlanTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE,
-        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE CASCADE,
         FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL
       )
     `);
 
-    // Ensure missing columns in production_plan_items
+    // Ensure missing columns and remove strict FKs for direct orders
     const [ppiCols] = await connection.query('SHOW COLUMNS FROM production_plan_items');
     const existingPpiCols = new Set(ppiCols.map(c => c.Field));
+    
+    // 1. Make columns nullable for direct orders support
+    const soIdCol = ppiCols.find(c => c.Field === 'sales_order_id');
+    if (soIdCol && soIdCol.Null === 'NO') {
+      try {
+        // Drop FK first if exists
+        await connection.query('ALTER TABLE production_plan_items DROP FOREIGN KEY production_plan_items_ibfk_2');
+      } catch (e) { /* ignore if doesn't exist */ }
+      await connection.query('ALTER TABLE production_plan_items MODIFY COLUMN sales_order_id INT NULL');
+    }
+
+    const soItemIdCol = ppiCols.find(c => c.Field === 'sales_order_item_id');
+    if (soItemIdCol && soItemIdCol.Null === 'NO') {
+      try {
+        // Drop FK first if exists
+        await connection.query('ALTER TABLE production_plan_items DROP FOREIGN KEY production_plan_items_ibfk_3');
+      } catch (e) { /* ignore if doesn't exist */ }
+      await connection.query('ALTER TABLE production_plan_items MODIFY COLUMN sales_order_item_id INT NULL');
+    }
+
     if (!existingPpiCols.has('item_code')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN item_code VARCHAR(120) AFTER sales_order_item_id');
     if (!existingPpiCols.has('bom_no')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN bom_no VARCHAR(100) AFTER item_code');
     if (!existingPpiCols.has('warehouse')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN warehouse VARCHAR(100) AFTER planned_qty');
@@ -1025,10 +1043,16 @@ const ensureProductionPlanTables = async () => {
         target_warehouse VARCHAR(100),
         scheduled_date DATE,
         manufacturing_type VARCHAR(50) DEFAULT 'In House',
+        source_fg VARCHAR(120),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure missing columns in production_plan_sub_assemblies
+    const [saCols] = await connection.query('SHOW COLUMNS FROM production_plan_sub_assemblies');
+    const existingSaCols = new Set(saCols.map(c => c.Field));
+    if (!existingSaCols.has('source_fg')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN source_fg VARCHAR(120) AFTER manufacturing_type');
 
     // Create production_plan_materials table
     await connection.query(`
@@ -1102,15 +1126,22 @@ const ensureWorkOrderTables = async () => {
         FOREIGN KEY (production_plan_item_id) REFERENCES production_plan_items(id) ON DELETE SET NULL,
         FOREIGN KEY (parent_wo_id) REFERENCES work_orders(id) ON DELETE SET NULL,
         FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE SET NULL,
-        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE SET NULL,
         FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL
       )
     `);
 
-    // Ensure missing columns in work_orders
+    // Ensure missing columns and remove strict FKs for direct orders in work_orders
     const [woCols] = await connection.query('SHOW COLUMNS FROM work_orders');
     const existingWoCols = new Set(woCols.map(c => c.Field));
+
+    try {
+      // Try to drop FKs that might reference sales_orders/items to support direct orders
+      await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_4');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_5');
+    } catch (e) {}
+
     if (!existingWoCols.has('plan_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN plan_id INT AFTER production_plan_item_id');
     if (!existingWoCols.has('parent_wo_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN parent_wo_id INT AFTER production_plan_item_id');
     if (!existingWoCols.has('item_code')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_code VARCHAR(120) AFTER sales_order_item_id');
