@@ -114,24 +114,40 @@ const deleteDesignOrder = async (designOrderId) => {
 };
 
 const getDesignOrderItemsBySalesOrder = async (salesOrderId) => {
-  const [rows] = await pool.query(`
+  // Try order_items first (new system)
+  let [rows] = await pool.query(`
     SELECT 
-      soi.item_code,
-      soi.id as item_id,
-      soi.drawing_no,
-      soi.description,
-      COALESCE(
-        poi.quantity, 
-        (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
-        soi.quantity
-      ) as qty
-    FROM sales_order_items soi
-    JOIN sales_orders so ON soi.sales_order_id = so.id
-    LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
-         AND soi.item_code = poi.item_code 
-         AND (soi.drawing_no = poi.drawing_no OR (soi.drawing_no IS NULL AND poi.drawing_no IS NULL))
-    WHERE soi.sales_order_id = ? AND (soi.item_type IN ('FG', 'SFG'))
+      oi.item_code,
+      oi.id as item_id,
+      oi.drawing_no,
+      oi.description,
+      oi.qty as qty
+    FROM order_items oi
+    JOIN orders o ON oi.order_id = o.id
+    WHERE o.id = ?
   `, [salesOrderId]);
+
+  // Fallback to legacy sales_order_items
+  if (rows.length === 0) {
+    [rows] = await pool.query(`
+      SELECT 
+        soi.item_code,
+        soi.id as item_id,
+        soi.drawing_no,
+        soi.description,
+        COALESCE(
+          poi.quantity, 
+          (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+          soi.quantity
+        ) as qty
+      FROM sales_order_items soi
+      JOIN sales_orders so ON soi.sales_order_id = so.id
+      LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
+           AND soi.item_code = poi.item_code 
+           AND (soi.drawing_no = poi.drawing_no OR (soi.drawing_no IS NULL AND poi.drawing_no IS NULL))
+      WHERE soi.sales_order_id = ? AND (soi.item_type IN ('FG', 'SFG'))
+    `, [salesOrderId]);
+  }
   return rows;
 };
 

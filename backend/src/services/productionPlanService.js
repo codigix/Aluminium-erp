@@ -4,8 +4,10 @@ const bomService = require('./bomService');
 const listProductionPlans = async () => {
   const [rows] = await pool.query(
     `SELECT pp.*, u.username as creator_name, 
-            o.order_no, so.project_name,
-            soi.item_code, soi.description as item_description,
+            COALESCE(o.order_no, o_direct.order_no) as order_no, 
+            COALESCE(so.project_name, c_direct.company_name) as project_name,
+            COALESCE(soi.item_code, oi.item_code) as item_code, 
+            COALESCE(soi.description, oi.description) as item_description,
             (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id) as wo_count,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id) as total_ops,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops
@@ -14,9 +16,12 @@ const listProductionPlans = async () => {
      LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
      LEFT JOIN (
        SELECT quotation_id, order_no FROM orders 
-       WHERE id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
+       WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
      ) o ON o.quotation_id = so.id
+     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
+     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      LEFT JOIN sales_order_items soi ON pp.bom_no = soi.id
+     LEFT JOIN order_items oi ON pp.bom_no = oi.id
      ORDER BY pp.created_at DESC`
   );
   return rows;
@@ -36,18 +41,25 @@ const getProductionPlanById = async (id) => {
   const plan = plans[0];
 
   const [items] = await pool.query(
-    `SELECT ppi.*, so.project_name, soi.item_code, soi.description, soi.drawing_no, w.workstation_name,
-            COALESCE(ppi.design_qty, soi.quantity) as design_qty, 
-            COALESCE(ppi.uom, soi.unit) as uom,
-            o.order_no
+    `SELECT ppi.*, 
+            COALESCE(so.project_name, o_direct.customer_name) as project_name, 
+            COALESCE(soi.item_code, oi.item_code) as item_code, 
+            COALESCE(soi.description, oi.description) as description, 
+            COALESCE(soi.drawing_no, oi.drawing_no) as drawing_no, 
+            w.workstation_name,
+            COALESCE(ppi.design_qty, soi.quantity, oi.qty) as design_qty, 
+            COALESCE(ppi.uom, soi.unit, 'Nos') as uom,
+            COALESCE(o.order_no, o_direct.order_no) as order_no
      FROM production_plan_items ppi
      LEFT JOIN sales_orders so ON ppi.sales_order_id = so.id
      LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id
      LEFT JOIN workstations w ON ppi.workstation_id = w.id
      LEFT JOIN (
        SELECT quotation_id, order_no FROM orders 
-       WHERE id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
+       WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
      ) o ON o.quotation_id = so.id
+     LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
      WHERE ppi.plan_id = ?`,
     [id]
   );
@@ -138,11 +150,21 @@ const createProductionPlan = async (planData, createdBy) => {
         );
 
         // Update Sales Order status
-        if (item.salesOrderId || salesOrderId) {
-          await connection.execute(
+        const currentSOId = item.salesOrderId || salesOrderId;
+        if (currentSOId) {
+          // Try updating sales_orders
+          const [soResult] = await connection.execute(
             `UPDATE sales_orders SET status = 'IN_PRODUCTION', current_department = 'PRODUCTION' WHERE id = ?`,
-            [item.salesOrderId || salesOrderId]
+            [currentSOId]
           );
+          
+          // If no rows affected, it might be a DIRECT order in orders table
+          if (soResult.affectedRows === 0) {
+            await connection.execute(
+              `UPDATE orders SET status = 'In Production' WHERE id = ?`,
+              [currentSOId]
+            );
+          }
         }
       }
     }
@@ -360,92 +382,161 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
 
 const getReadySalesOrderItems = async () => {
   // Items that are approved and ready for production
-  // We pick the LATEST item for each drawing_no to avoid showing old revisions
-  // We join with customer_po_items to get the original Design Quantity if available
+  // Combine items from legacy sales_orders and new orders system
   const [rows] = await pool.query(
-    `SELECT so.id as sales_order_id, 
-            o.order_no as order_no, 
-            so.project_name, 
-            so.production_priority, 
-            so.created_at,
-            soi.id as sales_order_item_id, 
-            soi.item_code as item_code, 
-            soi.item_type as item_type,
-            soi.drawing_no as drawing_no,
-            soi.description as description, 
-            soi.quantity as total_qty, 
-            soi.quantity as design_qty,
-            soi.unit as unit,
-            COALESCE(planned.already_planned_qty, 0) as already_planned_qty
-     FROM (
-       SELECT *, ROW_NUMBER() OVER (PARTITION BY sales_order_id, item_code, drawing_no ORDER BY id DESC) as rn
-       FROM sales_order_items
-       WHERE status != 'Rejected' AND (item_type IN ('FG', 'SFG'))
-     ) soi
-     JOIN sales_orders so ON soi.sales_order_id = so.id
-     LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id AND soi.drawing_no = poi.drawing_no
-     LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
-     JOIN (
-       SELECT quotation_id, order_no FROM orders 
-       WHERE id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
-     ) o ON o.quotation_id = so.id
-     LEFT JOIN (
-       SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
-       FROM production_plan_items 
-       WHERE status != 'CANCELLED'
-       GROUP BY sales_order_item_id
-     ) planned ON soi.id = planned.sales_order_item_id
-     WHERE soi.rn = 1
-       AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
-     ORDER BY so.production_priority DESC, so.created_at ASC`
+    `SELECT * FROM (
+      -- Legacy system items
+      SELECT so.id as sales_order_id, 
+             o.order_no as order_no, 
+             so.project_name, 
+             so.production_priority, 
+             so.created_at,
+             soi.id as sales_order_item_id, 
+             soi.item_code as item_code, 
+             soi.item_type as item_type,
+             soi.drawing_no as drawing_no,
+             soi.description as description, 
+             soi.quantity as total_qty, 
+             soi.quantity as design_qty,
+             soi.unit as unit,
+             COALESCE(planned.already_planned_qty, 0) as already_planned_qty
+      FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY sales_order_id, item_code, drawing_no ORDER BY id DESC) as rn
+        FROM sales_order_items
+        WHERE status != 'Rejected' AND (item_type IN ('FG', 'SFG'))
+      ) soi
+      JOIN sales_orders so ON soi.sales_order_id = so.id
+      JOIN (
+        SELECT quotation_id, order_no FROM orders 
+        WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
+      ) o ON o.quotation_id = so.id
+      LEFT JOIN (
+        SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+        FROM production_plan_items 
+        WHERE status != 'CANCELLED'
+        GROUP BY sales_order_item_id
+      ) planned ON soi.id = planned.sales_order_item_id
+      WHERE soi.rn = 1 AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
+
+      UNION ALL
+
+      -- New system items (Direct orders)
+      SELECT o.id as sales_order_id,
+             o.order_no as order_no,
+             c.company_name as project_name,
+             0 as production_priority,
+             o.created_at,
+             oi.id as sales_order_item_id,
+             oi.item_code as item_code,
+             oi.type as item_type,
+             oi.drawing_no as drawing_no,
+             oi.description as description,
+             oi.quantity as total_qty,
+             oi.quantity as design_qty,
+             'Nos' as unit,
+             COALESCE(planned.already_planned_qty, 0) as already_planned_qty
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      JOIN companies c ON o.client_id = c.id
+      LEFT JOIN (
+        SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+        FROM production_plan_items 
+        WHERE status != 'CANCELLED'
+        GROUP BY sales_order_item_id
+      ) planned ON oi.id = planned.sales_order_item_id
+      WHERE o.quotation_id IS NULL AND (COALESCE(planned.already_planned_qty, 0) < oi.quantity)
+    ) combined
+    ORDER BY production_priority DESC, created_at ASC`
   );
   return rows;
 };
 
 const getProductionReadySalesOrders = async () => {
   const [rows] = await pool.query(
-    `SELECT so.id, 
+    `SELECT o.id, 
             o.order_no, 
-            so.project_name, 
+            COALESCE(so.project_name, c.company_name, '') as project_name, 
             cp.po_number, 
             c.company_name, 
-            so.created_at
-     FROM sales_orders so
-     LEFT JOIN companies c ON so.company_id = c.id
+            o.created_at
+     FROM orders o
+     LEFT JOIN sales_orders so ON o.quotation_id = so.id
+     LEFT JOIN companies c ON o.client_id = c.id
      LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-     JOIN orders o ON o.quotation_id = so.id
      WHERE EXISTS (
-       SELECT 1 FROM (
-         SELECT sales_order_id, drawing_no, ROW_NUMBER() OVER (PARTITION BY sales_order_id, drawing_no ORDER BY id DESC) as rn
-         FROM sales_order_items
-         WHERE status != 'Rejected' AND (item_type IN ('FG', 'SFG'))
-       ) soi 
-       WHERE soi.sales_order_id = so.id AND soi.rn = 1
+       SELECT 1 FROM order_items oi WHERE oi.order_id = o.id
+     ) OR EXISTS (
+       SELECT 1 FROM sales_order_items soi WHERE soi.sales_order_id = so.id
      )
-     GROUP BY so.id, so.project_name, cp.po_number, c.company_name, so.created_at, o.order_no
-     ORDER BY so.created_at DESC`
+     GROUP BY o.id, so.project_name, c.company_name, cp.po_number, o.created_at, o.order_no
+     ORDER BY o.created_at DESC`
   );
   return rows;
 };
 
 const getSalesOrderFullDetails = async (id) => {
+  // Try to find in orders table first (new system)
   const [orders] = await pool.query(
+    `SELECT o.*, c.company_name, cp.po_number, o.order_no, 
+            so.id as sales_order_id, so.project_name
+     FROM orders o
+     LEFT JOIN sales_orders so ON o.quotation_id = so.id
+     LEFT JOIN companies c ON o.client_id = c.id
+     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
+     WHERE o.id = ?`,
+    [id]
+  );
+
+  if (orders.length > 0) {
+    const order = orders[0];
+    
+    // Fetch items from order_items
+    const [items] = await pool.query(
+      `SELECT oi.id,
+              oi.id as sales_order_item_id,
+              oi.order_id as sales_order_id,
+              oi.item_code as item_code,
+              oi.type as item_type,
+              oi.drawing_no as drawing_no,
+              oi.description,
+              oi.quantity as quantity,
+              oi.quantity as design_qty,
+              'Nos' as unit,
+              'Approved' as status,
+              COALESCE(planned.already_planned_qty, 0) as already_planned_qty
+       FROM order_items oi
+       LEFT JOIN (
+         SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+         FROM production_plan_items 
+         WHERE status != 'CANCELLED'
+         GROUP BY sales_order_item_id
+       ) planned ON oi.id = planned.sales_order_item_id
+       WHERE oi.order_id = ?`,
+      [id]
+    );
+    
+    order.items = items;
+    return order;
+  }
+
+  // Fallback to old sales_orders system
+  const [soOrders] = await pool.query(
     `SELECT so.*, c.company_name, cp.po_number, o.order_no
      FROM sales_orders so
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-     JOIN (
+     LEFT JOIN (
        SELECT quotation_id, order_no FROM orders 
-       WHERE quotation_id = ? ORDER BY id DESC LIMIT 1
+       WHERE quotation_id IS NOT NULL ORDER BY id DESC
      ) o ON o.quotation_id = so.id
      WHERE so.id = ?`,
-    [id, id]
+    [id]
   );
 
-  if (orders.length === 0) return null;
-  const order = orders[0];
+  if (soOrders.length === 0) return null;
+  const soOrder = soOrders[0];
 
-  const [items] = await pool.query(
+  const [soItems] = await pool.query(
     `SELECT soi.id,
             soi.id as sales_order_item_id,
             soi.sales_order_id,
@@ -464,9 +555,6 @@ const getSalesOrderFullDetails = async (id) => {
        FROM sales_order_items
        WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG'))
      ) soi
-     LEFT JOIN sales_orders so ON so.id = soi.sales_order_id
-     LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id AND soi.drawing_no = poi.drawing_no
-     LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
      LEFT JOIN (
        SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
        FROM production_plan_items 
@@ -477,8 +565,8 @@ const getSalesOrderFullDetails = async (id) => {
     [id]
   );
 
-  order.items = items;
-  return order;
+  soOrder.items = soItems;
+  return soOrder;
 };
 
 const generatePlanCode = async () => {
@@ -507,11 +595,24 @@ const generatePlanCode = async () => {
 };
 
 const getItemBOMDetails = async (salesOrderItemId) => {
-  // Fetch the item details first - removed strict item_type filter
-  const [items] = await pool.query(
+  // Try to fetch the item details from sales_order_items first
+  let [items] = await pool.query(
     'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ?',
     [salesOrderItemId]
   );
+
+  let soItemId = salesOrderItemId;
+
+  // If not found, try order_items (the new system)
+  if (items.length === 0) {
+    [items] = await pool.query(
+      'SELECT id, item_code, drawing_no FROM order_items WHERE id = ?',
+      [salesOrderItemId]
+    );
+    // For order_items, we don't have SO-specific materials/components/operations 
+    // in sales_order_item_* tables yet, so we treat it as no SO context
+    soItemId = null; 
+  }
 
   if (items.length === 0) return null;
   const item = items[0];
