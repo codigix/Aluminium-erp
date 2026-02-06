@@ -47,7 +47,7 @@ const getProductionPlanById = async (id) => {
             COALESCE(soi.description, oi.description) as description, 
             COALESCE(soi.drawing_no, oi.drawing_no) as drawing_no, 
             w.workstation_name,
-            COALESCE(ppi.design_qty, soi.quantity, oi.qty) as design_qty, 
+            COALESCE(ppi.design_qty, soi.quantity, oi.quantity) as design_qty, 
             COALESCE(ppi.uom, soi.unit, 'Nos') as uom,
             COALESCE(o.order_no, o_direct.order_no) as order_no
      FROM production_plan_items ppi
@@ -601,7 +601,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     [salesOrderItemId]
   );
 
-  let soItemId = salesOrderItemId;
+  let soItemIdForLookup = salesOrderItemId;
 
   // If not found, try order_items (the new system)
   if (items.length === 0) {
@@ -609,135 +609,175 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       'SELECT id, item_code, drawing_no FROM order_items WHERE id = ?',
       [salesOrderItemId]
     );
-    // For order_items, we don't have SO-specific materials/components/operations 
-    // in sales_order_item_* tables yet, so we treat it as no SO context
-    soItemId = null; 
+    // For order_items, we don't have SO-specific records yet
+    soItemIdForLookup = null; 
   }
 
   if (items.length === 0) return null;
   const item = items[0];
 
-  // Helper function to recursively fetch BOM details
-  const fetchRecursiveBOM = async (itemCode, drawingNo, soItemId = null, parentId = null) => {
+  const materialMap = new Map();
+  const componentMap = new Map();
+  const operationMap = new Map();
+  const visitedItems = new Set();
+  const processedBOMs = new Set();
+
+  // Helper function to recursively explode BOM and flatten results
+  const explodeBOM = async (itemCode, drawingNo, soItemId = null, parentId = null, qtyMultiplier = 1, depth = 0) => {
+    const currentIdentity = `${itemCode}-${drawingNo || ''}`;
+    const bomContextKey = `${currentIdentity}-${soItemId || 'MASTER'}-${parentId || 'TOP'}`;
+
+    if (processedBOMs.has(bomContextKey)) return { materials: [], components: [], operations: [] };
+    processedBOMs.add(bomContextKey);
+    
+    // Fetch data from specific context
     let materials = [];
     let components = [];
     let operations = [];
 
-    // 1. Try to fetch SO-specific data if soItemId is provided
-    if (soItemId) {
-      const [soMaterials] = await pool.query(
-        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? AND parent_id <=> ?',
-        [soItemId, parentId]
-      );
-      const [soComponents] = await pool.query(
-        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? AND parent_id <=> ?',
-        [soItemId, parentId]
-      );
+    // 1. Try to fetch from Sales Order context OR Master BOM with parent_id
+    if (soItemId || parentId) {
+      const targetSoId = soItemId || null;
+      const [soM] = await pool.query('SELECT * FROM sales_order_item_materials WHERE sales_order_item_id <=> ? AND parent_id <=> ?', [targetSoId, parentId]);
+      const [soC] = await pool.query('SELECT * FROM sales_order_item_components WHERE sales_order_item_id <=> ? AND parent_id <=> ?', [targetSoId, parentId]);
+      materials = soM;
+      components = soC;
       
-      materials = soMaterials;
-      components = soComponents;
+      // Operations are usually flat for the item, fetch if matches item identity
+      const [soO] = await pool.query('SELECT * FROM sales_order_item_operations WHERE sales_order_item_id <=> ? AND (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))', [targetSoId, itemCode, drawingNo]);
+      operations = soO;
+    }
 
-      // Operations are usually top-level (parentId is null)
-      if (parentId === null) {
-        const [soOperations] = await pool.query(
-          'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ?',
-          [soItemId]
-        );
-        operations = soOperations;
+    // 2. Granular Fallback to Master BOM or Any BOM (only if still empty and we are looking at a potential standalone item)
+    if (materials.length === 0 || components.length === 0 || operations.length === 0) {
+      // Fetch Master BOM data
+      const masterM = await bomService.getItemMaterials(null, itemCode, drawingNo);
+      const masterC = await bomService.getItemComponents(null, itemCode, drawingNo);
+      const masterO = await bomService.getItemOperations(null, itemCode, drawingNo);
+
+      // Fetch Any BOM data as secondary fallback
+      const anyBOM = (materials.length === 0 && components.length === 0 && operations.length === 0) 
+        ? await bomService.findAnyBOM(itemCode, drawingNo) 
+        : null;
+
+      if (materials.length === 0) {
+        materials = masterM.filter(m => !m.parent_id);
+        if (materials.length === 0 && anyBOM) materials = (anyBOM.materials || []).filter(m => !m.parent_id);
+      }
+
+      if (components.length === 0) {
+        components = masterC.filter(c => !c.parent_id);
+        if (components.length === 0 && anyBOM) components = (anyBOM.components || []).filter(c => !c.parent_id);
+      }
+
+      if (operations.length === 0) {
+        operations = masterO;
+        if (operations.length === 0 && anyBOM) operations = anyBOM.operations || [];
       }
     }
 
-    // 2. Fallback to Master BOM per category
-    // Always attempt fallback if we found nothing in the Sales Order context, 
-    // or if we are already in the Master context.
-    const isInMasterContext = !soItemId;
-    const targetParentIdStr = String(parentId || '');
+    // Process Materials
+    const category = depth === 0 ? 'CORE' : 'EXPLODED';
+    materials.forEach(m => {
+      const mKey = `${m.material_name}-${m.material_code || ''}`;
+      const existing = materialMap.get(mKey);
+      const reqQty = (m.qty_per_pc || 0) * qtyMultiplier;
+      
+      if (existing) {
+        existing.required_qty += reqQty;
+        existing.totalRequiredQty += reqQty;
+      } else {
+        materialMap.set(mKey, {
+          ...m,
+          material_category: category,
+          required_qty: reqQty,
+          totalRequiredQty: reqQty,
+          source_assembly: itemCode,
+          bom_no: m.bom_no || drawingNo || 'BOM-REF'
+        });
+      }
+    });
 
-    if (materials.length === 0) {
-      const masterMaterials = await bomService.getItemMaterials(null, itemCode, drawingNo);
-      materials = masterMaterials.filter(m => String(m.parent_id || '') === targetParentIdStr);
-    }
-    if (components.length === 0) {
-      const masterComponents = await bomService.getItemComponents(null, itemCode, drawingNo);
-      components = masterComponents.filter(c => String(c.parent_id || '') === targetParentIdStr);
-    }
-    // Operations can exist at any level, but usually they are top-level for an assembly
-    if (operations.length === 0) {
-      const masterOperations = await bomService.getItemOperations(null, itemCode, drawingNo);
-      // For Master operations, they usually don't have parent_id in the table, 
-      // but they are linked to the itemCode/drawingNo.
-      // We only take them if we are at the top level of that identity.
-      if (targetParentIdStr === '') {
-        operations = masterOperations;
+    // Process Operations
+    if (operations.length > 0) {
+      const opsWithSource = operations.map(o => ({
+        ...o,
+        source_item: itemCode,
+        itemCode: itemCode
+      }));
+      
+      // Store in global flat map
+      if (!operationMap.has(currentIdentity)) {
+        operationMap.set(currentIdentity, opsWithSource);
       }
     }
 
-    // 3. Recursively resolve components
-    const resolvedComponents = await Promise.all(components.map(async (comp) => {
-      // 1. Try to find nested children in the SAME context first (for multi-level within one BOM)
-      let subDetails = await fetchRecursiveBOM(itemCode, drawingNo, soItemId, comp.id);
-
-      // 2. ALSO attempt a standalone explosion if the component has its own identity
-      // This is crucial for items like "Side Bracket" which have their own Master BOMs
-      const compCode = comp.component_code || comp.item_code;
-      const compDrawing = comp.drawing_no;
+    // Process Components
+    const componentResults = [];
+    if (!visitedItems.has(currentIdentity)) {
+      visitedItems.add(currentIdentity);
       
-      if (compCode || compDrawing) {
-        let soItem = [];
+      for (const comp of components) {
+        const compCode = comp.component_code || comp.item_code;
+        const compDrawing = comp.drawing_no;
+        const compQty = parseFloat(comp.quantity || 0);
+        const totalCompQty = compQty * qtyMultiplier;
+
+        const cKey = `${compCode}-${compDrawing || ''}`;
+        
+        let nextSoItemId = null;
+        let nextParentId = null;
+
         if (soItemId) {
-          [soItem] = await pool.query(
+          const [found] = await pool.query(
             `SELECT id FROM sales_order_items 
              WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))
              AND sales_order_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?) 
              LIMIT 1`,
             [compCode, compDrawing, soItemId]
           );
+          
+          if (found.length > 0) {
+            nextSoItemId = found[0].id;
+            nextParentId = null;
+          } else {
+            nextSoItemId = soItemId;
+            nextParentId = comp.id;
+          }
         }
 
-        const standaloneDetails = await fetchRecursiveBOM(
-          compCode, 
-          compDrawing, 
-          soItem.length > 0 ? soItem[0].id : null, 
-          null
-        );
+        const subDetails = await explodeBOM(compCode, compDrawing, nextSoItemId, nextParentId, totalCompQty, depth + 1);
         
-        // Merge Strategy: Combine results from nested context and standalone context
-        if (standaloneDetails) {
-          // 1. Merge Materials: Append materials from standalone explosion
-          // We use a Set to avoid duplicates if they were already in subDetails
-          const existingMatKeys = new Set(subDetails.materials.map(m => `${m.material_name}-${m.item_code}`));
-          standaloneDetails.materials.forEach(m => {
-            const key = `${m.material_name}-${m.item_code}`;
-            if (!existingMatKeys.has(key)) subDetails.materials.push(m);
-          });
+        const componentData = {
+          ...comp,
+          item_code: compCode,
+          required_qty: totalCompQty,
+          bom_no: comp.bom_no || compDrawing || 'BOM-SUB',
+          materials: subDetails.materials,
+          operations: subDetails.operations
+        };
 
-          // 2. Merge Components: Append sub-components
-          const existingCompKeys = new Set(subDetails.components.map(c => c.component_code || c.item_code));
-          standaloneDetails.components.forEach(c => {
-            const key = c.component_code || c.item_code;
-            if (!existingCompKeys.has(key)) subDetails.components.push(c);
-          });
-
-          // 3. Merge Operations: Append manufacturing steps
-          const existingOpKeys = new Set(subDetails.operations.map(o => o.operation_name));
-          standaloneDetails.operations.forEach(o => {
-            if (!existingOpKeys.has(o.operation_name)) subDetails.operations.push(o);
-          });
+        if (!componentMap.has(cKey)) {
+          componentMap.set(cKey, componentData);
         }
+        componentResults.push(componentData);
       }
+    }
 
-      return {
-        ...comp,
-        materials: subDetails.materials,
-        components: subDetails.components,
-        operations: subDetails.operations
-      };
-    }));
-
-    return { materials, components: resolvedComponents, operations };
+    return {
+      materials: materials,
+      operations: (operationMap.get(currentIdentity) || []),
+      components: componentResults
+    };
   };
 
-  return fetchRecursiveBOM(item.item_code, item.drawing_no, salesOrderItemId, null);
+  await explodeBOM(item.item_code, item.drawing_no, soItemIdForLookup, null, 1, 0);
+
+  return {
+    materials: Array.from(materialMap.values()),
+    components: Array.from(componentMap.values()),
+    operations: Array.from(operationMap.values()).flat()
+  };
 };
 
 const deleteProductionPlan = async (id) => {

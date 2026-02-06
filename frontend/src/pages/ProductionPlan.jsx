@@ -267,7 +267,7 @@ const ProductionPlan = () => {
             if (bomResp.ok) {
               bomDetails = await bomResp.json();
             }
-          } catch (e) {
+          } catch (_e) {
             console.error('Error fetching BOM for item:', item.item_code);
           }
 
@@ -350,7 +350,7 @@ const ProductionPlan = () => {
             if (bomResp.ok) {
               bomDetails = await bomResp.json();
             }
-          } catch (e) {
+          } catch (_e) {
             console.error('Error fetching BOM for item:', item.item_code);
           }
 
@@ -408,6 +408,7 @@ const ProductionPlan = () => {
     setSelectedBomId('');
     setAvailableBoms([]);
     setDesignOrderItems([]);
+    setIsViewing(false);
     
     if (!orderId) {
       setSelectedOrderDetails(null);
@@ -456,6 +457,7 @@ const ProductionPlan = () => {
 
   const handleBomSelect = (bomId) => {
     setSelectedBomId(bomId);
+    setIsViewing(false);
     if (!bomId) {
       setNewPlan(prev => ({ ...prev, items: [] }));
       return;
@@ -511,6 +513,7 @@ const ProductionPlan = () => {
             totalQty: itemInReady.total_qty || itemInReady.quantity,
             designQty: designQty,
             alreadyPlannedQty: itemInReady.already_planned_qty || 0,
+            bom_no: itemInReady.drawing_no || itemInReady.bom_no || 'BOM-' + (salesOrderItemId || 'REF'),
             workstationId: '',
             plannedStartDate: prev.startDate,
             plannedEndDate: prev.endDate,
@@ -584,78 +587,32 @@ const ProductionPlan = () => {
   };
 
   const calculatePlanDetails = () => {
-    const coreMaterials = newPlan.items.flatMap(item => 
+    // Collect all materials from all items (they are already exploded from backend)
+    const allMaterials = newPlan.items.flatMap(item => 
       (item.materials || []).map(mat => ({
         ...mat,
-        totalRequiredQty: mat.qty_per_pc * (item.plannedQty || 1),
-        bom_no: item.bom_no || 'BOM-' + (item.salesOrderItemId || 'REF')
+        // Calculate based on the specific FG item's planned quantity
+        totalRequiredQty: parseFloat(mat.required_qty || mat.qty_per_pc || 0) * (item.plannedQty || 1),
+        bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF'
       }))
     );
 
-    const getExplodedMaterials = () => {
-      const exploded = [];
-      const operations = [];
-      const subAssemblies = [];
-      
-      const traverse = (components, parentPlannedQty = 1) => {
-        if (!components || !Array.isArray(components)) return;
-        
-        components.forEach(comp => {
-          const compQty = parseFloat(comp.quantity) || 0;
-          const currentCompQty = compQty * parentPlannedQty;
-          
-          // Collect Sub-Assemblies
-          subAssemblies.push({
-            ...comp,
-            parentPlannedQty: parentPlannedQty,
-            itemCode: comp.component_code || comp.item_code,
-            bomNo: comp.bom_no || 'BOM-SUB'
-          });
+    // Filter by category for display sections
+    const coreMaterials = allMaterials.filter(m => m.material_category === 'CORE');
+    const explodedMaterials = allMaterials.filter(m => m.material_category === 'EXPLODED');
 
-          // Collect Materials
-          if (comp.materials && Array.isArray(comp.materials)) {
-            comp.materials.forEach(mat => {
-              const matQty = parseFloat(mat.qty_per_pc) || 0;
-              exploded.push({
-                ...mat,
-                source_assembly: comp.component_code || comp.item_code || 'Sub-Assembly',
-                bom_no: comp.bom_no || 'BOM-SUB',
-                totalRequiredQty: matQty * currentCompQty
-              });
-            });
-          }
-
-          // Collect Operations from sub-assemblies
-          if (comp.operations && Array.isArray(comp.operations)) {
-            comp.operations.forEach(op => {
-              operations.push({
-                ...op,
-                itemCode: comp.component_code || comp.item_code
-              });
-            });
-          }
-
-          // Recurse
-          if (comp.components && Array.isArray(comp.components)) {
-            traverse(comp.components, currentCompQty);
-          }
-        });
-      };
-      
-      newPlan.items.forEach(item => {
-        if (item.components) {
-          traverse(item.components, item.plannedQty || 1);
-        }
-      });
-      
-      return { exploded, operations, subAssemblies };
-    };
-
-    const { exploded: explodedMaterials, operations: explodedOperations, subAssemblies: explodedSubAssemblies } = getExplodedMaterials();
+    // Handle display data for different tabs
+    const materialsToDisplay = isViewing ? (newPlan.materials || []) : allMaterials;
     
-    // Use directly fetched data if in viewing mode, otherwise use calculated ones
-    const materialsToDisplay = isViewing ? (newPlan.materials || []) : [...coreMaterials, ...explodedMaterials];
-    const subAssembliesToDisplay = isViewing ? (newPlan.subAssemblies || []) : explodedSubAssemblies;
+    const subAssembliesToDisplay = isViewing 
+      ? (newPlan.subAssemblies || []) 
+      : newPlan.items.flatMap(item => (item.components || []).map(comp => ({
+          ...comp,
+          itemCode: comp.item_code || comp.component_code,
+          bomNo: comp.bom_no || 'BOM-SUB',
+          parentPlannedQty: item.plannedQty || 1
+        })));
+
     const operationsToDisplay = isViewing 
       ? (newPlan.operations || []).map(op => ({
           ...op,
@@ -664,21 +621,13 @@ const ProductionPlan = () => {
           base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0'),
           itemCode: op.itemCode || op.source_item
         }))
-      : [
-          ...newPlan.items.flatMap(item => (item.operations || []).map(op => ({ 
-            ...op, 
-            itemCode: item.itemCode,
-            operation_name: op.operation_name || op.name,
-            workstation: op.workstation || op.workstation_name,
-            base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0')
-          }))),
-          ...explodedOperations.map(op => ({
-            ...op,
-            operation_name: op.operation_name || op.name,
-            workstation: op.workstation || op.workstation_name,
-            base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0')
-          }))
-        ];
+      : newPlan.items.flatMap(item => (item.operations || []).map(op => ({ 
+          ...op, 
+          itemCode: op.source_item || op.itemCode || item.itemCode || item.item_code,
+          operation_name: op.operation_name || op.name,
+          workstation: op.workstation || op.workstation_name,
+          base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0')
+        })));
 
     return { 
       materialsToDisplay, 
@@ -686,8 +635,7 @@ const ProductionPlan = () => {
       operationsToDisplay,
       coreMaterials,
       explodedMaterials,
-      explodedOperations,
-      explodedSubAssemblies
+      totalMaterialCount: materialsToDisplay.length
     };
   };
 
@@ -697,8 +645,7 @@ const ProductionPlan = () => {
       subAssembliesToDisplay, 
       operationsToDisplay,
       coreMaterials,
-      explodedMaterials,
-      explodedOperations
+      explodedMaterials
     } = calculatePlanDetails();
 
     const totalMaterialCount = materialsToDisplay.length;

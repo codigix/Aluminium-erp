@@ -15,7 +15,7 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   if (rows.length === 0) {
     if (itemCode && drawingNo) {
       [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IS NULL AND (item_code = ? OR drawing_no = ?) ORDER BY created_at ASC',
+        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IS NULL AND item_code = ? AND drawing_no = ? ORDER BY created_at ASC',
         [itemCode, drawingNo]
       );
     } else if (itemCode) {
@@ -47,7 +47,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
   if (rows.length === 0) {
     if (itemCode && drawingNo) {
       [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id IS NULL AND (item_code = ? OR drawing_no = ?) ORDER BY created_at ASC',
+        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id IS NULL AND item_code = ? AND drawing_no = ? ORDER BY created_at ASC',
         [itemCode, drawingNo]
       );
     } else if (itemCode) {
@@ -79,7 +79,7 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
   if (rows.length === 0) {
     if (itemCode && drawingNo) {
       [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id IS NULL AND (item_code = ? OR drawing_no = ?) ORDER BY created_at ASC',
+        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id IS NULL AND item_code = ? AND drawing_no = ? ORDER BY created_at ASC',
         [itemCode, drawingNo]
       );
     } else if (itemCode) {
@@ -573,6 +573,29 @@ const deleteBOM = async (itemId) => {
   }
 };
 
+const findAnyBOM = async (itemCode, drawingNo) => {
+  // Find the most recently updated sales_order_item that has a BOM for this identity
+  let [rows] = await pool.query(`
+    SELECT id FROM sales_order_items 
+    WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))
+    AND (
+      EXISTS (SELECT 1 FROM sales_order_item_materials WHERE sales_order_item_id = sales_order_items.id)
+      OR EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = sales_order_items.id)
+      OR EXISTS (SELECT 1 FROM sales_order_item_operations WHERE sales_order_item_id = sales_order_items.id)
+    )
+    ORDER BY updated_at DESC LIMIT 1
+  `, [itemCode, drawingNo]);
+
+  if (rows.length === 0) return null;
+  
+  const itemId = rows[0].id;
+  const materials = await getItemMaterials(itemId);
+  const components = await getItemComponents(itemId);
+  const operations = await getItemOperations(itemId);
+  
+  return { materials, components, operations };
+};
+
 module.exports = {
   getItemMaterials,
   getItemComponents,
@@ -590,5 +613,6 @@ module.exports = {
   getBOMBySalesOrder,
   getApprovedBOMs,
   createBOMRequest,
-  deleteBOM
+  deleteBOM,
+  findAnyBOM
 };

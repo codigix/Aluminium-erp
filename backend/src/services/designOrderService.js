@@ -121,7 +121,7 @@ const getDesignOrderItemsBySalesOrder = async (salesOrderId) => {
       oi.id as item_id,
       oi.drawing_no,
       oi.description,
-      oi.qty as qty
+      oi.quantity as qty
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
     WHERE o.id = ?
