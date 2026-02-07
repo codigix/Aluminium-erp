@@ -685,7 +685,7 @@ const ProductionPlan = () => {
 
         {/* Tab Navigation */}
         <div className="flex items-center gap-2 border-b border-slate-200 pb-px">
-          {['Basic Info', 'Finished Goods', 'Materials', 'Sub Assemblies', 'Operations'].map(tab => (
+          {['Basic Info', 'Finished Goods', 'Materials', 'Sub Assemblies'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -697,7 +697,7 @@ const ProductionPlan = () => {
             >
               <div className="flex items-center gap-2">
                 {tab}
-                {(tab === 'Sub Assemblies' || tab === 'Materials' || tab === 'Operations') && (
+                {(tab === 'Sub Assemblies' || tab === 'Materials') && (
                   <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
                 )}
               </div>
@@ -1158,7 +1158,8 @@ const ProductionPlan = () => {
           </div>
         </Card>
 
-        {/* Section 05: Operations */}
+        {/* Section 05: Operations (Hidden) */}
+        {/*
         <Card className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
           <div className="p-6">
             <div className="flex items-center gap-4 mb-6">
@@ -1226,6 +1227,7 @@ const ProductionPlan = () => {
             </div>
           </div>
         </Card>
+        */}
 
         {/* Sticky Bottom Bar */}
         <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 p-4 flex items-center justify-between z-20">
