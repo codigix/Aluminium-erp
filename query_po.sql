@@ -1,0 +1,1 @@
+SELECT cp.id, cp.company_id, poi.drawing_no, poi.quantity FROM customer_pos cp JOIN customer_po_items poi ON cp.id = poi.customer_po_id WHERE cp.company_id = (SELECT company_id FROM sales_orders WHERE id = 20);  

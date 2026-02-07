@@ -1,0 +1,1 @@
+SELECT soi.id, soi.drawing_no, soi.quantity, (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND drawing_no = soi.drawing_no AND id != soi.id AND quantity \ as max_other_qty FROM sales_order_items soi WHERE soi.id IN (86, 88); 

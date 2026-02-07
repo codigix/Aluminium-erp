@@ -1,0 +1,1 @@
+SELECT so.id, so.customer_po_id, so.project_name, soi.id as item_id, soi.drawing_no, soi.quantity FROM sales_orders so JOIN sales_order_items soi ON so.id = soi.sales_order_id WHERE so.id IN (SELECT quotation_id FROM orders WHERE order_no = 'ORD-20260203-001');  

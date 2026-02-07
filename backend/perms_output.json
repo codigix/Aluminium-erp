@@ -1,0 +1,815 @@
+[dotenv@17.2.3] injecting env (14) from backend\.env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+--- All Permissions ---
+Database connection successful
+[
+  {
+    "id": 1,
+    "name": "View POs",
+    "code": "PO_VIEW",
+    "description": "View customer purchase orders",
+    "resource": "customer_pos",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 2,
+    "name": "Create PO",
+    "code": "PO_CREATE",
+    "description": "Create new customer POs",
+    "resource": "customer_pos",
+    "action": "create",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 3,
+    "name": "Edit PO",
+    "code": "PO_EDIT",
+    "description": "Edit customer POs",
+    "resource": "customer_pos",
+    "action": "update",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 4,
+    "name": "Delete PO",
+    "code": "PO_DELETE",
+    "description": "Delete customer POs",
+    "resource": "customer_pos",
+    "action": "delete",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 5,
+    "name": "View Orders",
+    "code": "ORDER_VIEW",
+    "description": "View sales orders",
+    "resource": "sales_orders",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 6,
+    "name": "Create Orders",
+    "code": "ORDER_CREATE",
+    "description": "Create sales orders",
+    "resource": "sales_orders",
+    "action": "create",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 7,
+    "name": "Edit Orders",
+    "code": "ORDER_EDIT",
+    "description": "Edit sales orders",
+    "resource": "sales_orders",
+    "action": "update",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 8,
+    "name": "View Companies",
+    "code": "COMPANY_VIEW",
+    "description": "View company data",
+    "resource": "companies",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 9,
+    "name": "Edit Companies",
+    "code": "COMPANY_EDIT",
+    "description": "Edit company data",
+    "resource": "companies",
+    "action": "update",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 10,
+    "name": "Manage Users",
+    "code": "USER_MANAGE",
+    "description": "Manage users and permissions",
+    "resource": "users",
+    "action": "all",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 11,
+    "name": "Manage Departments",
+    "code": "DEPT_MANAGE",
+    "description": "Manage departments",
+    "resource": "departments",
+    "action": "all",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 12,
+    "name": "Export Data",
+    "code": "DATA_EXPORT",
+    "description": "Export data and reports",
+    "resource": "reports",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 13,
+    "name": "View Dashboard",
+    "code": "DASHBOARD_VIEW",
+    "description": "View dashboard",
+    "resource": "dashboard",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 14,
+    "name": "Change Order Status",
+    "code": "STATUS_CHANGE",
+    "description": "Change order status",
+    "resource": "sales_orders",
+    "action": "update_status",
+    "status": "ACTIVE",
+    "created_at": "2026-01-24T02:24:10.000Z"
+  },
+  {
+    "id": 617,
+    "name": "View Vendors",
+    "code": "VENDOR_VIEW",
+    "description": "View vendor data",
+    "resource": "vendors",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 618,
+    "name": "Edit Vendors",
+    "code": "VENDOR_EDIT",
+    "description": "Edit vendor data",
+    "resource": "vendors",
+    "action": "update",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 619,
+    "name": "View Quotations",
+    "code": "QUOTATION_VIEW",
+    "description": "View vendor quotations",
+    "resource": "quotations",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 620,
+    "name": "Edit Quotations",
+    "code": "QUOTATION_EDIT",
+    "description": "Edit vendor quotations",
+    "resource": "quotations",
+    "action": "update",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 621,
+    "name": "View Purchase Orders",
+    "code": "PURCHASE_ORDER_VIEW",
+    "description": "View purchase orders",
+    "resource": "purchase_orders",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 622,
+    "name": "Create Purchase Order",
+    "code": "PURCHASE_ORDER_CREATE",
+    "description": "Create purchase orders",
+    "resource": "purchase_orders",
+    "action": "create",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 623,
+    "name": "Edit Purchase Order",
+    "code": "PURCHASE_ORDER_EDIT",
+    "description": "Edit purchase orders",
+    "resource": "purchase_orders",
+    "action": "update",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 624,
+    "name": "Delete Purchase Order",
+    "code": "PURCHASE_ORDER_DELETE",
+    "description": "Delete purchase orders",
+    "resource": "purchase_orders",
+    "action": "delete",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 625,
+    "name": "View GRNs",
+    "code": "GRN_VIEW",
+    "description": "View GRNs",
+    "resource": "grns",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 626,
+    "name": "Create GRN",
+    "code": "GRN_CREATE",
+    "description": "Create GRNs",
+    "resource": "grns",
+    "action": "create",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 627,
+    "name": "Edit GRN",
+    "code": "GRN_EDIT",
+    "description": "Edit GRNs",
+    "resource": "grns",
+    "action": "update",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 628,
+    "name": "Delete GRN",
+    "code": "GRN_DELETE",
+    "description": "Delete GRNs",
+    "resource": "grns",
+    "action": "delete",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 629,
+    "name": "View Stock",
+    "code": "STOCK_VIEW",
+    "description": "View stock balances and ledger",
+    "resource": "stock",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 630,
+    "name": "Manage Stock",
+    "code": "STOCK_MANAGE",
+    "description": "Manage stock entries and adjustments",
+    "resource": "stock",
+    "action": "all",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 631,
+    "name": "View QC",
+    "code": "QC_VIEW",
+    "description": "View QC inspections",
+    "resource": "qc_inspections",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 632,
+    "name": "Create QC",
+    "code": "QC_CREATE",
+    "description": "Create QC inspections",
+    "resource": "qc_inspections",
+    "action": "create",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 633,
+    "name": "Edit QC",
+    "code": "QC_EDIT",
+    "description": "Edit QC inspections",
+    "resource": "qc_inspections",
+    "action": "update",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 634,
+    "name": "View BOM",
+    "code": "BOM_VIEW",
+    "description": "View Bill of Materials",
+    "resource": "bom",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 635,
+    "name": "Manage BOM",
+    "code": "BOM_MANAGE",
+    "description": "Create and edit Bill of Materials",
+    "resource": "bom",
+    "action": "all",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 636,
+    "name": "View Production",
+    "code": "PROD_VIEW",
+    "description": "View production plans and job cards",
+    "resource": "production",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 637,
+    "name": "Manage Production",
+    "code": "PROD_MANAGE",
+    "description": "Manage production processes",
+    "resource": "production",
+    "action": "all",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 638,
+    "name": "View Design",
+    "code": "DESIGN_VIEW",
+    "description": "View designs and drawings",
+    "resource": "design",
+    "action": "read",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  },
+  {
+    "id": 639,
+    "name": "Manage Design",
+    "code": "DESIGN_MANAGE",
+    "description": "Create and edit designs and drawings",
+    "resource": "design",
+    "action": "all",
+    "status": "ACTIVE",
+    "created_at": "2026-01-26T10:45:22.000Z"
+  }
+]
+
+--- Role-Permission Mapping ---
+[
+  {
+    "role": "ACC_MGR",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "ACC_MGR",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "ACC_MGR",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "ACC_MGR",
+    "permission": "DATA_EXPORT"
+  },
+  {
+    "role": "ACC_MGR",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "ACC_MGR",
+    "permission": "STATUS_CHANGE"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "ORDER_EDIT"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "STATUS_CHANGE"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "BOM_VIEW"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "BOM_MANAGE"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "DESIGN_VIEW"
+  },
+  {
+    "role": "DESIGN_ENG_ROLE",
+    "permission": "DESIGN_MANAGE"
+  },
+  {
+    "role": "INV_MGR",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "INV_MGR",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "INV_MGR",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "INV_MGR",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "INV_MGR",
+    "permission": "GRN_VIEW"
+  },
+  {
+    "role": "INV_MGR",
+    "permission": "STOCK_VIEW"
+  },
+  {
+    "role": "INV_MGR",
+    "permission": "STOCK_MANAGE"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "VENDOR_VIEW"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "VENDOR_EDIT"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "QUOTATION_VIEW"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "QUOTATION_EDIT"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "PURCHASE_ORDER_VIEW"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "PURCHASE_ORDER_CREATE"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "PURCHASE_ORDER_EDIT"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "GRN_VIEW"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "GRN_CREATE"
+  },
+  {
+    "role": "PROC_OFFICER",
+    "permission": "GRN_EDIT"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "ORDER_EDIT"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "STATUS_CHANGE"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "BOM_VIEW"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "PROD_VIEW"
+  },
+  {
+    "role": "PROD_MGR",
+    "permission": "PROD_MANAGE"
+  },
+  {
+    "role": "QA_INSP",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "QA_INSP",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "QA_INSP",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "QA_INSP",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "QA_INSP",
+    "permission": "GRN_VIEW"
+  },
+  {
+    "role": "QA_INSP",
+    "permission": "QC_VIEW"
+  },
+  {
+    "role": "QA_INSP",
+    "permission": "QC_CREATE"
+  },
+  {
+    "role": "QA_INSP",
+    "permission": "QC_EDIT"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "PO_CREATE"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "PO_EDIT"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "ORDER_CREATE"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "ORDER_EDIT"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "STATUS_CHANGE"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "DESIGN_VIEW"
+  },
+  {
+    "role": "SALES_MGR",
+    "permission": "DESIGN_MANAGE"
+  },
+  {
+    "role": "SHIP_OFFICER",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "SHIP_OFFICER",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "SHIP_OFFICER",
+    "permission": "ORDER_EDIT"
+  },
+  {
+    "role": "SHIP_OFFICER",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "SHIP_OFFICER",
+    "permission": "DATA_EXPORT"
+  },
+  {
+    "role": "SHIP_OFFICER",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "SHIP_OFFICER",
+    "permission": "STATUS_CHANGE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PO_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PO_CREATE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PO_EDIT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PO_DELETE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "ORDER_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "ORDER_CREATE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "ORDER_EDIT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "COMPANY_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "COMPANY_EDIT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "USER_MANAGE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "DEPT_MANAGE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "DATA_EXPORT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "DASHBOARD_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "STATUS_CHANGE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "VENDOR_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "VENDOR_EDIT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "QUOTATION_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "QUOTATION_EDIT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PURCHASE_ORDER_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PURCHASE_ORDER_CREATE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PURCHASE_ORDER_EDIT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PURCHASE_ORDER_DELETE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "GRN_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "GRN_CREATE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "GRN_EDIT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "GRN_DELETE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "STOCK_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "STOCK_MANAGE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "QC_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "QC_CREATE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "QC_EDIT"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "BOM_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "BOM_MANAGE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PROD_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "PROD_MANAGE"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "DESIGN_VIEW"
+  },
+  {
+    "role": "SYS_ADMIN",
+    "permission": "DESIGN_MANAGE"
+  }
+]

@@ -1,20 +1,18 @@
 {
-  "name": "aluminium-precision-casting-erp",
+  "name": "sp_tech",
   "version": "1.0.0",
-  "description": "ERP for aluminium precision casting company",
-  "private": true,
-  "workspaces": [
-    "backend",
-    "frontend"
-  ],
+  "description": "",
+  "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
-    "backend": "npm run dev --workspace=backend",
-    "frontend": "npm run dev --workspace=frontend",
-    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
-    "install-all": "npm install"
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^9.2.1"
   }
 }
