@@ -47,13 +47,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads')));
 
-// 🔐 PRODUCTION API LOCKDOWN
-const allowedProdApis = [
-  '/api/auth/login',
-  '/api/quotations/communications',
-  '/api/quotation-requests',
-  '/api/order'
-];
+const allowedProdApis = require('./config/allowedProdApis');
 
 const productionApiGuard = (req, res, next) => {
   const isProd = process.env.NODE_ENV?.trim() === 'production';
@@ -67,15 +61,18 @@ const productionApiGuard = (req, res, next) => {
     return res.send('ERP API Running');
   }
 
+  const path = req.path || '';
+  const originalUrl = req.originalUrl || '';
+
   const isAllowed = allowedProdApis.some(api => 
-    req.path.includes(api) || req.originalUrl.includes(api)
+    path.includes(api) || originalUrl.includes(api)
   );
 
-  if (!isAllowed && !req.path.startsWith('/uploads')) {
-    console.log(`[PRODUCTION BLOCKED] ${req.method} ${req.path}`);
+  if (!isAllowed && !path.startsWith('/uploads')) {
+    console.log(`[PRODUCTION BLOCKED] ${req.method} ${path}`);
     return res.status(403).json({ 
       message: 'Access denied in production',
-      path: req.path,
+      path: path,
       allowed: allowedProdApis
     });
   }
@@ -86,8 +83,6 @@ const productionApiGuard = (req, res, next) => {
 app.use(productionApiGuard);
 
 app.use('/api/auth', authRoutes);
-
-// Remove the redundant secondary guard block below
 app.use('/api/departments', departmentRoutes);
 
 app.use(authenticate);
@@ -127,6 +122,10 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start real email receiver to fetch replies
-emailReceiver.startEmailReceiver();
+try {
+  emailReceiver.startEmailReceiver();
+} catch (error) {
+  console.error('[App] Failed to start email receiver:', error.message);
+}
 
 module.exports = app;
