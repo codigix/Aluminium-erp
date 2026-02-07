@@ -1141,6 +1141,15 @@ const ensureWorkOrderTables = async () => {
 
     try {
       // Try to drop FKs that might reference sales_orders/items to support direct orders
+      await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_1');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_2');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_3');
+    } catch (e) {}
+    try {
       await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_4');
     } catch (e) {}
     try {
@@ -1154,7 +1163,8 @@ const ensureWorkOrderTables = async () => {
     if (!existingWoCols.has('bom_no')) await connection.query('ALTER TABLE work_orders ADD COLUMN bom_no VARCHAR(100) AFTER item_name');
     if (!existingWoCols.has('source_type')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_type ENUM("FG", "SA") DEFAULT "FG" AFTER bom_no');
     
-    // Update status enum and make sales_order_item_id nullable
+    // Update status enum and make sales order columns nullable
+    await connection.query("ALTER TABLE work_orders MODIFY COLUMN sales_order_id INT NULL");
     await connection.query("ALTER TABLE work_orders MODIFY COLUMN sales_order_item_id INT NULL");
     await connection.query("ALTER TABLE work_orders MODIFY COLUMN status ENUM('DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED') DEFAULT 'DRAFT'");
 

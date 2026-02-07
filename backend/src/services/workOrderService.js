@@ -40,20 +40,23 @@ const createWorkOrdersFromPlan = async (planId) => {
       const itemCode = itemData.item_code;
       const itemName = itemData.description || itemData.item_code; // Fallback
       const bomNo = itemData.bom_no;
-      const quantity = itemData.planned_qty || itemData.required_qty;
+      const quantity = parseFloat(itemData.planned_qty || itemData.required_qty || 0);
       const salesOrderItemId = itemData.sales_order_item_id || null;
       const productionPlanItemId = sourceType === 'FG' ? itemData.id : null;
-      const startDate = itemData.planned_start_date || plan.start_date;
-      const endDate = itemData.planned_end_date || plan.end_date;
+      const startDate = (itemData.planned_start_date || plan.start_date) || null;
+      const endDate = (itemData.planned_end_date || plan.end_date) || null;
 
       // Check if WO already exists for this plan and item
       const [existing] = await connection.query(
-        'SELECT id FROM work_orders WHERE plan_id = ? AND item_code = ?',
-        [planId, itemCode]
+        'SELECT id FROM work_orders WHERE plan_id = ? AND item_code = ? AND source_type = ?',
+        [planId, itemCode, sourceType]
       );
       if (existing.length > 0) return existing[0].id;
 
-      const woNumber = await generateWoNumber();
+      // Ensure we have a valid sales_order_id if available
+      const effectiveSalesOrderId = plan.sales_order_id || (itemData.sales_order_id) || null;
+
+      const woNumber = await generateWoNumber(connection);
       
       const [result] = await connection.execute(
         `INSERT INTO work_orders 
@@ -62,7 +65,7 @@ const createWorkOrdersFromPlan = async (planId) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
         [
           woNumber, planId, productionPlanItemId, parentId,
-          plan.sales_order_id, salesOrderItemId,
+          effectiveSalesOrderId, salesOrderItemId,
           itemCode, itemName, bomNo, sourceType, quantity,
           startDate, endDate, plan.production_priority || 'NORMAL'
         ]
@@ -194,9 +197,11 @@ const getWorkOrderById = async (id) => {
 };
 
 const generateJobCardNo = async (connection) => {
-  const [rows] = await connection.query('SELECT COUNT(*) as count FROM job_cards');
+  const conn = connection || pool;
+  const [rows] = await conn.query('SELECT COUNT(*) as count FROM job_cards');
   const count = rows[0].count + 1;
-  return `JC-${String(count).padStart(4, '0')}`;
+  const random = Math.floor(Math.random() * 1000);
+  return `JC-${String(count).padStart(4, '0')}-${random}`;
 };
 
 const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus = 'DRAFT', providedOperations = null) => {
@@ -322,8 +327,12 @@ const deleteWorkOrder = async (id) => {
   }
 };
 
-const generateWoNumber = async () => {
-  return `WO-${Date.now()}`;
+const generateWoNumber = async (connection) => {
+  const conn = connection || pool;
+  const [rows] = await conn.query('SELECT COUNT(*) as count FROM work_orders');
+  const count = rows[0].count + 1;
+  const random = Math.floor(Math.random() * 1000); // Add randomness for fast loops
+  return `WO-${String(count).padStart(5, '0')}-${random}`;
 };
 
 module.exports = {
