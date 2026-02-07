@@ -4,7 +4,7 @@ import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const DrawingMaster = () => {
   const [drawings, setDrawings] = useState([]);

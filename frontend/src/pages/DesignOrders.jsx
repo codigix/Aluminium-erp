@@ -6,7 +6,7 @@ import { Plus, Search, RefreshCw, Filter, FileText, Send, Eye, LayoutList, Layou
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const DesignOrders = () => {
   const navigate = useNavigate();

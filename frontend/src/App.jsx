@@ -51,7 +51,7 @@ import JobCard from './pages/JobCard'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
-const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000')
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000')
 const API_HOST = API_BASE
 const isProduction = import.meta.env.PROD || window.location.hostname.includes('aluminiumerp.codigix.co');
 const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card']

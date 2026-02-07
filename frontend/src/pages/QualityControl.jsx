@@ -23,7 +23,7 @@ import {
   Loader2
 } from 'lucide-react';
 
-const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const grnStatusColors = {
   PENDING: { badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Pending' },

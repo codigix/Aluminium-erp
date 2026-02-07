@@ -56,11 +56,11 @@ const productionApiGuard = (req, res, next) => {
     return next();
   }
 
-  const requestedPath = req.path || '';
+  const requestedPath = (req.path || '').replace(/^\/api/, '') || '/';
   const originalUrl = req.originalUrl || '';
 
   // Allow health check
-  if (requestedPath === '/' || requestedPath === '/health' || requestedPath === '/api/health') {
+  if (requestedPath === '/' || requestedPath === '/health') {
     if (req.method === 'GET') {
       return res.send('ERP API Running');
     }
@@ -95,41 +95,51 @@ const productionApiGuard = (req, res, next) => {
 
 app.use(productionApiGuard);
 
-app.use('/auth', authRoutes);
-app.use('/departments', departmentRoutes);
+// --- Route Grouping ---
+const publicRouter = express.Router();
+publicRouter.use('/auth', authRoutes);
+publicRouter.use('/departments', departmentRoutes);
 
-app.use(authenticate);
+const privateRouter = express.Router();
+privateRouter.use(authenticate);
+privateRouter.use('/users', userRoutes);
+privateRouter.use('/access', departmentDocumentRoutes);
+privateRouter.use('/companies', companyRoutes);
+privateRouter.use('/customer-pos', customerPoRoutes);
+privateRouter.use('/sales-orders', salesOrderRoutes);
+privateRouter.use('/order', orderRoutes);
+privateRouter.use('/design-orders', designOrderRoutes);
+privateRouter.use('/vendors', vendorRoutes);
+privateRouter.use('/quotations/communications', quotationCommunicationRoutes);
+privateRouter.use('/quotations', quotationRoutes);
+privateRouter.use('/quotation-requests', quotationRequestRoutes);
+privateRouter.use('/purchase-orders', purchaseOrderRoutes);
+privateRouter.use('/bom', bomRoutes);
+privateRouter.use('/items', stockRoutes);
+privateRouter.use('/drawings', drawingRoutes);
+privateRouter.use('/po-receipts', poReceiptRoutes);
+privateRouter.use('/grns', grnRoutes);
+privateRouter.use('/grn-items', grnItemRoutes);
+privateRouter.use('/qc-inspections', qcInspectionsRoutes);
+privateRouter.use('/stock', stockRoutes);
+privateRouter.use('/warehouse-allocations', warehouseAllocationRoutes);
+privateRouter.use('/inventory', inventoryDashboardRoutes);
+privateRouter.use('/workstations', workstationRoutes);
+privateRouter.use('/operations', operationRoutes);
+privateRouter.use('/production-plans', productionPlanRoutes);
+privateRouter.use('/material-requirements', materialRequirementsRoutes);
+privateRouter.use('/work-orders', workOrderRoutes);
+privateRouter.use('/job-cards', jobCardRoutes);
+privateRouter.use('/material-issues', materialIssueRoutes);
+privateRouter.use('/dashboard', dashboardRoutes);
 
-app.use('/users', userRoutes);
-app.use('/access', departmentDocumentRoutes);
-app.use('/companies', companyRoutes);
-app.use('/customer-pos', customerPoRoutes);
-app.use('/sales-orders', salesOrderRoutes);
-app.use('/order', orderRoutes);
-app.use('/design-orders', designOrderRoutes);
-app.use('/vendors', vendorRoutes);
-app.use('/quotations/communications', quotationCommunicationRoutes);
-app.use('/quotations', quotationRoutes);
-app.use('/quotation-requests', quotationRequestRoutes);
-app.use('/purchase-orders', purchaseOrderRoutes);
-app.use('/bom', bomRoutes);
-app.use('/items', stockRoutes);
-app.use('/drawings', drawingRoutes);
-app.use('/po-receipts', poReceiptRoutes);
-app.use('/grns', grnRoutes);
-app.use('/grn-items', grnItemRoutes);
-app.use('/qc-inspections', qcInspectionsRoutes);
-app.use('/stock', stockRoutes);
-app.use('/warehouse-allocations', warehouseAllocationRoutes);
-app.use('/inventory', inventoryDashboardRoutes);
-app.use('/workstations', workstationRoutes);
-app.use('/operations', operationRoutes);
-app.use('/production-plans', productionPlanRoutes);
-app.use('/material-requirements', materialRequirementsRoutes);
-app.use('/work-orders', workOrderRoutes);
-app.use('/job-cards', jobCardRoutes);
-app.use('/material-issues', materialIssueRoutes);
-app.use('/dashboard', dashboardRoutes);
+const apiRouter = express.Router();
+apiRouter.use(publicRouter);
+apiRouter.use(privateRouter);
+
+// Mount with and without /api prefix for compatibility
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 app.use(notFound);
 app.use(errorHandler);

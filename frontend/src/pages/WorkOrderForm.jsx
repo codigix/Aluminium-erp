@@ -7,7 +7,7 @@ import {
 import { Card, FormControl, SearchableSelect } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast.js';
 
-const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
   const [activeTab, setActiveTab] = useState('foundation');

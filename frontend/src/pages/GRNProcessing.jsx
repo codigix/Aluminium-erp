@@ -3,7 +3,7 @@ import { Card, DataTable, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const itemStatusColors = {
   APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
