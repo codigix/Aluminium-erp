@@ -47,54 +47,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads')));
 
-const allowedProdApis = require('./config/allowedProdApis');
-
-const productionApiGuard = (req, res, next) => {
-  const isProd = process.env.NODE_ENV?.trim() === 'production';
-  
-  if (!isProd) {
-    return next();
-  }
-
-  const requestedPath = (req.path || '').replace(/^\/api/, '') || '/';
-  const originalUrl = req.originalUrl || '';
-
-  // Allow health check
-  if (requestedPath === '/' || requestedPath === '/health') {
-    if (req.method === 'GET') {
-      return res.send('ERP API Running');
-    }
-    return next();
-  }
-
-  // Always allow auth and uploads in production
-  if (requestedPath.startsWith('/auth') || requestedPath.startsWith('/uploads')) {
-    return next();
-  }
-
-  // Ensure allowedProdApis is handled safely
-  const apis = Array.isArray(allowedProdApis) ? allowedProdApis : [];
-  
-  const isAllowed = apis.some(api => {
-    if (!api) return false;
-    const cleanApi = api.startsWith('/') ? api : `/${api}`;
-    return requestedPath.startsWith(cleanApi) || originalUrl.includes(cleanApi);
-  });
-
-  if (!isAllowed) {
-    console.log(`[PRODUCTION BLOCKED] ${req.method} ${requestedPath}`);
-    return res.status(403).json({ 
-      message: 'Access denied in production',
-      path: requestedPath,
-      allowed: apis
-    });
-  }
-
-  next();
-};
-
-app.use(productionApiGuard);
-
 // --- Route Grouping ---
 const publicRouter = express.Router();
 publicRouter.use('/auth', authRoutes);
