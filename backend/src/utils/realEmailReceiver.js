@@ -48,6 +48,12 @@ const processEmails = async () => {
 
     isProcessing = true;
     const client = new ImapFlow(config);
+    
+    // Add error listener to prevent crash on connection reset/errors
+    client.on('error', err => {
+        console.error(`[Email Receiver] ImapFlow Error: ${err.message}`);
+    });
+
     try {
         console.log(`[Email Receiver] ${new Date().toISOString()} - Starting email sync...`);
         await client.connect();

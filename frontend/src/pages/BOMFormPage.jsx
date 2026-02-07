@@ -713,7 +713,7 @@ const BOMFormPage = () => {
         const cleanStockDwg = cleanText(stockItem?.drawing_no || 'N/A');
         const cleanSelectedDwg = cleanText(selectedItem?.drawing_no || productForm.drawingNo || 'N/A');
 
-        if (stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
+        if (!showAllDrawings && stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
           const confirm = await Swal.fire({
             title: 'Drawing Mismatch',
             text: `This material is linked to drawing ${cleanStockDwg}, but the product drawing is ${cleanSelectedDwg}. Continue?`,
@@ -740,7 +740,7 @@ const BOMFormPage = () => {
         const cleanStockDwg = cleanText(linkedItem?.drawing_no || 'N/A');
         const cleanSelectedDwg = cleanText(selectedItem?.drawing_no || productForm.drawingNo || 'N/A');
 
-        if (linkedItem?.drawing_no && linkedItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
+        if (!showAllDrawings && linkedItem?.drawing_no && linkedItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
           const confirm = await Swal.fire({
             title: 'Drawing Mismatch',
             text: `This component is linked to drawing ${cleanStockDwg}, but the product drawing is ${cleanSelectedDwg}. Continue?`,
@@ -777,7 +777,7 @@ const BOMFormPage = () => {
         const cleanStockDwg = cleanText(linkedItem?.drawing_no || 'N/A');
         const cleanSelectedDwg = cleanText(selectedItem?.drawing_no || productForm.drawingNo || 'N/A');
 
-        if (linkedItem?.drawing_no && linkedItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
+        if (!showAllDrawings && linkedItem?.drawing_no && linkedItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
           const confirm = await Swal.fire({
             title: 'Drawing Mismatch',
             text: `This scrap item is linked to drawing ${cleanStockDwg}, but the product drawing is ${cleanSelectedDwg}. Continue?`,

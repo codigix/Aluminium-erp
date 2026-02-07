@@ -9,7 +9,7 @@ const toNumber = value => {
 };
 
 const normalizeDate = value => {
-  if (!value) return '';
+  if (!value) return null;
   if (typeof value === 'number') {
     const date = new Date((value - 25569) * 86400 * 1000);
     const yyyy = date.getFullYear();
@@ -27,7 +27,7 @@ const normalizeDate = value => {
     const year = Number(yy) + 2000;
     return `${year}-${mm}-${dd}`;
   }
-  return '';
+  return null;
 };
 
 const parseExcelPo = async fileBuffer => {

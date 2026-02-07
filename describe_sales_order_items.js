@@ -1,12 +1,14 @@
 const pool = require('./backend/src/config/db');
+
 async function run() {
   try {
-    const [rows] = await pool.query('DESCRIBE quotation_requests');
+    const [rows] = await pool.query('DESCRIBE sales_order_items');
     console.table(rows);
   } catch (err) {
     console.error(err);
   } finally {
-    process.exit(0);
+    await pool.end();
   }
 }
+
 run();

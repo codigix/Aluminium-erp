@@ -1,18 +1,20 @@
-require('dotenv').config();
-const pool = require('./src/config/db');
-
-async function checkSchema() {
-  try {
-    const tables = ['sales_order_item_materials', 'sales_order_items', 'customer_drawings'];
-    for (const table of tables) {
-      const [rows] = await pool.query(`DESCRIBE ${table}`);
-      console.log(`Schema for ${table}:`, rows);
-    }
-  } catch (err) {
-    console.error(err);
-  } finally {
-    process.exit(0);
-  }
+const mysql = require('mysql2/promise');
+async function run() {
+  const connection = await mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: 'backend',
+    database: 'sales_erp'
+  });
+  const [rows] = await connection.query('DESCRIBE production_plan_items');
+  console.log('production_plan_items:', rows.map(r => ({Field: r.Field, Null: r.Null})));
+  const [rows2] = await connection.query('DESCRIBE production_plan_sub_assemblies');
+  console.log('production_plan_sub_assemblies:', rows2.map(r => ({Field: r.Field, Null: r.Null})));
+  const [rows3] = await connection.query('DESCRIBE production_plan_operations');
+  console.log('production_plan_operations:', rows3.map(r => ({Field: r.Field, Null: r.Null})));
+  process.exit(0);
 }
-
-checkSchema();
+run().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

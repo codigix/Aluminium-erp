@@ -19,7 +19,8 @@ const parseExcelDrawings = async (filePath) => {
       revision: -1,
       description: -1,
       qty: -1,
-      remarks: -1
+      remarks: -1,
+      drawingFile: -1
     };
 
     // Find header row
@@ -30,7 +31,9 @@ const parseExcelDrawings = async (filePath) => {
       if (hasDrawing) {
         headerRowIndex = i;
         row.forEach((cell, idx) => {
-          if (cell.includes('drawing') || cell.includes('drw') || cell.includes('part no') || cell.includes('item code')) {
+          if (cell.includes('drawing_file') || cell.includes('drawing file') || (cell.includes('file') && !cell.includes('type'))) {
+            if (columnMap.drawingFile === -1) columnMap.drawingFile = idx;
+          } else if (cell.includes('drawing') || cell.includes('drw') || cell.includes('part no') || cell.includes('item code')) {
             if (columnMap.drawingNo === -1) columnMap.drawingNo = idx;
           } else if (cell.includes('rev')) {
             if (columnMap.revision === -1) columnMap.revision = idx;
@@ -60,7 +63,8 @@ const parseExcelDrawings = async (filePath) => {
           revision: columnMap.revision !== -1 ? cleanup(row[columnMap.revision]) : '',
           description: columnMap.description !== -1 ? cleanup(row[columnMap.description]) : '',
           qty: columnMap.qty !== -1 ? parseInt(row[columnMap.qty]) || 1 : 1,
-          remarks: columnMap.remarks !== -1 ? cleanup(row[columnMap.remarks]) : ''
+          remarks: columnMap.remarks !== -1 ? cleanup(row[columnMap.remarks]) : '',
+          drawingFile: columnMap.drawingFile !== -1 ? cleanup(row[columnMap.drawingFile]) : ''
         });
       }
     } else {
@@ -78,7 +82,8 @@ const parseExcelDrawings = async (filePath) => {
              revision: row[1] ? cleanup(row[1]) : '',
              description: row[2] ? cleanup(row[2]) : '',
              qty: row[3] ? parseInt(row[3]) || 1 : 1,
-             remarks: row[4] ? cleanup(row[4]) : ''
+             remarks: row[4] ? cleanup(row[4]) : '',
+             drawingFile: row[5] ? cleanup(row[5]) : ''
            });
         }
       }

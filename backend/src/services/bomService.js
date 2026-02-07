@@ -126,9 +126,13 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
 const addItemMaterial = async (itemId, materialData) => {
   const { itemCode, drawingNo, materialName, materialType, itemGroup, qtyPerPc, uom, rate, warehouse, operation, parentId, description } = materialData;
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
+  
+  // Raw materials are GLOBAL - they should not be linked to any specific drawing
+  const effectiveDrawingNo = itemGroup === 'Raw Material' ? null : (drawingNo || null);
+
   const [result] = await pool.execute(
     'INSERT INTO sales_order_item_materials (sales_order_item_id, item_code, drawing_no, parent_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [parsedItemId, itemCode || null, drawingNo || null, parentId || null, materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, description || null]
+    [parsedItemId, itemCode || null, effectiveDrawingNo, parentId || null, materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, description || null]
   );
   return result.insertId;
 };

@@ -419,11 +419,12 @@ const ProductionPlan = () => {
       const token = localStorage.getItem('authToken');
       
       // Fetch Design Order Items
+      let designData = [];
       const designResp = await fetch(`${API_BASE}/design-orders/by-sales-order/${orderId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (designResp.ok) {
-        const designData = await designResp.json();
+        designData = await designResp.json();
         setDesignOrderItems(designData);
       }
 
@@ -442,11 +443,7 @@ const ProductionPlan = () => {
         if (boms.length === 1) {
           const singleBomId = boms[0].id.toString();
           setSelectedBomId(singleBomId);
-          // Auto-select the item for production if it's in readyItems
-          const itemInReady = readyItems.find(ri => ri.sales_order_item_id === parseInt(singleBomId));
-          if (itemInReady) {
-            toggleItemSelection(itemInReady);
-          }
+          handleBomSelect(singleBomId);
         }
       }
     } catch (error) {
@@ -463,19 +460,19 @@ const ProductionPlan = () => {
       return;
     }
 
-    // When a BOM is selected, find the item in readyItems and select it
+    // When a BOM is selected, find the item in designOrderItems or selectedOrderDetails and select it
     // The user wants STRICT behavior: only this item should be in the plan
-    const itemsToSearch = selectedOrderDetails ? selectedOrderDetails.items : readyItems;
+    const itemsToSearch = selectedOrderDetails?.items || readyItems;
     const itemInReady = itemsToSearch.find(item => (item.id || item.sales_order_item_id).toString() === bomId.toString());
     
     if (itemInReady) {
       // Find matching design order item to get quantity
       const designItem = designOrderItems.find(d => 
-        d.item_code === itemInReady.item_code && 
-        (d.drawing_no === itemInReady.drawing_no || (!d.drawing_no && !itemInReady.drawing_no))
+        String(d.item_code).trim() === String(itemInReady.item_code).trim() && 
+        (String(d.drawing_no || '').trim() === String(itemInReady.drawing_no || '').trim())
       );
       
-      const designQty = designItem ? designItem.qty : (itemInReady.total_qty || itemInReady.quantity || 1);
+      const designQty = designItem ? parseFloat(designItem.qty || 0) : parseFloat(itemInReady.total_qty || itemInReady.quantity || 1);
 
       // Clear existing items and only add this one
       const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id;
@@ -510,9 +507,9 @@ const ProductionPlan = () => {
             itemCode: itemInReady.item_code,
             description: itemInReady.description,
             plannedQty: designQty,
-            totalQty: itemInReady.total_qty || itemInReady.quantity,
+            totalQty: parseFloat(itemInReady.total_qty || itemInReady.quantity || 0),
             designQty: designQty,
-            alreadyPlannedQty: itemInReady.already_planned_qty || 0,
+            alreadyPlannedQty: parseFloat(itemInReady.already_planned_qty || 0),
             bom_no: itemInReady.drawing_no || itemInReady.bom_no || 'BOM-' + (salesOrderItemId || 'REF'),
             workstationId: '',
             plannedStartDate: prev.startDate,
@@ -528,7 +525,8 @@ const ProductionPlan = () => {
     }
   };
 
-  const toggleItemSelection = async (item) => {
+  const toggleItemSelection = async (item, designItemsOverride = null) => {
+    const itemsToUse = designItemsOverride || designOrderItems;
     const salesOrderItemId = item.id || item.sales_order_item_id;
     const exists = newPlan.items.find(i => i.salesOrderItemId === salesOrderItemId);
     
@@ -553,12 +551,12 @@ const ProductionPlan = () => {
       }
 
       // Find matching design order item to get quantity
-      const designItem = designOrderItems.find(d => 
-        d.item_code === item.item_code && 
-        (d.drawing_no === item.drawing_no || (!d.drawing_no && !item.drawing_no))
+      const designItem = itemsToUse.find(d => 
+        String(d.item_code).trim() === String(item.item_code).trim() && 
+        (String(d.drawing_no || '').trim() === String(item.drawing_no || '').trim())
       );
       
-      const designQty = designItem ? designItem.qty : (item.total_qty || item.quantity || 1);
+      const designQty = designItem ? parseFloat(designItem.qty || 0) : parseFloat(item.total_qty || item.quantity || 1);
 
       setNewPlan(prev => ({
         ...prev,
@@ -571,9 +569,9 @@ const ProductionPlan = () => {
           itemCode: item.item_code,
           description: item.description,
           plannedQty: designQty,
-          totalQty: item.total_qty || item.quantity,
+          totalQty: parseFloat(item.total_qty || item.quantity || 0),
           designQty: designQty,
-          alreadyPlannedQty: item.already_planned_qty || 0,
+          alreadyPlannedQty: parseFloat(item.already_planned_qty || 0),
           workstationId: '',
           plannedStartDate: prev.startDate,
           plannedEndDate: prev.endDate,
@@ -801,10 +799,10 @@ const ProductionPlan = () => {
               <FormControl label="Select BOM">
                 <div className="relative">
                   <select
-                    className={`w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${(availableBoms.length <= 1 && selectedOrderId) || isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={selectedBomId}
                     onChange={(e) => handleBomSelect(e.target.value)}
-                    disabled={(availableBoms.length <= 1 && selectedOrderId) || isViewing}
+                    disabled={isViewing}
                   >
                     <option value="">{availableBoms.length === 0 ? (selectedOrderId ? 'No BOMs Available' : 'Select Order First') : 'Select BOM...'}</option>
                     {availableBoms.map(bom => (

@@ -77,22 +77,28 @@ const createDrawing = async (req, res, next) => {
           let rowFilePath = null; 
           
           if (zipFile && zipEntries.length > 0) {
-            // Find drawing file in ZIP matching drawingNo
+            // Find drawing file in ZIP matching drawingNo or drawingFile column
             // We search for files matching drawingNo (ignoring case and extension)
             const cleanDrawingNo = d.drawingNo.toLowerCase().trim();
+            const explicitFileName = d.drawingFile ? d.drawingFile.toLowerCase().trim() : null;
+
             const entry = zipEntries.find(e => {
               if (e.isDirectory) return false;
               const entryName = e.entryName.toLowerCase();
-              const fileName = path.basename(entryName, path.extname(entryName));
+              const fileNameWithExt = path.basename(entryName);
+              const fileNameWithoutExt = path.basename(entryName, path.extname(entryName));
               
+              // Priority 0: Exact match with explicit drawingFile from Excel
+              if (explicitFileName && (fileNameWithExt === explicitFileName || fileNameWithoutExt === explicitFileName)) return true;
+
               // Priority 1: Exact match of filename without extension
-              if (fileName === cleanDrawingNo) return true;
+              if (fileNameWithoutExt === cleanDrawingNo) return true;
               
               // Priority 2: Full entry name matches (for files in root)
               if (entryName === cleanDrawingNo) return true;
 
               // Priority 3: Filename includes drawing number (best effort)
-              return fileName.includes(cleanDrawingNo) || cleanDrawingNo.includes(fileName);
+              return fileNameWithoutExt.includes(cleanDrawingNo) || cleanDrawingNo.includes(fileNameWithoutExt);
             });
 
             if (entry) {

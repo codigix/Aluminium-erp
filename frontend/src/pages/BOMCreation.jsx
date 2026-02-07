@@ -126,6 +126,58 @@ const BOMCreation = () => {
     }
   };
 
+  const handleSendForApproval = async (client) => {
+    try {
+      const items = clientData[client.id]?.items || [];
+      const salesOrderIds = [...new Set(items.map(i => i.sales_order_id))].filter(id => id);
+
+      if (salesOrderIds.length === 0) {
+        errorToast("No sales orders found for this client.");
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: 'Send for Approval?',
+        text: `Are you sure you want to send BOMs for ${client.client_name} for approval?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Send'
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        
+        const promises = salesOrderIds.map(soId => 
+          fetch(`${API_BASE}/sales-orders/${soId}/status`, {
+            method: 'PATCH',
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status: 'BOM_SUBMITTED' })
+          })
+        );
+
+        const responses = await Promise.all(promises);
+        const failed = responses.filter(r => !r.ok);
+
+        if (failed.length > 0) {
+          throw new Error(`Failed to send ${failed.length} order(s) for approval.`);
+        }
+
+        successToast('BOMs sent for approval successfully.');
+        fetchOrders();
+      }
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const stats = useMemo(() => {
     let totalDrawings = 0;
     let completedDrawings = 0;
@@ -355,14 +407,22 @@ const BOMCreation = () => {
                             <StatusBadge status={allBOMsCompleted ? 'COMPLETED' : 'IN_PROGRESS'} />
                           </td>
                           <td className="p-2 text-left">
-                            <div >
+                            <div className="flex items-center gap-2">
                               <button 
                                 onClick={(e) => { e.stopPropagation(); toggleClient(client.id); }}
                                 className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all"
                               >
                                 {isExpanded ? 'Hide Drawings' : 'View Drawings'}
                               </button>
-                            
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleSendForApproval(client); }}
+                                className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-all"
+                                title="Send to BOM Approval"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                              </button>
                             </div>
                           </td>
                         </tr>

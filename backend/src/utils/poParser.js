@@ -106,7 +106,7 @@ const MONTHS = {
 };
 
 const normalizeDate = value => {
-  if (!value) return '';
+  if (!value) return null;
   const cleaned = value.replace(/[.]/g, '-').replace(/\//g, '-').trim();
   if (/^\d{2}-\d{2}-\d{4}$/.test(cleaned)) {
     const [dd, mm, yyyy] = cleaned.split('-');
@@ -124,7 +124,7 @@ const normalizeDate = value => {
     const year = yy.length === 2 ? Number(yy) + 2000 : Number(yy);
     return `${year}-${month}-${dd}`;
   }
-  return '';
+  return null;
 };
 
 const deriveCreditDays = paymentTerms => {
