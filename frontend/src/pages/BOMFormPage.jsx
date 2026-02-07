@@ -99,7 +99,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 
   );
 };
 
-const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
+const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000');
 
 const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type: providedType, inheritedLoss = 0 }) => {
   // Determine if this item is a material or component if type not provided or to be sure

@@ -56,24 +56,37 @@ const productionApiGuard = (req, res, next) => {
     return next();
   }
 
-  // Allow health check
-  if (req.path === '/' || req.path === '/api' || req.path === '/api/') {
-    return res.send('ERP API Running');
-  }
-
-  const path = req.path || '';
+  const requestedPath = req.path || '';
   const originalUrl = req.originalUrl || '';
 
-  const isAllowed = allowedProdApis.some(api => 
-    path.includes(api) || originalUrl.includes(api)
-  );
+  // Allow health check
+  if (requestedPath === '/' || requestedPath === '/health' || requestedPath === '/api/health') {
+    if (req.method === 'GET') {
+      return res.send('ERP API Running');
+    }
+    return next();
+  }
 
-  if (!isAllowed && !path.startsWith('/uploads')) {
-    console.log(`[PRODUCTION BLOCKED] ${req.method} ${path}`);
+  // Always allow auth and uploads in production
+  if (requestedPath.startsWith('/auth') || requestedPath.startsWith('/uploads')) {
+    return next();
+  }
+
+  // Ensure allowedProdApis is handled safely
+  const apis = Array.isArray(allowedProdApis) ? allowedProdApis : [];
+  
+  const isAllowed = apis.some(api => {
+    if (!api) return false;
+    const cleanApi = api.startsWith('/') ? api : `/${api}`;
+    return requestedPath.startsWith(cleanApi) || originalUrl.includes(cleanApi);
+  });
+
+  if (!isAllowed) {
+    console.log(`[PRODUCTION BLOCKED] ${req.method} ${requestedPath}`);
     return res.status(403).json({ 
       message: 'Access denied in production',
-      path: path,
-      allowed: allowedProdApis
+      path: requestedPath,
+      allowed: apis
     });
   }
 
@@ -82,41 +95,41 @@ const productionApiGuard = (req, res, next) => {
 
 app.use(productionApiGuard);
 
-app.use('/api/auth', authRoutes);
-app.use('/api/departments', departmentRoutes);
+app.use('/auth', authRoutes);
+app.use('/departments', departmentRoutes);
 
 app.use(authenticate);
 
-app.use('/api/users', userRoutes);
-app.use('/api/access', departmentDocumentRoutes);
-app.use('/api/companies', companyRoutes);
-app.use('/api/customer-pos', customerPoRoutes);
-app.use('/api/sales-orders', salesOrderRoutes);
-app.use('/api/order', orderRoutes);
-app.use('/api/design-orders', designOrderRoutes);
-app.use('/api/vendors', vendorRoutes);
-app.use('/api/quotations/communications', quotationCommunicationRoutes);
-app.use('/api/quotations', quotationRoutes);
-app.use('/api/quotation-requests', quotationRequestRoutes);
-app.use('/api/purchase-orders', purchaseOrderRoutes);
-app.use('/api/bom', bomRoutes);
-app.use('/api/items', stockRoutes);
-app.use('/api/drawings', drawingRoutes);
-app.use('/api/po-receipts', poReceiptRoutes);
-app.use('/api/grns', grnRoutes);
-app.use('/api/grn-items', grnItemRoutes);
-app.use('/api/qc-inspections', qcInspectionsRoutes);
-app.use('/api/stock', stockRoutes);
-app.use('/api/warehouse-allocations', warehouseAllocationRoutes);
-app.use('/api/inventory', inventoryDashboardRoutes);
-app.use('/api/workstations', workstationRoutes);
-app.use('/api/operations', operationRoutes);
-app.use('/api/production-plans', productionPlanRoutes);
-app.use('/api/material-requirements', materialRequirementsRoutes);
-app.use('/api/work-orders', workOrderRoutes);
-app.use('/api/job-cards', jobCardRoutes);
-app.use('/api/material-issues', materialIssueRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+app.use('/users', userRoutes);
+app.use('/access', departmentDocumentRoutes);
+app.use('/companies', companyRoutes);
+app.use('/customer-pos', customerPoRoutes);
+app.use('/sales-orders', salesOrderRoutes);
+app.use('/order', orderRoutes);
+app.use('/design-orders', designOrderRoutes);
+app.use('/vendors', vendorRoutes);
+app.use('/quotations/communications', quotationCommunicationRoutes);
+app.use('/quotations', quotationRoutes);
+app.use('/quotation-requests', quotationRequestRoutes);
+app.use('/purchase-orders', purchaseOrderRoutes);
+app.use('/bom', bomRoutes);
+app.use('/items', stockRoutes);
+app.use('/drawings', drawingRoutes);
+app.use('/po-receipts', poReceiptRoutes);
+app.use('/grns', grnRoutes);
+app.use('/grn-items', grnItemRoutes);
+app.use('/qc-inspections', qcInspectionsRoutes);
+app.use('/stock', stockRoutes);
+app.use('/warehouse-allocations', warehouseAllocationRoutes);
+app.use('/inventory', inventoryDashboardRoutes);
+app.use('/workstations', workstationRoutes);
+app.use('/operations', operationRoutes);
+app.use('/production-plans', productionPlanRoutes);
+app.use('/material-requirements', materialRequirementsRoutes);
+app.use('/work-orders', workOrderRoutes);
+app.use('/job-cards', jobCardRoutes);
+app.use('/material-issues', materialIssueRoutes);
+app.use('/dashboard', dashboardRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

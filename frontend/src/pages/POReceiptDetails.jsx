@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import { Card } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
+const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000');
 
 const receiptStatusColors = {
   DRAFT: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'Draft' },
