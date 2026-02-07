@@ -871,6 +871,11 @@ const ensureBOMHierarchyColumns = async () => {
         await connection.query(`ALTER TABLE ${table} ADD COLUMN parent_id INT NULL AFTER item_code`);
         console.log(`Added parent_id column to ${table}`);
       }
+
+      if (table === 'sales_order_item_components' && !existing.has('source_fg')) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN source_fg VARCHAR(120) NULL AFTER drawing_no`);
+        console.log(`Added source_fg column to ${table}`);
+      }
     }
   } catch (error) {
     console.error('BOM Hierarchy columns sync failed', error.message);

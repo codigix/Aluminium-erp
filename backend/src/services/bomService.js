@@ -384,14 +384,19 @@ const createBOMRequest = async (bomData) => {
 
       if (components && components.length > 0) {
         for (const c of components) {
+          const compCode = c.component_code || c.componentCode || null;
+          const isSA = compCode && compCode.startsWith('SA-');
+          const sourceFg = c.sourceFg || c.source_fg || (isSA ? (drawingNo || null) : null);
+
           const [result] = await connection.execute(
-            'INSERT INTO sales_order_item_components (sales_order_item_id, item_code, drawing_no, parent_id, component_code, description, quantity, uom, rate, loss_percent, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO sales_order_item_components (sales_order_item_id, item_code, drawing_no, source_fg, parent_id, component_code, description, quantity, uom, rate, loss_percent, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
               linkId, 
               safeItemCode, 
               drawingNo || null,
+              sourceFg,
               null, // Temporarily set parent_id to null
-              c.component_code || c.componentCode || null, 
+              compCode, 
               c.description || null, 
               c.quantity || 0, 
               c.uom || null, 
@@ -493,21 +498,23 @@ const createBOMRequest = async (bomData) => {
     }
 
     // 4. Update sales_order status (only if linked to sales order)
-    if (itemId) {
+    let finalSalesOrderId = salesOrderId;
+    if (!finalSalesOrderId && itemId) {
       const [itemRows] = await connection.query(
         'SELECT sales_order_id FROM sales_order_items WHERE id = ?',
         [itemId]
       );
 
       if (itemRows.length > 0) {
-        const salesOrderId = itemRows[0].sales_order_id;
-        await connection.execute(
-          "UPDATE sales_orders SET status = 'BOM_SUBMITTED', updated_at = NOW() WHERE id = ?",
-          [salesOrderId]
-        );
+        finalSalesOrderId = itemRows[0].sales_order_id;
       }
-    } else if (drawingNo) {
-      // Handled in the loop above for drawingNo based creation
+    }
+
+    if (finalSalesOrderId) {
+      await connection.execute(
+        "UPDATE sales_orders SET status = 'BOM_SUBMITTED', updated_at = NOW() WHERE id = ?",
+        [finalSalesOrderId]
+      );
     }
 
     await connection.commit();

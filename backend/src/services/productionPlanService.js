@@ -637,6 +637,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
   if (items.length === 0) return null;
   const item = items[0];
+  console.log(`[getItemBOMDetails] Exploding BOM for ${item.item_code} / ${item.drawing_no}`);
 
   const materialMap = new Map();
   const componentMap = new Map();
@@ -664,6 +665,8 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     let materials = [];
     let components = [];
     let operations = [];
+
+    console.log(`[explodeBOM] Level ${depth}: ${itemCode} (Drawing: ${drawingNo}), soItemId: ${soItemId}, parentId: ${parentId}, qtyMultiplier: ${qtyMultiplier}`);
 
     // 1. Try to fetch from Sales Order context OR Master BOM with parent_id
     if (soItemId || parentId) {
@@ -729,6 +732,8 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       }
     }
 
+    console.log(`[explodeBOM] Result for ${itemCode}: ${materials.length} materials, ${components.length} components, ${operations.length} operations`);
+
     // Process Materials
     materials.forEach(m => {
       // Logic fix: level 0 (FG) is CORE, everything else is EXPLODED
@@ -787,10 +792,10 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       if (soItemId) {
         const [found] = await pool.query(
           `SELECT id FROM sales_order_items 
-           WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))
+           WHERE item_code = ? 
            AND sales_order_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?) 
            LIMIT 1`,
-          [compCode, compDrawing, soItemId]
+          [compCode, soItemId]
         );
         
         if (found.length > 0) {

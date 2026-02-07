@@ -587,13 +587,13 @@ const ProductionPlan = () => {
   };
 
   const calculatePlanDetails = () => {
-    // Collect all materials from all items (they are already exploded from backend)
+    // Collect all materials from all items (already exploded from backend)
     const allMaterials = newPlan.items.flatMap(item => 
       (item.materials || []).map(mat => ({
         ...mat,
-        // Calculate based on the specific FG item's planned quantity
         totalRequiredQty: parseFloat(mat.required_qty || mat.qty_per_pc || 0) * (item.plannedQty || 1),
-        bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF'
+        bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
+        source_fg: item.itemCode
       }))
     );
 
@@ -601,16 +601,14 @@ const ProductionPlan = () => {
     const coreMaterials = allMaterials.filter(m => m.material_category === 'CORE');
     const explodedMaterials = allMaterials.filter(m => m.material_category === 'EXPLODED');
 
-    // Handle display data for different tabs
-    const materialsToDisplay = isViewing ? (newPlan.materials || []) : allMaterials;
-    
     const subAssembliesToDisplay = isViewing 
       ? (newPlan.subAssemblies || []) 
       : newPlan.items.flatMap(item => (item.components || []).map(comp => ({
           ...comp,
           itemCode: comp.item_code || comp.component_code,
           bomNo: comp.bom_no || 'BOM-SUB',
-          parentPlannedQty: item.plannedQty || 1
+          parentPlannedQty: item.plannedQty || 1,
+          source_fg: item.itemCode
         })));
 
     const operationsToDisplay = isViewing 
@@ -626,8 +624,11 @@ const ProductionPlan = () => {
           itemCode: op.source_item || op.itemCode || item.itemCode || item.item_code,
           operation_name: op.operation_name || op.name,
           workstation: op.workstation || op.workstation_name,
-          base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0')
+          base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0'),
+          source_fg: item.itemCode
         })));
+
+    const materialsToDisplay = isViewing ? (newPlan.materials || []) : allMaterials;
 
     return { 
       materialsToDisplay, 

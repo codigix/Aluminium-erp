@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
 const listSalesOrders = async (includeWithoutPo = true) => {
-  let whereClause = 'WHERE so.is_sales_order = 1';
+  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_APPROVED'))";
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }

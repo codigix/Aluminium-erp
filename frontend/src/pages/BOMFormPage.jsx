@@ -317,8 +317,9 @@ const BOMFormPage = () => {
         const bomInfo = approvedBOMs.find(b => b.item_code === item.item_code);
         const bomCost = bomInfo ? parseFloat(bomInfo.bom_cost) : 0;
 
+        const isSA = (item.item_code || '').startsWith('SA-');
         options.push({
-          label: `${item.item_code} - ${item.material_name}`,
+          label: isSA ? `${item.material_name}${bomCost > 0 ? ` | ₹${Math.round(bomCost)}` : ''}` : `${item.item_code} - ${item.material_name}`,
           value: item.item_code,
           subLabel: item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0)),
@@ -344,8 +345,9 @@ const BOMFormPage = () => {
         const bomInfo = approvedBOMs.find(b => b.item_code === item.item_code || (b.drawing_no === item.drawing_no && b.drawing_no !== 'N/A'));
         const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? parseFloat(bomInfo.bom_cost) : 0);
 
+        const isSA = (item.item_code || '').startsWith('SA-');
         options.push({
-          label: `${item.item_code} - ${item.description || item.material_name}`,
+          label: isSA ? `${item.description || item.material_name}${bomCost > 0 ? ` | ₹${Math.round(bomCost)}` : ''}` : `${item.item_code} - ${item.description || item.material_name}`,
           value: item.item_code,
           subLabel: `Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.rate || 0),
@@ -937,7 +939,10 @@ const BOMFormPage = () => {
         salesOrderId: salesOrderIdFromUrl,
         productForm: productForm,
         materials: bomData.materials,
-        components: bomData.components,
+        components: bomData.components.map(c => ({
+          ...c,
+          sourceFg: (c.componentCode || '').startsWith('SA-') ? productForm.drawingNo : null
+        })),
         operations: bomData.operations,
         scrap: bomData.scrap,
         source: selectedItem?.source || (productForm.drawingNo ? 'order' : 'stock'),
