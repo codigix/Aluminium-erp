@@ -7,6 +7,7 @@ module.exports = [
   "/sales-orders",
   "/design-orders",
   "/vendors",
+  "/suppliers",
   "/quotations",
   "/quotation-requests",
   "/purchase-orders",

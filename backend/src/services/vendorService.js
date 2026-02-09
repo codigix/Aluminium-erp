@@ -1,12 +1,8 @@
 const pool = require('../config/db');
 
 const normalizeCode = (name) => {
-  if (!name) return `VND-${Date.now()}`;
-  return name
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-    .slice(0, 8)
-    .padEnd(4, 'X');
+  if (!name) return `SUP-${Date.now()}`;
+  return `SUP-${Date.now()}`; // Matching screenshot style
 };
 
 const sanitizeValue = (value) => {
@@ -23,7 +19,10 @@ const createVendor = async (payload) => {
     phone,
     location,
     rating = 0,
-    status = 'ACTIVE'
+    status = 'ACTIVE',
+    gstin,
+    groupName,
+    leadTime
   } = payload;
 
   if (!vendorName) {
@@ -34,8 +33,8 @@ const createVendor = async (payload) => {
 
   const [result] = await pool.execute(
     `INSERT INTO vendors
-      (vendor_name, vendor_code, category, email, phone, location, rating, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      (vendor_name, vendor_code, category, email, phone, location, rating, status, gstin, group_name, lead_time)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ,
     [
       vendorName,
@@ -45,7 +44,10 @@ const createVendor = async (payload) => {
       sanitizeValue(phone),
       sanitizeValue(location),
       parseFloat(rating) || 0,
-      status
+      status,
+      sanitizeValue(gstin),
+      sanitizeValue(groupName),
+      sanitizeValue(leadTime)
     ]
   );
 
@@ -82,7 +84,10 @@ const updateVendor = async (vendorId, payload) => {
     phone,
     location,
     rating,
-    status
+    status,
+    gstin,
+    groupName,
+    leadTime
   } = payload;
 
   await getVendorById(vendorId);
@@ -123,6 +128,21 @@ const updateVendor = async (vendorId, payload) => {
   if (status !== undefined) {
     updateFields.push('status = ?');
     updateValues.push(status);
+  }
+
+  if (gstin !== undefined) {
+    updateFields.push('gstin = ?');
+    updateValues.push(sanitizeValue(gstin));
+  }
+
+  if (groupName !== undefined) {
+    updateFields.push('group_name = ?');
+    updateValues.push(sanitizeValue(groupName));
+  }
+
+  if (leadTime !== undefined) {
+    updateFields.push('lead_time = ?');
+    updateValues.push(sanitizeValue(leadTime));
   }
 
   if (updateFields.length === 0) {

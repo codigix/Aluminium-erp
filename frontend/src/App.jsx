@@ -12,7 +12,7 @@ import CustomerPO from './pages/CustomerPO'
 import SalesOrders from './pages/SalesOrders'
 import IncomingOrders from './pages/IncomingOrders'
 import VendorManagement from './pages/VendorManagement'
-import Vendors from './pages/Vendors'
+import Suppliers from './pages/Suppliers'
 import Quotations from './pages/Quotations'
 import PurchaseOrders from './pages/PurchaseOrders'
 import POReceipts from './pages/POReceipts'
@@ -30,7 +30,7 @@ import InProcessQC from './pages/InProcessQC'
 import FinalQC from './pages/FinalQC'
 import QualityRejections from './pages/QualityRejections'
 import QualityReports from './pages/QualityReports'
-import WarehouseAllocation from './pages/WarehouseAllocation'
+import Warehouses from './pages/Warehouses'
 import DrawingMaster from './pages/DrawingMaster'
 import CustomerDrawing from './pages/CustomerDrawing'
 import DesignOrders from './pages/DesignOrders'
@@ -54,7 +54,7 @@ import './index.css'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000')
 const API_HOST = API_BASE
 const isProduction = import.meta.env.PROD || window.location.hostname.includes('aluminiumerp.codigix.co');
-const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouse-allocation', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card']
+const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -152,15 +152,15 @@ const DEPARTMENT_MODULES = {
   QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
   SHIPMENT: ['incoming-orders', 'dashboard'],
   ACCOUNTS: ['dashboard'],
-  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation', 'dashboard'],
-  PROCUREMENT: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
+  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
+  PROCUREMENT: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
   ADMIN: [
     'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations',
     'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet',
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
     'quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
-    'inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation',
-    'vendors', 'quotations', 'purchase-orders', 'po-receipts', 'dashboard'
+    'inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouses',
+    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'dashboard'
   ]
 }
 
@@ -999,18 +999,15 @@ function App() {
     { label: 'Job Card', moduleId: 'job-card', icon: 'clipboard', indent: true },
     { label: 'Workstations', moduleId: 'workstation-master', icon: 'factory', indent: true },
     { label: 'Operations', moduleId: 'operation-master', icon: 'settings', indent: true },
-    { label: 'Vendor Management', isGroup: true, groupId: 'vendor-group' },
-    { label: 'Vendors', moduleId: 'vendors', icon: 'handshake', indent: true },
-    { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: 'message', indent: true },
+    { label: 'Inventory', isGroup: true, groupId: 'inventory-group' },
+    { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard', indent: true },
     { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'cart', indent: true },
-    { label: 'PO Receipts', moduleId: 'po-receipts', icon: 'inbox', indent: true },
-    { label: 'Inventory Management', isGroup: true, groupId: 'inventory-group' },
-    { label: 'Inventory Dashboard', moduleId: 'inventory-dashboard', icon: 'chart', indent: true },
-    { label: 'PO Material Request', moduleId: 'po-material-request', icon: 'clipboard', indent: true },
-    { label: 'GRN Processing', moduleId: 'grn', icon: 'refresh', indent: true },
-    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book', indent: true },
+    { label: 'Purchase Receipt', moduleId: 'po-receipts', icon: 'inbox', indent: true },
+    { label: 'GRN Management', moduleId: 'grn', icon: 'refresh', indent: true },
     { label: 'Stock Balance', moduleId: 'stock-balance', icon: 'scale', indent: true },
-    { label: 'Warehouse Allocation', moduleId: 'warehouse-allocation', icon: 'factory', indent: true },
+    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book', indent: true },
+    { label: 'Warehouses', moduleId: 'warehouses', icon: 'factory', indent: true },
+    { label: 'Suppliers', moduleId: 'suppliers', icon: 'handshake', indent: true },
     { label: 'Quality Assurance', isGroup: true, groupId: 'quality-group' },
     { label: 'Quality Dashboard', moduleId: 'quality-dashboard', icon: 'trending', indent: true },
     { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
@@ -1490,8 +1487,8 @@ function App() {
                   <VendorManagement />
                 )}
 
-                {activeModule === 'vendors' && (
-                  <Vendors />
+                {activeModule === 'suppliers' && (
+                  <Suppliers />
                 )}
 
                 {activeModule === 'quotations' && (
@@ -1554,8 +1551,9 @@ function App() {
                   <StockBalance />
                 )}
 
-                {activeModule === 'warehouse-allocation' && (
-                  <WarehouseAllocation />
+
+                {activeModule === 'warehouses' && (
+                  <Warehouses />
                 )}
 
                 {activeModule === 'design-orders' && (

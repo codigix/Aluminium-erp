@@ -64,12 +64,22 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
+    allowedModules: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
     permissions: [
       'PO_VIEW',
       'ORDER_VIEW',
       'COMPANY_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'VENDOR_VIEW',
+      'VENDOR_EDIT',
+      'QUOTATION_VIEW',
+      'QUOTATION_EDIT',
+      'PURCHASE_ORDER_VIEW',
+      'PURCHASE_ORDER_CREATE',
+      'PURCHASE_ORDER_EDIT',
+      'GRN_VIEW',
+      'GRN_CREATE',
+      'GRN_EDIT'
     ]
   },
 
@@ -154,12 +164,19 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
+    allowedModules: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
       'COMPANY_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'VENDOR_VIEW',
+      'VENDOR_EDIT',
+      'STOCK_VIEW',
+      'STOCK_MANAGE',
+      'GRN_VIEW',
+      'GRN_CREATE',
+      'GRN_EDIT'
     ]
   },
 
@@ -171,7 +188,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
-    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card'],
+    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'grn', 'stock-ledger', 'stock-balance', 'warehouses'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
@@ -180,7 +197,15 @@ const DEPARTMENT_ACCESS_RULES = {
       'DEPT_MANAGE',
       'DASHBOARD_VIEW',
       'DATA_EXPORT',
-      'STATUS_CHANGE'
+      'STATUS_CHANGE',
+      'VENDOR_VIEW',
+      'VENDOR_EDIT',
+      'GRN_VIEW',
+      'GRN_CREATE',
+      'GRN_EDIT',
+      'GRN_DELETE',
+      'STOCK_VIEW',
+      'STOCK_MANAGE'
     ]
   }
 };

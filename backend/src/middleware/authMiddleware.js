@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { DEPARTMENT_ACCESS_RULES } = require('../config/departmentAccessConfig');
 
 exports.authenticate = (req, res, next) => {
   try {
@@ -58,7 +59,19 @@ exports.authorize = (requiredPermissions = []) => {
       
       console.log('[DEBUG] User permissions count:', results?.length);
       console.log('[DEBUG] User permissions:', userPermissions);
-      const hasPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
+      
+      let hasPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
+
+      // Fallback to departmentAccessConfig if database permissions are missing
+      if (!hasPermission && req.user.department_code) {
+        const deptRules = DEPARTMENT_ACCESS_RULES[req.user.department_code];
+        if (deptRules && deptRules.permissions) {
+          hasPermission = requiredPermissions.some(perm => deptRules.permissions.includes(perm));
+          if (hasPermission) {
+            console.log(`[DEBUG] Permission ${requiredPermissions} granted via departmentAccessConfig fallback for ${req.user.department_code}`);
+          }
+        }
+      }
 
       if (!hasPermission) {
         console.log(`Permission denied for user ${req.user.id} (Role: ${req.user.role_id}). Required: ${requiredPermissions}, User has: ${userPermissions}`);

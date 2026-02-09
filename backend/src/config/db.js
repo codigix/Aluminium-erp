@@ -441,6 +441,31 @@ const ensureWarehouseAllocationTables = async () => {
   }
 };
 
+const ensureWarehousesTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS warehouses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        warehouse_code VARCHAR(50) UNIQUE NOT NULL,
+        warehouse_name VARCHAR(100) NOT NULL,
+        warehouse_type VARCHAR(50),
+        location VARCHAR(255),
+        capacity DECIMAL(12, 3),
+        status ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Warehouses master table synchronized');
+  } catch (error) {
+    console.error('Warehouses master table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureCustomerDrawingTable = async () => {
   let connection;
   try {
@@ -1239,6 +1264,74 @@ const ensureWorkOrderTables = async () => {
   }
 };
 
+const ensureMaterialRequestTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS material_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        mr_number VARCHAR(50) UNIQUE NOT NULL,
+        department VARCHAR(100),
+        requested_by INT,
+        required_by DATE,
+        purpose ENUM('Purchase Request', 'Internal Transfer', 'Material Issue') NOT NULL,
+        status ENUM('Draft', 'Approved', 'Processing', 'Fulfilled', 'Cancelled') DEFAULT 'Draft',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS material_request_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        mr_id INT NOT NULL,
+        item_code VARCHAR(100) NOT NULL,
+        quantity DECIMAL(12, 3) NOT NULL,
+        uom VARCHAR(20),
+        allocated_quantity DECIMAL(12, 3) DEFAULT 0,
+        FOREIGN KEY (mr_id) REFERENCES material_requests(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('Material Request tables synchronized');
+  } catch (error) {
+    console.error('Material Request tables sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureMaterialRequestColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM material_requests');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'target_warehouse', definition: 'VARCHAR(100) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE material_requests ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Material Request columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Material Request column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureSeed = async () => {
   let connection;
   try {
@@ -1385,10 +1478,41 @@ const ensureSalesOrderColumns = async () => {
   }
 };
 
+const ensureVendorColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM vendors');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'gstin', definition: 'VARCHAR(20) NULL' },
+      { name: 'group_name', definition: 'VARCHAR(100) NULL' },
+      { name: 'lead_time', definition: 'VARCHAR(50) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE vendors ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Vendor columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Vendor column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
   await ensureSeed();
+  await ensureVendorColumns();
   await ensureCustomerPoColumns();
   await ensurePurchaseOrderItemColumns();
   await ensureQuotationItemColumns();
@@ -1398,6 +1522,7 @@ const bootstrapDatabase = async () => {
   await ensurePoMaterialRequestColumns();
   await ensureStockColumns();
   await ensureWarehouseAllocationTables();
+  await ensureWarehousesTable();
   await ensureDesignOrderTables();
   await ensureQuotationRequestTables();
   await ensureQuotationRequestStatus();
@@ -1414,6 +1539,7 @@ const bootstrapDatabase = async () => {
   await ensureOperationsTable();
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();
+  await ensureMaterialRequestTables();
   await ensureQuotationCommunicationTable();
   await ensureOrdersTable();
 };
