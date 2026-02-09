@@ -120,17 +120,19 @@ export const StatusBadge = ({ status }) => {
     switch (s) {
       case 'DRAFT':
       case 'CREATED':
-        return 'bg-amber-50 border-amber-200 text-amber-600'
+        return 'bg-slate-50 border-slate-200 text-slate-600'
+      case 'APPROVED':
+      case 'DESIGN_APPROVED':
+      case 'BOM_APPROVED':
+        return 'bg-blue-50 border-blue-200 text-blue-600'
+      case 'PROCESSING':
       case 'DESIGN_IN_REVIEW':
       case 'IN_DESIGN':
       case 'IN_PROGRESS':
       case 'RELEASED':
-        return 'bg-blue-50 border-blue-200 text-blue-600'
-      case 'BOM_SUBMITTED':
-        return 'bg-indigo-50 border-indigo-200 text-indigo-600'
+        return 'bg-purple-50 border-purple-200 text-purple-600'
+      case 'FULFILLED':
       case 'ACTIVE':
-      case 'DESIGN_APPROVED':
-      case 'BOM_APPROVED':
       case 'COMPLETED':
       case 'PRODUCTION_COMPLETED':
         return 'bg-emerald-50 border-emerald-200 text-emerald-600'
@@ -175,14 +177,30 @@ export const Badge = ({ children, variant = 'default', className = '' }) => {
   );
 };
 
-export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
+export const Modal = ({ isOpen, onClose, title, children, className = '', size = '4xl' }) => {
   if (!isOpen) return null;
 
   const isDark = className.includes('bg-slate-900') || className.includes('bg-[#1e293b]') || className.includes('dark');
 
+  const sizeClasses = {
+    'sm': 'max-w-sm',
+    'md': 'max-w-md',
+    'lg': 'max-w-lg',
+    'xl': 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
+    '6xl': 'max-w-6xl',
+    '7xl': 'max-w-7xl',
+    'full': 'max-w-full'
+  };
+
+  const maxWidth = sizeClasses[size] || 'max-w-4xl';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className={`rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`rounded-xl shadow-2xl ${maxWidth} w-full mx-4 max-h-[90vh] overflow-y-auto overflow-x-hidden border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
         <div className={`sticky top-0 z-10 border-b p-4 flex items-center justify-between ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900'}`}>
           <h2 className="text-lg font-bold tracking-tight">{title}</h2>
           <button onClick={onClose} className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
@@ -199,7 +217,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
   )
 }
 
-export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '' }) => {
+export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
@@ -241,6 +259,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
   }, [data, sortConfig]);
 
   const filteredData = sortedData.filter(item => {
+    if (hideHeader) return true;
     const searchLower = String(searchTerm || '').toLowerCase();
     return Object.values(item).some(val => 
       String(val).toLowerCase().includes(searchLower)
@@ -249,21 +268,23 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
 
   return (
     <div className={`flex flex-col h-full rounded-xl shadow-sm border overflow-hidden ${isDark ? 'border-slate-800' : 'border-slate-100 bg-white'} ${className}`}>
-      <div className={`p-4 border-b flex flex-wrap gap-4 items-center justify-between ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-50 bg-slate-50/30'}`}>
-        <div className="flex-1 min-w-[280px] relative group">
-          <input 
-            type="text" 
-            placeholder={searchPlaceholder}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={`w-full pl-10 pr-4 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
-          />
-          <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+      {!hideHeader && (
+        <div className={`p-4 border-b flex flex-wrap gap-4 items-center justify-between ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-50 bg-slate-50/30'}`}>
+          <div className="flex-1 min-w-[280px] relative group">
+            <input 
+              type="text" 
+              placeholder={searchPlaceholder}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full pl-10 pr-4 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+            />
+            <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          {actions}
         </div>
-        {actions}
-      </div>
+      )}
 
       <div className="overflow-x-auto relative">
         <table className="w-full text-left text-sm border-collapse">

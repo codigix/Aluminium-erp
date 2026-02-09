@@ -149,6 +149,29 @@ const Warehouses = () => {
     { value: 'REJECT', label: 'Rejected Store' }
   ];
 
+  const generateWarehouseCode = () => {
+    const codes = warehouses
+      .map(w => w.warehouse_code)
+      .filter(code => code && code.startsWith('WH-'))
+      .map(code => parseInt(code.replace('WH-', ''), 10))
+      .filter(num => !isNaN(num));
+    
+    const nextNum = codes.length > 0 ? Math.max(...codes) + 1 : 1;
+    return `WH-${String(nextNum).padStart(3, '0')}`;
+  };
+
+  const handleOpenCreateModal = () => {
+    setFormData({
+      warehouseCode: generateWarehouseCode(),
+      warehouseName: '',
+      warehouseType: '',
+      location: '',
+      capacity: '',
+      status: 'ACTIVE'
+    });
+    setShowForm(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -317,7 +340,7 @@ const Warehouses = () => {
         </div>
         {activeTab === 'list' && (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={handleOpenCreateModal}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl text-sm font-bold hover:bg-orange-600 shadow-sm shadow-orange-200 transition-all active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -479,9 +502,10 @@ const Warehouses = () => {
                 type="text"
                 value={formData.warehouseCode}
                 onChange={(e) => setFormData({...formData, warehouseCode: e.target.value})}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
+                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
                 placeholder="e.g. WH-RM"
                 required
+                readOnly
               />
             </FormControl>
             <FormControl label="Warehouse Name *">

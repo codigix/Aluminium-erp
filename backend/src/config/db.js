@@ -335,7 +335,8 @@ const ensureStockColumns = async () => {
       { name: 'drawing_id', definition: 'INT NULL' },
       { name: 'revision', definition: 'VARCHAR(50) NULL' },
       { name: 'material_grade', definition: 'VARCHAR(100) NULL' },
-      { name: 'unit', definition: 'VARCHAR(20) DEFAULT "Nos"' }
+      { name: 'unit', definition: 'VARCHAR(20) DEFAULT "Nos"' },
+      { name: 'warehouse', definition: 'VARCHAR(100) NULL' }
     ];
     
     const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));
@@ -360,6 +361,23 @@ const ensureStockColumns = async () => {
       console.log('Executing SQL:', alterBalanceSql);
       await connection.query(alterBalanceSql);
       console.log('Stock Balance material columns synchronized');
+    }
+
+    // Add unique index for item_code + warehouse if it doesn't exist
+    const [indexes] = await connection.query('SHOW INDEX FROM stock_balance');
+    const hasItemWhIndex = indexes.some(idx => idx.Key_name === 'unique_item_warehouse');
+    if (!hasItemWhIndex) {
+      try {
+        // First drop existing unique constraint on item_code if it exists and is not the PK
+        const itemCodeIndex = indexes.find(idx => idx.Column_name === 'item_code' && idx.Non_unique === 0 && idx.Key_name !== 'PRIMARY');
+        if (itemCodeIndex) {
+          await connection.query(`ALTER TABLE stock_balance DROP INDEX ${itemCodeIndex.Key_name}`);
+        }
+        await connection.query('ALTER TABLE stock_balance ADD UNIQUE INDEX unique_item_warehouse (item_code, warehouse)');
+        console.log('Added unique index for item_code and warehouse in stock_balance');
+      } catch (e) {
+        console.error('Failed to add unique index to stock_balance:', e.message);
+      }
     }
 
     // Populate existing records if possible
@@ -1311,7 +1329,9 @@ const ensureMaterialRequestColumns = async () => {
     const [columns] = await connection.query('SHOW COLUMNS FROM material_requests');
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
-      { name: 'target_warehouse', definition: 'VARCHAR(100) NULL' }
+      { name: 'target_warehouse', definition: 'VARCHAR(100) NULL' },
+      { name: 'source_warehouse', definition: 'VARCHAR(100) NULL' },
+      { name: 'linked_po', definition: 'VARCHAR(100) NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -1508,6 +1528,24 @@ const ensureVendorColumns = async () => {
   }
 };
 
+const ensurePurchaseOrderQuotationNullable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query("SHOW COLUMNS FROM purchase_orders LIKE 'quotation_id'");
+    if (columns.length > 0 && columns[0].Null === 'NO') {
+      console.log('[ensurePurchaseOrderQuotationNullable] Making quotation_id nullable in purchase_orders...');
+      await connection.query('ALTER TABLE purchase_orders MODIFY quotation_id INT NULL');
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Purchase Order quotation_id nullability sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -1515,6 +1553,7 @@ const bootstrapDatabase = async () => {
   await ensureVendorColumns();
   await ensureCustomerPoColumns();
   await ensurePurchaseOrderItemColumns();
+  await ensurePurchaseOrderQuotationNullable();
   await ensureQuotationItemColumns();
   await ensurePoReceiptItemTable();
   await ensurePoReceiptColumns();
@@ -1540,6 +1579,7 @@ const bootstrapDatabase = async () => {
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();
   await ensureMaterialRequestTables();
+  await ensureMaterialRequestColumns();
   await ensureQuotationCommunicationTable();
   await ensureOrdersTable();
 };

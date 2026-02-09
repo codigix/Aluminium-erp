@@ -271,11 +271,34 @@ const getApprovedDrawings = async (companyId = null) => {
   return rows;
 };
 
+const getStats = async () => {
+  const [rows] = await pool.query(`
+    SELECT 
+      COUNT(*) as total_orders,
+      SUM(CASE WHEN status = 'Draft' THEN 1 ELSE 0 END) as draft_orders,
+      SUM(CASE WHEN status = 'Created' THEN 1 ELSE 0 END) as open_orders,
+      SUM(CASE WHEN status = 'Delivered' THEN 1 ELSE 0 END) as delivered_orders,
+      SUM(CASE WHEN status = 'Cancelled' THEN 1 ELSE 0 END) as cancelled_orders,
+      SUM(grand_total) as total_amount
+    FROM orders
+  `);
+  
+  return {
+    total: rows[0].total_orders || 0,
+    draft: rows[0].draft_orders || 0,
+    open: rows[0].open_orders || 0,
+    delivered: rows[0].delivered_orders || 0,
+    cancelled: rows[0].cancelled_orders || 0,
+    totalAmount: rows[0].total_amount || 0
+  };
+};
+
 module.exports = {
   listOrders,
   createOrder,
   getOrderById,
   updateOrder,
   deleteOrder,
-  getApprovedDrawings
+  getApprovedDrawings,
+  getStats
 };

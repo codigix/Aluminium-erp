@@ -11,10 +11,14 @@ const POMaterialRequest = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [fulfillmentWarehouse, setFulfillmentWarehouse] = useState('');
   const [modalStep, setModalStep] = useState(1);
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [items, setItems] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const navigate = useNavigate();
 
   // New Request Form State
@@ -24,7 +28,9 @@ const POMaterialRequest = () => {
     required_by: '',
     purpose: 'Material Issue',
     notes: '',
-    items: []
+    items: [],
+    target_warehouse: '',
+    source_warehouse: ''
   });
 
   const [currentItem, setCurrentItem] = useState({
@@ -48,14 +54,22 @@ const POMaterialRequest = () => {
       const token = localStorage.getItem('authToken');
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [deptRes, userRes, itemRes] = await Promise.all([
+      const [deptRes, userRes, itemRes, warehouseRes] = await Promise.all([
         fetch(`${API_BASE}/departments`, { headers }),
         fetch(`${API_BASE}/users`, { headers }),
-        fetch(`${API_BASE}/items`, { headers })
+        fetch(`${API_BASE}/items`, { headers }),
+        fetch(`${API_BASE}/warehouses`, { headers })
       ]);
 
       if (deptRes.ok) setDepartments(await deptRes.json());
       if (userRes.ok) setUsers(await userRes.json());
+      if (warehouseRes.ok) {
+        const whData = await warehouseRes.json();
+        console.log('Warehouses loaded:', whData);
+        setWarehouses(whData);
+      } else {
+        console.error('Failed to load warehouses:', warehouseRes.status);
+      }
       if (itemRes.ok) {
         const itemData = await itemRes.json();
         setItems(itemData.map(i => ({
@@ -68,6 +82,26 @@ const POMaterialRequest = () => {
       console.error('Error fetching initial data:', error);
     }
   };
+
+  useEffect(() => {
+    if (showViewModal && selectedRequest?.id && fulfillmentWarehouse) {
+      const fetchWarehouseStock = async () => {
+        try {
+          const token = localStorage.getItem('authToken');
+          const response = await fetch(`${API_BASE}/material-requests/${selectedRequest.id}?warehouse=${encodeURIComponent(fulfillmentWarehouse)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setSelectedRequest(data);
+          }
+        } catch (error) {
+          console.error('Error fetching warehouse stock:', error);
+        }
+      };
+      fetchWarehouseStock();
+    }
+  }, [fulfillmentWarehouse, showViewModal]);
 
   const fetchRequests = async () => {
     try {
@@ -86,6 +120,74 @@ const POMaterialRequest = () => {
     } catch (error) {
       console.error('Error fetching material requests:', error);
       setRequests([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewRequest = async (id) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/material-requests/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedRequest(data);
+        // Automatically set fulfillment warehouse if source_warehouse is available
+        if (data.source_warehouse) {
+          setFulfillmentWarehouse(data.source_warehouse);
+        } else {
+          setFulfillmentWarehouse('Consumables Store'); // Default fallback
+        }
+        setShowViewModal(true);
+      } else {
+        errorToast("Failed to fetch request details");
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast("Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReleaseMaterial = async (id) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Release Material?',
+        text: 'This will mark the material request as completed.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, release it!'
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/material-requests/${id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: 'completed' })
+        });
+
+        if (response.ok) {
+          successToast("Material released successfully");
+          setShowViewModal(false);
+          fetchRequests();
+        } else {
+          errorToast("Failed to release material");
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast("Network error");
     } finally {
       setLoading(false);
     }
@@ -124,13 +226,11 @@ const POMaterialRequest = () => {
       render: (val) => <span className="text-slate-900 font-medium">{val}</span>
     },
     {
-      key: 'requester_name',
+      key: 'department',
       label: 'Requester',
       sortable: true,
       render: (val, row) => (
-        <div>
-          <div className="text-slate-900">{row.department || '—'}</div>
-        </div>
+        <div className="text-slate-500 font-medium">{val || '—'}</div>
       )
     },
     {
@@ -149,7 +249,8 @@ const POMaterialRequest = () => {
       key: 'availability',
       label: 'Availability',
       render: (val) => (
-        <span className={`px-2 py-1 rounded-full text-[10px] ${val === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 w-fit ${val === 'available' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+          <div className={`w-1 h-1 rounded-full ${val === 'available' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
           {val || 'unavailable'}
         </span>
       )
@@ -159,7 +260,10 @@ const POMaterialRequest = () => {
       label: 'Actions',
       render: (_, row) => (
         <div className="flex items-center gap-2">
-          <button className="p-1 hover:bg-slate-100 rounded text-slate-400">
+          <button 
+            onClick={() => handleViewRequest(row.id)}
+            className="p-1 hover:bg-slate-100 rounded text-slate-400"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -214,7 +318,9 @@ const POMaterialRequest = () => {
         required_by: '',
         purpose: 'Material Issue',
         notes: '',
-        items: []
+        items: [],
+        target_warehouse: '',
+        source_warehouse: ''
       });
     } catch (error) {
       errorToast(error.message);
@@ -310,10 +416,10 @@ const POMaterialRequest = () => {
       </div>
 
       <Modal
-        show={showModal}
+        isOpen={showModal}
         onClose={() => setShowModal(false)}
         title="Create Material Request"
-        size="2xl"
+        size="4xl"
       >
         <div className="p-6">
           <div className="grid grid-cols-2 gap-8">
@@ -330,7 +436,10 @@ const POMaterialRequest = () => {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Department <span className="text-rose-500">*</span></label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    Department <span className="text-rose-500">*</span>
+                  </label>
                   <select 
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
@@ -342,19 +451,29 @@ const POMaterialRequest = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Requested By <span className="text-rose-500">*</span></label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    Requested By (Optional)
+                  </label>
                   <select 
                     value={formData.requested_by}
                     onChange={(e) => setFormData({ ...formData, requested_by: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-100"
                   >
-                    <option value="">Select Requester</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    <option value="">{formData.department ? 'Select Requester (Optional)' : 'Select Dept First'}</option>
+                    {users.filter(u => !formData.department || u.department_name === formData.department).map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.first_name} {u.last_name} ({u.username})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Required By <span className="text-rose-500">*</span></label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    Required By <span className="text-rose-500">*</span>
+                  </label>
                   <input 
                     type="date"
                     value={formData.required_by}
@@ -364,36 +483,82 @@ const POMaterialRequest = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Purpose</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Purpose</label>
                   <div className="space-y-2">
-                    {['Purchase Request', 'Internal Transfer', 'Material Issue'].map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => setFormData({ ...formData, purpose: p })}
+                    {[
+                      { id: 'Purchase Request', icon: '📦', color: 'blue' },
+                      { id: 'Internal Transfer', icon: '🏢', color: 'slate' },
+                      { id: 'Material Issue', icon: '➡️', color: 'orange' }
+                    ].map(p => (
+                      <button 
+                        key={p.id}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, purpose: p.id })}
                         className={`w-full px-4 py-3 rounded-xl border text-left flex items-center gap-3 transition-all ${
-                          formData.purpose === p ? 'border-orange-200 bg-orange-50/50 text-orange-900 shadow-sm shadow-orange-100' : 'border-slate-100 bg-white text-slate-600 hover:bg-slate-50'
+                          formData.purpose === p.id 
+                            ? `border-${p.color}-200 bg-${p.color}-50/50 text-${p.color}-900 shadow-sm shadow-${p.color}-100` 
+                            : 'border-slate-100 bg-white text-slate-600 hover:bg-slate-50'
                         }`}
                       >
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${formData.purpose === p ? 'bg-orange-100' : 'bg-slate-100'}`}>
-                          {p === 'Purchase Request' && '📦'}
-                          {p === 'Internal Transfer' && '🏢'}
-                          {p === 'Material Issue' && '➡️'}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          formData.purpose === p.id ? `bg-${p.color}-100` : 'bg-slate-100'
+                        }`}>
+                          {p.icon}
                         </div>
-                        <span className="text-xs font-medium">{p}</span>
-                        {formData.purpose === p && <div className="ml-auto w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center"><svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg></div>}
+                        <span className="text-xs font-medium">{p.id}</span>
+                        {formData.purpose === p.id && (
+                          <div className={`ml-auto w-4 h-4 rounded-full bg-${p.color}-500 flex items-center justify-center`}>
+                            <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Notes & Special Instructions</label>
-                  <textarea 
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Add any additional notes..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-100 min-h-[80px]"
-                  />
+                {(formData.purpose === 'Internal Transfer' || formData.purpose === 'Material Issue') && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      Source Warehouse <span className="text-rose-500">*</span>
+                    </label>
+                    <select 
+                      value={formData.source_warehouse}
+                      onChange={(e) => setFormData({ ...formData, source_warehouse: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="">Select Source Warehouse</option>
+                      {warehouses.map(w => <option key={w.id} value={w.warehouse_name}>{w.warehouse_name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {(formData.purpose === 'Internal Transfer' || formData.purpose === 'Purchase Request') && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      Target Warehouse <span className="text-rose-500">*</span>
+                    </label>
+                    <select 
+                      value={formData.target_warehouse}
+                      onChange={(e) => setFormData({ ...formData, target_warehouse: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="">Select Target Warehouse</option>
+                      {warehouses.map(w => <option key={w.id} value={w.warehouse_name}>{w.warehouse_name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div className="mt-auto p-4 bg-blue-50/50 rounded-xl border border-blue-100 flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <p className="text-[10px] text-blue-700 leading-relaxed">
+                    <span className="font-bold">Pro Tip:</span> Setting the department to <span className="font-bold">Production</span> will automatically switch the purpose to <span className="font-bold">Material Issue</span>. Use <span className="font-bold">Internal Transfer</span> for moving stock between warehouses.
+                  </p>
                 </div>
               </div>
             </div>
@@ -410,8 +575,8 @@ const POMaterialRequest = () => {
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl space-y-4">
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-7">
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-6">
                     <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Item <span className="text-rose-500">*</span></label>
                     <select 
                       value={currentItem.item_code}
@@ -447,13 +612,12 @@ const POMaterialRequest = () => {
                       className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-500 outline-none"
                     />
                   </div>
-                  <div className="col-span-12">
+                  <div className="col-span-1">
                     <button 
                       onClick={handleAddItem}
-                      className="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"
+                      className="w-10 h-9 bg-blue-600 text-white rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                      Add Item
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
                     </button>
                   </div>
                 </div>
@@ -489,6 +653,28 @@ const POMaterialRequest = () => {
                     )}
                   </div>
                 </div>
+
+                <div className="mt-6">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
+                    Notes & Special Instructions
+                  </label>
+                  <textarea 
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Add any additional notes for this material request..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-100 min-h-[80px]"
+                  />
+                </div>
+
+                <div className="mt-6 p-4 bg-blue-50/50 rounded-xl border border-blue-100 flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <p className="text-[10px] text-blue-700 leading-relaxed">
+                    <span className="font-bold">Pro Tip:</span> Setting the department to <span className="font-bold">Production</span> will automatically switch the purpose to <span className="font-bold">Material Issue</span>. Use <span className="font-bold">Internal Transfer</span> for moving stock between warehouses.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -516,6 +702,266 @@ const POMaterialRequest = () => {
                 Submit Request
               </button>
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showViewModal}
+        onClose={() => setShowViewModal(false)}
+        title={`Material Request: ${selectedRequest?.mr_number}`}
+        size="7xl"
+      >
+        <div className="p-6 bg-slate-50/30">
+          {/* Header Stats */}
+          <div className="grid grid-cols-5 gap-4 mb-8">
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+              <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 shadow-sm shadow-orange-100/50">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Status</p>
+                <StatusBadge status={selectedRequest?.status} />
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shadow-sm shadow-blue-100/50">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Purpose</p>
+                <p className="text-sm font-bold text-slate-700">{selectedRequest?.purpose}</p>
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+              <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-500 shadow-sm shadow-purple-100/50">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Department</p>
+                <p className="text-sm font-bold text-slate-700">{selectedRequest?.department}</p>
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 shadow-sm shadow-emerald-100/50">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Requested By</p>
+                <p className="text-sm font-bold text-slate-700">{selectedRequest?.requester_name || 'System'}</p>
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+              <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-sm shadow-indigo-100/50">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Linked PO</p>
+                <div className="flex flex-col">
+                  <p className="text-xs font-bold text-indigo-600 truncate">
+                    {selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : '#N/A'}
+                  </p>
+                  {selectedRequest?.linked_po && (
+                    <span className="text-[9px] font-bold text-emerald-500 uppercase mt-0.5">completed</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-8">
+            {/* Left Side - Line Items */}
+            <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-slate-50 bg-white flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 11m8 4V5" /></svg>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">Line Items</h4>
+                </div>
+                <button className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold flex items-center gap-2 hover:bg-indigo-100 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  Refresh Stock
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                      <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item Details</th>
+                      <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</th>
+                      <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Stock Level</th>
+                      <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {selectedRequest?.items?.map((item, idx) => {
+                      const totalStock = item.stocks ? item.stocks.reduce((acc, st) => acc + (Number(st.current_stock) || 0), 0) : 0;
+                      const isAvailable = totalStock >= Number(item.quantity);
+                      
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
+                          <td className="px-6 py-5">
+                            <div>
+                              <p className="text-sm font-bold text-slate-800 tracking-tight group-hover:text-indigo-600 transition-colors">{item.name}</p>
+                              <p className="text-[10px] font-medium text-slate-400 tracking-wider mt-1">{item.item_code}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <span className="px-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700">
+                              {Number(item.quantity).toFixed(3)} {item.uom}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <div className="flex flex-col items-center">
+                              <p className={`text-sm font-bold ${totalStock > 0 ? 'text-blue-600' : 'text-rose-500'}`}>
+                                {totalStock.toFixed(totalStock % 1 === 0 ? 0 : 2)} {item.uom}
+                              </p>
+                              <div className="flex flex-col items-center mt-1">
+                                {item.stocks?.map((st, sidx) => (
+                                  <span key={sidx} className="text-[10px] font-medium text-blue-500/80">
+                                    {st.warehouse_name}: {Number(st.current_stock).toFixed(Number(st.current_stock) % 1 === 0 ? 0 : 1)}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex flex-col items-end gap-1.5">
+                              <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase border shadow-sm ${
+                                isAvailable 
+                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                                  : 'bg-rose-50 text-rose-600 border-rose-100'
+                              }`}>
+                                {isAvailable ? 'in stock' : 'low stock'}
+                              </span>
+                              <span className="px-2.5 py-1 rounded-full bg-slate-50 text-slate-600 text-[9px] font-bold uppercase border border-slate-100 shadow-sm">
+                                {selectedRequest?.status || 'Draft'}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Right Side - Fulfillment & Summary */}
+            <div className="w-96 space-y-6">
+              {/* Fulfillment Source */}
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-5 border-b border-slate-50 bg-amber-500 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    </div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-widest">FULFILLMENT SOURCE</h4>
+                  </div>
+                  <span className="px-2 py-0.5 bg-white/20 text-white rounded text-[9px] font-bold uppercase tracking-wider">action required</span>
+                </div>
+                <div className="p-6 space-y-5">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Select Warehouse</label>
+                      <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 uppercase">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                        Stock Available
+                      </span>
+                    </div>
+                    <div className="relative group">
+                      <select 
+                        value={fulfillmentWarehouse}
+                        onChange={(e) => setFulfillmentWarehouse(e.target.value)}
+                        className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium text-slate-700 outline-none focus:border-amber-400 transition-all appearance-none group-hover:border-slate-200"
+                      >
+                        <option value="">Select Warehouse...</option>
+                        {warehouses.map(wh => (
+                          <option key={wh.id} value={wh.warehouse_name}>{wh.warehouse_name}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-amber-500 transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex gap-4">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 shadow-sm shadow-amber-200/50">
+                      <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <p className="text-[11px] font-medium text-amber-700 leading-relaxed">
+                      Changing the warehouse will trigger a real-time stock verification for all line items.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Request Summary */}
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex items-center gap-3">
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Request Summary</h4>
+                </div>
+                <div className="p-6 space-y-6">
+                  <div className="bg-indigo-50/50 rounded-2xl p-4 border border-indigo-100 group hover:bg-indigo-50 transition-colors">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      </div>
+                      <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider">Linked Purchase Order:</p>
+                    </div>
+                    <p className="text-sm font-bold text-indigo-600 mb-2 truncate group-hover:text-indigo-700 transition-colors">
+                      {selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : 'No Linked PO'}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Status:</span>
+                      <StatusBadge status={selectedRequest?.linked_po ? "completed" : "none"} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 px-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Required By</span>
+                      <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg border border-slate-100 text-slate-700">
+                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        <span className="text-[11px] font-bold uppercase">{formatDate(selectedRequest?.required_by)}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Created On</span>
+                      <span className="text-[11px] font-bold text-slate-700 uppercase">{formatDate(selectedRequest?.created_at)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Items Total</span>
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{selectedRequest?.items?.length} Unique Items</span>
+                    </div>
+                  </div>
+
+                  <button className="w-full py-4 px-4 bg-white border-2 border-slate-100 rounded-2xl text-[11px] font-bold text-slate-500 hover:border-slate-300 hover:text-slate-700 hover:bg-slate-50 transition-all flex items-center justify-center gap-3 shadow-sm active:scale-[0.98]">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Print Document
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-10 pt-6 border-t border-slate-100 flex justify-end items-center gap-4">
+            <button 
+              onClick={() => setShowViewModal(false)}
+              className="px-8 py-3 text-slate-400 text-xs font-bold hover:text-slate-600 transition-colors uppercase tracking-widest active:scale-95"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={() => handleReleaseMaterial(selectedRequest?.id)}
+              className="px-8 py-3 bg-emerald-500 text-white rounded-2xl text-xs font-bold hover:bg-emerald-600 flex items-center gap-3 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+            >
+              Release Material
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+            </button>
           </div>
         </div>
       </Modal>

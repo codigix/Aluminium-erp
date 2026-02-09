@@ -54,45 +54,63 @@ const previewPurchaseOrder = async (quotationId) => {
   };
 };
 
-const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, manualPoNumber = null) => {
-  if (!quotationId) {
-    const error = new Error('Quotation is required');
-    error.statusCode = 400;
-    throw error;
-  }
-
+const createPurchaseOrder = async (data) => {
+  const { quotationId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id } = data;
+  
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    const [quotation] = await connection.query(
-      'SELECT * FROM quotations WHERE id = ?',
-      [quotationId]
-    );
+    let finalVendorId = vendorId || vendor_id;
+    let sales_order_id = null;
+    let total_amount = 0;
+    let items = [];
 
-    if (!quotation.length) {
-      throw new Error('Quotation not found');
+    if (quotationId) {
+      const [quotation] = await connection.query(
+        'SELECT * FROM quotations WHERE id = ?',
+        [quotationId]
+      );
+
+      if (!quotation.length) {
+        throw new Error('Quotation not found');
+      }
+
+      const quote = quotation[0];
+      finalVendorId = quote.vendor_id;
+      sales_order_id = quote.sales_order_id;
+      total_amount = quote.total_amount;
+
+      const [quoteItems] = await connection.query(
+        `SELECT qi.*, soi.status as sales_order_item_status 
+         FROM quotation_items qi
+         LEFT JOIN sales_order_items soi ON (qi.drawing_no = soi.drawing_no OR qi.item_code = soi.item_code) AND soi.sales_order_id = ?
+         WHERE qi.quotation_id = ?`,
+        [quote.sales_order_id, quotationId]
+      );
+      items = quoteItems;
+    } else {
+      // Manual PO
+      if (!finalVendorId) throw new Error('Vendor is required for manual PO');
+      if (!manualItems || manualItems.length === 0) throw new Error('Items are required for manual PO');
+      
+      items = manualItems.map(item => ({
+        ...item,
+        unit_rate: item.rate, // map rate to unit_rate if needed
+        total_amount: item.amount // map amount to total_amount if needed
+      }));
+      total_amount = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     }
-
-    const quote = quotation[0];
-
-    const [items] = await connection.query(
-      `SELECT qi.*, soi.status as sales_order_item_status 
-       FROM quotation_items qi
-       LEFT JOIN sales_order_items soi ON (qi.drawing_no = soi.drawing_no OR qi.item_code = soi.item_code) AND soi.sales_order_id = ?
-       WHERE qi.quotation_id = ?`,
-      [quote.sales_order_id, quotationId]
-    );
 
     let poNumber = manualPoNumber;
     
     if (!poNumber) {
       poNumber = await generatePONumber();
 
-      if (quote.sales_order_id) {
+      if (sales_order_id) {
         const [salesOrder] = await connection.query(
           'SELECT customer_po_id FROM sales_orders WHERE id = ?',
-          [quote.sales_order_id]
+          [sales_order_id]
         );
 
         if (salesOrder.length && salesOrder[0].customer_po_id) {
@@ -113,11 +131,11 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         poNumber,
-        quotationId,
-        quote.vendor_id,
-        quote.sales_order_id || null,
-        'ORDERED',
-        quote.total_amount || 0,
+        quotationId || null,
+        finalVendorId,
+        sales_order_id || null,
+        items.length > 0 ? 'ORDERED' : 'DRAFT',
+        total_amount || 0,
         expectedDeliveryDate || null,
         notes || null
       ]
@@ -130,7 +148,6 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
       for (const item of items) {
         if (item.sales_order_item_status === 'Rejected') continue;
 
-        // Inherit tax amounts from quotation if available, otherwise default to 0
         const cgstAmount = item.cgst_amount || 0;
         const sgstAmount = item.sgst_amount || 0;
         const totalItemAmount = item.total_amount || (parseFloat(item.amount || 0) + parseFloat(cgstAmount) + parseFloat(sgstAmount));
@@ -150,7 +167,7 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
             item.description || null,
             item.quantity || 0,
             item.unit || 'NOS',
-            item.unit_rate || 0,
+            item.unit_rate || item.rate || 0,
             item.amount || 0,
             item.cgst_percent || 0,
             cgstAmount,
@@ -166,8 +183,7 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
       }
     }
 
-    // Update PO with actual total amount if items were skipped
-    if (actualTotalAmount !== quote.total_amount) {
+    if (actualTotalAmount !== total_amount) {
       await connection.execute(
         'UPDATE purchase_orders SET total_amount = ? WHERE id = ?',
         [actualTotalAmount, poId]
@@ -186,27 +202,15 @@ const createPurchaseOrder = async (quotationId, expectedDeliveryDate, notes, man
       [grnResult.insertId, new Date().toISOString().split('T')[0], 0, 0, 'PENDING', null, null]
     );
 
-    if (quote.sales_order_id) {
+    if (sales_order_id) {
       await connection.execute(
         'UPDATE sales_orders SET status = ? WHERE id = ?',
-        ['MATERIAL_PURCHASE_IN_PROGRESS', quote.sales_order_id]
+        ['MATERIAL_PURCHASE_IN_PROGRESS', sales_order_id]
       );
     }
 
-    const [receiptResult] = await connection.execute(
-      `INSERT INTO po_receipts (po_id, receipt_date, received_quantity, status, notes)
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        poId,
-        new Date().toISOString().split('T')[0],
-        0,
-        'DRAFT',
-        `Auto-created for PO ${poNumber}`
-      ]
-    );
-
     await connection.commit();
-    return { id: poId, po_number: poNumber, receipt_id: receiptResult.insertId };
+    return { id: poId, po_number: poNumber };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -221,7 +225,8 @@ const getPurchaseOrders = async (filters = {}) => {
       po.*,
       v.vendor_name,
       COUNT(poi.id) as items_count,
-      SUM(poi.quantity) as total_quantity
+      IFNULL(SUM(poi.quantity), 0) as total_quantity,
+      IFNULL(SUM(poi.accepted_quantity), 0) as accepted_quantity
     FROM purchase_orders po
     LEFT JOIN vendors v ON v.id = po.vendor_id
     LEFT JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
@@ -247,6 +252,24 @@ const getPurchaseOrders = async (filters = {}) => {
   query += ' GROUP BY po.id ORDER BY po.created_at DESC';
 
   const [pos] = await pool.query(query, params);
+
+  if (pos.length > 0) {
+    const poIds = pos.map(p => p.id);
+    const [items] = await pool.query(
+      `SELECT poi.*, soi.status as sales_order_item_status 
+       FROM purchase_order_items poi
+       LEFT JOIN purchase_orders po ON po.id = poi.purchase_order_id
+       LEFT JOIN sales_order_items soi ON (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) AND soi.sales_order_id = po.sales_order_id
+       WHERE poi.purchase_order_id IN (?)`,
+      [poIds]
+    );
+
+    // Group items by purchase_order_id
+    pos.forEach(po => {
+      po.items = items.filter(item => item.purchase_order_id === po.id);
+    });
+  }
+
   return pos;
 };
 
@@ -287,10 +310,9 @@ const getPurchaseOrderById = async (poId) => {
       poi.accepted_quantity,
       soi.status as sales_order_item_status
      FROM purchase_order_items poi
-     LEFT JOIN purchase_orders po ON po.id = poi.purchase_order_id
-     LEFT JOIN sales_order_items soi ON (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) AND soi.sales_order_id = po.sales_order_id
+     LEFT JOIN sales_order_items soi ON (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) AND soi.sales_order_id = ?
      WHERE poi.purchase_order_id = ?`,
-    [poId]
+    [po.sales_order_id, poId]
   );
 
   // Use the total_amount stored in po if available, otherwise calculate from items
@@ -357,18 +379,22 @@ const getPurchaseOrderStats = async () => {
   const [stats] = await pool.query(`
     SELECT 
       COUNT(*) as total_pos,
-      SUM(CASE WHEN status = 'ORDERED' THEN 1 ELSE 0 END) as pending_pos,
-      SUM(CASE WHEN status = 'ACKNOWLEDGED' THEN 1 ELSE 0 END) as approved_pos,
-      SUM(CASE WHEN status = 'RECEIVED' THEN 1 ELSE 0 END) as delivered_pos,
+      SUM(CASE WHEN status = 'DRAFT' THEN 1 ELSE 0 END) as draft_pos,
+      SUM(CASE WHEN status = 'ORDERED' THEN 1 ELSE 0 END) as submitted_pos,
+      SUM(CASE WHEN status IN ('ORDERED', 'SENT', 'ACKNOWLEDGED') THEN 1 ELSE 0 END) as to_receive_pos,
+      SUM(CASE WHEN status = 'PARTIALLY_RECEIVED' THEN 1 ELSE 0 END) as partial_pos,
+      SUM(CASE WHEN status IN ('RECEIVED', 'COMPLETED') THEN 1 ELSE 0 END) as fulfilled_pos,
       SUM(total_amount) as total_value
     FROM purchase_orders
   `);
 
   return stats[0] || {
     total_pos: 0,
-    pending_pos: 0,
-    approved_pos: 0,
-    delivered_pos: 0,
+    draft_pos: 0,
+    submitted_pos: 0,
+    to_receive_pos: 0,
+    partial_pos: 0,
+    fulfilled_pos: 0,
     total_value: 0
   };
 };

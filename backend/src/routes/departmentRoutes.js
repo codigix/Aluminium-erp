@@ -4,7 +4,7 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-router.get('/', departmentController.getAllDepartments);
+router.get('/', authenticate, departmentController.getAllDepartments);
 router.get('/:id', authenticate, authorize(['DEPT_MANAGE', 'USER_MANAGE']), departmentController.getDepartmentById);
 router.get('/:id/users', authenticate, authorize(['DEPT_MANAGE', 'USER_MANAGE']), departmentController.getDepartmentUsers);
 router.get('/:id/roles', authenticate, authorize(['DEPT_MANAGE', 'USER_MANAGE']), departmentController.getRolesByDepartment);

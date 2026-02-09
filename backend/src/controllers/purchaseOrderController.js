@@ -2,13 +2,7 @@ const purchaseOrderService = require('../services/purchaseOrderService');
 
 const createPurchaseOrder = async (req, res, next) => {
   try {
-    const { quotationId, expectedDeliveryDate, notes, poNumber } = req.body;
-    const result = await purchaseOrderService.createPurchaseOrder(
-      quotationId,
-      expectedDeliveryDate,
-      notes,
-      poNumber
-    );
+    const result = await purchaseOrderService.createPurchaseOrder(req.body);
     res.status(201).json({ message: 'Purchase Order created', data: result });
   } catch (error) {
     next(error);

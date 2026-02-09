@@ -1,16 +1,24 @@
 const pool = require('../config/db');
 
-const calculateBalanceDetailsFromLedger = async (itemCode, connection = null) => {
+const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, connection = null) => {
   const executor = connection || pool;
-  const [ledgerData] = await executor.query(`
+  let query = `
     SELECT 
-      SUM(CASE WHEN transaction_type = 'GRN_IN' THEN quantity ELSE 0 END) as accepted_qty,
+      SUM(CASE WHEN transaction_type = 'GRN_IN' OR (transaction_type = 'IN' AND reference_doc_type != 'WAREHOUSE_ALLOCATION') THEN quantity ELSE 0 END) as accepted_qty,
       SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) as issued_qty,
       SUM(CASE WHEN transaction_type IN ('GRN_IN', 'ADJUSTMENT', 'RETURN', 'IN') THEN quantity 
                WHEN transaction_type = 'OUT' THEN -quantity ELSE 0 END) as current_balance
     FROM stock_ledger 
     WHERE item_code = ?
-  `, [itemCode]);
+  `;
+  
+  const params = [itemCode];
+  if (warehouse) {
+    query += ` AND warehouse = ? `;
+    params.push(warehouse);
+  }
+
+  const [ledgerData] = await executor.query(query, params);
 
   const ledger = ledgerData[0] || {};
   return {
@@ -130,6 +138,7 @@ const getStockBalance = async (drawingNo = null) => {
       drawing_id,
       revision,
       material_grade,
+      warehouse,
       last_updated
     FROM stock_balance
   `;
@@ -146,7 +155,7 @@ const getStockBalance = async (drawingNo = null) => {
 
   const result = [];
   for (const balance of balances) {
-    const details = await calculateBalanceDetailsFromLedger(balance.item_code);
+    const details = await calculateBalanceDetailsFromLedger(balance.item_code, balance.warehouse);
     
     const [poItems] = await pool.query(`
       SELECT COALESCE(SUM(quantity), 0) as po_qty FROM purchase_order_items WHERE item_code = ?
@@ -175,6 +184,7 @@ const getStockBalance = async (drawingNo = null) => {
       drawing_id: balance.drawing_id,
       revision: balance.revision,
       material_grade: balance.material_grade,
+      warehouse: balance.warehouse,
       last_updated: balance.last_updated
     });
   }

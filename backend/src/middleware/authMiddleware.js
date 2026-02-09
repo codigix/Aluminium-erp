@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
-const { DEPARTMENT_ACCESS_RULES } = require('../config/departmentAccessConfig');
+const { DEPARTMENT_ACCESS_RULES, DEPARTMENT_CODES } = require('../config/departmentAccessConfig');
 
 exports.authenticate = (req, res, next) => {
   try {
@@ -64,11 +64,20 @@ exports.authorize = (requiredPermissions = []) => {
 
       // Fallback to departmentAccessConfig if database permissions are missing
       if (!hasPermission && req.user.department_code) {
-        const deptRules = DEPARTMENT_ACCESS_RULES[req.user.department_code];
+        let deptKey = req.user.department_code;
+        // If it's a numeric code, find the string key from DEPARTMENT_CODES
+        if (typeof deptKey === 'number' || !isNaN(deptKey)) {
+          const found = Object.entries(DEPARTMENT_CODES).find(([_, value]) => String(value) === String(deptKey));
+          if (found) {
+            deptKey = found[0];
+          }
+        }
+
+        const deptRules = DEPARTMENT_ACCESS_RULES[deptKey];
         if (deptRules && deptRules.permissions) {
           hasPermission = requiredPermissions.some(perm => deptRules.permissions.includes(perm));
           if (hasPermission) {
-            console.log(`[DEBUG] Permission ${requiredPermissions} granted via departmentAccessConfig fallback for ${req.user.department_code}`);
+            console.log(`[DEBUG] Permission ${requiredPermissions} granted via departmentAccessConfig fallback for ${deptKey}`);
           }
         }
       }
