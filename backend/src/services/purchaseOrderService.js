@@ -190,18 +190,6 @@ const createPurchaseOrder = async (data) => {
       );
     }
 
-    const [grnResult] = await connection.execute(
-      `INSERT INTO grns (po_number, grn_date, received_quantity, status, notes)
-       VALUES (?, ?, ?, ?, ?)` ,
-      [poNumber, new Date().toISOString().split('T')[0], 0, 'PENDING', null]
-    );
-
-    await connection.execute(
-      `INSERT INTO qc_inspections (grn_id, inspection_date, pass_quantity, fail_quantity, status, defects, remarks)
-       VALUES (?, ?, ?, ?, ?, ?, ?)` ,
-      [grnResult.insertId, new Date().toISOString().split('T')[0], 0, 0, 'PENDING', null, null]
-    );
-
     if (sales_order_id) {
       await connection.execute(
         'UPDATE sales_orders SET status = ? WHERE id = ?',
