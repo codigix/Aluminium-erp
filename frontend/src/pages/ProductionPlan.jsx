@@ -223,6 +223,41 @@ const ProductionPlan = () => {
     }
   };
 
+  const handleTransmitMR = async (planId) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Transmit Material Request?',
+        text: "This will generate a Material Request in Inventory for all required materials in this plan.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, transmit it!',
+        cancelButtonText: 'Cancel'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/production-plans/transmit-mr/${planId}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          successToast(data.message || 'Material Request created successfully');
+          fetchPlans();
+        } else {
+          const error = await response.json();
+          errorToast(error.message || 'Failed to transmit Material Request');
+        }
+      }
+    } catch (error) {
+      console.error('Error transmitting MR:', error);
+      errorToast('An unexpected error occurred');
+    }
+  };
+
   const handleCreateNew = () => {
     fetchReadyItems();
     fetchReadyOrders();
@@ -1325,7 +1360,7 @@ const ProductionPlan = () => {
         })),
         materials: materialsToDisplay.map(m => ({
           ...m,
-          itemCode: m.item_code || m.item || null,
+          itemCode: m.material_code || m.item_code || m.item || null,
           materialName: m.material_name || m.item || null,
           requiredQty: m.required_qty || m.totalRequiredQty || 0,
           bomRef: m.bom_ref || m.bom_no || null,
@@ -1663,7 +1698,11 @@ const ProductionPlan = () => {
                         <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Settings">
                           <Settings className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Transmit">
+                        <button 
+                          onClick={() => handleTransmitMR(plan.id)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" 
+                          title="Transmit"
+                        >
                           <Send className="w-4 h-4" />
                         </button>
                         <button 

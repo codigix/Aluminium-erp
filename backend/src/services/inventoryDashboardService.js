@@ -40,18 +40,33 @@ const getPendingGRNs = async () => {
 const getLowStockItems = async () => {
   const [items] = await pool.query(`
     SELECT 
-      sb.item_code,
-      sb.item_description,
-      sb.unit,
-      COALESCE(SUM(CASE WHEN sl.transaction_type IN ('GRN_IN', 'ADJUSTMENT', 'RETURN') THEN sl.quantity 
-                        WHEN sl.transaction_type = 'OUT' THEN -sl.quantity ELSE 0 END), 0) as current_balance
-    FROM stock_balance sb
-    LEFT JOIN stock_ledger sl ON sb.item_code = sl.item_code
-    GROUP BY sb.item_code, sb.item_description, sb.unit
-    HAVING current_balance < 10
+      item_code,
+      COALESCE(material_name, item_description) as item_description,
+      unit,
+      current_balance,
+      warehouse
+    FROM stock_balance
+    WHERE current_balance < 10
     ORDER BY current_balance ASC
   `);
   return items;
+};
+
+const getMaterialRequests = async () => {
+  const [mrs] = await pool.query(`
+    SELECT 
+      mr.id,
+      mr.mr_number as request_no,
+      mr.purpose,
+      mr.department,
+      mr.required_by as required_date,
+      mr.status,
+      (SELECT COUNT(*) FROM material_request_items WHERE mr_id = mr.id) as items_count
+    FROM material_requests mr
+    ORDER BY mr.created_at DESC
+    LIMIT 10
+  `);
+  return mrs;
 };
 
 const getQCPendingItems = async () => {
@@ -70,9 +85,44 @@ const getQCPendingItems = async () => {
   return items;
 };
 
+const getSummaryMetrics = async () => {
+  const [stockStats] = await pool.query(`
+    SELECT 
+      COUNT(DISTINCT item_code) as total_items,
+      SUM(current_balance) as total_stock_qty,
+      SUM(current_balance * IFNULL(valuation_rate, 0)) as total_stock_value
+    FROM stock_balance
+  `);
+
+  const [mrStats] = await pool.query(`
+    SELECT 
+      COUNT(*) as total_mrs,
+      SUM(CASE WHEN status = 'DRAFT' THEN 1 ELSE 0 END) as draft_mrs,
+      SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as approved_mrs,
+      SUM(CASE WHEN status = 'SUBMITTED' THEN 1 ELSE 0 END) as submitted_mrs
+    FROM material_requests
+  `);
+
+  const [poStats] = await pool.query(`
+    SELECT 
+      COUNT(*) as total_pos,
+      SUM(CASE WHEN status = 'ORDERED' THEN 1 ELSE 0 END) as ordered_pos,
+      SUM(CASE WHEN status = 'PARTIALLY_RECEIVED' THEN 1 ELSE 0 END) as partial_pos,
+      SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed_pos
+    FROM purchase_orders
+  `);
+
+  return {
+    stock: stockStats[0],
+    materialRequests: mrStats[0],
+    purchaseOrders: poStats[0]
+  };
+};
+
 module.exports = {
   getIncomingOrders,
   getPendingGRNs,
   getLowStockItems,
-  getQCPendingItems
+  getQCPendingItems,
+  getSummaryMetrics
 };

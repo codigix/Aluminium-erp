@@ -72,7 +72,7 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
     await connection.beginTransaction();
 
     const [po] = await connection.query(
-      'SELECT id FROM purchase_orders WHERE id = ?',
+      'SELECT id, po_number FROM purchase_orders WHERE id = ?',
       [poId]
     );
 
@@ -80,6 +80,7 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       throw new Error('Purchase Order not found');
     }
 
+    const poNumber = po[0].po_number;
     const dateValue = receiptDate ? new Date(receiptDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
     
     const [result] = await connection.execute(
@@ -96,12 +97,27 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
 
     const receiptId = result.insertId;
 
+    // Create GRN entry automatically
+    const [grnResult] = await connection.execute(
+      `INSERT INTO grns (po_number, grn_date, received_quantity, status, notes, po_receipt_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [poNumber, dateValue, receivedQuantity || 0, 'PENDING', notes || null, receiptId]
+    );
+    const grnId = grnResult.insertId;
+
     if (Array.isArray(items) && items.length > 0) {
       for (const item of items) {
         await connection.execute(
           `INSERT INTO po_receipt_items (receipt_id, po_item_id, received_quantity)
            VALUES (?, ?, ?)`,
           [receiptId, item.id, item.received_qty || 0]
+        );
+
+        // Also create GRN item
+        await connection.execute(
+          `INSERT INTO grn_items (grn_id, po_item_id, po_qty, received_qty, accepted_qty, status)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [grnId, item.id, item.quantity || 0, item.received_qty || 0, item.received_qty || 0, 'PENDING']
         );
       }
     }

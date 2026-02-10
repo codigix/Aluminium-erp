@@ -509,6 +509,16 @@ const GRNProcessing = () => {
           >
             <Eye className="w-4 h-4" />
           </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteGRN(row.id);
+            }}
+            className="p-1.5 bg-rose-50 border border-rose-100 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors shadow-sm"
+            title="Delete GRN"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
         </div>
       )
     }

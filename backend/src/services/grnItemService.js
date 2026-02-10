@@ -97,26 +97,6 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
 
     const grnItemId = result.insertId;
 
-    if (itemCode && acceptedQty > 0) {
-      const [grn] = await connection.query(
-        'SELECT id FROM grns WHERE id = ?',
-        [grnId]
-      );
-
-      await stockService.updateStockBalance(itemCode, poQty, receivedQty, acceptedQty, 0, itemDescription);
-
-      await stockService.addStockLedgerEntry(
-        itemCode,
-        'IN',
-        acceptedQty,
-        'GRN',
-        grnId,
-        `GRN-${String(grnId).padStart(4, '0')}`,
-        remarks,
-        null
-      );
-    }
-
     await connection.commit();
 
     return {
@@ -193,27 +173,6 @@ const updateGRNItem = async (grnItemId, updates) => {
 
     const itemCode = poItem.length ? poItem[0].item_code : null;
     const itemDescription = poItem.length ? poItem[0].description : null;
-
-    if (itemCode && (acceptedQty !== parseFloat(item.accepted_qty))) {
-      const qtyDifference = parseFloat(acceptedQty) - parseFloat(item.accepted_qty);
-
-      await stockService.updateStockBalance(itemCode, item.po_qty, receivedQty, acceptedQty, 0, itemDescription);
-
-      if (qtyDifference !== 0) {
-        const transactionType = qtyDifference > 0 ? 'IN' : 'OUT';
-
-        await stockService.addStockLedgerEntry(
-          itemCode,
-          transactionType,
-          Math.abs(qtyDifference),
-          'GRN',
-          item.grn_id,
-          `GRN-${String(item.grn_id).padStart(4, '0')}`,
-          `Updated: ${remarks || 'Quantity adjustment'}`,
-          null
-        );
-      }
-    }
 
     if (newStatus === GRN_ITEM_STATUS.EXCESS_HOLD && overageQty > 0) {
       const [existingApproval] = await connection.query(

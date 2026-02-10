@@ -236,8 +236,8 @@ const processStockMovement = async (entryId, connection, userId) => {
       const type = item.quantity >= 0 ? 'IN' : 'OUT';
       await stockService.addStockLedgerEntry(
         item.item_code,
+        type === 'IN' ? 'ADJUSTMENT' : 'OUT',
         Math.abs(item.quantity),
-        type === 'IN' ? 'ADJUSTMENT' : 'OUT', // Using ADJUSTMENT for IN or just IN
         'STOCK_ENTRY',
         entry.id,
         entry.entry_no,
@@ -258,10 +258,26 @@ const deleteStockEntry = async (id) => {
   return { success: true };
 };
 
+const getStockEntryItemsFromGRN = async (grnId) => {
+  const [items] = await pool.query(`
+    SELECT 
+      poi.item_code,
+      gi.accepted_qty as quantity,
+      poi.unit as uom,
+      poi.unit_rate as valuation_rate
+    FROM grn_items gi
+    JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+    WHERE gi.grn_id = ? AND gi.is_approved = 1
+  `, [grnId]);
+  
+  return items;
+};
+
 module.exports = {
   getAllStockEntries,
   getStockEntryById,
   createStockEntry,
   submitStockEntry,
-  deleteStockEntry
+  deleteStockEntry,
+  getStockEntryItemsFromGRN
 };

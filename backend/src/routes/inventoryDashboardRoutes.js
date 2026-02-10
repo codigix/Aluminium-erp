@@ -9,6 +9,8 @@ router.use(authorize(['STOCK_VIEW', 'GRN_VIEW']));
 router.get('/incoming-orders', inventoryDashboardController.getIncomingOrders);
 router.get('/pending-grns', inventoryDashboardController.getPendingGRNs);
 router.get('/low-stock', inventoryDashboardController.getLowStockItems);
+router.get('/material-requests', inventoryDashboardController.getMaterialRequests);
 router.get('/qc-pending', inventoryDashboardController.getQCPendingItems);
+router.get('/summary', inventoryDashboardController.getSummaryMetrics);
 
 module.exports = router;

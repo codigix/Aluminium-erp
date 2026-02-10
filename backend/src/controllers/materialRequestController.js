@@ -12,7 +12,7 @@ const materialRequestController = {
           END
           FROM material_request_items mri
           LEFT JOIN stock_balance sb ON mri.item_code = sb.item_code 
-            AND sb.warehouse = COALESCE(mr.source_warehouse, 'Consumables Store')
+            AND sb.warehouse = COALESCE(mri.warehouse, mr.source_warehouse, 'Consumables Store')
           WHERE mri.mr_id = mr.id
         ) as availability
         FROM material_requests mr
@@ -40,16 +40,20 @@ const materialRequestController = {
         return res.status(404).json({ message: 'Material Request not found' });
       }
 
+      const request = requests[0];
+
       const [items] = await pool.query(`
         SELECT mri.*, 
-               COALESCE(sb.material_name, sb.item_description, mri.item_code) as name, 
-               COALESCE(mri.uom, sb.unit) as uom
+               COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
+               COALESCE(mri.uom, sb.unit) as uom,
+               COALESCE(mri.item_type, sb.material_type) as material_type
         FROM material_request_items mri
         LEFT JOIN (
           SELECT item_code, 
                  MAX(material_name) as material_name, 
                  MAX(item_description) as item_description, 
-                 MAX(unit) as unit 
+                 MAX(unit) as unit,
+                 MAX(material_type) as material_type
           FROM stock_balance 
           GROUP BY item_code
         ) sb ON mri.item_code = sb.item_code
@@ -57,6 +61,10 @@ const materialRequestController = {
       `, [id]);
 
       // Fetch stock info for each item
+      const selectedWh = warehouse || request.source_warehouse;
+      
+      let allItemsAvailable = true;
+
       for (let item of items) {
         let stockQuery = `
           SELECT warehouse as warehouse_name, current_balance as current_stock
@@ -65,21 +73,68 @@ const materialRequestController = {
         `;
         let params = [item.item_code];
 
-        if (warehouse) {
-          stockQuery += ` AND warehouse = ? `;
-          params.push(warehouse);
+        // Use item-specific warehouse if available, fallback to header warehouse
+        const itemWh = item.warehouse || selectedWh;
+
+        if (itemWh) {
+          stockQuery += ` AND (warehouse = ? OR (warehouse IS NULL AND ? IS NULL)) `;
+          params.push(itemWh, itemWh);
         }
 
-        const [stock] = await pool.query(stockQuery, params);
-        item.stocks = stock;
+        const [stockRows] = await pool.query(stockQuery, params);
+        item.stocks = stockRows;
+        
+        // Also provide a direct stock level for the selected warehouse
+        const matchingWh = stockRows.find(s => s.warehouse_name === itemWh);
+        const availableQty = matchingWh ? parseFloat(matchingWh.current_stock) : 0;
+        
+        item.current_stock = availableQty;
+        item.fulfillment_source = availableQty >= parseFloat(item.quantity) ? 'STOCK' : 'PURCHASE';
+        
+        if (item.fulfillment_source === 'PURCHASE') {
+          allItemsAvailable = false;
+        }
       }
 
-      const request = requests[0];
       request.items = items;
+      request.all_items_available = allItemsAvailable;
+      request.suggested_fulfillment_mode = allItemsAvailable ? 'STOCK' : 'PURCHASE';
 
       res.json(request);
     } catch (error) {
       console.error('Error in getById:', error);
+      res.status(500).json({ message: error.message });
+    }
+  },
+
+  updateWarehouse: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { source_warehouse, target_warehouse } = req.body;
+      
+      const updates = [];
+      const params = [];
+      
+      if (source_warehouse !== undefined) {
+        updates.push('source_warehouse = ?');
+        params.push(source_warehouse);
+      }
+      
+      if (target_warehouse !== undefined) {
+        updates.push('target_warehouse = ?');
+        params.push(target_warehouse);
+      }
+      
+      if (updates.length === 0) {
+        return res.status(400).json({ message: 'No warehouse provided' });
+      }
+      
+      params.push(id);
+      await pool.query(`UPDATE material_requests SET ${updates.join(', ')} WHERE id = ?`, params);
+      
+      res.json({ message: 'Warehouses updated successfully' });
+    } catch (error) {
+      console.error('Error in updateWarehouse:', error);
       res.status(500).json({ message: error.message });
     }
   },
@@ -140,12 +195,15 @@ const materialRequestController = {
         const itemValues = items.map(item => [
           mrId,
           item.item_code,
+          item.item_name || null,
+          item.item_type || null,
           item.quantity,
-          item.uom || 'pcs'
+          item.uom || 'pcs',
+          item.warehouse || null
         ]);
 
         await connection.query(
-          'INSERT INTO material_request_items (mr_id, item_code, quantity, uom) VALUES ?',
+          'INSERT INTO material_request_items (mr_id, item_code, item_name, item_type, quantity, uom, warehouse) VALUES ?',
           [itemValues]
         );
       }

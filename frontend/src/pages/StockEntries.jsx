@@ -145,7 +145,10 @@ const StockEntries = () => {
 
   const handleGRNSelect = async (grnId) => {
     setFormData(prev => ({ ...prev, grnId }));
-    if (!grnId) return;
+    if (!grnId) {
+      setFormData(prev => ({ ...prev, items: [] }));
+      return;
+    }
 
     try {
       const token = localStorage.getItem('authToken');
@@ -153,15 +156,23 @@ const StockEntries = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
+      
       if (data && data.items) {
         const mappedItems = data.items.map(item => ({
           itemCode: item.item_code || item.itemCode,
-          quantity: item.accepted_qty || item.quantity,
+          quantity: parseFloat(item.accepted_qty || item.received_qty || item.receivedQuantity || item.quantity || 0),
           uom: item.unit || 'Kg',
           batchNo: '',
-          valuationRate: 0
+          valuationRate: parseFloat(item.unit_rate || item.rate || 0)
         }));
-        setFormData(prev => ({ ...prev, items: mappedItems }));
+        
+        setFormData(prev => ({ 
+          ...prev, 
+          items: mappedItems,
+          entryType: 'Material Receipt' // Auto-set to Material Receipt when GRN is selected
+        }));
+        
+        successToast(`Fetched ${mappedItems.length} items from GRN`);
       }
     } catch (error) {
       console.error('Error fetching GRN items:', error);

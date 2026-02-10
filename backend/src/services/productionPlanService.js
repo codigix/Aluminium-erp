@@ -208,8 +208,8 @@ const createProductionPlan = async (planData, createdBy) => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            mat.itemCode || mat.item || null,
-            mat.materialName || mat.item || null,
+            mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
+            mat.materialName || mat.material_name || mat.item || null,
             mat.requiredQty || 0,
             mat.uom || mat.unit || 'Nos',
             mat.warehouse || null,
@@ -360,8 +360,8 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            mat.itemCode || mat.item || null,
-            mat.materialName || mat.item || null,
+            mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
+            mat.materialName || mat.material_name || mat.item || null,
             mat.requiredQty || 0,
             mat.uom || mat.unit || 'Nos',
             mat.warehouse || null,
@@ -838,6 +838,8 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     return {
       materials: materials.map(m => ({
         ...m,
+        item_code: m.material_code || m.item_code || m.itemCode || null,
+        material_name: m.material_name || m.name || null,
         qty_per_pc: m.qty_per_pc || 0,
         required_qty: (m.qty_per_pc || 0) * qtyMultiplier
       })),
@@ -853,6 +855,197 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     components: Array.from(componentMap.values()),
     operations: Array.from(operationMap.values()).flat()
   };
+};
+
+const createMaterialRequestFromPlan = async (planId, userId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Fetch Plan Details
+    const [plans] = await connection.query(
+      'SELECT * FROM production_plans WHERE id = ?',
+      [planId]
+    );
+
+    if (plans.length === 0) {
+      throw new Error('Production Plan not found');
+    }
+
+    const plan = plans[0];
+
+    // Check if an MR already exists for this plan to avoid duplicates
+    const [existingMrs] = await connection.query(
+      "SELECT id FROM material_requests WHERE notes LIKE ?",
+      [`%Generated from Production Plan ${plan.plan_code}%`]
+    );
+    
+    if (existingMrs.length > 0) {
+      throw new Error(`A Material Request already exists for Production Plan ${plan.plan_code}`);
+    }
+
+    // 2. Aggregate everything into a single map
+    const aggregatedMap = new Map();
+
+    const addToMap = (itemCode, qty, uom, name, warehouse, defaultWarehouse, category) => {
+      if (!itemCode && !name) return;
+      
+      const code = (itemCode || name).trim();
+      const targetWarehouse = warehouse || defaultWarehouse;
+      const key = `${code.toUpperCase()}|${targetWarehouse}`;
+      
+      // Correct Item Type Mapping
+      const mapItemType = (code, cat) => {
+        // Force RAW_MATERIAL for material categories
+        const materialCategories = ['CORE', 'EXPLODED', 'RAW_MATERIAL', 'COMPONENT'];
+        if (materialCategories.includes(String(cat).toUpperCase())) return 'RAW_MATERIAL';
+
+        const c = (code || '').toUpperCase();
+        if (c.startsWith('RM-')) return 'RAW_MATERIAL';
+        if (c.startsWith('SA-')) return 'SUB_ASSEMBLY';
+        if (c.startsWith('FG-')) return 'FG';
+        
+        // Fallback based on source category
+        if (cat === 'FG') return 'FG';
+        if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
+        return 'RAW_MATERIAL';
+      };
+
+      if (aggregatedMap.has(key)) {
+        const existing = aggregatedMap.get(key);
+        existing.quantity += Number(qty);
+        // Upgrade type to RAW_MATERIAL if it was previously something else but now identified as material
+        if (existing.item_type !== 'RAW_MATERIAL') {
+          const newType = mapItemType(code, category);
+          if (newType === 'RAW_MATERIAL') existing.item_type = 'RAW_MATERIAL';
+        }
+      } else {
+        aggregatedMap.set(key, {
+          item_code: code,
+          quantity: Number(qty),
+          uom: uom || 'Nos',
+          material_name: name || code,
+          warehouse: targetWarehouse,
+          item_type: mapItemType(code, category)
+        });
+      }
+    };
+
+    // Step 1: Add Finished Goods (FG)
+    const [fgItems] = await connection.query(`
+      SELECT ppi.*, COALESCE(soi.description, oi.description, ppi.item_code) as item_name
+      FROM production_plan_items ppi
+      LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+      LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id
+      WHERE ppi.plan_id = ?
+    `, [planId]);
+
+    for (const fg of fgItems) {
+      addToMap(fg.item_code, fg.planned_qty, fg.uom, fg.item_name, fg.warehouse, 'Finished Goods - NC', 'FG');
+    }
+
+    // Step 2: Add Sub Assemblies (SA)
+    const [saItems] = await connection.query(`
+      SELECT sa.*, COALESCE(sb.material_name, sa.item_code) as item_name
+      FROM production_plan_sub_assemblies sa
+      LEFT JOIN (
+        SELECT item_code, MAX(material_name) as material_name FROM stock_balance GROUP BY item_code
+      ) sb ON sa.item_code = sb.item_code
+      WHERE sa.plan_id = ?
+    `, [planId]);
+
+    for (const sa of saItems) {
+      addToMap(sa.item_code, sa.required_qty, 'Nos', sa.item_name, sa.target_warehouse, 'Work In Progress - NC', 'SUB_ASSEMBLY');
+    }
+
+    // Step 3: Add Materials (CORE & EXPLODED)
+    const [materials] = await connection.query(
+      'SELECT * FROM production_plan_materials WHERE plan_id = ?',
+      [planId]
+    );
+
+    for (const mat of materials) {
+      // Force it to be RAW_MATERIAL because it's from the materials table
+      addToMap(mat.item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'Store - NC', 'RAW_MATERIAL');
+    }
+
+    if (aggregatedMap.size === 0) {
+      throw new Error('No items found in this Production Plan to request');
+    }
+
+    const aggregatedItems = Array.from(aggregatedMap.values());
+
+    // 4. Generate MR Number
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const [lastMrResult] = await connection.query(
+      'SELECT mr_number FROM material_requests WHERE mr_number LIKE ? ORDER BY id DESC LIMIT 1',
+      [`MR-${dateStr}-%`]
+    );
+
+    let nextNum = 1;
+    if (lastMrResult.length > 0) {
+      const lastMrNum = lastMrResult[0].mr_number;
+      const parts = lastMrNum.split('-');
+      const lastSeq = parseInt(parts[parts.length - 1]);
+      if (!isNaN(lastSeq)) {
+        nextNum = lastSeq + 1;
+      }
+    }
+    const mrNumber = `MR-${dateStr}-${nextNum.toString().padStart(3, '0')}`;
+
+    // 5. Create Material Request Header
+    const [mrResult] = await connection.execute(
+      `INSERT INTO material_requests (
+        mr_number, department, requested_by, required_by, 
+        purpose, status, notes, source_warehouse
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        mrNumber,
+        'Production',
+        userId,
+        plan.start_date || new Date(),
+        'Purchase Request',
+        'DRAFT',
+        `Generated from Production Plan ${plan.plan_code}`,
+        'Consumables Store'
+      ]
+    );
+
+    const mrId = mrResult.insertId;
+
+    // 6. Create Material Request Items
+    for (const item of aggregatedItems) {
+      await connection.execute(
+        `INSERT INTO material_request_items (
+          mr_id, item_code, item_name, item_type, quantity, uom, warehouse
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          mrId,
+          item.item_code,
+          item.material_name,
+          item.item_type,
+          item.quantity,
+          item.uom,
+          item.warehouse
+        ]
+      );
+    }
+
+    // 7. Update Plan Materials Status
+    await connection.execute(
+      "UPDATE production_plan_materials SET status = 'SUBMITTED' WHERE plan_id = ?",
+      [planId]
+    );
+
+    await connection.commit();
+    return { id: mrId, mr_number: mrNumber, message: 'Material Request created successfully' };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const deleteProductionPlan = async (id) => {
@@ -888,5 +1081,6 @@ module.exports = {
   getSalesOrderFullDetails,
   generatePlanCode,
   getItemBOMDetails,
-  deleteProductionPlan
+  deleteProductionPlan,
+  createMaterialRequestFromPlan
 };

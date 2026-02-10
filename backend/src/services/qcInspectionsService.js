@@ -298,43 +298,6 @@ const updateQC = async (qcId, updates) => {
       }
     }
 
-    if (currentStatus === 'PASSED' || currentStatus === 'PARTIAL') {
-      try {
-        const [qcItems] = await connection.query(
-          `SELECT id, grn_item_id, item_code, accepted_qty FROM qc_inspection_items WHERE qc_inspection_id = ?`,
-          [qcId]
-        );
-
-        const grnId = qcData[0].grn_id;
-        console.log(`[QC ${qcId}] Creating stock ledger - Found ${qcItems.length} items`);
-
-        if (qcItems.length > 0) {
-          for (const qcItem of qcItems) {
-            const passQty = parseFloat(qcItem.accepted_qty) || 0;
-            
-            console.log(`[QC ${qcId}] Item: ${qcItem.item_code}, grn_item_id: ${qcItem.grn_item_id}, accepted_qty: ${passQty}`);
-            
-            if (passQty > 0 && qcItem.grn_item_id) {
-              const result = await stockService.createQCStockLedgerEntry(
-                qcId,
-                grnId,
-                qcItem.grn_item_id,
-                qcItem.item_code,
-                passQty,
-                connection
-              );
-              console.log(`[QC ${qcId}] Stock ledger result:`, result);
-            } else {
-              console.log(`[QC ${qcId}] Skipped - passQty: ${passQty}, grn_item_id: ${qcItem.grn_item_id}`);
-            }
-          }
-        }
-      } catch (stockError) {
-        console.error(`[QC ${qcId}] Error creating stock ledger:`, stockError.message);
-        throw stockError;
-      }
-    }
-
     await connection.commit();
   } catch (error) {
     await connection.rollback();

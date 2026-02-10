@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Card, DataTable, StatusBadge, Modal } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Modal, SearchableSelect } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 import { successToast, errorToast } from '../utils/toast';
@@ -9,17 +9,14 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 const POMaterialRequest = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [fulfillmentWarehouse, setFulfillmentWarehouse] = useState('');
-  const [modalStep, setModalStep] = useState(1);
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [items, setItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-  const navigate = useNavigate();
 
   // New Request Form State
   const [formData, setFormData] = useState({
@@ -42,8 +39,6 @@ const POMaterialRequest = () => {
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
     if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
       fetchRequests();
       fetchInitialData();
     }
@@ -75,7 +70,8 @@ const POMaterialRequest = () => {
         setItems(itemData.map(i => ({
           item_code: i.item_code,
           name: i.item_description || i.material_name || i.item_code,
-          uom: i.unit || 'pcs'
+          uom: i.unit || 'pcs',
+          material_type: i.material_type
         })));
       }
     } catch (error) {
@@ -101,7 +97,7 @@ const POMaterialRequest = () => {
       };
       fetchWarehouseStock();
     }
-  }, [fulfillmentWarehouse, showViewModal]);
+  }, [fulfillmentWarehouse, showViewModal, selectedRequest?.id]);
 
   const fetchRequests = async () => {
     try {
@@ -120,6 +116,97 @@ const POMaterialRequest = () => {
     } catch (error) {
       console.error('Error fetching material requests:', error);
       setRequests([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWarehouseChange = async (warehouse) => {
+    setFulfillmentWarehouse(warehouse);
+    if (!selectedRequest?.id) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/material-requests/${selectedRequest.id}/warehouse`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ source_warehouse: warehouse })
+      });
+
+      if (response.ok) {
+        // Fetch updated data with stock
+        const updatedRes = await fetch(`${API_BASE}/material-requests/${selectedRequest.id}?warehouse=${encodeURIComponent(warehouse)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (updatedRes.ok) {
+          setSelectedRequest(await updatedRes.json());
+        }
+      }
+    } catch (error) {
+      console.error('Error updating warehouse:', error);
+    }
+  };
+
+  const handleCreatePO = async (mr) => {
+    try {
+      // Fetch vendors first
+      const token = localStorage.getItem('authToken');
+      const vendorRes = await fetch(`${API_BASE}/vendors`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!vendorRes.ok) throw new Error("Failed to fetch vendors");
+      const vendors = await vendorRes.json();
+
+      const { value: vendorId } = await Swal.fire({
+        title: 'Select Vendor',
+        input: 'select',
+        inputOptions: vendors.reduce((acc, v) => ({ ...acc, [v.id]: v.vendor_name }), {}),
+        inputPlaceholder: 'Select a vendor',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        inputValidator: (value) => {
+          if (!value) return 'You need to select a vendor!';
+        }
+      });
+
+      if (vendorId) {
+        setLoading(true);
+        const response = await fetch(`${API_BASE}/purchase-orders`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            mrId: mr.id,
+            vendorId: vendorId,
+            items: mr.items.map(item => ({
+              item_code: item.item_code,
+              description: item.name,
+              quantity: item.quantity,
+              unit: item.uom,
+              rate: 0 // Will be set in PO later
+            }))
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          successToast(`Purchase Order ${data.po_number} created successfully`);
+          setShowViewModal(false);
+          fetchRequests();
+        } else {
+          const err = await response.json();
+          errorToast(err.message || "Failed to create Purchase Order");
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast(error.message || "Network error");
     } finally {
       setLoading(false);
     }
@@ -268,7 +355,7 @@ const POMaterialRequest = () => {
       key: 'department',
       label: 'Requester',
       sortable: true,
-      render: (val, row) => (
+      render: (val) => (
         <div className="text-slate-500 font-medium">{val || '—'}</div>
       )
     },
@@ -327,7 +414,14 @@ const POMaterialRequest = () => {
     const selectedItem = items.find(i => i.item_code === currentItem.item_code);
     setFormData({
       ...formData,
-      items: [...formData.items, { ...currentItem, name: selectedItem?.name || currentItem.item_code }]
+      items: [
+        ...formData.items, 
+        { 
+          ...currentItem, 
+          item_name: selectedItem?.name || currentItem.item_code,
+          item_type: selectedItem?.material_type || 'Raw Material'
+        }
+      ]
     });
     setCurrentItem({ item_code: '', quantity: 1, uom: 'pcs' });
   };
@@ -405,7 +499,7 @@ const POMaterialRequest = () => {
               <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               Refresh
             </button>
-            <button onClick={() => { setModalStep(1); setShowModal(true); }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-medium hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-200">
+            <button onClick={() => { setShowModal(true); }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-medium hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-200">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
               New Request
             </button>
@@ -627,21 +721,24 @@ const POMaterialRequest = () => {
                 <div className="grid grid-cols-12 gap-3 items-end">
                   <div className="col-span-6">
                     <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Item <span className="text-rose-500">*</span></label>
-                    <select 
+                    <SearchableSelect 
+                      options={items}
                       value={currentItem.item_code}
                       onChange={(e) => {
                         const selected = items.find(i => i.item_code === e.target.value);
                         setCurrentItem({ 
                           ...currentItem, 
                           item_code: e.target.value,
-                          uom: selected?.uom || 'pcs'
+                          name: selected?.name || '',
+                          uom: selected?.uom || 'pcs',
+                          material_type: selected?.material_type || ''
                         });
                       }}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-100"
-                    >
-                      <option value="">Select Item</option>
-                      {items.map(i => <option key={i.item_code} value={i.item_code}>{i.name}</option>)}
-                    </select>
+                      placeholder="Select Item"
+                      labelField="name"
+                      valueField="item_code"
+                      subLabelField="material_type"
+                    />
                   </div>
                   <div className="col-span-3">
                     <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Quantity <span className="text-rose-500">*</span></label>
@@ -689,7 +786,7 @@ const POMaterialRequest = () => {
                         <div key={idx} className="px-3 py-2 flex justify-between items-center group hover:bg-slate-50">
                           <div>
                             <p className="text-xs font-medium text-slate-900">{item.name}</p>
-                            <p className="text-[9px] text-slate-500">{item.item_code}</p>
+                            <p className="text-[9px] text-slate-500">{item.item_code} • {item.material_type}</p>
                           </div>
                           <div className="flex items-center gap-4">
                             <span className="text-xs font-bold text-slate-900">{item.quantity} {item.uom}</span>
@@ -808,10 +905,10 @@ const POMaterialRequest = () => {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Linked PO</p>
                 <div className="flex flex-col">
                   <p className="text-xs font-bold text-indigo-600 truncate">
-                    {selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : '#N/A'}
+                    {selectedRequest?.linked_po_number ? `#${selectedRequest.linked_po_number}` : (selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : '#N/A')}
                   </p>
-                  {selectedRequest?.linked_po && (
-                    <span className="text-[9px] font-bold text-emerald-500 uppercase mt-0.5">completed</span>
+                  {(selectedRequest?.linked_po_number || selectedRequest?.linked_po) && (
+                    <span className="text-[9px] font-bold text-emerald-500 uppercase mt-0.5">ORDERED</span>
                   )}
                 </div>
               </div>
@@ -828,7 +925,10 @@ const POMaterialRequest = () => {
                   </div>
                   <h4 className="text-sm font-bold text-slate-900">Line Items</h4>
                 </div>
-                <button className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold flex items-center gap-2 hover:bg-indigo-100 transition-colors">
+                <button 
+                  onClick={() => fulfillmentWarehouse && handleWarehouseChange(fulfillmentWarehouse)}
+                  className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold flex items-center gap-2 hover:bg-indigo-100 transition-colors"
+                >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                   Refresh Stock
                 </button>
@@ -840,6 +940,7 @@ const POMaterialRequest = () => {
                     <tr className="bg-slate-50/50 border-b border-slate-100">
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item Details</th>
                       <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</th>
+                      <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Warehouse</th>
                       <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Stock Level</th>
                       <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
                     </tr>
@@ -853,14 +954,27 @@ const POMaterialRequest = () => {
                         <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
                           <td className="px-6 py-5">
                             <div>
-                              <p className="text-sm font-bold text-slate-800 tracking-tight group-hover:text-indigo-600 transition-colors">{item.name}</p>
-                              <p className="text-[10px] font-medium text-slate-400 tracking-wider mt-1">{item.item_code}</p>
+                              <p className="text-[11px] font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
+                              <p className="text-sm font-medium text-slate-600 mt-0.5">{item.name}</p>
+                              <div className="mt-1.5 flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                  item.material_type === 'RAW_MATERIAL' || item.material_type === 'Raw Material' ? 'bg-slate-100 text-slate-600' :
+                                  item.material_type === 'SUB_ASSEMBLY' || item.material_type === 'Sub Assembly' ? 'bg-blue-50 text-blue-600' :
+                                  item.material_type === 'FG' || item.material_type === 'Finished Good' ? 'bg-purple-50 text-purple-600' :
+                                  'bg-slate-50 text-slate-500'
+                                }`}>
+                                  {item.material_type?.replace('_', ' ')}
+                                </span>
+                              </div>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <span className="px-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700">
                               {Number(item.quantity).toFixed(3)} {item.uom}
                             </span>
+                          </td>
+                          <td className="px-6 py-5 text-center text-xs font-medium text-slate-600">
+                            {item.warehouse || '—'}
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
@@ -902,14 +1016,16 @@ const POMaterialRequest = () => {
             <div className="w-96 space-y-6">
               {/* Fulfillment Source */}
               <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-50 bg-amber-500 flex justify-between items-center">
+                <div className={`p-5 border-b border-slate-50 flex justify-between items-center transition-colors ${selectedRequest?.all_items_available ? 'bg-emerald-500' : 'bg-amber-500'}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
                       <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                     </div>
                     <h4 className="text-xs font-bold text-white uppercase tracking-widest">FULFILLMENT SOURCE</h4>
                   </div>
-                  <span className="px-2 py-0.5 bg-white/20 text-white rounded text-[9px] font-bold uppercase tracking-wider">action required</span>
+                  <span className="px-2 py-0.5 bg-white/20 text-white rounded text-[9px] font-bold uppercase tracking-wider">
+                    {selectedRequest?.all_items_available ? 'STOCK AVAILABLE' : 'ACTION REQUIRED'}
+                  </span>
                 </div>
                 <div className="p-6 space-y-5">
                   <div className="space-y-2">
@@ -923,7 +1039,7 @@ const POMaterialRequest = () => {
                     <div className="relative group">
                       <select 
                         value={fulfillmentWarehouse}
-                        onChange={(e) => setFulfillmentWarehouse(e.target.value)}
+                        onChange={(e) => handleWarehouseChange(e.target.value)}
                         className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium text-slate-700 outline-none focus:border-amber-400 transition-all appearance-none group-hover:border-slate-200"
                       >
                         <option value="">Select Warehouse...</option>
@@ -936,12 +1052,16 @@ const POMaterialRequest = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex gap-4">
-                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 shadow-sm shadow-amber-200/50">
-                      <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <div className={`${selectedRequest?.all_items_available ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'} rounded-2xl p-4 border flex gap-4 transition-colors`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${selectedRequest?.all_items_available ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+                      <svg className={`w-4 h-4 ${selectedRequest?.all_items_available ? 'text-emerald-600' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
                     </div>
-                    <p className="text-[11px] font-medium text-amber-700 leading-relaxed">
-                      Changing the warehouse will trigger a real-time stock verification for all line items.
+                    <p className={`text-[11px] font-medium leading-relaxed ${selectedRequest?.all_items_available ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      {selectedRequest?.all_items_available 
+                        ? 'Full stock is available in this warehouse. You can fulfill this request directly from stock.' 
+                        : 'Stock is insufficient. You may need to create a Purchase Order or select another warehouse.'}
                     </p>
                   </div>
                 </div>
@@ -962,11 +1082,11 @@ const POMaterialRequest = () => {
                       <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider">Linked Purchase Order:</p>
                     </div>
                     <p className="text-sm font-bold text-indigo-600 mb-2 truncate group-hover:text-indigo-700 transition-colors">
-                      {selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : 'No Linked PO'}
+                      {selectedRequest?.linked_po_number ? `#${selectedRequest.linked_po_number}` : (selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : 'No Linked PO')}
                     </p>
                     <div className="flex items-center gap-3">
                       <span className="text-[10px] font-bold text-slate-400 uppercase">Status:</span>
-                      <StatusBadge status={selectedRequest?.linked_po ? "completed" : "none"} />
+                      <StatusBadge status={(selectedRequest?.linked_po_number || selectedRequest?.linked_po) ? "ORDERED" : "none"} />
                     </div>
                   </div>
 
@@ -1004,6 +1124,18 @@ const POMaterialRequest = () => {
             >
               Cancel
             </button>
+            {selectedRequest?.items?.some(item => {
+              const totalStock = item.stocks ? item.stocks.reduce((acc, st) => acc + (Number(st.current_stock) || 0), 0) : 0;
+              return totalStock < Number(item.quantity);
+            }) && !selectedRequest?.linked_po_id && (
+              <button 
+                onClick={() => handleCreatePO(selectedRequest)}
+                className="px-8 py-3 bg-indigo-500 text-white rounded-2xl text-xs font-bold hover:bg-indigo-600 flex items-center gap-3 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+              >
+                Create Purchase Order
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+              </button>
+            )}
             <button 
               onClick={() => handleReleaseMaterial(selectedRequest?.id)}
               className="px-8 py-3 bg-emerald-500 text-white rounded-2xl text-xs font-bold hover:bg-emerald-600 flex items-center gap-3 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"

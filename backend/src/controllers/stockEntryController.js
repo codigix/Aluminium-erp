@@ -55,10 +55,20 @@ const deleteStockEntry = async (req, res) => {
   }
 };
 
+const getItemsFromGRN = async (req, res) => {
+  try {
+    const items = await stockEntryService.getStockEntryItemsFromGRN(req.params.grnId);
+    res.json(items);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAllStockEntries,
   getStockEntryById,
   createStockEntry,
   submitStockEntry,
-  deleteStockEntry
+  deleteStockEntry,
+  getItemsFromGRN
 };

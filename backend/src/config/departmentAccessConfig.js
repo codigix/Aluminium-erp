@@ -78,9 +78,11 @@ const DEPARTMENT_ACCESS_RULES = {
       'PURCHASE_ORDER_CREATE',
       'PURCHASE_ORDER_EDIT',
       'STOCK_VIEW',
+      'STOCK_MANAGE',
       'GRN_VIEW',
       'GRN_CREATE',
-      'GRN_EDIT'
+      'GRN_EDIT',
+      'GRN_DELETE'
     ]
   },
 
@@ -177,7 +179,8 @@ const DEPARTMENT_ACCESS_RULES = {
       'STOCK_MANAGE',
       'GRN_VIEW',
       'GRN_CREATE',
-      'GRN_EDIT'
+      'GRN_EDIT',
+      'GRN_DELETE'
     ]
   },
 
