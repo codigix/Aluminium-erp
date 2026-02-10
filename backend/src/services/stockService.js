@@ -227,7 +227,7 @@ const getStockBalanceByItem = async (itemCode) => {
   };
 };
 
-const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocType = null, refDocId = null, refDocNumber = null, remarks = null, userId = null) => {
+const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocType = null, refDocId = null, refDocNumber = null, remarks = null, userId = null, options = {}) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -235,26 +235,30 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     let existingBalance = await getStockBalanceByItem(itemCode);
 
     let newBalance = 0;
-    const matName = existingBalance?.material_name || null;
-    const matType = existingBalance?.material_type || null;
+    const matName = options.materialName || existingBalance?.material_name || null;
+    const matType = options.materialType || existingBalance?.material_type || null;
+    const warehouse = options.warehouse || null;
+    const valuationRate = options.valuationRate || 0;
 
     if (existingBalance) {
       const currentBalance = parseFloat(existingBalance.current_balance) || 0;
       const qty = parseFloat(quantity) || 0;
 
-      if (transactionType === 'IN') {
+      if (transactionType === 'IN' || transactionType === 'GRN_IN') {
         newBalance = currentBalance + qty;
       } else if (transactionType === 'OUT') {
         newBalance = Math.max(0, currentBalance - qty);
       } else if (transactionType === 'ADJUSTMENT' || transactionType === 'RETURN') {
         newBalance = currentBalance + qty;
+      } else {
+        newBalance = currentBalance;
       }
 
       await connection.execute(`
         INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [itemCode, matName, matType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
+        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, matName, matType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId, warehouse, valuationRate]);
 
       await connection.execute(`
         UPDATE stock_balance 
@@ -263,21 +267,21 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       `, [newBalance, itemCode]);
     } else {
       let newBalance = 0;
-      if (transactionType === 'IN') {
+      if (transactionType === 'IN' || transactionType === 'GRN_IN' || transactionType === 'ADJUSTMENT') {
         newBalance = parseFloat(quantity) || 0;
       }
 
       await connection.execute(`
         INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [itemCode, matName, matType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId]);
+        (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, matName, matType, transactionType, quantity, refDocType, refDocId, refDocNumber, newBalance, remarks, userId, warehouse, valuationRate]);
 
       await connection.execute(`
         INSERT INTO stock_balance 
-        (item_code, current_balance, material_name, material_type)
-        VALUES (?, ?, ?, ?)
-      `, [itemCode, newBalance, matName, matType]);
+        (item_code, current_balance, material_name, material_type, warehouse)
+        VALUES (?, ?, ?, ?, ?)
+      `, [itemCode, newBalance, matName, matType, warehouse]);
     }
 
     await connection.commit();

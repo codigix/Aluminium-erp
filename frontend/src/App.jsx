@@ -48,13 +48,14 @@ import ProductionPlan from './pages/ProductionPlan'
 import WorkOrder from './pages/WorkOrder'
 import WorkOrderForm from './pages/WorkOrderForm'
 import JobCard from './pages/JobCard'
+import StockEntries from './pages/StockEntries'
 import { FormControl, StatusBadge } from './components/ui.jsx'
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000')
 const API_HOST = API_BASE
 const isProduction = import.meta.env.PROD || window.location.hostname.includes('aluminiumerp.codigix.co');
-const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card']
+const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -152,14 +153,14 @@ const DEPARTMENT_MODULES = {
   QUALITY: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
   SHIPMENT: ['incoming-orders', 'dashboard'],
   ACCOUNTS: ['dashboard'],
-  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
+  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
   PROCUREMENT: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
   ADMIN: [
     'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations',
     'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet',
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
     'quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
-    'inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouses',
+    'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses',
     'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'dashboard'
   ]
 }
@@ -1004,6 +1005,7 @@ function App() {
     { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'cart', indent: true },
     { label: 'Purchase Receipt', moduleId: 'po-receipts', icon: 'inbox', indent: true },
     { label: 'GRN Management', moduleId: 'grn', icon: 'refresh', indent: true },
+    { label: 'Stock Entries', moduleId: 'stock-entries', icon: 'package', indent: true },
     { label: 'Stock Balance', moduleId: 'stock-balance', icon: 'scale', indent: true },
     { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book', indent: true },
     { label: 'Warehouses', moduleId: 'warehouses', icon: 'factory', indent: true },
@@ -1625,6 +1627,10 @@ function App() {
 
                 {activeModule === 'job-card' && (
                   <JobCard />
+                )}
+
+                {activeModule === 'stock-entries' && (
+                  <StockEntries />
                 )}
               </>
             )}

@@ -193,6 +193,44 @@ const POMaterialRequest = () => {
     }
   };
 
+  const handleDeleteRequest = async (id) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Delete Request?',
+        text: 'This action cannot be undone.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/material-requests/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          successToast("Request deleted successfully");
+          fetchRequests();
+        } else {
+          const error = await response.json();
+          errorToast(error.message || "Failed to delete request");
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast("Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const statusCounts = useMemo(() => {
     const counts = {
       total: requests.length,
@@ -200,10 +238,11 @@ const POMaterialRequest = () => {
       approved: 0,
       processing: 0,
       fulfilled: 0,
+      completed: 0,
       cancelled: 0
     };
     requests.forEach(req => {
-      const status = (req.status || 'draft').toLowerCase();
+      const status = (req.status || 'DRAFT').toLowerCase();
       if (counts[status] !== undefined) counts[status]++;
     });
     return counts;
@@ -237,7 +276,7 @@ const POMaterialRequest = () => {
       key: 'status',
       label: 'Status',
       sortable: true,
-      render: (val) => <StatusBadge status={val || 'Draft'} />
+      render: (val) => <StatusBadge status={val || 'DRAFT'} />
     },
     {
       key: 'required_by',
@@ -267,6 +306,15 @@ const POMaterialRequest = () => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </button>
+          <button 
+            onClick={() => handleDeleteRequest(row.id)}
+            className="p-1 hover:bg-rose-50 rounded text-rose-400"
+            title="Delete Request"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -364,13 +412,14 @@ const POMaterialRequest = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-7 gap-4 mb-6">
           {[
             { label: 'Total Requests', count: statusCounts.total, icon: '📋', color: 'indigo', active: true },
             { label: 'Draft', count: statusCounts.draft, icon: '📝', color: 'slate' },
             { label: 'Approved', count: statusCounts.approved, icon: '🛡️', color: 'blue' },
             { label: 'Processing', count: statusCounts.processing, icon: '⚙️', color: 'purple' },
             { label: 'Fulfilled', count: statusCounts.fulfilled, icon: '✅', color: 'emerald' },
+            { label: 'Completed', count: statusCounts.completed, icon: '✔️', color: 'emerald' },
             { label: 'Cancelled', count: statusCounts.cancelled, icon: '❌', color: 'rose' }
           ].map((card, idx) => (
             <div key={idx} className={`bg-white p-4 rounded-2xl border ${card.active ? 'border-indigo-200 ring-4 ring-indigo-50' : 'border-slate-100 hover:border-slate-200'} transition-all cursor-pointer group`}>

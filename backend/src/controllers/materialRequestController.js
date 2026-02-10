@@ -46,7 +46,10 @@ const materialRequestController = {
                COALESCE(mri.uom, sb.unit) as uom
         FROM material_request_items mri
         LEFT JOIN (
-          SELECT item_code, material_name, item_description, unit 
+          SELECT item_code, 
+                 MAX(material_name) as material_name, 
+                 MAX(item_description) as item_description, 
+                 MAX(unit) as unit 
           FROM stock_balance 
           GROUP BY item_code
         ) sb ON mri.item_code = sb.item_code
@@ -85,9 +88,11 @@ const materialRequestController = {
     try {
       const { id } = req.params;
       const { status } = req.body;
-      await pool.query('UPDATE material_requests SET status = ? WHERE id = ?', [status, id]);
-      res.json({ message: `Material Request status updated to ${status}` });
+      const normalizedStatus = status.toUpperCase();
+      await pool.query('UPDATE material_requests SET status = ? WHERE id = ?', [normalizedStatus, id]);
+      res.json({ message: `Material Request status updated to ${normalizedStatus}` });
     } catch (error) {
+      console.error('Error in updateStatus:', error);
       res.status(500).json({ message: error.message });
     }
   },
@@ -126,7 +131,7 @@ const materialRequestController = {
 
       const [result] = await connection.query(
         'INSERT INTO material_requests (mr_number, department, requested_by, required_by, purpose, notes, status, target_warehouse, source_warehouse) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [mrNumber, department, requesterId, requiredByDate, purpose, notes, 'Draft', targetWh, sourceWh]
+        [mrNumber, department, requesterId, requiredByDate, purpose, notes, 'DRAFT', targetWh, sourceWh]
       );
 
       const mrId = result.insertId;
@@ -150,6 +155,34 @@ const materialRequestController = {
     } catch (error) {
       await connection.rollback();
       console.error('Error creating material request:', error);
+      res.status(500).json({ message: error.message });
+    } finally {
+      connection.release();
+    }
+  },
+
+  delete: async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const { id } = req.params;
+
+      // Delete items first
+      await connection.query('DELETE FROM material_request_items WHERE mr_id = ?', [id]);
+      
+      // Delete request
+      const [result] = await connection.query('DELETE FROM material_requests WHERE id = ?', [id]);
+
+      if (result.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(404).json({ message: 'Material Request not found' });
+      }
+
+      await connection.commit();
+      res.json({ message: 'Material Request deleted successfully' });
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error deleting material request:', error);
       res.status(500).json({ message: error.message });
     } finally {
       connection.release();

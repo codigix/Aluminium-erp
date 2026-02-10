@@ -460,6 +460,38 @@ CREATE TABLE IF NOT EXISTS po_receipt_items (
   FOREIGN KEY (receipt_id) REFERENCES po_receipts(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS stock_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  entry_no VARCHAR(50) UNIQUE NOT NULL,
+  entry_type ENUM('Material Receipt', 'Material Issue', 'Material Transfer', 'Material Adjustment') NOT NULL,
+  purpose VARCHAR(255),
+  from_warehouse_id INT,
+  to_warehouse_id INT,
+  status ENUM('draft', 'submitted', 'cancelled') DEFAULT 'draft',
+  entry_date DATE NOT NULL,
+  grn_id INT,
+  remarks TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_by INT,
+  FOREIGN KEY (from_warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL,
+  FOREIGN KEY (to_warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL,
+  FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS stock_entry_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  stock_entry_id INT NOT NULL,
+  item_code VARCHAR(100) NOT NULL,
+  quantity DECIMAL(12, 3) NOT NULL,
+  uom VARCHAR(20),
+  batch_no VARCHAR(100),
+  valuation_rate DECIMAL(12, 2) DEFAULT 0,
+  amount DECIMAL(14, 2) DEFAULT 0,
+  FOREIGN KEY (stock_entry_id) REFERENCES stock_entries(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS grn_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   grn_id INT NOT NULL,

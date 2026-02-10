@@ -30,35 +30,36 @@ const createGRNWithItems = async (req, res, next) => {
     const grn = await grnService.createGRN(po.po_number, grnDate || new Date(), 0, notes, receiptId || null);
 
     const grnItemResults = [];
+    const itemErrors = [];
     let totalAcceptedQty = 0;
-    let totalRejectedQty = 0;
     const pool = require('../config/db');
 
     for (const item of items) {
       try {
         let poItemId = item.poItemId;
+        const itemCode = item.itemCode || item.item_code;
 
         const [poItemResult] = await pool.query(
           'SELECT id FROM purchase_order_items WHERE item_code = ? AND purchase_order_id = ?',
-          [item.itemCode, poId]
+          [itemCode, poId]
         );
 
         if (poItemResult.length > 0) {
           poItemId = poItemResult[0].id;
-        } else {
-          console.warn(`Creating missing purchase_order_item for: ${item.itemCode}`);
+        } else if (!poItemId) {
+          console.warn(`Creating missing purchase_order_item for: ${itemCode}`);
           const [insertResult] = await pool.execute(
             `INSERT INTO purchase_order_items 
              (purchase_order_id, item_code, description, material_name, material_type, drawing_no, quantity, unit, unit_rate, amount) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               poId, 
-              item.itemCode, 
+              itemCode || 'UNKNOWN', 
               item.description || '', 
               item.materialName || null,
               item.materialType || null,
               item.drawingNo || null,
-              item.poQty, 
+              item.poQty || 0, 
               'NOS', 
               0, 
               0
@@ -70,28 +71,38 @@ const createGRNWithItems = async (req, res, next) => {
         const grnItem = await grnItemService.createGRNItem(
           grn.id,
           poItemId,
-          item.poQty,
-          item.acceptedQty,
+          item.poQty || 0,
+          item.acceptedQty || 0,
           item.remarks
         );
 
         grnItemResults.push(grnItem);
         totalAcceptedQty += item.acceptedQty || 0;
 
-        await inventoryPostingService.postInventoryFromGRN(
-          grn.id,
-          poItemId,
-          item.acceptedQty || 0,
-          0,
-          grn.po_number
-        );
+        try {
+          await inventoryPostingService.postInventoryFromGRN(
+            grn.id,
+            poItemId,
+            item.acceptedQty || 0,
+            0,
+            grn.po_number
+          );
+        } catch (invError) {
+          console.error(`Inventory posting failed for ${itemCode}:`, invError.message);
+          // Non-blocking but record it
+        }
       } catch (itemError) {
-        console.error(`Error creating GRN item for ${item.itemCode}:`, itemError.message);
-        grnItemResults.push({
-          itemCode: item.itemCode,
+        console.error(`Error creating GRN item for ${item.itemCode || item.item_code}:`, itemError.message);
+        itemErrors.push({
+          itemCode: item.itemCode || item.item_code,
           error: itemError.message
         });
       }
+    }
+
+    if (grnItemResults.length === 0 && items.length > 0) {
+      // If we failed to create ANY items but some were requested, throw error
+      throw new Error(`Failed to create any GRN items: ${itemErrors.map(e => e.error).join(', ')}`);
     }
 
     await poBalanceService.updatePOStatus(poId);

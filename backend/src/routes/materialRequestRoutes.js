@@ -9,5 +9,6 @@ router.get('/', materialRequestController.getAll);
 router.get('/:id', materialRequestController.getById);
 router.patch('/:id/status', materialRequestController.updateStatus);
 router.post('/', materialRequestController.create);
+router.delete('/:id', materialRequestController.delete);
 
 module.exports = router;
