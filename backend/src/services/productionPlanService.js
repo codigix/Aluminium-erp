@@ -892,7 +892,8 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
       
       const code = (itemCode || name).trim();
       const targetWarehouse = warehouse || defaultWarehouse;
-      const key = `${code.toUpperCase()}|${targetWarehouse}`;
+      // Aggregation key: use both code and name to distinguish items even if they share codes
+      const key = `${code.toUpperCase()}|${(name || code).trim().toUpperCase()}`;
       
       // Correct Item Type Mapping
       const mapItemType = (code, cat) => {
