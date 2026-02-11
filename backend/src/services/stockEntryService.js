@@ -172,17 +172,25 @@ const submitStockEntry = async (id, userId) => {
 };
 
 const processStockMovement = async (entryId, connection, userId) => {
+  console.log(`[StockMovement] Processing movement for entry: ${entryId}`);
   const [entries] = await connection.query('SELECT * FROM stock_entries WHERE id = ?', [entryId]);
+  if (entries.length === 0) {
+    console.error(`[StockMovement] Entry ${entryId} not found`);
+    throw new Error('Stock Entry not found');
+  }
   const entry = entries[0];
   const [items] = await connection.query('SELECT * FROM stock_entry_items WHERE stock_entry_id = ?', [entryId]);
+  console.log(`[StockMovement] Found ${items.length} items to process`);
 
   const [fromWh] = entry.from_warehouse_id ? await connection.query('SELECT warehouse_name FROM warehouses WHERE id = ?', [entry.from_warehouse_id]) : [[]];
   const [toWh] = entry.to_warehouse_id ? await connection.query('SELECT warehouse_name FROM warehouses WHERE id = ?', [entry.to_warehouse_id]) : [[]];
 
   const fromWarehouseName = fromWh[0]?.warehouse_name;
   const toWarehouseName = toWh[0]?.warehouse_name;
+  console.log(`[StockMovement] From: ${fromWarehouseName}, To: ${toWarehouseName}`);
 
   for (const item of items) {
+    console.log(`[StockMovement] Item: ${item.item_code}, Qty: ${item.quantity}, Type: ${entry.entry_type}`);
     if (entry.entry_type === 'Material Receipt') {
       await stockService.addStockLedgerEntry(
         item.item_code,
@@ -193,7 +201,7 @@ const processStockMovement = async (entryId, connection, userId) => {
         entry.entry_no,
         `Receipt into ${toWarehouseName || 'Warehouse'}. ${entry.remarks || ''}`,
         userId,
-        { warehouse: toWarehouseName, valuationRate: item.valuation_rate }
+        { connection, warehouse: toWarehouseName, valuationRate: item.valuation_rate }
       );
     } else if (entry.entry_type === 'Material Issue') {
       await stockService.addStockLedgerEntry(
@@ -250,16 +258,40 @@ const processStockMovement = async (entryId, connection, userId) => {
 };
 
 const deleteStockEntry = async (id) => {
-  const [entries] = await pool.query('SELECT status FROM stock_entries WHERE id = ?', [id]);
-  if (entries.length === 0) throw new Error('Stock Entry not found');
-  if (entries[0].status === 'submitted') throw new Error('Cannot delete submitted stock entry');
-  
-  await pool.query('DELETE FROM stock_entries WHERE id = ?', [id]);
-  return { success: true };
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [entries] = await connection.query('SELECT status FROM stock_entries WHERE id = ?', [id]);
+    if (entries.length === 0) throw new Error('Stock Entry not found');
+    
+    // If submitted, we must reverse the stock ledger entries first
+    if (entries[0].status === 'submitted') {
+      const [ledgerEntries] = await connection.query(
+        'SELECT id FROM stock_ledger WHERE reference_doc_type = "STOCK_ENTRY" AND reference_doc_id = ?',
+        [id]
+      );
+      
+      for (const le of ledgerEntries) {
+        await stockService.deleteStockLedgerEntry(le.id, connection);
+      }
+    }
+    
+    await connection.execute('DELETE FROM stock_entries WHERE id = ?', [id]);
+    
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
-const getStockEntryItemsFromGRN = async (grnId) => {
-  const [items] = await pool.query(`
+const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
+  const executor = connection || pool;
+  const [items] = await executor.query(`
     SELECT 
       poi.item_code,
       gi.accepted_qty as quantity,
@@ -267,10 +299,110 @@ const getStockEntryItemsFromGRN = async (grnId) => {
       poi.unit_rate as valuation_rate
     FROM grn_items gi
     JOIN purchase_order_items poi ON gi.po_item_id = poi.id
-    WHERE gi.grn_id = ? AND gi.is_approved = 1
+    WHERE gi.grn_id = ?
   `, [grnId]);
   
   return items;
+};
+
+const autoCreateStockEntryFromGRN = async (grnId, userId) => {
+  console.log(`[StockEntry] Auto-creating for GRN: ${grnId}, User: ${userId}`);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get GRN details
+    const [grns] = await connection.query('SELECT * FROM grns WHERE id = ?', [grnId]);
+    if (grns.length === 0) throw new Error('GRN not found');
+    const grn = grns[0];
+
+    // 2. Get default warehouse ID (Consumables Store or similar)
+    const [allWhs] = await connection.query('SELECT id, warehouse_name FROM warehouses');
+    console.log(`[StockEntry] Available warehouses: ${allWhs.map(w => w.warehouse_name).join(', ')}`);
+
+    const preferredWh = allWhs.find(w => w.warehouse_name === 'Consumables Store' || w.warehouse_name === 'Main Warehouse' || w.warehouse_name === 'RM-HOLD');
+    const toWarehouseId = preferredWh ? preferredWh.id : (allWhs.length > 0 ? allWhs[0].id : null);
+    
+    console.log(`[StockEntry] Selected warehouse ID: ${toWarehouseId} (${preferredWh?.warehouse_name || allWhs[0]?.warehouse_name || 'None'})`);
+
+    // 3. Get items from GRN
+    const items = await getStockEntryItemsFromGRN(grnId, connection);
+    console.log(`[StockEntry] Found ${items.length} items in GRN`);
+
+    if (items.length === 0) {
+      console.log('[StockEntry] No items found, skipping');
+      await connection.rollback();
+      return { success: false, message: 'No items in GRN' };
+    }
+
+    // 4. Create Stock Entry
+    const entryNo = await generateEntryNo('Material Receipt');
+    console.log(`[StockEntry] Generated Entry No: ${entryNo}`);
+
+    const [result] = await connection.execute(
+      `INSERT INTO stock_entries 
+       (entry_no, entry_type, purpose, to_warehouse_id, entry_date, grn_id, remarks, created_by, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entryNo,
+        'Material Receipt',
+        'Stock Receipt from GRN',
+        toWarehouseId,
+        grn.grn_date || new Date(),
+        grnId,
+        `Auto-created from GRN ${grn.po_number}`,
+        userId,
+        'submitted'
+      ]
+    );
+
+    const entryId = result.insertId;
+    console.log(`[StockEntry] Created Entry ID: ${entryId}`);
+
+    // 5. Create Stock Entry Items
+    let itemsAdded = 0;
+    for (const item of items) {
+      if (parseFloat(item.quantity) <= 0) {
+        console.log(`[StockEntry] Skipping item ${item.item_code} with 0 quantity`);
+        continue;
+      }
+      
+      await connection.execute(
+        `INSERT INTO stock_entry_items 
+         (stock_entry_id, item_code, quantity, uom, valuation_rate, amount)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          entryId,
+          item.item_code,
+          item.quantity,
+          item.uom || 'NOS',
+          item.valuation_rate || 0,
+          (item.quantity * (item.valuation_rate || 0))
+        ]
+      );
+      itemsAdded++;
+    }
+
+    if (itemsAdded === 0) {
+      console.log('[StockEntry] No items with positive quantity, skipping');
+      await connection.rollback();
+      return { success: false, message: 'No items with positive quantity' };
+    }
+
+    // 6. Process Stock Movement (Updates Ledger and Balance)
+    await processStockMovement(entryId, connection, userId);
+    console.log('[StockEntry] Stock movement processed');
+
+    await connection.commit();
+    console.log('[StockEntry] Transaction committed successfully');
+    return { success: true, entryId, entryNo };
+  } catch (error) {
+    await connection.rollback();
+    console.error('[StockEntry] Error auto-creating stock entry:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 module.exports = {
@@ -279,5 +411,6 @@ module.exports = {
   createStockEntry,
   submitStockEntry,
   deleteStockEntry,
-  getStockEntryItemsFromGRN
+  getStockEntryItemsFromGRN,
+  autoCreateStockEntryFromGRN
 };

@@ -649,7 +649,7 @@ const ProductionPlan = () => {
           ...op,
           operation_name: op.operation_name || op.name,
           workstation: op.workstation || op.workstation_name,
-          base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0'),
+          base_hour: op.base_hour ?? op.base_time ?? op.cycle_time_min ?? 0,
           itemCode: op.itemCode || op.source_item
         }))
       : newPlan.items.flatMap(item => (item.operations || []).map(op => ({ 
@@ -657,7 +657,7 @@ const ProductionPlan = () => {
           itemCode: op.source_item || op.itemCode || item.itemCode || item.item_code,
           operation_name: op.operation_name || op.name,
           workstation: op.workstation || op.workstation_name,
-          base_hour: op.base_hour ?? op.base_time ?? (op.cycle_time_min ? (parseFloat(op.cycle_time_min) / 60).toFixed(2) : '1.0'),
+          base_hour: op.base_hour ?? op.base_time ?? op.cycle_time_min ?? 0,
           source_fg: item.itemCode
         })));
 

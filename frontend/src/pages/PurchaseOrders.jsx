@@ -8,6 +8,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const poStatusColors = {
   DRAFT: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-50 text-blue-700', label: 'draft', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
+  PO_REQUEST: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', badge: 'bg-amber-50 text-amber-700', label: 'po request', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
   ORDERED: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-50 text-indigo-700', label: 'ordered', icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
   SENT: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-50 text-indigo-700', label: 'sent', icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
   ACKNOWLEDGED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-50 text-cyan-700', label: 'acknowledged', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -64,13 +65,15 @@ const PurchaseOrders = () => {
   const [editFormData, setEditFormData] = useState({
     expectedDeliveryDate: '',
     notes: '',
-    status: ''
+    status: '',
+    vendorId: ''
   });
 
   const [vendors, setVendors] = useState([]);
   const [stockItems, setStockItems] = useState([]);
   const [showManualCreateModal, setShowManualCreateModal] = useState(false);
   const [manualFormData, setManualFormData] = useState({
+    id: null,
     vendorId: '',
     expectedDeliveryDate: '',
     notes: '',
@@ -176,12 +179,14 @@ const PurchaseOrders = () => {
       const subtotal = manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
       
       const payload = {
-        vendor_id: parseInt(manualFormData.vendorId),
-        expected_delivery_date: manualFormData.expectedDeliveryDate || null,
+        vendorId: parseInt(manualFormData.vendorId),
+        expectedDeliveryDate: manualFormData.expectedDeliveryDate || null,
         notes: manualFormData.notes || null,
         currency: manualFormData.currency?.split(' ')[0] || 'INR',
         total_amount: subtotal,
+        status: manualFormData.id ? 'DRAFT' : undefined,
         items: manualFormData.items.map(item => ({
+          id: item.id || undefined,
           item_code: item.item_code,
           description: item.description,
           quantity: parseFloat(item.quantity) || 0,
@@ -191,8 +196,13 @@ const PurchaseOrders = () => {
         }))
       };
 
-      const response = await fetch(`${API_BASE}/purchase-orders`, {
-        method: 'POST',
+      const url = manualFormData.id 
+        ? `${API_BASE}/purchase-orders/${manualFormData.id}`
+        : `${API_BASE}/purchase-orders`;
+      const method = manualFormData.id ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -202,12 +212,12 @@ const PurchaseOrders = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create manual PO');
+        throw new Error(errorData.message || `Failed to ${manualFormData.id ? 'update' : 'create'} PO`);
       }
 
-      successToast('Purchase Order created successfully');
+      successToast(`Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
       setShowManualCreateModal(false);
-      setManualFormData({ vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+      setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
       fetchPOs();
       fetchStats();
     } catch (error) {
@@ -415,14 +425,36 @@ const PurchaseOrders = () => {
 
       if (!response.ok) throw new Error('Failed to fetch PO details');
       const data = await response.json();
-      setSelectedPO(data);
-      setPoItems(data.items || []);
-      setEditFormData({
-        expectedDeliveryDate: data.expected_delivery_date || '',
-        notes: data.notes || '',
-        status: data.status || ''
-      });
-      setShowEditModal(true);
+      
+      if (data.status === 'PO_REQUEST') {
+        setManualFormData({
+          id: data.id,
+          vendorId: data.vendor_id || '',
+          expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
+          notes: data.notes || '',
+          currency: data.currency ? `${data.currency} (${data.currency === 'INR' ? 'Indian Rupee' : 'US Dollar'})` : 'INR (Indian Rupee)',
+          items: (data.items || []).map(item => ({
+            id: item.id,
+            item_code: item.item_code || '',
+            description: item.description || '',
+            quantity: item.quantity || 0,
+            unit: item.unit || 'NOS',
+            rate: item.unit_rate || item.rate || 0,
+            amount: item.amount || (item.quantity * (item.unit_rate || item.rate || 0))
+          }))
+        });
+        setShowManualCreateModal(true);
+      } else {
+        setSelectedPO(data);
+        setPoItems(data.items || []);
+        setEditFormData({
+          expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
+          notes: data.notes || '',
+          status: data.status || '',
+          vendorId: data.vendor_id || ''
+        });
+        setShowEditModal(true);
+      }
     } catch (error) {
       errorToast(error.message || 'Failed to load PO details');
     }
@@ -471,6 +503,7 @@ const PurchaseOrders = () => {
           poNumber: selectedPO.po_number,
           expectedDeliveryDate: editFormData.expectedDeliveryDate || null,
           notes: editFormData.notes,
+          vendorId: editFormData.vendorId || null,
           items: poItems
         })
       });
@@ -520,6 +553,12 @@ const PurchaseOrders = () => {
   };
 
   const handleApprovePO = async (poId) => {
+    const po = pos.find(p => p.id === poId);
+    if (po && po.status === 'PO_REQUEST' && !po.vendor_id) {
+      // If it's a request without a vendor, open the edit flow instead of approving
+      return handleEditPO(poId);
+    }
+
     try {
       const result = await Swal.fire({
         title: 'Approve Purchase Order?',
@@ -582,8 +621,12 @@ const PurchaseOrders = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col">
-          <span className="font-bold text-slate-700 text-sm tracking-tight">{val}</span>
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Active Vendor</span>
+          <span className={`font-bold text-sm tracking-tight ${!val ? 'text-rose-500 italic' : 'text-slate-700'}`}>
+            {val || 'Vendor Not Selected'}
+          </span>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+            {val ? 'Active Vendor' : 'Action Required'}
+          </span>
         </div>
       )
     },
@@ -660,7 +703,7 @@ const PurchaseOrders = () => {
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-          {row.status === 'DRAFT' && (
+          {(row.status === 'DRAFT' || row.status === 'PO_REQUEST') && (
             <button
               onClick={() => handleApprovePO(row.id)}
               className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all border border-emerald-50 shadow-sm active:scale-90"
@@ -809,7 +852,10 @@ const PurchaseOrders = () => {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           </button>
           <button
-            onClick={() => setShowManualCreateModal(true)}
+            onClick={() => {
+              setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+              setShowManualCreateModal(true);
+            }}
             className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
@@ -875,6 +921,7 @@ const PurchaseOrders = () => {
             className="text-sm font-bold text-blue-600 outline-none bg-transparent cursor-pointer"
           >
             <option value="ALL">All Orders</option>
+            <option value="PO_REQUEST">Requests</option>
             <option value="DRAFT">Draft</option>
             <option value="ORDERED">Ordered</option>
             <option value="SENT">Sent</option>
@@ -908,9 +955,12 @@ const PurchaseOrders = () => {
           <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
             {/* Modal Header */}
             <div className="flex justify-between items-center p-6 border-b border-slate-50">
-              <h2 className="text-xl font-bold text-slate-800">Create New Purchase Order</h2>
+              <h2 className="text-xl font-bold text-slate-800">{manualFormData.id ? 'Edit Purchase Order Request' : 'Create New Purchase Order'}</h2>
               <button 
-                onClick={() => setShowManualCreateModal(false)}
+                onClick={() => {
+                  setShowManualCreateModal(false);
+                  setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+                }}
                 className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -1121,7 +1171,10 @@ const PurchaseOrders = () => {
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowManualCreateModal(false)}
+                  onClick={() => {
+                    setShowManualCreateModal(false);
+                    setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+                  }}
                   className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
                 >
                   Cancel
@@ -1131,7 +1184,7 @@ const PurchaseOrders = () => {
                   className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Create Purchase Order
+                  {manualFormData.id ? 'Save Changes' : 'Create Purchase Order'}
                 </button>
               </div>
             </form>
@@ -1344,9 +1397,30 @@ const PurchaseOrders = () => {
                     className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-blue-600 font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider w-24">Vendor:</span>
-                  <span className="text-sm font-bold text-slate-700">{selectedPO.vendor_name}</span>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vendor:</span>
+                  {selectedPO.status === 'PO_REQUEST' ? (
+                    <select
+                      value={editFormData.vendorId}
+                      onChange={(e) => {
+                        const newVendorId = e.target.value;
+                        setEditFormData({ 
+                          ...editFormData, 
+                          vendorId: newVendorId,
+                          status: newVendorId ? 'DRAFT' : 'PO_REQUEST'
+                        });
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20"
+                      required
+                    >
+                      <option value="">-- Select Vendor --</option>
+                      {vendors.map(v => (
+                        <option key={v.id} value={v.id}>{v.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-sm font-bold text-slate-700">{selectedPO.vendor_name}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider w-24">Amount:</span>

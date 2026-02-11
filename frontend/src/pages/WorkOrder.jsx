@@ -283,7 +283,7 @@ const WorkOrder = () => {
                       <div className="max-w-[140px] mx-auto">
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-[10px] font-bold text-slate-900">
-                            {wo.total_job_cards > 0 ? 100 : 80}% COMPLETE
+                            {wo.total_job_cards > 0 ? Math.round((wo.completed_job_cards / wo.total_job_cards) * 100) : 0}% COMPLETE
                           </span>
                           <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-tighter">
                             {wo.completed_job_cards || 0}/{wo.total_job_cards || 0} OPS
@@ -291,8 +291,12 @@ const WorkOrder = () => {
                         </div>
                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                           <div 
-                            className={`h-full rounded-full transition-all duration-500 ${wo.total_job_cards > 0 ? 'bg-emerald-500' : 'bg-indigo-500'}`} 
-                            style={{ width: `${wo.total_job_cards > 0 ? 100 : 80}%` }}
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              wo.total_job_cards > 0 && (wo.completed_job_cards / wo.total_job_cards) === 1 
+                                ? 'bg-emerald-500' 
+                                : wo.total_job_cards > 0 ? 'bg-indigo-500' : 'bg-slate-200'
+                            }`} 
+                            style={{ width: `${wo.total_job_cards > 0 ? (wo.completed_job_cards / wo.total_job_cards) * 100 : 0}%` }}
                           ></div>
                         </div>
                       </div>

@@ -152,57 +152,27 @@ const POMaterialRequest = () => {
 
   const handleCreatePO = async (mr) => {
     try {
-      // Fetch vendors first
+      setLoading(true);
       const token = localStorage.getItem('authToken');
-      const vendorRes = await fetch(`${API_BASE}/vendors`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!vendorRes.ok) throw new Error("Failed to fetch vendors");
-      const vendors = await vendorRes.json();
-
-      const { value: vendorId } = await Swal.fire({
-        title: 'Select Vendor',
-        input: 'select',
-        inputOptions: vendors.reduce((acc, v) => ({ ...acc, [v.id]: v.vendor_name }), {}),
-        inputPlaceholder: 'Select a vendor',
-        showCancelButton: true,
-        confirmButtonColor: '#4f46e5',
-        inputValidator: (value) => {
-          if (!value) return 'You need to select a vendor!';
-        }
+      const response = await fetch(`${API_BASE}/purchase-orders`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mrId: mr.id
+        })
       });
 
-      if (vendorId) {
-        setLoading(true);
-        const response = await fetch(`${API_BASE}/purchase-orders`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            mrId: mr.id,
-            vendorId: vendorId,
-            items: mr.items.map(item => ({
-              item_code: item.item_code,
-              description: item.name,
-              quantity: item.quantity,
-              unit: item.uom,
-              rate: 0 // Will be set in PO later
-            }))
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          successToast(`Purchase Order ${data.po_number} created successfully`);
-          setShowViewModal(false);
-          fetchRequests();
-        } else {
-          const err = await response.json();
-          errorToast(err.message || "Failed to create Purchase Order");
-        }
+      if (response.ok) {
+        const data = await response.json();
+        successToast(`Purchase Order Request created successfully`);
+        setShowViewModal(false);
+        fetchRequests();
+      } else {
+        const err = await response.json();
+        errorToast(err.message || "Failed to create Purchase Order Request");
       }
     } catch (error) {
       console.error('Error:', error);
@@ -222,8 +192,11 @@ const POMaterialRequest = () => {
       if (response.ok) {
         const data = await response.json();
         setSelectedRequest(data);
-        // Automatically set fulfillment warehouse if source_warehouse is available
-        if (data.source_warehouse) {
+        // Use suggested warehouse if available, else source_warehouse, else default
+        const suggestedWh = data.items?.find(i => i.suggested_warehouse)?.suggested_warehouse;
+        if (suggestedWh) {
+          setFulfillmentWarehouse(suggestedWh);
+        } else if (data.source_warehouse) {
           setFulfillmentWarehouse(data.source_warehouse);
         } else {
           setFulfillmentWarehouse('Consumables Store'); // Default fallback
@@ -948,8 +921,7 @@ const POMaterialRequest = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {selectedRequest?.items?.map((item, idx) => {
-                      const totalStock = item.stocks ? item.stocks.reduce((acc, st) => acc + (Number(st.current_stock) || 0), 0) : 0;
-                      const isAvailable = totalStock >= Number(item.quantity);
+                      const isAvailable = item.fulfillment_source === 'STOCK';
                       
                       return (
                         <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
@@ -979,13 +951,14 @@ const POMaterialRequest = () => {
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <p className={`text-sm font-bold ${totalStock > 0 ? 'text-blue-600' : 'text-rose-500'}`}>
-                                {totalStock.toFixed(totalStock % 1 === 0 ? 0 : 2)} {item.uom}
+                              <p className={`text-sm font-bold ${item.total_stock > 0 ? 'text-indigo-600' : 'text-rose-500'}`}>
+                                {Number(item.total_stock || 0).toFixed(Number(item.total_stock) % 1 === 0 ? 0 : 2)} {item.uom}
                               </p>
-                              <div className="flex flex-col items-center mt-1">
+                              <div className="flex flex-col items-center mt-1 gap-1">
                                 {item.stocks?.map((st, sidx) => (
-                                  <span key={sidx} className="text-[10px] font-medium text-blue-500/80">
+                                  <span key={sidx} className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium ${st.warehouse_name === item.suggested_warehouse ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'text-slate-500'}`}>
                                     {st.warehouse_name}: {Number(st.current_stock).toFixed(Number(st.current_stock) % 1 === 0 ? 0 : 1)}
+                                    {st.warehouse_name === item.suggested_warehouse && <span className="ml-1 text-[8px] font-bold uppercase tracking-tighter">(Suggested)</span>}
                                   </span>
                                 ))}
                               </div>
@@ -1016,57 +989,65 @@ const POMaterialRequest = () => {
             {/* Right Side - Fulfillment & Summary */}
             <div className="w-96 space-y-6">
               {/* Fulfillment Source */}
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <div className={`p-5 border-b border-slate-50 flex justify-between items-center transition-colors ${selectedRequest?.all_items_available ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                    </div>
-                    <h4 className="text-xs font-bold text-white uppercase tracking-widest">FULFILLMENT SOURCE</h4>
-                  </div>
-                  <span className="px-2 py-0.5 bg-white/20 text-white rounded text-[9px] font-bold uppercase tracking-wider">
-                    {selectedRequest?.all_items_available ? 'STOCK AVAILABLE' : 'ACTION REQUIRED'}
-                  </span>
-                </div>
-                <div className="p-6 space-y-5">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Select Warehouse</label>
-                      <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 uppercase">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                        Stock Available
+              {(() => {
+                const allAvailable = selectedRequest?.items?.every(item => item.fulfillment_source === 'STOCK');
+                return (
+                  <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                    <div className={`p-5 border-b border-slate-50 flex justify-between items-center transition-colors ${allAvailable ? 'bg-emerald-500' : 'bg-amber-500'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        </div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-widest">FULFILLMENT SOURCE</h4>
+                      </div>
+                      <span className="px-2 py-0.5 bg-white/20 text-white rounded text-[9px] font-bold uppercase tracking-wider">
+                        {allAvailable ? 'STOCK AVAILABLE' : 'ACTION REQUIRED'}
                       </span>
                     </div>
-                    <div className="relative group">
-                      <select 
-                        value={fulfillmentWarehouse}
-                        onChange={(e) => handleWarehouseChange(e.target.value)}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium text-slate-700 outline-none focus:border-amber-400 transition-all appearance-none group-hover:border-slate-200"
-                      >
-                        <option value="">Select Warehouse...</option>
-                        {warehouses.map(wh => (
-                          <option key={wh.id} value={wh.warehouse_name}>{wh.warehouse_name}</option>
-                        ))}
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-amber-500 transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    <div className="p-6 space-y-5">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Select Warehouse</label>
+                          <span className={`flex items-center gap-1.5 text-[10px] font-bold ${allAvailable ? 'text-emerald-500' : 'text-amber-500'} uppercase`}>
+                            {allAvailable ? (
+                              <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>Stock Available</>
+                            ) : (
+                              <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>Partial Stock</>
+                            )}
+                          </span>
+                        </div>
+                        <div className="relative group">
+                          <select 
+                            value={fulfillmentWarehouse}
+                            onChange={(e) => handleWarehouseChange(e.target.value)}
+                            className={`w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium text-slate-700 outline-none focus:border-${allAvailable ? 'emerald' : 'amber'}-400 transition-all appearance-none group-hover:border-slate-200`}
+                          >
+                            <option value="">Select Warehouse...</option>
+                            {warehouses.map(wh => (
+                              <option key={wh.id} value={wh.warehouse_name}>{wh.warehouse_name}</option>
+                            ))}
+                          </select>
+                          <div className={`absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-${allAvailable ? 'emerald' : 'amber'}-500 transition-colors`}>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                          </div>
+                        </div>
+                      </div>
+                      <div className={`${allAvailable ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'} rounded-2xl p-4 border flex gap-4 transition-colors`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${allAvailable ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+                          <svg className={`w-4 h-4 ${allAvailable ? 'text-emerald-600' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <p className={`text-[11px] font-medium leading-relaxed ${allAvailable ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {allAvailable 
+                            ? 'Full stock is available across warehouses. You can fulfill this request directly.' 
+                            : 'Stock is insufficient globally. A Purchase Order may be required for some items.'}
+                        </p>
                       </div>
                     </div>
                   </div>
-                  <div className={`${selectedRequest?.all_items_available ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'} rounded-2xl p-4 border flex gap-4 transition-colors`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${selectedRequest?.all_items_available ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-                      <svg className={`w-4 h-4 ${selectedRequest?.all_items_available ? 'text-emerald-600' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <p className={`text-[11px] font-medium leading-relaxed ${selectedRequest?.all_items_available ? 'text-emerald-700' : 'text-amber-700'}`}>
-                      {selectedRequest?.all_items_available 
-                        ? 'Full stock is available in this warehouse. You can fulfill this request directly from stock.' 
-                        : 'Stock is insufficient. You may need to create a Purchase Order or select another warehouse.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Request Summary */}
               <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">

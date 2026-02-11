@@ -30,10 +30,14 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
   };
 };
 
-const deleteStockLedgerEntry = async (id) => {
-  const connection = await pool.getConnection();
+const deleteStockLedgerEntry = async (id, externalConnection = null) => {
+  const connection = externalConnection || await pool.getConnection();
+  const shouldRelease = !externalConnection;
+  
   try {
-    await connection.beginTransaction();
+    if (shouldRelease) {
+      await connection.beginTransaction();
+    }
 
     const [entries] = await connection.query('SELECT item_code, warehouse FROM stock_ledger WHERE id = ?', [id]);
     if (entries.length === 0) {
@@ -54,13 +58,19 @@ const deleteStockLedgerEntry = async (id) => {
       WHERE item_code = ? AND (warehouse = ? OR (warehouse IS NULL AND ? IS NULL))
     `, [details.current_balance, item_code, warehouse, warehouse]);
 
-    await connection.commit();
+    if (shouldRelease) {
+      await connection.commit();
+    }
     return { success: true };
   } catch (error) {
-    await connection.rollback();
+    if (shouldRelease) {
+      await connection.rollback();
+    }
     throw error;
   } finally {
-    connection.release();
+    if (shouldRelease) {
+      connection.release();
+    }
   }
 };
 
@@ -239,12 +249,18 @@ const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, con
 };
 
 const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocType = null, refDocId = null, refDocNumber = null, remarks = null, userId = null, options = {}) => {
-  const connection = await pool.getConnection();
+  const connection = options.connection || await pool.getConnection();
+  const shouldRelease = !options.connection;
+  
   try {
-    await connection.beginTransaction();
+    if (shouldRelease) {
+      await connection.beginTransaction();
+    }
 
     const warehouse = options.warehouse || null;
     const valuationRate = options.valuationRate || 0;
+    const qcId = options.qcId || null;
+    const grnItemId = options.grnItemId || null;
     
     // Get existing balance for this item and warehouse
     let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, connection);
@@ -263,8 +279,42 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       newBalance = currentBalance;
     }
 
-    const matName = options.materialName || existingBalance?.material_name || null;
-    const matType = options.materialType || existingBalance?.material_type || null;
+    let matName = options.materialName || existingBalance?.material_name || null;
+    let matType = options.materialType || existingBalance?.material_type || null;
+    let drawingNo = options.drawingNo || existingBalance?.drawing_no || null;
+    let drawingId = options.drawingId || existingBalance?.drawing_id || null;
+
+    // Try to fetch name if still null
+    if (!matName) {
+      const [nameRows] = await connection.query(`
+        SELECT material_name, material_type, drawing_no, drawing_id 
+        FROM purchase_order_items 
+        WHERE item_code = ? AND material_name IS NOT NULL 
+        LIMIT 1
+      `, [itemCode]);
+      
+      if (nameRows.length > 0) {
+        matName = nameRows[0].material_name;
+        matType = nameRows[0].material_type;
+        drawingNo = drawingNo || nameRows[0].drawing_no;
+        drawingId = drawingId || nameRows[0].drawing_id;
+      } else {
+        // Try stock_ledger for historical data
+        const [ledgerRows] = await connection.query(`
+          SELECT material_name, material_type, drawing_no, drawing_id 
+          FROM stock_ledger 
+          WHERE item_code = ? AND material_name IS NOT NULL 
+          ORDER BY id DESC LIMIT 1
+        `, [itemCode]);
+        
+        if (ledgerRows.length > 0) {
+          matName = ledgerRows[0].material_name;
+          matType = ledgerRows[0].material_type;
+          drawingNo = drawingNo || ledgerRows[0].drawing_no;
+          drawingId = drawingId || ledgerRows[0].drawing_id;
+        }
+      }
+    }
 
     let qtyIn = 0;
     let qtyOut = 0;
@@ -281,9 +331,9 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Insert into stock_ledger
     await connection.execute(`
       INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, transaction_type, quantity, qty_in, qty_out, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [itemCode, matName, matType, transactionType, quantity, qtyIn, qtyOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate]);
+      (item_code, material_name, material_type, drawing_no, drawing_id, transaction_type, quantity, qty_in, qty_out, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [itemCode, matName, matType, drawingNo, drawingId, transactionType, quantity, qtyIn, qtyOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId]);
 
     const ledgerId = (await connection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
 
@@ -298,24 +348,30 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     if (existingBalance) {
       await connection.execute(`
         UPDATE stock_balance 
-        SET current_balance = ?, last_updated = CURRENT_TIMESTAMP
+        SET current_balance = ?, material_name = ?, material_type = ?, drawing_no = ?, drawing_id = ?, last_updated = CURRENT_TIMESTAMP
         WHERE id = ?
-      `, [newBalance, existingBalance.id]);
+      `, [newBalance, matName, matType, drawingNo, drawingId, existingBalance.id]);
     } else {
       await connection.execute(`
         INSERT INTO stock_balance 
-        (item_code, current_balance, material_name, material_type, warehouse, unit)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [itemCode, newBalance, matName, matType, warehouse, options.unit || 'NOS']);
+        (item_code, current_balance, material_name, material_type, drawing_no, drawing_id, warehouse, unit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [itemCode, newBalance, matName, matType, drawingNo, drawingId, warehouse, options.unit || 'NOS']);
     }
 
-    await connection.commit();
+    if (shouldRelease) {
+      await connection.commit();
+    }
     return { success: true };
   } catch (error) {
-    await connection.rollback();
+    if (shouldRelease) {
+      await connection.rollback();
+    }
     throw error;
   } finally {
-    connection.release();
+    if (shouldRelease) {
+      connection.release();
+    }
   }
 };
 
@@ -329,17 +385,7 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
     console.log(`[Stock] Creating entry for QC:${qcId}, GRN:${grnId}, Item:${itemCode}, Qty:${passQty}`);
 
-    const [poItemRows] = await useConnection.query(
-      `SELECT material_name, material_type, drawing_no, drawing_id FROM purchase_order_items poi
-       JOIN grn_items gi ON poi.id = gi.po_item_id
-       WHERE gi.id = ?`,
-      [grnItemId]
-    );
-    const material_name = poItemRows[0]?.material_name || null;
-    const material_type = poItemRows[0]?.material_type || null;
-    const drawing_no = poItemRows[0]?.drawing_no || null;
-    const drawing_id = poItemRows[0]?.drawing_id || null;
-
+    // Duplicate check
     const [existing] = await useConnection.query(
       `SELECT id FROM stock_ledger 
        WHERE reference_doc_id = ? 
@@ -357,48 +403,23 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
       return { success: true, duplicate: true };
     }
 
-    const [currentBalanceRow] = await useConnection.query(
-      `SELECT current_balance FROM stock_balance WHERE item_code = ? FOR UPDATE`,
-      [itemCode]
+    // Use addStockLedgerEntry for consistency and to ensure qty_in/qty_out are set
+    await addStockLedgerEntry(
+      itemCode,
+      'GRN_IN',
+      passQty,
+      'GRN',
+      grnId,
+      `GRN-${String(grnId).padStart(4, '0')}`,
+      'Auto-created from QC Pass',
+      null,
+      { 
+        connection: useConnection,
+        qcId: qcId,
+        grnItemId: grnItemId,
+        warehouse: 'RM-HOLD' // Default warehouse for GRN Receipt as per warehouseAllocationService
+      }
     );
-
-    let newBalance = 0;
-
-    if (currentBalanceRow.length > 0) {
-      newBalance = parseFloat(currentBalanceRow[0].current_balance) || 0;
-      newBalance += parseFloat(passQty) || 0;
-      console.log(`[Stock] Existing balance: ${currentBalanceRow[0].current_balance}, new: ${newBalance}`);
-
-      await useConnection.execute(
-        `INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, drawing_no, drawing_id, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemCode, material_name, material_type, drawing_no, drawing_id, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
-      );
-
-      await useConnection.execute(
-        `UPDATE stock_balance SET current_balance = ?, material_name = ?, material_type = ?, drawing_no = ?, drawing_id = ?, last_updated = CURRENT_TIMESTAMP WHERE item_code = ?`,
-        [newBalance, material_name, material_type, drawing_no, drawing_id, itemCode]
-      );
-      console.log(`[Stock] Created ledger entry and updated balance`);
-    } else {
-      newBalance = parseFloat(passQty) || 0;
-      console.log(`[Stock] New item - balance: ${newBalance}`);
-
-      await useConnection.execute(
-        `INSERT INTO stock_ledger 
-        (item_code, material_name, material_type, drawing_no, drawing_id, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, qc_id, grn_item_id, balance_after, remarks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemCode, material_name, material_type, drawing_no, drawing_id, 'GRN_IN', passQty, 'GRN', grnId, `GRN-${String(grnId).padStart(4, '0')}`, qcId, grnItemId, newBalance, 'Auto-created from QC Pass']
-      );
-
-      await useConnection.execute(
-        `INSERT INTO stock_balance (item_code, material_name, material_type, drawing_no, drawing_id, current_balance) VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE current_balance = VALUES(current_balance), material_name = VALUES(material_name), material_type = VALUES(material_type), drawing_no = VALUES(drawing_no), drawing_id = VALUES(drawing_id), last_updated = CURRENT_TIMESTAMP`,
-        [itemCode, material_name, material_type, drawing_no, drawing_id, newBalance]
-      );
-      console.log(`[Stock] Created new balance and ledger entry`);
-    }
 
     if (!connection) {
       await useConnection.commit();

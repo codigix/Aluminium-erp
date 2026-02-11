@@ -1,22 +1,15 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config({ path: './backend/.env' });
+const db = require('./src/config/db');
 
-async function check() {
-  const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'backend',
-    database: process.env.DB_NAME || 'sales_erp'
-  });
-
-  try {
-    const [rows] = await connection.query('DESCRIBE work_orders');
-    console.table(rows);
-  } catch (e) {
-    console.log('Error:', e.message);
-  }
-
-  await connection.end();
+async function migrate() {
+    try {
+        await db.query('ALTER TABLE production_plan_items ADD COLUMN description TEXT AFTER item_code');
+        await db.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN description TEXT AFTER item_code');
+        console.log('Columns added successfully');
+    } catch (error) {
+        console.error('Migration Error:', error);
+    } finally {
+        process.exit();
+    }
 }
 
-check();
+migrate();

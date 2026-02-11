@@ -22,6 +22,87 @@ const pool = mysql.createPool({
   namedPlaceholders: true
 });
 
+const ensureJobCardColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM job_cards');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'std_time', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'hourly_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'operation_name', definition: 'VARCHAR(255) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE job_cards ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Job Card columns synchronized');
+
+    // Create detailed logging tables
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS job_card_time_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        job_card_id INT NOT NULL,
+        log_date DATE NOT NULL,
+        operator_id INT,
+        workstation_id INT,
+        shift VARCHAR(20),
+        start_time DATETIME,
+        end_time DATETIME,
+        produced_qty DECIMAL(12, 3) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS job_card_quality_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        job_card_id INT NOT NULL,
+        check_date DATE NOT NULL,
+        shift VARCHAR(20),
+        inspected_qty DECIMAL(12, 3) DEFAULT 0,
+        accepted_qty DECIMAL(12, 3) DEFAULT 0,
+        rejected_qty DECIMAL(12, 3) DEFAULT 0,
+        scrap_qty DECIMAL(12, 3) DEFAULT 0,
+        rejection_reason TEXT,
+        status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS job_card_downtime_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        job_card_id INT NOT NULL,
+        downtime_date DATE NOT NULL,
+        shift VARCHAR(20),
+        downtime_type VARCHAR(100),
+        start_time DATETIME,
+        end_time DATETIME,
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Job Card detailed log tables synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Job Card column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureDatabase = async () => {
   try {
     const connection = await pool.getConnection();
@@ -1591,6 +1672,31 @@ const ensurePurchaseOrderQuotationNullable = async () => {
   }
 };
 
+const ensurePurchaseOrderVendorNullable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query("SHOW COLUMNS FROM purchase_orders");
+    const vendorIdCol = columns.find(c => c.Field === 'vendor_id');
+    if (vendorIdCol && vendorIdCol.Null === 'NO') {
+      console.log('[ensurePurchaseOrderVendorNullable] Making vendor_id nullable in purchase_orders...');
+      await connection.query('ALTER TABLE purchase_orders MODIFY vendor_id INT NULL');
+    }
+
+    const statusCol = columns.find(c => c.Field === 'status');
+    if (statusCol && !statusCol.Type.includes('PO_REQUEST')) {
+      console.log('[ensurePurchaseOrderVendorNullable] Adding PO_REQUEST to purchase_orders status enum...');
+      await connection.query(`ALTER TABLE purchase_orders MODIFY status ENUM('DRAFT', 'PO_REQUEST', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'CLOSED', 'COMPLETED') DEFAULT 'ORDERED'`);
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Purchase Order vendor_id nullability or status sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureStockEntryTables = async () => {
   let connection;
   try {
@@ -1720,6 +1826,7 @@ const bootstrapDatabase = async () => {
   await ensureCustomerPoColumns();
   await ensurePurchaseOrderItemColumns();
   await ensurePurchaseOrderQuotationNullable();
+  await ensurePurchaseOrderVendorNullable();
   await ensureQuotationItemColumns();
   await ensurePoReceiptItemTable();
   await ensurePoReceiptColumns();
@@ -1747,6 +1854,7 @@ const bootstrapDatabase = async () => {
   await ensureOperationsTable();
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();
+  await ensureJobCardColumns();
   await ensureMaterialRequestTables();
   await ensureMaterialRequestColumns();
   await ensureQuotationCommunicationTable();

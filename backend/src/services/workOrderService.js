@@ -38,7 +38,22 @@ const createWorkOrdersFromPlan = async (planId) => {
     // Helper to create WO
     const createWO = async (itemData, sourceType, parentId = null) => {
       const itemCode = itemData.item_code;
-      const itemName = itemData.description || itemData.item_code; // Fallback
+      let itemName = itemData.description || itemData.item_name;
+
+      // If name is just the code or missing, try to fetch a better name from sales_order_items or bom_creation
+      if (!itemName || itemName === itemCode) {
+        if (itemData.sales_order_item_id) {
+          const [soItems] = await connection.query('SELECT description FROM sales_order_items WHERE id = ?', [itemData.sales_order_item_id]);
+          if (soItems.length > 0 && soItems[0].description) itemName = soItems[0].description;
+        }
+
+        if (!itemName || itemName === itemCode) {
+          const [bomItems] = await connection.query('SELECT description as product_name FROM sales_order_items WHERE (drawing_no = ? OR item_code = ?) AND description IS NOT NULL LIMIT 1', [itemData.bom_no, itemCode]);
+          if (bomItems.length > 0 && bomItems[0].product_name) itemName = bomItems[0].product_name;
+        }
+      }
+      
+      if (!itemName) itemName = itemCode; // Fallback to code if still nothing
       const bomNo = itemData.bom_no;
       const quantity = parseFloat(itemData.planned_qty || itemData.required_qty || 0);
       const salesOrderItemId = itemData.sales_order_item_id || null;
@@ -73,10 +88,8 @@ const createWorkOrdersFromPlan = async (planId) => {
 
       const workOrderId = result.insertId;
       
-      // Only create Job Cards for Finished Goods (FG), not for Sub-Assemblies (SA)
-      if (sourceType !== 'SA') {
-        await createJobCardsForWorkOrder(workOrderId, connection, 'DRAFT', planOps.filter(op => op.source_item === itemCode));
-      }
+      // Create Job Cards for both Finished Goods (FG) and Sub-Assemblies (SA)
+      await createJobCardsForWorkOrder(workOrderId, connection, 'PENDING', planOps.filter(op => op.source_item === itemCode));
       
       return workOrderId;
     };
@@ -219,14 +232,16 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
 
   // 3. Get Operations
   let operationsToUse = [];
-  if (providedOperations && providedOperations.length > 0) {
+  if (providedOperations && Array.isArray(providedOperations)) {
+    // If operations are provided, use them strictly
     operationsToUse = providedOperations.map(op => ({
-      operation_name: op.operation_name,
+      operation_name: op.operation_name || op.operationName,
       workstation: op.workstation,
-      base_time: op.base_time
+      base_time: op.base_time || op.cycle_time_min || op.baseTime,
+      hourly_rate: op.hourly_rate || op.hourlyRate
     }));
   } else {
-    // Fetch from BOM if not provided
+    // Fetch from BOM if not provided (fallback)
     if (wo.source_type === 'SA' || !wo.sales_order_item_id) {
       operationsToUse = await bomService.getItemOperations(null, wo.item_code);
     } else {
@@ -234,15 +249,22 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     }
   }
   
+  // If still no operations, create one default Job Card to allow progress tracking
   if (operationsToUse.length === 0) {
-    console.warn(`No operations found for item ${wo.item_code}`);
+    const jcNo = await generateJobCardNo(connection);
+    await connection.execute(
+      `INSERT INTO job_cards 
+       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, hourly_rate, operation_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [jcNo, workOrderId, null, null, wo.quantity, initialStatus, 0, 0, 'Production / Assembly']
+    );
     return;
   }
 
-  // 4. Create Job Cards
+  // 4. Create Job Cards for defined operations
   for (const op of operationsToUse) {
     const [masterOps] = await connection.query(
-      'SELECT id FROM operations WHERE operation_name = ?',
+      'SELECT id, std_time, hourly_rate FROM operations WHERE operation_name = ?',
       [op.operation_name]
     );
     const [masterWs] = await connection.query(
@@ -251,12 +273,14 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     );
 
     const jcNo = await generateJobCardNo(connection);
+    const stdTime = op.base_time || op.cycle_time_min || masterOps[0]?.std_time || 0;
+    const hourlyRate = op.hourly_rate || masterOps[0]?.hourly_rate || 0;
 
     await connection.execute(
       `INSERT INTO job_cards 
-       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus]
+       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, hourly_rate, operation_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, hourlyRate, op.operation_name]
     );
   }
 };

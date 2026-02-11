@@ -130,7 +130,7 @@ const createPurchaseOrder = async (data) => {
       });
       
       total_amount = items.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
-      if (!finalVendorId) throw new Error('Vendor is required for PO from Material Request');
+      // Removed: if (!finalVendorId) throw new Error('Vendor is required for PO from Material Request');
     } else {
       // Manual PO
       if (!finalVendorId) throw new Error('Vendor is required for manual PO');
@@ -183,6 +183,8 @@ const createPurchaseOrder = async (data) => {
       }
     }
 
+    const poStatus = (mrId && !finalVendorId) ? 'PO_REQUEST' : 'DRAFT';
+
     const [result] = await connection.execute(
       `INSERT INTO purchase_orders (po_number, quotation_id, mr_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -190,9 +192,9 @@ const createPurchaseOrder = async (data) => {
         poNumber,
         quotationId || null,
         mrId || null,
-        finalVendorId,
+        finalVendorId || null,
         sales_order_id || null,
-        'DRAFT',
+        poStatus,
         total_amount || 0,
         expectedDeliveryDate || null,
         notes || null
@@ -391,9 +393,9 @@ const getPurchaseOrderById = async (poId) => {
 };
 
 const updatePurchaseOrder = async (poId, payload) => {
-  const { status, poNumber, expectedDeliveryDate, notes, items } = payload;
+  const { status, poNumber, expectedDeliveryDate, notes, items, vendorId } = payload;
   
-  const validStatuses = ['DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'CLOSED'];
+  const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'COMPLETED', 'CLOSED'];
   if (status && !validStatuses.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
@@ -428,6 +430,10 @@ const updatePurchaseOrder = async (poId, payload) => {
       updates.push('notes = ?');
       params.push(notes);
     }
+    if (vendorId !== undefined) {
+      updates.push('vendor_id = ?');
+      params.push(vendorId);
+    }
 
     if (updates.length > 0) {
       params.push(poId);
@@ -453,12 +459,21 @@ const updatePurchaseOrder = async (poId, payload) => {
         
         totalAmount += totalItemAmount;
 
-        await connection.execute(
-          `UPDATE purchase_order_items 
-           SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?
-           WHERE id = ? AND purchase_order_id = ?`,
-          [rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, item.id, poId]
-        );
+        if (item.id) {
+          await connection.execute(
+            `UPDATE purchase_order_items 
+             SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, description = ?, item_code = ?, unit = ?
+             WHERE id = ? AND purchase_order_id = ?`,
+            [rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, item.description, item.item_code, item.unit, item.id, poId]
+          );
+        } else {
+          await connection.execute(
+            `INSERT INTO purchase_order_items 
+             (purchase_order_id, item_code, description, quantity, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [poId, item.item_code, item.description, qty, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount]
+          );
+        }
       }
 
       await connection.execute(
@@ -555,8 +570,12 @@ const approvePurchaseOrder = async (poId, userId) => {
   try {
     await connection.beginTransaction();
 
-    const [po] = await connection.query('SELECT mr_id FROM purchase_orders WHERE id = ?', [poId]);
+    const [po] = await connection.query('SELECT mr_id, vendor_id FROM purchase_orders WHERE id = ?', [poId]);
     if (!po.length) throw new Error('Purchase Order not found');
+    
+    if (!po[0].vendor_id) {
+      throw new Error('Cannot approve PO without a vendor. Please edit the PO to assign a vendor first.');
+    }
 
     await connection.execute(
       `UPDATE purchase_orders 

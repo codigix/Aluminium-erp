@@ -3,7 +3,11 @@ const pool = require('../config/db');
 const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
-            o.operation_name, o.std_time, o.time_uom, w.workstation_name, u.username as operator_name, soi.status as item_status
+            COALESCE(o.operation_name, jc.operation_name) as operation_name, 
+            COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
+            COALESCE(o.time_uom, 'Min') as time_uom, 
+            COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
+            w.workstation_name, u.username as operator_name, soi.status as item_status
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
@@ -118,7 +122,12 @@ const updateJobCardProgress = async (id, data) => {
 
 const getJobCardById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT jc.*, wo.wo_number, o.operation_name, w.workstation_name, u.username as operator_name
+    `SELECT jc.*, wo.wo_number, wo.item_name, wo.drawing_no,
+            COALESCE(o.operation_name, jc.operation_name) as operation_name, 
+            COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
+            COALESCE(o.time_uom, 'Min') as time_uom, 
+            COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
+            w.workstation_name, u.username as operator_name
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
      LEFT JOIN operations o ON jc.operation_id = o.id
@@ -128,6 +137,88 @@ const getJobCardById = async (id) => {
     [id]
   );
   return rows[0];
+};
+
+const getTimeLogs = async (jobCardId) => {
+  const [rows] = await pool.query(
+    `SELECT tl.*, u.username as operator_name, w.workstation_name 
+     FROM job_card_time_logs tl
+     LEFT JOIN users u ON tl.operator_id = u.id
+     LEFT JOIN workstations w ON tl.workstation_id = w.id
+     WHERE tl.job_card_id = ? ORDER BY tl.created_at DESC`,
+    [jobCardId]
+  );
+  return rows;
+};
+
+const addTimeLog = async (data) => {
+  const { jobCardId, logDate, operatorId, workstationId, shift, startTime, endTime, producedQty } = data;
+  const [result] = await pool.execute(
+    `INSERT INTO job_card_time_logs 
+     (job_card_id, log_date, operator_id, workstation_id, shift, start_time, end_time, produced_qty)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [jobCardId, logDate, operatorId, workstationId, shift, startTime, endTime, producedQty]
+  );
+  
+  // Update total produced qty in job card
+  await pool.execute(
+    `UPDATE job_cards jc 
+     SET produced_qty = (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = ?)
+     WHERE id = ?`,
+    [jobCardId, jobCardId]
+  );
+  
+  return result.insertId;
+};
+
+const getQualityLogs = async (jobCardId) => {
+  const [rows] = await pool.query(
+    'SELECT * FROM job_card_quality_logs WHERE job_card_id = ? ORDER BY created_at DESC',
+    [jobCardId]
+  );
+  return rows;
+};
+
+const addQualityLog = async (data) => {
+  const { jobCardId, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status } = data;
+  const [result] = await pool.execute(
+    `INSERT INTO job_card_quality_logs 
+     (job_card_id, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [jobCardId, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status || 'PENDING']
+  );
+
+  // Update accepted and rejected qty in job card if approved
+  if (status === 'APPROVED') {
+    await pool.execute(
+      `UPDATE job_cards jc 
+       SET accepted_qty = (SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'),
+           rejected_qty = (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED')
+       WHERE id = ?`,
+      [jobCardId, jobCardId, jobCardId]
+    );
+  }
+  
+  return result.insertId;
+};
+
+const getDowntimeLogs = async (jobCardId) => {
+  const [rows] = await pool.query(
+    'SELECT * FROM job_card_downtime_logs WHERE job_card_id = ? ORDER BY created_at DESC',
+    [jobCardId]
+  );
+  return rows;
+};
+
+const addDowntimeLog = async (data) => {
+  const { jobCardId, downtimeDate, shift, downtimeType, startTime, endTime, remarks } = data;
+  const [result] = await pool.execute(
+    `INSERT INTO job_card_downtime_logs 
+     (job_card_id, downtime_date, shift, downtime_type, start_time, end_time, remarks)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [jobCardId, downtimeDate, shift, downtimeType, startTime, endTime, remarks]
+  );
+  return result.insertId;
 };
 
 const updateJobCard = async (id, data) => {
@@ -153,5 +244,11 @@ module.exports = {
   updateJobCardProgress,
   getJobCardById,
   updateJobCard,
-  deleteJobCard
+  deleteJobCard,
+  getTimeLogs,
+  addTimeLog,
+  getQualityLogs,
+  addQualityLog,
+  getDowntimeLogs,
+  addDowntimeLog
 };

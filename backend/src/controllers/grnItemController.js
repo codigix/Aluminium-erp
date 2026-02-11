@@ -2,6 +2,7 @@ const grnItemService = require('../services/grnItemService');
 const inventoryPostingService = require('../services/inventoryPostingService');
 const poBalanceService = require('../services/poBalanceService');
 const qcInspectionsService = require('../services/qcInspectionsService');
+const stockEntryService = require('../services/stockEntryService');
 
 const createGRNWithItems = async (req, res, next) => {
   try {
@@ -128,6 +129,19 @@ const createGRNWithItems = async (req, res, next) => {
       );
     } catch (qcError) {
       console.error('QC creation error (non-blocking):', qcError.message);
+    }
+
+    // Auto-create Stock Entry from GRN
+    try {
+      const userId = req.user?.id || 1; // Fallback to 1 if user not in req
+      const result = await stockEntryService.autoCreateStockEntryFromGRN(grn.id, userId);
+      if (result.success) {
+        console.log(`[GRN] Auto-created stock entry ${result.entryNo} for GRN: ${grn.id}`);
+      } else {
+        console.warn(`[GRN] Stock entry auto-creation skipped: ${result.message}`);
+      }
+    } catch (stockError) {
+      console.error('[GRN] Stock entry auto-creation error:', stockError);
     }
 
     res.status(201).json({

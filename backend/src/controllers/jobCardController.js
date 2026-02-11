@@ -46,10 +46,55 @@ const deleteJobCard = async (req, res) => {
   }
 };
 
+const getJobCardLogs = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [timeLogs, qualityLogs, downtimeLogs] = await Promise.all([
+      jobCardService.getTimeLogs(id),
+      jobCardService.getQualityLogs(id),
+      jobCardService.getDowntimeLogs(id)
+    ]);
+    res.json({ timeLogs, qualityLogs, downtimeLogs });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const addTimeLog = async (req, res) => {
+  try {
+    const id = await jobCardService.addTimeLog({ ...req.body, jobCardId: req.params.id });
+    res.status(201).json({ id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const addQualityLog = async (req, res) => {
+  try {
+    const id = await jobCardService.addQualityLog({ ...req.body, jobCardId: req.params.id });
+    res.status(201).json({ id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const addDowntimeLog = async (req, res) => {
+  try {
+    const id = await jobCardService.addDowntimeLog({ ...req.body, jobCardId: req.params.id });
+    res.status(201).json({ id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
   updateProgress,
   updateJobCard,
-  deleteJobCard
+  deleteJobCard,
+  getJobCardLogs,
+  addTimeLog,
+  addQualityLog,
+  addDowntimeLog
 };

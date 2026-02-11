@@ -6,8 +6,18 @@ const listProductionPlans = async () => {
     `SELECT pp.*, u.username as creator_name, 
             COALESCE(o.order_no, o_direct.order_no) as order_no, 
             COALESCE(so.project_name, c_direct.company_name) as project_name,
-            COALESCE(soi.item_code, oi.item_code) as item_code, 
-            COALESCE(soi.description, oi.description) as item_description,
+            COALESCE(ppi.item_code, 
+              CASE 
+                WHEN o_direct.id IS NOT NULL THEN oi.item_code 
+                ELSE COALESCE(soi.item_code, oi.item_code) 
+              END
+            ) as item_code, 
+            COALESCE(ppi.description,
+              CASE 
+                WHEN o_direct.id IS NOT NULL THEN oi.description 
+                ELSE COALESCE(soi.description, oi.description) 
+              END
+            ) as item_description,
             (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id) as wo_count,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id) as total_ops,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops
@@ -20,8 +30,13 @@ const listProductionPlans = async () => {
      ) o ON o.quotation_id = so.id
      LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
      LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
-     LEFT JOIN sales_order_items soi ON pp.bom_no = soi.id
-     LEFT JOIN order_items oi ON pp.bom_no = oi.id
+     LEFT JOIN (
+       SELECT plan_id, item_code, description, sales_order_item_id, sales_order_id
+       FROM production_plan_items 
+       WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+     ) ppi ON pp.id = ppi.plan_id
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id
+     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
      ORDER BY pp.created_at DESC`
   );
   return rows;
@@ -29,9 +44,18 @@ const listProductionPlans = async () => {
 
 const getProductionPlanById = async (id) => {
   const [plans] = await pool.query(
-    `SELECT pp.*, u.username as creator_name
+    `SELECT pp.*, u.username as creator_name,
+            COALESCE(o_direct.order_no) as order_no,
+            COALESCE(ppi_first.item_code) as item_code,
+            COALESCE(ppi_first.description) as item_description
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
+     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
+     LEFT JOIN (
+       SELECT plan_id, item_code, description 
+       FROM production_plan_items 
+       WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+     ) ppi_first ON pp.id = ppi_first.plan_id
      WHERE pp.id = ?`,
     [id]
   );
@@ -43,23 +67,36 @@ const getProductionPlanById = async (id) => {
   const [items] = await pool.query(
     `SELECT ppi.*, 
             COALESCE(so.project_name, c_direct.company_name) as project_name, 
-            COALESCE(soi.item_code, oi.item_code) as item_code, 
-            COALESCE(soi.description, oi.description) as description, 
-            COALESCE(soi.drawing_no, oi.drawing_no) as drawing_no, 
+            COALESCE(ppi.item_code, 
+              CASE 
+                WHEN o_direct.id IS NOT NULL THEN oi.item_code 
+                ELSE COALESCE(soi.item_code, oi.item_code) 
+              END
+            ) as item_code, 
+            COALESCE(ppi.description, 
+              CASE 
+                WHEN o_direct.id IS NOT NULL THEN oi.description 
+                ELSE COALESCE(soi.description, oi.description) 
+              END
+            ) as description, 
+            CASE 
+              WHEN o_direct.id IS NOT NULL THEN oi.drawing_no 
+              ELSE COALESCE(soi.drawing_no, oi.drawing_no) 
+            END as drawing_no, 
             w.workstation_name,
             COALESCE(ppi.design_qty, soi.quantity, oi.quantity) as design_qty, 
             COALESCE(ppi.uom, soi.unit, 'Nos') as uom,
             COALESCE(o.order_no, o_direct.order_no) as order_no
      FROM production_plan_items ppi
      LEFT JOIN sales_orders so ON ppi.sales_order_id = so.id
-     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id
+     LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id AND ppi.item_code = soi.item_code
+     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id AND ppi.item_code = oi.item_code
      LEFT JOIN workstations w ON ppi.workstation_id = w.id
      LEFT JOIN (
        SELECT quotation_id, order_no FROM orders 
        WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
      ) o ON o.quotation_id = so.id
-     LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
      LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      WHERE ppi.plan_id = ?`,
     [id]
@@ -138,13 +175,14 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const item of finishedGoods) {
         await connection.execute(
           `INSERT INTO production_plan_items 
-           (plan_id, sales_order_id, sales_order_item_id, item_code, bom_no, design_qty, uom, planned_qty, rate, warehouse, planned_start_date, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+           (plan_id, sales_order_id, sales_order_item_id, item_code, description, bom_no, design_qty, uom, planned_qty, rate, warehouse, planned_start_date, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
           [
             planId,
             item.salesOrderId || finalSalesOrderId,
             item.salesOrderItemId || null,
             item.itemCode || null,
+            item.description || item.item_description || null,
             item.bomNo || finalBomNo,
             item.designQty || finalTargetQty || 0,
             item.uom || 'Nos',
@@ -534,11 +572,11 @@ const getSalesOrderFullDetails = async (id) => {
               COALESCE(planned.already_planned_qty, 0) as already_planned_qty
        FROM order_items oi
        LEFT JOIN (
-         SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+         SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
          FROM production_plan_items 
          WHERE status != 'CANCELLED'
-         GROUP BY sales_order_item_id
-       ) planned ON oi.id = planned.sales_order_item_id
+         GROUP BY sales_order_id, sales_order_item_id
+       ) planned ON oi.order_id = planned.sales_order_id AND oi.id = planned.sales_order_item_id
        WHERE oi.order_id = ?`,
       [id]
     );
@@ -584,11 +622,11 @@ const getSalesOrderFullDetails = async (id) => {
        WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG'))
      ) soi
      LEFT JOIN (
-       SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+       SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
        FROM production_plan_items 
        WHERE status != 'CANCELLED'
-       GROUP BY sales_order_item_id
-     ) planned ON soi.id = planned.sales_order_item_id
+       GROUP BY sales_order_id, sales_order_item_id
+     ) planned ON soi.sales_order_id = planned.sales_order_id AND soi.id = planned.sales_order_item_id
      WHERE soi.rn = 1`,
     [id]
   );
@@ -623,22 +661,21 @@ const generatePlanCode = async () => {
 };
 
 const getItemBOMDetails = async (salesOrderItemId) => {
-  // Try to fetch the item details from sales_order_items first
+  // Try to fetch the item details from order_items first (new system)
   let [items] = await pool.query(
-    'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ?',
+    'SELECT id, item_code, drawing_no FROM order_items WHERE id = ?',
     [salesOrderItemId]
   );
 
-  let soItemIdForLookup = salesOrderItemId;
+  let soItemIdForLookup = null;
 
-  // If not found, try order_items (the new system)
+  // If not found in order_items, try sales_order_items (the old system)
   if (items.length === 0) {
     [items] = await pool.query(
-      'SELECT id, item_code, drawing_no FROM order_items WHERE id = ?',
+      'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ?',
       [salesOrderItemId]
     );
-    // For order_items, we don't have SO-specific records yet
-    soItemIdForLookup = null; 
+    soItemIdForLookup = items.length > 0 ? salesOrderItemId : null;
   }
 
   if (items.length === 0) return null;
@@ -662,6 +699,26 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     parentType = 'FG'
   ) => {
     const currentIdentity = `${itemCode}-${drawingNo || ''}`;
+
+    if (soItemId && depth === 0) {
+      // Safety check: Ensure soItemId actually refers to an item with matching identity
+      // This prevents ID clashes between order_items and sales_order_items
+      const [check] = await pool.query(
+        'SELECT item_code, drawing_no FROM sales_order_items WHERE id = ?',
+        [soItemId]
+      );
+      if (check.length > 0) {
+        const matches = (check[0].item_code === itemCode) || 
+                        (check[0].drawing_no === drawingNo && check[0].drawing_no !== null);
+        if (!matches) {
+          console.warn(`[explodeBOM] Identity mismatch for soItemId ${soItemId}. Expected ${itemCode}/${drawingNo}, found ${check[0].item_code}/${check[0].drawing_no}. Disregarding soItemId.`);
+          soItemId = null;
+        }
+      } else {
+        soItemId = null;
+      }
+    }
+
     const bomContextKey = `${currentIdentity}-${soItemId || 'MASTER'}-${parentId || 'TOP'}`;
 
     if (processedBOMs.has(bomContextKey)) return { materials: [], components: [], operations: [] };
@@ -742,10 +799,9 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     // Process Materials
     materials.forEach(m => {
-      // Logic fix: level 0 (FG) is CORE, everything else is EXPLODED
-      const isFG = depth === 0;
-      const material_category = isFG ? 'CORE' : 'EXPLODED';
-      const source_assembly = isFG ? null : itemCode;
+      // level 0 (FG) and level 1 (direct sub-assemblies) are considered CORE for primary list
+      const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
+      const source_assembly = depth === 0 ? null : itemCode;
       
       const mKey = `${m.material_name}-${m.material_code || ''}-${material_category}-${source_assembly || ''}`;
       const existing = materialMap.get(mKey);
@@ -773,7 +829,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         ...o,
         source_item: itemCode,
         itemCode: itemCode,
-        base_time: o.base_hour || o.base_time || (o.cycle_time_min ? (parseFloat(o.cycle_time_min) / 60).toFixed(2) : 1)
+        base_time: o.cycle_time_min || o.base_time || (o.base_hour ? (parseFloat(o.base_hour) * 60).toFixed(2) : 1)
       }));
       
       // Store in global flat map

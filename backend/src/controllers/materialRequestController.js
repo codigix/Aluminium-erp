@@ -7,12 +7,10 @@ const materialRequestController = {
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
         (
           SELECT CASE 
-            WHEN COUNT(*) = SUM(CASE WHEN COALESCE(sb.current_balance, 0) >= mri.quantity THEN 1 ELSE 0 END) THEN 'available'
+            WHEN COUNT(*) = SUM(CASE WHEN (SELECT SUM(current_balance) FROM stock_balance WHERE item_code = mri.item_code) >= mri.quantity THEN 1 ELSE 0 END) THEN 'available'
             ELSE 'unavailable'
           END
           FROM material_request_items mri
-          LEFT JOIN stock_balance sb ON mri.item_code = sb.item_code 
-            AND sb.warehouse = COALESCE(mri.warehouse, mr.source_warehouse, 'Consumables Store')
           WHERE mri.mr_id = mr.id
         ) as availability
         FROM material_requests mr
@@ -66,30 +64,32 @@ const materialRequestController = {
       let allItemsAvailable = true;
 
       for (let item of items) {
-        let stockQuery = `
+        // Fetch stock across ALL warehouses
+        const [stockRows] = await pool.query(`
           SELECT warehouse as warehouse_name, current_balance as current_stock
           FROM stock_balance
-          WHERE item_code = ?
-        `;
-        let params = [item.item_code];
-
-        // Use item-specific warehouse if available, fallback to header warehouse
-        const itemWh = item.warehouse || selectedWh;
-
-        if (itemWh) {
-          stockQuery += ` AND (warehouse = ? OR (warehouse IS NULL AND ? IS NULL)) `;
-          params.push(itemWh, itemWh);
-        }
-
-        const [stockRows] = await pool.query(stockQuery, params);
+          WHERE item_code = ? AND current_balance > 0
+        `, [item.item_code]);
+        
         item.stocks = stockRows;
         
-        // Also provide a direct stock level for the selected warehouse
-        const matchingWh = stockRows.find(s => s.warehouse_name === itemWh);
-        const availableQty = matchingWh ? parseFloat(matchingWh.current_stock) : 0;
+        // Calculate total stock across all warehouses
+        const totalStock = stockRows.reduce((sum, row) => sum + parseFloat(row.current_stock), 0);
+        item.total_stock = totalStock;
+
+        // Determine suggested warehouse (one with the most stock)
+        const suggestedWh = stockRows.length > 0 
+          ? stockRows.reduce((prev, current) => (parseFloat(prev.current_stock) > parseFloat(current.current_stock)) ? prev : current)
+          : null;
         
-        item.current_stock = availableQty;
-        item.fulfillment_source = availableQty >= parseFloat(item.quantity) ? 'STOCK' : 'PURCHASE';
+        item.suggested_warehouse = suggestedWh ? suggestedWh.warehouse_name : null;
+        
+        // Use the selected warehouse stock for display, but fallback to total stock logic
+        const matchingWh = stockRows.find(s => s.warehouse_name === selectedWh);
+        item.current_stock = matchingWh ? parseFloat(matchingWh.current_stock) : 0;
+        
+        // An item is "Available" if total stock >= required quantity
+        item.fulfillment_source = totalStock >= parseFloat(item.quantity) ? 'STOCK' : 'PURCHASE';
         
         if (item.fulfillment_source === 'PURCHASE') {
           allItemsAvailable = false;
