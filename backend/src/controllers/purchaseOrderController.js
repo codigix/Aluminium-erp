@@ -84,6 +84,18 @@ const handleStoreAcceptance = async (req, res, next) => {
   }
 };
 
+const approvePurchaseOrder = async (req, res, next) => {
+  try {
+    const result = await purchaseOrderService.approvePurchaseOrder(
+      req.params.poId,
+      req.user.id
+    );
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -93,5 +105,6 @@ module.exports = {
   deletePurchaseOrder,
   getPurchaseOrderStats,
   getPOMaterialRequests,
-  handleStoreAcceptance
+  handleStoreAcceptance,
+  approvePurchaseOrder
 };

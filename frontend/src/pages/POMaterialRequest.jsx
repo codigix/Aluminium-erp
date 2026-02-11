@@ -324,6 +324,7 @@ const POMaterialRequest = () => {
       draft: 0,
       approved: 0,
       processing: 0,
+      po_created: 0,
       fulfilled: 0,
       completed: 0,
       cancelled: 0

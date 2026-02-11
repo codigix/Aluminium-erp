@@ -245,7 +245,9 @@ const ensurePoMaterialRequestColumns = async () => {
       { name: 'store_acceptance_status', definition: "ENUM('PENDING', 'ACCEPTED', 'REJECTED') DEFAULT 'PENDING'" },
       { name: 'store_acceptance_date', definition: 'TIMESTAMP NULL' },
       { name: 'store_acceptance_notes', definition: 'TEXT NULL' },
-      { name: 'mr_id', definition: 'INT NULL' }
+      { name: 'mr_id', definition: 'INT NULL' },
+      { name: 'approved_by', definition: 'INT NULL' },
+      { name: 'approved_at', definition: 'TIMESTAMP NULL' }
     ];
     
     const missingPoCols = requiredPoCols.filter(c => !existingPoCols.has(c.name));
@@ -301,8 +303,8 @@ const ensureMaterialRequestColumns = async () => {
     
     // Update status enum if needed
     const statusCol = columns.find(c => c.Field === 'status');
-    if (statusCol && (!statusCol.Type.includes('ORDERED') || !statusCol.Type.includes('COMPLETED'))) {
-      await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'APPROVED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED') DEFAULT 'DRAFT'`);
+    if (statusCol && (!statusCol.Type.includes('ORDERED') || !statusCol.Type.includes('COMPLETED') || !statusCol.Type.includes('PO_CREATED'))) {
+      await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'APPROVED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT'`);
       console.log('Material Request status enum updated');
     }
 
@@ -1077,7 +1079,10 @@ const ensureProductionPlanTables = async () => {
         sales_order_item_id INT NULL,
         item_code VARCHAR(120),
         bom_no VARCHAR(100),
+        design_qty DECIMAL(12, 3),
+        uom VARCHAR(20),
         planned_qty DECIMAL(12, 3) NOT NULL,
+        rate DECIMAL(12, 2) DEFAULT 0,
         warehouse VARCHAR(100),
         workstation_id INT,
         planned_start_date DATE,
@@ -1118,6 +1123,7 @@ const ensureProductionPlanTables = async () => {
     if (!existingPpiCols.has('warehouse')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN warehouse VARCHAR(100) AFTER planned_qty');
     if (!existingPpiCols.has('design_qty')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN design_qty DECIMAL(12, 3) AFTER bom_no');
     if (!existingPpiCols.has('uom')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN uom VARCHAR(20) AFTER design_qty');
+    if (!existingPpiCols.has('rate')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER planned_qty');
 
     // Create production_plan_sub_assemblies table
     await connection.query(`
@@ -1126,6 +1132,7 @@ const ensureProductionPlanTables = async () => {
         plan_id INT NOT NULL,
         item_code VARCHAR(120) NOT NULL,
         required_qty DECIMAL(12, 3) NOT NULL,
+        rate DECIMAL(12, 2) DEFAULT 0,
         bom_no VARCHAR(100),
         target_warehouse VARCHAR(100),
         scheduled_date DATE,
@@ -1140,6 +1147,7 @@ const ensureProductionPlanTables = async () => {
     const [saCols] = await connection.query('SHOW COLUMNS FROM production_plan_sub_assemblies');
     const existingSaCols = new Set(saCols.map(c => c.Field));
     if (!existingSaCols.has('source_fg')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN source_fg VARCHAR(120) AFTER manufacturing_type');
+    if (!existingSaCols.has('rate')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER required_qty');
 
     // Create production_plan_materials table
     await connection.query(`
@@ -1149,6 +1157,7 @@ const ensureProductionPlanTables = async () => {
         item_code VARCHAR(120),
         material_name VARCHAR(255) NOT NULL,
         required_qty DECIMAL(12, 3) NOT NULL,
+        rate DECIMAL(12, 2) DEFAULT 0,
         uom VARCHAR(20),
         warehouse VARCHAR(100),
         bom_ref VARCHAR(100),
@@ -1159,6 +1168,13 @@ const ensureProductionPlanTables = async () => {
         FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure rate column exists for existing table
+    const [ppmCols] = await connection.query('SHOW COLUMNS FROM production_plan_materials');
+    const existingPpmCols = new Set(ppmCols.map(c => c.Field));
+    if (!existingPpmCols.has('rate')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER required_qty');
+    }
 
     // Create production_plan_operations table
     await connection.query(`
@@ -1333,7 +1349,7 @@ const ensureMaterialRequestTables = async () => {
         requested_by INT,
         required_by DATE,
         purpose ENUM('Purchase Request', 'Internal Transfer', 'Material Issue') NOT NULL,
-        status ENUM('DRAFT', 'APPROVED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED') DEFAULT 'DRAFT',
+        status ENUM('DRAFT', 'APPROVED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1349,6 +1365,7 @@ const ensureMaterialRequestTables = async () => {
         item_name VARCHAR(255),
         item_type VARCHAR(50),
         quantity DECIMAL(12, 3) NOT NULL,
+        unit_rate DECIMAL(12, 2) DEFAULT 0,
         uom VARCHAR(20),
         warehouse VARCHAR(100),
         allocated_quantity DECIMAL(12, 3) DEFAULT 0,
@@ -1367,6 +1384,9 @@ const ensureMaterialRequestTables = async () => {
     }
     if (!existingItemCols.has('item_type')) {
       await connection.query('ALTER TABLE material_request_items ADD COLUMN item_type VARCHAR(50) AFTER item_name');
+    }
+    if (!existingItemCols.has('unit_rate')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN unit_rate DECIMAL(12, 2) DEFAULT 0 AFTER quantity');
     }
 
     console.log('Material Request tables synchronized');

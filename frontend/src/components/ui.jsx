@@ -130,7 +130,9 @@ export const StatusBadge = ({ status }) => {
       case 'IN_DESIGN':
       case 'IN_PROGRESS':
       case 'RELEASED':
-        return 'bg-purple-50 border-purple-200 text-purple-600'
+      case 'PO_CREATED':
+      case 'ORDERED':
+        return 'bg-indigo-50 border-indigo-200 text-indigo-600'
       case 'FULFILLED':
       case 'ACTIVE':
       case 'COMPLETED':

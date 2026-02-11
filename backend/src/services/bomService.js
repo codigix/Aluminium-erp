@@ -586,6 +586,7 @@ const deleteBOM = async (itemId) => {
 
 const findAnyBOM = async (itemCode, drawingNo) => {
   // Find the most recently updated sales_order_item that has a BOM for this identity
+  // Prioritize item_code match, then fallback to drawing_no
   let [rows] = await pool.query(`
     SELECT id FROM sales_order_items 
     WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))
@@ -594,8 +595,8 @@ const findAnyBOM = async (itemCode, drawingNo) => {
       OR EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = sales_order_items.id)
       OR EXISTS (SELECT 1 FROM sales_order_item_operations WHERE sales_order_item_id = sales_order_items.id)
     )
-    ORDER BY updated_at DESC LIMIT 1
-  `, [itemCode, drawingNo]);
+    ORDER BY (CASE WHEN item_code = ? THEN 1 ELSE 2 END) ASC, updated_at DESC LIMIT 1
+  `, [itemCode, drawingNo, itemCode]);
 
   if (rows.length === 0) return null;
   

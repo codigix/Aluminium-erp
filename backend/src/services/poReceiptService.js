@@ -72,12 +72,16 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
     await connection.beginTransaction();
 
     const [po] = await connection.query(
-      'SELECT id, po_number FROM purchase_orders WHERE id = ?',
+      'SELECT id, po_number, status FROM purchase_orders WHERE id = ?',
       [poId]
     );
 
     if (!po.length) {
       throw new Error('Purchase Order not found');
+    }
+
+    if (po[0].status === 'DRAFT') {
+      throw new Error('Cannot create receipt for a Draft Purchase Order. Please approve it first.');
     }
 
     const poNumber = po[0].po_number;

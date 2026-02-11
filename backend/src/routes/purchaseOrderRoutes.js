@@ -6,6 +6,7 @@ const { authorize } = require('../middleware/authMiddleware');
 
 router.get('/material-requests', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPOMaterialRequests);
 router.post('/:poId/store-acceptance', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.handleStoreAcceptance);
+router.post('/:poId/approve', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.approvePurchaseOrder);
 router.get('/preview/:quotationId', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.previewPurchaseOrder);
 router.post('/', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.createPurchaseOrder);
 router.get('/stats', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrderStats);

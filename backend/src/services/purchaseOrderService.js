@@ -94,27 +94,69 @@ const createPurchaseOrder = async (data) => {
       const [mr] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [mrId]);
       if (!mr.length) throw new Error('Material Request not found');
       
-      const [mrItems] = await connection.query('SELECT * FROM material_request_items WHERE mr_id = ?', [mrId]);
+      const [mrItems] = await connection.query(`
+        SELECT mri.*, sb.valuation_rate 
+        FROM material_request_items mri
+        LEFT JOIN (SELECT item_code, MAX(valuation_rate) as valuation_rate FROM stock_balance GROUP BY item_code) sb ON mri.item_code = sb.item_code
+        WHERE mri.mr_id = ?
+      `, [mrId]);
       
-      items = mrItems.map(item => ({
-        ...item,
-        unit_rate: item.unit_rate || 0,
-        amount: (item.quantity * (item.unit_rate || 0))
-      }));
+      items = mrItems.map(item => {
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.unit_rate || item.valuation_rate) || 0;
+        const amount = qty * rate;
+        const cgstPercent = 9;
+        const sgstPercent = 9;
+        const cgstAmount = (amount * cgstPercent) / 100;
+        const sgstAmount = (amount * sgstPercent) / 100;
+        const totalItemAmount = amount + cgstAmount + sgstAmount;
+
+        return {
+          ...item,
+          description: item.item_name || item.description,
+          material_name: item.item_name || item.material_name,
+          material_type: item.item_type || item.material_type,
+          drawing_no: item.drawing_no || null,
+          drawing_id: item.drawing_id || null,
+          unit: item.uom || item.unit || 'NOS',
+          unit_rate: rate,
+          amount: amount,
+          cgst_percent: cgstPercent,
+          cgst_amount: cgstAmount,
+          sgst_percent: sgstPercent,
+          sgst_amount: sgstAmount,
+          total_amount: totalItemAmount
+        };
+      });
       
-      total_amount = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+      total_amount = items.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
       if (!finalVendorId) throw new Error('Vendor is required for PO from Material Request');
     } else {
       // Manual PO
       if (!finalVendorId) throw new Error('Vendor is required for manual PO');
       if (!manualItems || manualItems.length === 0) throw new Error('Items are required for manual PO');
       
-      items = manualItems.map(item => ({
-        ...item,
-        unit_rate: item.rate, // map rate to unit_rate if needed
-        total_amount: item.amount // map amount to total_amount if needed
-      }));
-      total_amount = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+      items = manualItems.map(item => {
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.rate || item.unit_rate) || 0;
+        const amount = qty * rate;
+        const cgstPercent = item.cgst_percent || 9;
+        const sgstPercent = item.sgst_percent || 9;
+        const cgstAmount = (amount * cgstPercent) / 100;
+        const sgstAmount = (amount * sgstPercent) / 100;
+        const totalItemAmount = amount + cgstAmount + sgstAmount;
+        return {
+          ...item,
+          unit_rate: rate,
+          amount: amount,
+          cgst_percent: cgstPercent,
+          cgst_amount: cgstAmount,
+          sgst_percent: sgstPercent,
+          sgst_amount: sgstAmount,
+          total_amount: totalItemAmount
+        };
+      });
+      total_amount = items.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
     }
 
     let poNumber = manualPoNumber;
@@ -150,7 +192,7 @@ const createPurchaseOrder = async (data) => {
         mrId || null,
         finalVendorId,
         sales_order_id || null,
-        items.length > 0 ? 'ORDERED' : 'DRAFT',
+        'DRAFT',
         total_amount || 0,
         expectedDeliveryDate || null,
         notes || null
@@ -162,7 +204,7 @@ const createPurchaseOrder = async (data) => {
     if (mrId) {
       await connection.execute(
         'UPDATE material_requests SET linked_po_id = ?, linked_po_number = ?, status = ? WHERE id = ?',
-        [poId, poNumber, 'ORDERED', mrId]
+        [poId, poNumber, 'PROCESSING', mrId]
       );
     }
     
@@ -172,9 +214,14 @@ const createPurchaseOrder = async (data) => {
       for (const item of items) {
         if (item.sales_order_item_status === 'Rejected') continue;
 
-        const cgstAmount = item.cgst_amount || 0;
-        const sgstAmount = item.sgst_amount || 0;
-        const totalItemAmount = item.total_amount || (parseFloat(item.amount || 0) + parseFloat(cgstAmount) + parseFloat(sgstAmount));
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.unit_rate || item.rate) || 0;
+        const amount = qty * rate;
+        const cgstPercent = item.cgst_percent || 9;
+        const sgstPercent = item.sgst_percent || 9;
+        const cgstAmount = (amount * cgstPercent) / 100;
+        const sgstAmount = (amount * sgstPercent) / 100;
+        const totalItemAmount = amount + cgstAmount + sgstAmount;
         
         actualTotalAmount += totalItemAmount;
 
@@ -191,11 +238,11 @@ const createPurchaseOrder = async (data) => {
             item.description || null,
             item.quantity || 0,
             item.unit || 'NOS',
-            item.unit_rate || item.rate || 0,
-            item.amount || 0,
-            item.cgst_percent || 0,
+            rate,
+            amount,
+            cgstPercent,
             cgstAmount,
-            item.sgst_percent || 0,
+            sgstPercent,
             sgstAmount,
             totalItemAmount,
             item.material_name || null,
@@ -309,7 +356,7 @@ const getPurchaseOrderById = async (poId) => {
     `SELECT 
       poi.id,
       poi.item_code,
-      poi.description,
+      COALESCE(poi.description, sb.material_name, poi.item_code) as description,
       poi.quantity,
       poi.unit,
       poi.unit_rate,
@@ -319,12 +366,13 @@ const getPurchaseOrderById = async (poId) => {
       poi.sgst_percent,
       poi.sgst_amount,
       poi.total_amount,
-      poi.material_name,
+      COALESCE(poi.material_name, sb.material_name, poi.item_code) as material_name,
       poi.material_type,
       poi.drawing_no,
       poi.accepted_quantity,
       soi.status as sales_order_item_status
      FROM purchase_order_items poi
+     LEFT JOIN stock_balance sb ON poi.item_code = sb.item_code
      LEFT JOIN sales_order_items soi ON (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) AND soi.sales_order_id = ?
      WHERE poi.purchase_order_id = ?`,
     [po.sales_order_id, poId]
@@ -343,7 +391,7 @@ const getPurchaseOrderById = async (poId) => {
 };
 
 const updatePurchaseOrder = async (poId, payload) => {
-  const { status, poNumber, expectedDeliveryDate, notes } = payload;
+  const { status, poNumber, expectedDeliveryDate, notes, items } = payload;
   
   const validStatuses = ['DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'CLOSED'];
   if (status && !validStatuses.includes(status)) {
@@ -352,37 +400,81 @@ const updatePurchaseOrder = async (poId, payload) => {
     throw error;
   }
 
-  await getPurchaseOrderById(poId);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  const updates = [];
-  const params = [];
+    const [existing] = await connection.query('SELECT * FROM purchase_orders WHERE id = ?', [poId]);
+    if (!existing.length) {
+      throw new Error('Purchase Order not found');
+    }
 
-  if (status) {
-    updates.push('status = ?');
-    params.push(status);
-  }
-  if (poNumber) {
-    updates.push('po_number = ?');
-    params.push(poNumber);
-  }
-  if (expectedDeliveryDate !== undefined) {
-    updates.push('expected_delivery_date = ?');
-    params.push(expectedDeliveryDate);
-  }
-  if (notes !== undefined) {
-    updates.push('notes = ?');
-    params.push(notes);
-  }
+    const updates = [];
+    const params = [];
 
-  if (updates.length > 0) {
-    params.push(poId);
-    await pool.execute(
-      `UPDATE purchase_orders SET ${updates.join(', ')} WHERE id = ?`,
-      params
-    );
-  }
+    if (status) {
+      updates.push('status = ?');
+      params.push(status);
+    }
+    if (poNumber) {
+      updates.push('po_number = ?');
+      params.push(poNumber);
+    }
+    if (expectedDeliveryDate !== undefined) {
+      updates.push('expected_delivery_date = ?');
+      params.push(expectedDeliveryDate);
+    }
+    if (notes !== undefined) {
+      updates.push('notes = ?');
+      params.push(notes);
+    }
 
-  return { id: poId, status };
+    if (updates.length > 0) {
+      params.push(poId);
+      await connection.execute(
+        `UPDATE purchase_orders SET ${updates.join(', ')} WHERE id = ?`,
+        params
+      );
+    }
+
+    if (items && Array.isArray(items)) {
+      let totalAmount = 0;
+      for (const item of items) {
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.unit_rate) || parseFloat(item.rate) || 0;
+        const amount = qty * rate;
+        
+        // Default to 18% GST (9% CGST + 9% SGST)
+        const cgstPercent = item.cgst_percent || 9;
+        const sgstPercent = item.sgst_percent || 9;
+        const cgstAmount = (amount * cgstPercent) / 100;
+        const sgstAmount = (amount * sgstPercent) / 100;
+        const totalItemAmount = amount + cgstAmount + sgstAmount;
+        
+        totalAmount += totalItemAmount;
+
+        await connection.execute(
+          `UPDATE purchase_order_items 
+           SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?
+           WHERE id = ? AND purchase_order_id = ?`,
+          [rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, item.id, poId]
+        );
+      }
+
+      await connection.execute(
+        'UPDATE purchase_orders SET total_amount = ? WHERE id = ?',
+        [totalAmount, poId]
+      );
+    }
+
+    await connection.commit();
+    return { id: poId, status };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const deletePurchaseOrder = async (poId) => {
@@ -458,6 +550,40 @@ const getPOMaterialRequests = async (filters = {}) => {
   return rows;
 };
 
+const approvePurchaseOrder = async (poId, userId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [po] = await connection.query('SELECT mr_id FROM purchase_orders WHERE id = ?', [poId]);
+    if (!po.length) throw new Error('Purchase Order not found');
+
+    await connection.execute(
+      `UPDATE purchase_orders 
+       SET status = 'ORDERED',
+           approved_by = ?,
+           approved_at = NOW()
+       WHERE id = ?`,
+      [userId, poId]
+    );
+
+    if (po[0].mr_id) {
+      await connection.execute(
+        "UPDATE material_requests SET status = 'PO_CREATED' WHERE id = ?",
+        [po[0].mr_id]
+      );
+    }
+
+    await connection.commit();
+    return { success: true, poId, status: 'ORDERED' };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const handleStoreAcceptance = async (poId, payload) => {
   const { status, notes, items } = payload;
   const connection = await pool.getConnection();
@@ -513,5 +639,6 @@ module.exports = {
   deletePurchaseOrder,
   getPurchaseOrderStats,
   getPOMaterialRequests,
+  approvePurchaseOrder,
   handleStoreAcceptance
 };

@@ -1694,17 +1694,24 @@ const BOMFormPage = () => {
                     <div className="md:col-span-4 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Material Selection <span className="text-rose-500">*</span></label>
                       <SearchableSelect
-                        placeholder="Select raw material..."
+                        placeholder="Select material..."
                         options={stockItems
                           .filter(item => {
                             // Type Filter
                             const type = (item.material_type || '').toLowerCase();
                             const targetGroup = (materialForm.itemGroup || '').toLowerCase();
 
-                            if (targetGroup === 'raw material') {
-                              if (!type.includes('raw')) return false;
-                            } else if (targetGroup === 'sub assembly') {
-                              if (!type.includes('sub assembly')) return false;
+                            if (!showAllDrawings) {
+                              if (targetGroup === 'raw material' || targetGroup === 'consumable') {
+                                // Show both Raw and Consumables as requested
+                                if (!type.includes('raw') && !type.includes('consumable')) return false;
+                              } else if (targetGroup === 'sub assembly' || targetGroup === 'sfg') {
+                                if (!type.includes('sub assembly') && !type.includes('semi') && !type.includes('sfg')) return false;
+                              } else if (targetGroup === 'tooling') {
+                                if (!type.includes('tool')) return false;
+                              } else if (targetGroup === 'service') {
+                                if (!type.includes('service')) return false;
+                              }
                             }
 
                             if (showAllDrawings) return true;

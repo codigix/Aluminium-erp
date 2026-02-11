@@ -250,8 +250,8 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="px-6 py-4">
-                          <p className="text-xs font-black text-slate-800">{item.item_code}</p>
-                          <p className="text-[10px] text-slate-400 font-bold mt-0.5">{item.description}</p>
+                          <p className="text-xs font-black text-slate-800">{item.material_name || item.description || 'N/A'}</p>
+                          <p className="text-[10px] text-slate-400 font-bold mt-0.5">{item.item_code}</p>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <span className="text-xs font-black text-slate-800">{item.quantity}</span>
@@ -271,11 +271,24 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center font-bold text-xs text-slate-600">
-                          {formatCurrency(item.unit_rate, po.currency)}
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-xs font-black text-slate-700">{formatCurrency(item.unit_rate, po.currency)}</span>
+                            <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-tighter mt-0.5">
+                              +{(item.cgst_percent || 0) + (item.sgst_percent || 0) || 18}% GST
+                            </span>
+                          </div>
                         </td>
-                        <td className="px-6 py-4 text-right font-black text-xs text-slate-800">
-                          {formatCurrency(item.total_amount || (item.quantity * item.unit_rate), po.currency)}
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="text-xs font-black text-slate-800">
+                              {formatCurrency(item.total_amount || (item.quantity * item.unit_rate * 1.18), po.currency)}
+                            </span>
+                            <div className="flex gap-2 text-[8px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">
+                              <span>C: {formatCurrency(item.cgst_amount || (item.quantity * item.unit_rate * 0.09), po.currency)}</span>
+                              <span>S: {formatCurrency(item.sgst_amount || (item.quantity * item.unit_rate * 0.09), po.currency)}</span>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -287,16 +300,16 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
             <div className="p-6 bg-slate-50/30 border-t border-slate-50 space-y-3">
               <div className="flex justify-end gap-12 text-xs">
                 <span className="text-slate-400 font-bold uppercase tracking-widest">Subtotal</span>
-                <span className="text-slate-600 font-black w-24 text-right">{formatCurrency(subtotal, po.currency)}</span>
+                <span className="text-slate-600 font-black w-32 text-right">{formatCurrency(po.items?.reduce((sum, i) => sum + (parseFloat(i.amount) || (i.quantity * i.unit_rate)), 0), po.currency)}</span>
               </div>
               <div className="flex justify-end gap-12 text-xs">
-                <span className="text-slate-400 font-bold uppercase tracking-widest">Tax</span>
-                <span className="text-emerald-500 font-black w-24 text-right">+ {formatCurrency(totalTax, po.currency)}</span>
+                <span className="text-slate-400 font-bold uppercase tracking-widest">GST (CGST 9% + SGST 9%)</span>
+                <span className="text-emerald-500 font-black w-32 text-right">+ {formatCurrency(po.items?.reduce((sum, i) => sum + (parseFloat(i.cgst_amount || 0) + parseFloat(i.sgst_amount || 0)) || (i.quantity * i.unit_rate * 0.18), 0), po.currency)}</span>
               </div>
             </div>
             <div className="bg-blue-600 px-8 py-4 flex justify-between items-center text-white">
               <span className="text-xs font-black uppercase tracking-[0.2em]">Grand Total</span>
-              <span className="text-xl font-black">{formatCurrency(grandTotal, po.currency)}</span>
+              <span className="text-xl font-black">{formatCurrency(po.total_amount || po.items?.reduce((sum, i) => sum + (parseFloat(i.total_amount) || (i.quantity * i.unit_rate * 1.18)), 0), po.currency)}</span>
             </div>
           </div>
         </div>

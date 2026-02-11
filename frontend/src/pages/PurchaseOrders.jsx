@@ -428,6 +428,33 @@ const PurchaseOrders = () => {
     }
   };
 
+  const handleEditItemChange = (index, field, value) => {
+    const updatedItems = [...poItems];
+    updatedItems[index][field] = value;
+
+    if (field === 'unit_rate' || field === 'quantity') {
+      const qty = parseFloat(updatedItems[index].quantity) || 0;
+      const rate = parseFloat(updatedItems[index].unit_rate) || 0;
+      const amount = qty * rate;
+      
+      const cgstPercent = updatedItems[index].cgst_percent || 9;
+      const sgstPercent = updatedItems[index].sgst_percent || 9;
+      const cgstAmount = (amount * cgstPercent) / 100;
+      const sgstAmount = (amount * sgstPercent) / 100;
+      
+      updatedItems[index].amount = amount;
+      updatedItems[index].cgst_amount = cgstAmount;
+      updatedItems[index].sgst_amount = sgstAmount;
+      updatedItems[index].total_amount = amount + cgstAmount + sgstAmount;
+    }
+
+    setPoItems(updatedItems);
+    
+    // Recalculate grand total for the selected PO
+    const newGrandTotal = updatedItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+    setSelectedPO({ ...selectedPO, total_amount: newGrandTotal });
+  };
+
   const handleUpdatePO = async (e) => {
     e.preventDefault();
 
@@ -443,7 +470,8 @@ const PurchaseOrders = () => {
           status: editFormData.status,
           poNumber: selectedPO.po_number,
           expectedDeliveryDate: editFormData.expectedDeliveryDate || null,
-          notes: editFormData.notes
+          notes: editFormData.notes,
+          items: poItems
         })
       });
 
@@ -488,6 +516,46 @@ const PurchaseOrders = () => {
       fetchStats();
     } catch (error) {
       errorToast(error.message || 'Failed to delete PO');
+    }
+  };
+
+  const handleApprovePO = async (poId) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Approve Purchase Order?',
+        text: 'This will confirm the order and allow material receipts.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Approve It!'
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/purchase-orders/${poId}/approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          successToast("Purchase Order approved successfully");
+          fetchPOs();
+          fetchStats();
+        } else {
+          const error = await response.json();
+          errorToast(error.message || "Failed to approve PO");
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast("Network error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -592,6 +660,17 @@ const PurchaseOrders = () => {
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
+          {row.status === 'DRAFT' && (
+            <button
+              onClick={() => handleApprovePO(row.id)}
+              className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all border border-emerald-50 shadow-sm active:scale-90"
+              title="Approve PO"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={() => handleViewPODetail(row.id)}
             className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all border border-blue-50 shadow-sm active:scale-90"
@@ -1271,7 +1350,66 @@ const PurchaseOrders = () => {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider w-24">Amount:</span>
-                  <span className="text-sm font-black text-slate-800">{formatCurrency(selectedPO.total_amount)}</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-black text-slate-800">{formatCurrency(selectedPO.total_amount)}</span>
+                    <div className="flex gap-2 text-[8px] text-slate-400 font-bold uppercase tracking-tighter">
+                      <span>Sub: {formatCurrency(poItems.reduce((sum, i) => sum + (parseFloat(i.amount) || (i.quantity * (i.unit_rate || i.rate || 0))), 0))}</span>
+                      <span className="text-emerald-500">Tax: {formatCurrency(poItems.reduce((sum, i) => sum + (parseFloat(i.cgst_amount || 0) + parseFloat(i.sgst_amount || 0)) || (i.quantity * (i.unit_rate || i.rate || 0) * 0.18), 0))}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Items Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order Items (Update Rates & Tax)</h3>
+                  <span className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">Default 18% GST Applied</span>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/50">
+                      <tr>
+                        <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Item</th>
+                        <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Qty</th>
+                        <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Rate</th>
+                        <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {poItems.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-slate-700">{item.material_name || item.description}</span>
+                              <span className="text-[9px] text-slate-400 font-medium">{item.item_code}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-xs font-black text-slate-600">{item.quantity}</span>
+                            <span className="text-[9px] text-slate-400 ml-1 uppercase">{item.unit || 'NOS'}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="relative group max-w-[120px] mx-auto">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">₹</span>
+                              <input
+                                type="number"
+                                value={item.unit_rate || item.rate || 0}
+                                onChange={(e) => handleEditItemChange(idx, 'unit_rate', e.target.value)}
+                                className="w-full pl-5 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
+                              />
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex flex-col items-end">
+                              <span className="text-xs font-black text-slate-800">{formatCurrency(item.total_amount || (item.quantity * (item.unit_rate || item.rate || 0) * 1.18))}</span>
+                              <span className="text-[9px] text-emerald-500 font-bold">+18% GST</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
