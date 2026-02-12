@@ -28,7 +28,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DESIGN],
-    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
+    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
@@ -46,7 +46,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: ['sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.PRODUCTION],
-    allowedModules: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form'],
+    allowedModules: ['dashboard', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form'],
     permissions: [
       'ORDER_VIEW', 'ORDER_EDIT',
       'PO_VIEW',
@@ -64,7 +64,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
+    allowedModules: ['dashboard', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
     permissions: [
       'PO_VIEW',
       'ORDER_VIEW',
@@ -94,7 +94,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: ['sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DISPATCH_PENDING],
-    allowedModules: ['incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card'],
+    allowedModules: ['dashboard', 'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card'],
     permissions: [
       'ORDER_VIEW', 'ORDER_EDIT',
       'PO_VIEW',

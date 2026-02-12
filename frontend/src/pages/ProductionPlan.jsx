@@ -204,14 +204,8 @@ const ProductionPlan = () => {
           const data = await response.json();
           successToast(data.message || 'Work orders created successfully');
           
-          // Navigate to the first created work order (usually the FG one)
-          if (data.workOrderIds && data.workOrderIds.length > 0) {
-            navigate('/work-order-form', { state: { workOrderId: data.workOrderIds[0] } });
-          } else if (data.workOrderId) {
-            navigate('/work-order-form', { state: { workOrderId: data.workOrderId } });
-          } else {
-            handleViewPlan(planId);
-          }
+          // Navigate to the work order list
+          navigate('/work-order');
         } else {
           const error = await response.json();
           errorToast(error.error || 'Failed to create work orders');
