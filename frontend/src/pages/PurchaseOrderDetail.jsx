@@ -42,9 +42,9 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
 
   const currentStatus = po.status?.toUpperCase() || 'DRAFT';
   const getStepIndex = (status) => {
-    if (['COMPLETED', 'CLOSED'].includes(status)) return 3;
+    if (['COMPLETED', 'CLOSED', 'ORDERED'].includes(status)) return 3;
     if (['RECEIVED', 'ACKNOWLEDGED'].includes(status)) return 2;
-    if (['SUBMITTED', 'ORDERED', 'SENT'].includes(status)) return 1;
+    if (['SUBMITTED', 'SENT'].includes(status)) return 1;
     return 0;
   };
 
