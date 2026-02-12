@@ -38,6 +38,7 @@ const POReceipts = () => {
   const [user, setUser] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'details'
   const [activeTab, setActiveTab] = useState('grn');
+  const [stockBalances, setStockBalances] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
@@ -152,6 +153,7 @@ const POReceipts = () => {
         fetchPurchaseOrders();
         fetchStockItems();
         fetchWarehouses();
+        fetchStockBalance();
       }
     } else {
       fetchReceipts();
@@ -159,8 +161,27 @@ const POReceipts = () => {
       fetchPurchaseOrders();
       fetchStockItems();
       fetchWarehouses();
+      fetchStockBalance();
     }
   }, []);
+
+  const fetchStockBalance = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/stock/balance`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStockBalances(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching stock balance:', error);
+    }
+  };
 
   const fetchReceipts = async () => {
     try {
@@ -551,6 +572,53 @@ const POReceipts = () => {
       )
     }
   ];
+  const stockColumns = [
+    {
+      label: 'Item Code',
+      key: 'item_code',
+      sortable: true,
+      render: (val) => <span className="text-slate-900 font-black">{val}</span>
+    },
+    {
+      label: 'Material Name',
+      key: 'material_name',
+      sortable: true,
+      render: (val) => <span className="text-slate-600 font-bold">{val || '—'}</span>
+    },
+    {
+      label: 'Material Type',
+      key: 'material_type',
+      sortable: true,
+      render: (val) => <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{val || '—'}</span>
+    },
+    {
+      label: 'Warehouse',
+      key: 'warehouse',
+      sortable: true,
+      render: (val) => <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{val || '—'}</span>
+    },
+    {
+      label: 'Current Balance',
+      key: 'current_balance',
+      sortable: true,
+      className: 'text-right',
+      render: (val) => (
+        <div className="flex items-center justify-end gap-2">
+          <span className={`inline-block w-1.5 h-1.5 rounded-full ${parseFloat(val || 0) <= 0 ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
+          <span className={`font-black text-xs ${parseFloat(val || 0) <= 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+            {parseFloat(val || 0).toFixed(3)}
+          </span>
+        </div>
+      )
+    },
+    {
+      label: 'Unit',
+      key: 'unit',
+      sortable: true,
+      render: (val) => <span className="text-slate-400 text-[10px] font-black uppercase">{val || 'NOS'}</span>
+    }
+  ];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Page Header */}
@@ -684,20 +752,37 @@ const POReceipts = () => {
 
       {/* Main Table Section */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <DataTable
-          columns={columns}
-          data={receipts.filter(r => {
-            const matchesSearch = !searchTerm || 
-              String(r.id).includes(searchTerm) ||
-              r.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              r.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
-            return matchesSearch && matchesStatus;
-          })}
-          loading={loading}
-          hideHeader={true}
-          className="border-none shadow-none rounded-none"
-        />
+        {activeTab === 'grn' ? (
+          <DataTable
+            columns={columns}
+            data={receipts.filter(r => {
+              const matchesSearch = !searchTerm || 
+                String(r.id).includes(searchTerm) ||
+                r.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                r.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase());
+              const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
+              return matchesSearch && matchesStatus;
+            })}
+            loading={loading}
+            hideHeader={true}
+            className="border-none shadow-none rounded-none"
+          />
+        ) : (
+          <DataTable
+            columns={stockColumns}
+            data={stockBalances.filter(s => {
+              const matchesSearch = !searchTerm || 
+                s.item_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                s.material_name?.toLowerCase().includes(searchTerm.toLowerCase());
+              return matchesSearch;
+            })}
+            loading={loading}
+            hideHeader={true}
+            className="border-none shadow-none rounded-none"
+            searchPlaceholder="Search available stocks..."
+            emptyMessage="No available stocks found"
+          />
+        )}
       </div>
 
       {/* GRN View Details Modal */}
