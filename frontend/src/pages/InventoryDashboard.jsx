@@ -39,12 +39,16 @@ const InventoryDashboard = () => {
       const incomingData = incomingRes.ok ? await incomingRes.json() : [];
       const grnData = grnRes.ok ? await grnRes.json() : [];
       const stockData = stockRes.ok ? await stockRes.json() : [];
+      const filteredStockData = (Array.isArray(stockData) ? stockData : []).filter(item => {
+        const type = (item.material_type || item.item_group || '').toUpperCase();
+        return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+      });
       const mrData = mrRes.ok ? await mrRes.json() : [];
 
       setStats({
         incomingPos: Array.isArray(incomingData) ? incomingData : [],
         pendingGRNs: Array.isArray(grnData) ? grnData : [],
-        lowStockItems: Array.isArray(stockData) ? stockData : [],
+        lowStockItems: filteredStockData,
         materialRequests: Array.isArray(mrData) ? mrData : []
       });
     } catch (error) {

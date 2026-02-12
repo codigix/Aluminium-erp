@@ -108,12 +108,12 @@ const createPurchaseOrder = async (data) => {
       const [mrItems] = await connection.query(`
         SELECT mri.*, sb.valuation_rate,
                COALESCE(
-                 (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE soi.item_code = mri.item_code AND soi.bom_cost > 0),
+                 (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = mri.item_code OR soi.drawing_no = mri.item_code) AND soi.bom_cost > 0),
                  (SELECT MAX(rate) FROM production_plan_materials ppm WHERE ppm.plan_id = ? AND ppm.item_code = mri.item_code AND ppm.rate > 0),
                  (SELECT MAX(rate) FROM production_plan_sub_assemblies psa WHERE psa.plan_id = ? AND psa.item_code = mri.item_code AND psa.rate > 0),
                  (SELECT MAX(rate) FROM production_plan_items ppi WHERE ppi.plan_id = ? AND ppi.item_code = mri.item_code AND ppi.rate > 0),
-                 (SELECT MAX(rate) FROM sales_order_item_materials som WHERE som.item_code = mri.item_code AND som.rate > 0),
-                 (SELECT MAX(rate) FROM sales_order_item_components soc WHERE soc.component_code = mri.item_code AND soc.rate > 0),
+                 (SELECT MAX(rate) FROM sales_order_item_materials som WHERE (som.item_code = mri.item_code OR som.drawing_no = mri.item_code) AND som.rate > 0),
+                 (SELECT MAX(rate) FROM sales_order_item_components soc WHERE (soc.component_code = mri.item_code OR soc.drawing_no = mri.item_code) AND soc.rate > 0),
                  mri.unit_rate
                ) as bom_rate
         FROM material_request_items mri
@@ -344,9 +344,9 @@ const getPurchaseOrders = async (filters = {}) => {
       `SELECT 
         poi.*,
         COALESCE(
-          (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE soi.item_code = poi.item_code AND soi.bom_cost > 0),
-          (SELECT MAX(rate) FROM sales_order_item_materials som WHERE som.item_code = poi.item_code AND som.rate > 0),
-          (SELECT MAX(rate) FROM sales_order_item_components soc WHERE soc.component_code = poi.item_code AND soc.rate > 0),
+          (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = poi.item_code OR soi.drawing_no = poi.item_code) AND soi.bom_cost > 0),
+          (SELECT MAX(rate) FROM sales_order_item_materials som WHERE (som.item_code = poi.item_code OR som.drawing_no = poi.item_code) AND som.rate > 0),
+          (SELECT MAX(rate) FROM sales_order_item_components soc WHERE (soc.component_code = poi.item_code OR soc.drawing_no = poi.item_code) AND soc.rate > 0),
           poi.unit_rate
         ) as unit_rate,
         (SELECT status FROM sales_order_items soi 
@@ -359,9 +359,14 @@ const getPurchaseOrders = async (filters = {}) => {
       [poIds]
     );
 
-    // Group items by purchase_order_id
+    // Group items by purchase_order_id and filter them
     pos.forEach(po => {
-      po.items = items.filter(item => item.purchase_order_id === po.id);
+      po.items = items
+        .filter(item => item.purchase_order_id === po.id)
+        .filter(item => {
+          const type = (item.material_type || '').toUpperCase();
+          return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+        });
     });
   }
 
@@ -395,9 +400,9 @@ const getPurchaseOrderById = async (poId) => {
       poi.quantity,
       poi.unit,
       COALESCE(
-        (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE soi.item_code = poi.item_code AND soi.bom_cost > 0),
-        (SELECT MAX(rate) FROM sales_order_item_materials som WHERE som.item_code = poi.item_code AND som.rate > 0),
-        (SELECT MAX(rate) FROM sales_order_item_components soc WHERE soc.component_code = poi.item_code AND soc.rate > 0),
+        (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = poi.item_code OR soi.drawing_no = poi.item_code) AND soi.bom_cost > 0),
+        (SELECT MAX(rate) FROM sales_order_item_materials som WHERE (som.item_code = poi.item_code OR som.drawing_no = poi.item_code) AND som.rate > 0),
+        (SELECT MAX(rate) FROM sales_order_item_components soc WHERE (soc.component_code = poi.item_code OR soc.drawing_no = poi.item_code) AND soc.rate > 0),
         poi.unit_rate
       ) as unit_rate,
       poi.amount,
@@ -420,16 +425,18 @@ const getPurchaseOrderById = async (poId) => {
     [po.sales_order_id, poId]
   );
 
-  // Use the total_amount stored in po if available, otherwise calculate from items
+  // Filter out FG and Sub Assembly items
+  const filteredItems = items.filter(item => {
+    const type = (item.material_type || '').toUpperCase();
+    return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+  });
+
+  // Use the total_amount stored in po if available, otherwise calculate from filtered items
   if (!po.total_amount || po.total_amount === 0) {
-    const [totalResult] = await pool.query(
-      'SELECT SUM(total_amount) as total FROM purchase_order_items WHERE purchase_order_id = ?',
-      [poId]
-    );
-    po.total_amount = totalResult[0]?.total || 0;
+    po.total_amount = filteredItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
   }
 
-  return { ...po, items };
+  return { ...po, items: filteredItems };
 };
 
 const updatePurchaseOrder = async (poId, payload) => {
@@ -591,6 +598,7 @@ const getPOMaterialRequests = async (filters = {}) => {
     JOIN vendors v ON v.id = po.vendor_id
     JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
     WHERE 1=1
+    AND UPPER(poi.material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
   `;
   const params = [];
 

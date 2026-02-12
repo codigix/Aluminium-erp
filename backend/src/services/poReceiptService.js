@@ -102,6 +102,14 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
 
     const receiptId = result.insertId;
 
+    // Filter items to remove FG and Sub Assembly
+    const filteredItems = (items || []).filter(item => {
+      // Note: We might need to fetch material_type from purchase_order_items if not in item object
+      // But usually 'item' here is from the request body which is derived from the PO details we already filtered in frontend
+      const type = (item.material_type || '').toUpperCase();
+      return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+    });
+
     // Create GRN entry automatically
     const [grnResult] = await connection.execute(
       `INSERT INTO grns (po_number, grn_date, received_quantity, status, notes, po_receipt_id)
@@ -110,11 +118,11 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
     );
     const grnId = grnResult.insertId;
 
-    if (Array.isArray(items) && items.length > 0) {
+    if (filteredItems.length > 0) {
       // Pre-fetch all warehouses to map code/name to ID
       const [allWarehouses] = await connection.query('SELECT id, warehouse_code, warehouse_name FROM warehouses');
       
-      for (const item of items) {
+      for (const item of filteredItems) {
         await connection.execute(
           `INSERT INTO po_receipt_items (receipt_id, po_item_id, received_quantity)
            VALUES (?, ?, ?)`,
@@ -135,7 +143,7 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
           [
             grnId, 
             item.id, 
-            item.quantity || 0, 
+            item.design_qty || item.quantity || 0, 
             item.received_qty || 0, 
             item.received_qty || 0, 
             'PENDING',

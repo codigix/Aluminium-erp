@@ -296,13 +296,18 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
       poi.item_code,
       gi.accepted_qty as quantity,
       poi.unit as uom,
-      poi.unit_rate as valuation_rate
+      poi.unit_rate as valuation_rate,
+      poi.material_type
     FROM grn_items gi
     JOIN purchase_order_items poi ON gi.po_item_id = poi.id
     WHERE gi.grn_id = ?
   `, [grnId]);
   
-  return items;
+  // Filter out FG and Sub Assembly
+  return items.filter(item => {
+    const type = (item.material_type || '').toUpperCase();
+    return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+  });
 };
 
 const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = null) => {

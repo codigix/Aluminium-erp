@@ -137,7 +137,11 @@ const StockEntries = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      setStockBalances(Array.isArray(data) ? data : []);
+      const filteredData = (Array.isArray(data) ? data : []).filter(item => {
+        const type = (item.material_type || '').toUpperCase();
+        return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+      });
+      setStockBalances(filteredData);
     } catch (error) {
       console.error('Error fetching stock balances:', error);
     }

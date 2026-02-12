@@ -14,7 +14,7 @@ const getGRNWithDetails = async (grnId) => {
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
-      SUM(poi.quantity) AS orderedQuantity
+      SUM(COALESCE(poi.design_qty, poi.quantity)) AS orderedQuantity
     FROM grns g
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
     LEFT JOIN vendors v ON po.vendor_id = v.id

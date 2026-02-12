@@ -49,9 +49,13 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
   };
 
   const activeStepIndex = getStepIndex(currentStatus);
+  const filteredItems = (po.items || []).filter(item => {
+    const type = (item.material_type || '').toUpperCase();
+    return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+  });
 
-  const subtotal = po.items?.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0) || 0;
-  const totalTax = po.items?.reduce((sum, item) => sum + (parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)), 0) || 0;
+  const subtotal = filteredItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0) || 0;
+  const totalTax = filteredItems.reduce((sum, item) => sum + (parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)), 0) || 0;
   const grandTotal = po.total_amount || (subtotal + totalTax);
 
   return (
@@ -228,7 +232,7 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                 </div>
                 <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Items List</h4>
               </div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">{po.items?.length || 0} Items</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">{filteredItems.length} Items</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -243,7 +247,7 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {po.items?.map((item, idx) => {
+                  {filteredItems.map((item, idx) => {
                     const received = parseFloat(item.accepted_quantity) || 0;
                     const total = parseFloat(item.quantity) || 1;
                     const percent = Math.min(100, Math.round((received / total) * 100));
@@ -284,7 +288,7 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                         <td className="px-6 py-4 text-right">
                           <div className="flex flex-col items-end">
                             <span className="text-xs font-black text-slate-800">
-                              {formatCurrency(item.total_amount || (item.quantity * item.unit_rate * 1.18), po.currency)}
+                              {formatCurrency(item.amount || ((item.design_qty || item.quantity || 0) * (item.unit_rate || 0)), po.currency)}
                             </span>
                             <div className="flex gap-2 text-[8px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">
                               <span>C: {formatCurrency(item.cgst_amount || (item.quantity * item.unit_rate * 0.09), po.currency)}</span>
@@ -302,16 +306,16 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
             <div className="p-6 bg-slate-50/30 border-t border-slate-50 space-y-3">
               <div className="flex justify-end gap-12 text-xs">
                 <span className="text-slate-400 font-bold uppercase tracking-widest">Subtotal</span>
-                <span className="text-slate-600 font-black w-32 text-right">{formatCurrency(po.items?.reduce((sum, i) => sum + (parseFloat(i.amount) || (i.quantity * i.unit_rate)), 0), po.currency)}</span>
+                <span className="text-slate-600 font-black w-32 text-right">{formatCurrency(filteredItems.reduce((sum, i) => sum + (parseFloat(i.amount) || (i.quantity * i.unit_rate)), 0), po.currency)}</span>
               </div>
               <div className="flex justify-end gap-12 text-xs">
                 <span className="text-slate-400 font-bold uppercase tracking-widest">GST (CGST 9% + SGST 9%)</span>
-                <span className="text-emerald-500 font-black w-32 text-right">+ {formatCurrency(po.items?.reduce((sum, i) => sum + (parseFloat(i.cgst_amount || 0) + parseFloat(i.sgst_amount || 0)) || (i.quantity * i.unit_rate * 0.18), 0), po.currency)}</span>
+                <span className="text-emerald-500 font-black w-32 text-right">+ {formatCurrency(filteredItems.reduce((sum, i) => sum + (parseFloat(i.cgst_amount || 0) + parseFloat(i.sgst_amount || 0)) || (i.quantity * i.unit_rate * 0.18), 0), po.currency)}</span>
               </div>
             </div>
             <div className="bg-blue-600 px-8 py-4 flex justify-between items-center text-white">
               <span className="text-xs font-black uppercase tracking-[0.2em]">Grand Total</span>
-              <span className="text-xl font-black">{formatCurrency(po.total_amount || po.items?.reduce((sum, i) => sum + (parseFloat(i.total_amount) || (i.quantity * i.unit_rate * 1.18)), 0), po.currency)}</span>
+              <span className="text-xl font-black">{formatCurrency(po.total_amount || filteredItems.reduce((sum, i) => sum + (parseFloat(i.total_amount) || (i.quantity * i.unit_rate * 1.18)), 0), po.currency)}</span>
             </div>
           </div>
         </div>

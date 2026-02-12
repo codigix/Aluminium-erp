@@ -126,6 +126,13 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
     query += ' WHERE ' + conditions.join(' AND ');
   }
 
+  // Filter out FG and Sub Assembly
+  if (conditions.length > 0) {
+    query += " AND UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')";
+  } else {
+    query += " WHERE UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')";
+  }
+
   query += ' ORDER BY transaction_date DESC';
 
   const [ledger] = await pool.query(query, params);
@@ -160,6 +167,13 @@ const getStockBalance = async (drawingNo = null) => {
   if (drawingNo) {
     query += ` WHERE drawing_no = ? `;
     params.push(drawingNo);
+  }
+
+  // Filter out FG and Sub Assembly
+  if (drawingNo) {
+    query += " AND UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY') ";
+  } else {
+    query += " WHERE UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY') ";
   }
 
   query += ` GROUP BY item_code ORDER BY id DESC `;
@@ -251,13 +265,33 @@ const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, con
   return balance.length > 0 ? balance[0] : null;
 };
 
-const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocType = null, refDocId = null, refDocNumber = null, remarks = null, userId = null, options = {}) => {
-  const connection = options.connection || await pool.getConnection();
-  const shouldRelease = !options.connection;
+const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocType = null, refDocId = null, refDocNumber = null, optionsOrRemarks = {}, connectionOrUserId = null, extraOptions = {}) => {
+  // Handle flexible arguments to support different calling patterns
+  let options = {};
+  let connection = null;
+  let remarks = null;
+  let userId = null;
+
+  if (typeof optionsOrRemarks === 'string') {
+    // Old pattern: (..., remarks, userId, options)
+    remarks = optionsOrRemarks;
+    userId = connectionOrUserId;
+    options = extraOptions || {};
+    connection = options.connection || null;
+  } else {
+    // New pattern: (..., options, connection)
+    options = optionsOrRemarks || {};
+    connection = connectionOrUserId;
+    remarks = options.remarks || null;
+    userId = options.userId || null;
+  }
+
+  const useConnection = connection || options.connection || await pool.getConnection();
+  const shouldRelease = !(connection || options.connection);
   
   try {
     if (shouldRelease) {
-      await connection.beginTransaction();
+      await useConnection.beginTransaction();
     }
 
     const warehouse = options.warehouse || null;
@@ -266,22 +300,18 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     const grnItemId = options.grnItemId || null;
     
     // Get existing balance for this item and warehouse
-    let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, connection);
+    let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection);
 
-    // If not found for this specific warehouse, try to find the "master" entry (usually the one without a warehouse or the first one)
-    // to inherit material details correctly and prevent duplicates in UI if the UI doesn't filter by warehouse
+    // If not found for this specific warehouse, try to find the "master" entry
     if (!existingBalance) {
-      const [masterRows] = await connection.query(
+      const [masterRows] = await useConnection.query(
         'SELECT * FROM stock_balance WHERE item_code = ? LIMIT 1',
         [itemCode]
       );
       if (masterRows.length > 0) {
-        // We use the master details but we STILL want to create/update a specific warehouse record if 'warehouse' is provided
         const master = masterRows[0];
         if (!options.materialName) options.materialName = master.material_name;
         if (!options.materialType) options.materialType = master.material_type;
-        if (!options.drawingNo) options.drawingNo = master.drawing_no;
-        if (!options.drawingId) options.drawingId = master.drawing_id;
         if (!options.unit) options.unit = master.unit;
       }
     }
@@ -302,13 +332,11 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
     let matName = options.materialName || existingBalance?.material_name || null;
     let matType = options.materialType || existingBalance?.material_type || null;
-    let drawingNo = options.drawingNo || existingBalance?.drawing_no || null;
-    let drawingId = options.drawingId || existingBalance?.drawing_id || null;
 
     // Try to fetch name if still null
     if (!matName) {
-      const [nameRows] = await connection.query(`
-        SELECT material_name, material_type, drawing_no, drawing_id 
+      const [nameRows] = await useConnection.query(`
+        SELECT material_name, material_type 
         FROM stock_balance 
         WHERE item_code = ? AND material_name IS NOT NULL 
         LIMIT 1
@@ -317,11 +345,9 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       if (nameRows.length > 0) {
         matName = nameRows[0].material_name;
         matType = nameRows[0].material_type;
-        drawingNo = drawingNo || nameRows[0].drawing_no;
-        drawingId = drawingId || nameRows[0].drawing_id;
       } else {
-        const [poRows] = await connection.query(`
-          SELECT material_name, material_type, drawing_no, drawing_id 
+        const [poRows] = await useConnection.query(`
+          SELECT material_name, material_type 
           FROM purchase_order_items 
           WHERE item_code = ? AND material_name IS NOT NULL 
           LIMIT 1
@@ -330,8 +356,6 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
         if (poRows.length > 0) {
           matName = poRows[0].material_name;
           matType = poRows[0].material_type;
-          drawingNo = drawingNo || poRows[0].drawing_no;
-          drawingId = drawingId || poRows[0].drawing_id;
         }
       }
     }
@@ -349,61 +373,60 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     }
 
     // Insert into stock_ledger
-    await connection.execute(`
+    // Removed drawing_no and drawing_id as they don't exist in stock_ledger table
+    // Added transaction_date
+    await useConnection.execute(`
       INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, drawing_no, drawing_id, transaction_type, quantity, qty_in, qty_out, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [itemCode, matName, matType, drawingNo, drawingId, transactionType, quantity, qtyIn, qtyOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId]);
+      (item_code, material_name, material_type, transaction_type, transaction_date, quantity, qty_in, qty_out, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id)
+      VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [itemCode, matName, matType, transactionType, quantity, qtyIn, qtyOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId]);
 
-    const ledgerId = (await connection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
+    const ledgerId = (await useConnection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
 
     // Recalculate balance from ledger for accuracy (consolidated)
-    const details = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', connection);
+    const details = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection);
     newBalance = details.current_balance;
 
     // Update the ledger entry with the correct balance_after
-    await connection.execute('UPDATE stock_ledger SET balance_after = ? WHERE id = ?', [newBalance, ledgerId]);
+    await useConnection.execute('UPDATE stock_ledger SET balance_after = ? WHERE id = ?', [newBalance, ledgerId]);
 
     // IMPORTANT: Update or insert into stock_balance
     // We always want to update the "Master" record if it exists, or the specific warehouse one.
-    // To prevent duplicates in UI, we check for ANY existing balance for this item first if specific one doesn't exist.
     let balanceToUpdate = existingBalance;
     if (!balanceToUpdate) {
-      const [anyBalance] = await connection.query('SELECT * FROM stock_balance WHERE item_code = ? LIMIT 1', [itemCode]);
+      const [anyBalance] = await useConnection.query('SELECT * FROM stock_balance WHERE item_code = ? LIMIT 1', [itemCode]);
       if (anyBalance.length > 0) balanceToUpdate = anyBalance[0];
     }
 
     if (balanceToUpdate) {
-      await connection.execute(`
+      await useConnection.execute(`
         UPDATE stock_balance 
         SET current_balance = current_balance + ?, 
             material_name = COALESCE(?, material_name), 
             material_type = COALESCE(?, material_type), 
-            drawing_no = COALESCE(?, drawing_no), 
-            drawing_id = COALESCE(?, drawing_id), 
             last_updated = CURRENT_TIMESTAMP
         WHERE id = ?
-      `, [qtyIn - qtyOut, matName, matType, drawingNo, drawingId, balanceToUpdate.id]);
+      `, [qtyIn - qtyOut, matName, matType, balanceToUpdate.id]);
     } else {
-      await connection.execute(`
+      await useConnection.execute(`
         INSERT INTO stock_balance 
-        (item_code, current_balance, material_name, material_type, drawing_no, drawing_id, warehouse, unit)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [itemCode, qtyIn - qtyOut, matName, matType, drawingNo, drawingId, warehouse, options.unit || 'NOS']);
+        (item_code, current_balance, material_name, material_type, warehouse, unit)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [itemCode, qtyIn - qtyOut, matName, matType, warehouse, options.unit || 'NOS']);
     }
 
     if (shouldRelease) {
-      await connection.commit();
+      await useConnection.commit();
     }
     return { success: true };
   } catch (error) {
     if (shouldRelease) {
-      await connection.rollback();
+      await useConnection.rollback();
     }
     throw error;
   } finally {
     if (shouldRelease) {
-      connection.release();
+      useConnection.release();
     }
   }
 };

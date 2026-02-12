@@ -125,7 +125,11 @@ const PurchaseOrders = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setStockItems(Array.isArray(data) ? data : []);
+        const filteredData = (Array.isArray(data) ? data : []).filter(item => {
+          const type = (item.material_type || '').toUpperCase();
+          return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+        });
+        setStockItems(filteredData);
       }
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -317,7 +321,11 @@ const PurchaseOrders = () => {
 
           setPoSuggestions(suggestions);
           setIsManualPo(false);
-          setPoItems(detailedQuotation.items || []);
+          const filteredItems = (detailedQuotation.items || []).filter(item => {
+            const type = (item.material_type || '').toUpperCase();
+            return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+          });
+          setPoItems(filteredItems);
           setFormData(prev => ({
             ...prev,
             quotationId,
@@ -433,9 +441,14 @@ const PurchaseOrders = () => {
           expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
           notes: data.notes || '',
           currency: data.currency ? `${data.currency} (${data.currency === 'INR' ? 'Indian Rupee' : 'US Dollar'})` : 'INR (Indian Rupee)',
-          items: (data.items || []).map(item => ({
-            id: item.id,
-            item_code: item.item_code || '',
+          items: (data.items || [])
+            .filter(item => {
+              const type = (item.material_type || '').toUpperCase();
+              return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+            })
+            .map(item => ({
+              id: item.id,
+              item_code: item.item_code || '',
             description: item.description || '',
             quantity: item.design_qty || item.quantity || 0,
             unit: item.unit || 'NOS',
@@ -446,7 +459,11 @@ const PurchaseOrders = () => {
         setShowManualCreateModal(true);
       } else {
         setSelectedPO(data);
-        setPoItems(data.items || []);
+        const filteredItems = (data.items || []).filter(item => {
+          const type = (item.material_type || '').toUpperCase();
+          return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+        });
+        setPoItems(filteredItems);
         setEditFormData({
           expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
           notes: data.notes || '',

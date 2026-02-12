@@ -117,7 +117,11 @@ const POReceipts = () => {
       const response = await fetch(`${API_BASE}/inventory/items`);
       if (response.ok) {
         const data = await response.json();
-        setStockItems(data || []);
+        const filteredData = (Array.isArray(data) ? data : []).filter(item => {
+          const type = (item.material_type || '').toUpperCase();
+          return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+        });
+        setStockItems(filteredData);
       }
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -176,7 +180,11 @@ const POReceipts = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setStockBalances(Array.isArray(data) ? data : []);
+        const filteredData = (Array.isArray(data) ? data : []).filter(item => {
+          const type = (item.material_type || '').toUpperCase();
+          return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+        });
+        setStockBalances(filteredData);
       }
     } catch (error) {
       console.error('Error fetching stock balance:', error);
@@ -258,9 +266,14 @@ const POReceipts = () => {
 
         if (response.ok) {
           const detailedPO = await response.json();
-          const items = (detailedPO.items || []).map(item => {
-            const dQty = parseFloat(item.design_qty || 0);
-            const qQty = parseFloat(item.quantity || 0);
+          const items = (detailedPO.items || [])
+            .filter(item => {
+              const type = (item.material_type || '').toUpperCase();
+              return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+            })
+            .map(item => {
+              const dQty = parseFloat(item.design_qty || 0);
+              const qQty = parseFloat(item.quantity || 0);
             const finalQty = dQty > 0 ? dQty : qQty;
             
             return {

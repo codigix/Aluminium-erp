@@ -67,12 +67,18 @@ const POMaterialRequest = () => {
       }
       if (itemRes.ok) {
         const itemData = await itemRes.json();
-        setItems(itemData.map(i => ({
-          item_code: i.item_code,
-          name: i.item_description || i.material_name || i.item_code,
-          uom: i.unit || 'pcs',
-          material_type: i.material_type
-        })));
+        setItems(itemData
+          .filter(i => {
+            const type = (i.material_type || '').toUpperCase();
+            return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+          })
+          .map(i => ({
+            item_code: i.item_code,
+            name: i.item_description || i.material_name || i.item_code,
+            uom: i.unit || 'pcs',
+            material_type: i.material_type
+          }))
+        );
       }
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -748,7 +754,10 @@ const POMaterialRequest = () => {
                     <span className="text-[9px] font-bold text-slate-400 uppercase">Qty</span>
                   </div>
                   <div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">
-                    {formData.items.length === 0 ? (
+                    {formData.items.filter(item => {
+                      const type = (item.material_type || '').toUpperCase();
+                      return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+                    }).length === 0 ? (
                       <div className="p-8 text-center">
                         <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-2 text-slate-300">
                           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 11m8 4V5" /></svg>
@@ -756,7 +765,10 @@ const POMaterialRequest = () => {
                         <p className="text-[10px] text-slate-400 italic">No items added yet</p>
                       </div>
                     ) : (
-                      formData.items.map((item, idx) => (
+                      formData.items.filter(item => {
+                        const type = (item.material_type || '').toUpperCase();
+                        return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+                      }).map((item, idx) => (
                         <div key={idx} className="px-3 py-2 flex justify-between items-center group hover:bg-slate-50">
                           <div>
                             <p className="text-xs font-medium text-slate-900">{item.name}</p>
@@ -920,7 +932,10 @@ const POMaterialRequest = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {selectedRequest?.items?.map((item, idx) => {
+                    {selectedRequest?.items?.filter(item => {
+                      const type = (item.material_type || '').toUpperCase();
+                      return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+                    }).map((item, idx) => {
                       const isAvailable = item.fulfillment_source === 'STOCK';
                       
                       return (
@@ -990,7 +1005,11 @@ const POMaterialRequest = () => {
             <div className="w-96 space-y-6">
               {/* Fulfillment Source */}
               {(() => {
-                const allAvailable = selectedRequest?.items?.every(item => item.fulfillment_source === 'STOCK');
+                const filteredItems = selectedRequest?.items?.filter(item => {
+                  const type = (item.material_type || '').toUpperCase();
+                  return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+                }) || [];
+                const allAvailable = filteredItems.every(item => item.fulfillment_source === 'STOCK');
                 return (
                   <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
                     <div className={`p-5 border-b border-slate-50 flex justify-between items-center transition-colors ${allAvailable ? 'bg-emerald-500' : 'bg-amber-500'}`}>
@@ -1086,7 +1105,12 @@ const POMaterialRequest = () => {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Items Total</span>
-                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{selectedRequest?.items?.length} Unique Items</span>
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                        {selectedRequest?.items?.filter(item => {
+                          const type = (item.material_type || '').toUpperCase();
+                          return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+                        }).length} Unique Items
+                      </span>
                     </div>
                   </div>
 
@@ -1106,10 +1130,13 @@ const POMaterialRequest = () => {
             >
               Cancel
             </button>
-            {selectedRequest?.items?.some(item => {
+            {selectedRequest?.items?.filter(item => {
+              const type = (item.material_type || '').toUpperCase();
+              return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+            }).some(item => {
               const totalStock = item.stocks ? item.stocks.reduce((acc, st) => acc + (Number(st.current_stock) || 0), 0) : 0;
               return totalStock < Number(item.quantity);
-            }) && !selectedRequest?.linked_po_id && (
+            }) && !selectedRequest?.linked_po_id && selectedRequest?.status?.toUpperCase() !== 'COMPLETED' && (
               <button 
                 onClick={() => handleCreatePO(selectedRequest)}
                 className="px-8 py-3 bg-indigo-500 text-white rounded-2xl text-xs font-bold hover:bg-indigo-600 flex items-center gap-3 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
@@ -1118,13 +1145,15 @@ const POMaterialRequest = () => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
               </button>
             )}
-            <button 
-              onClick={() => handleReleaseMaterial(selectedRequest?.id)}
-              className="px-8 py-3 bg-emerald-500 text-white rounded-2xl text-xs font-bold hover:bg-emerald-600 flex items-center gap-3 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-            >
-              Release Material
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-            </button>
+            {selectedRequest?.status?.toUpperCase() !== 'COMPLETED' && (
+              <button 
+                onClick={() => handleReleaseMaterial(selectedRequest?.id)}
+                className="px-8 py-3 bg-emerald-500 text-white rounded-2xl text-xs font-bold hover:bg-emerald-600 flex items-center gap-3 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+              >
+                Release Material
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+              </button>
+            )}
           </div>
         </div>
       </Modal>

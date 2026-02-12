@@ -51,7 +51,11 @@ const StockLedger = () => {
 
       if (!response.ok) throw new Error('Failed to fetch Stock Ledger');
       const data = await response.json();
-      setLedger(Array.isArray(data) ? data : []);
+      const filteredData = (Array.isArray(data) ? data : []).filter(entry => {
+        const type = (entry.material_type || '').toUpperCase();
+        return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+      });
+      setLedger(filteredData);
     } catch (error) {
       console.error('Error fetching ledger:', error);
       errorToast(error.message || 'Failed to load stock ledger');

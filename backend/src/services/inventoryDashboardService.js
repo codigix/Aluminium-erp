@@ -47,6 +47,7 @@ const getLowStockItems = async () => {
       warehouse
     FROM stock_balance
     WHERE current_balance < 10
+    AND UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
     ORDER BY current_balance ASC
   `);
   return items;
@@ -79,7 +80,8 @@ const getQCPendingItems = async () => {
     FROM grn_items gi
     JOIN purchase_order_items poi ON gi.po_item_id = poi.id
     LEFT JOIN qc_inspections q ON gi.grn_id = q.grn_id
-    WHERE q.id IS NULL OR q.status = 'PENDING'
+    WHERE (q.id IS NULL OR q.status = 'PENDING')
+    AND UPPER(poi.material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
     ORDER BY gi.grn_id DESC
   `);
   return items;
@@ -92,6 +94,7 @@ const getSummaryMetrics = async () => {
       SUM(current_balance) as total_stock_qty,
       SUM(current_balance * IFNULL(valuation_rate, 0)) as total_stock_value
     FROM stock_balance
+    WHERE UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
   `);
 
   const [mrStats] = await pool.query(`

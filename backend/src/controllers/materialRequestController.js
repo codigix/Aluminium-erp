@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const stockService = require('../services/stockService');
 
 const materialRequestController = {
   getAll: async (req, res) => {
@@ -7,11 +8,13 @@ const materialRequestController = {
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
         (
           SELECT CASE 
-            WHEN COUNT(*) = SUM(CASE WHEN (SELECT SUM(current_balance) FROM stock_balance WHERE item_code = mri.item_code) >= mri.quantity THEN 1 ELSE 0 END) THEN 'available'
+            WHEN COUNT(*) = 0 THEN 'available'
+            WHEN COUNT(*) = SUM(CASE WHEN (SELECT SUM(current_balance) FROM stock_balance WHERE item_code = mri.item_code) >= COALESCE(NULLIF(mri.design_qty, 0), mri.quantity) THEN 1 ELSE 0 END) THEN 'available'
             ELSE 'unavailable'
           END
           FROM material_request_items mri
           WHERE mri.mr_id = mr.id
+          AND UPPER(COALESCE(mri.item_type, '')) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
         ) as availability
         FROM material_requests mr
         LEFT JOIN users u ON mr.requested_by = u.id
@@ -89,7 +92,8 @@ const materialRequestController = {
         item.current_stock = matchingWh ? parseFloat(matchingWh.current_stock) : 0;
         
         // An item is "Available" if total stock >= required quantity
-        item.fulfillment_source = totalStock >= parseFloat(item.quantity) ? 'STOCK' : 'PURCHASE';
+        const requiredQty = parseFloat(item.design_qty || item.quantity || 0);
+        item.fulfillment_source = totalStock >= requiredQty ? 'STOCK' : 'PURCHASE';
         
         if (item.fulfillment_source === 'PURCHASE') {
           allItemsAvailable = false;
@@ -140,15 +144,71 @@ const materialRequestController = {
   },
 
   updateStatus: async (req, res) => {
+    const connection = await pool.getConnection();
     try {
+      await connection.beginTransaction();
       const { id } = req.params;
       const { status } = req.body;
       const normalizedStatus = status.toUpperCase();
-      await pool.query('UPDATE material_requests SET status = ? WHERE id = ?', [normalizedStatus, id]);
+
+      // If status is being updated to COMPLETED, trigger stock out
+      if (normalizedStatus === 'COMPLETED') {
+        // Fetch MR and its items
+        const [mrRows] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [id]);
+        if (mrRows.length === 0) {
+          throw new Error('Material Request not found');
+        }
+        const mr = mrRows[0];
+
+        // Only process stock out if it wasn't already completed
+        if (mr.status?.toUpperCase() !== 'COMPLETED') {
+          const [items] = await connection.query('SELECT * FROM material_request_items WHERE mr_id = ?', [id]);
+          
+          for (const item of items) {
+            // Find a warehouse with enough stock, or just the one with most stock
+            const [stockRows] = await connection.query(`
+              SELECT warehouse, current_balance 
+              FROM stock_balance 
+              WHERE item_code = ?
+              ORDER BY current_balance DESC LIMIT 1
+            `, [item.item_code]);
+
+            const sourceWarehouse = stockRows.length > 0 ? stockRows[0].warehouse : (mr.source_warehouse || 'Main');
+
+            // Prioritize design_qty as requested by user
+            const releaseQty = item.design_qty || item.quantity;
+
+            await stockService.addStockLedgerEntry(
+              item.item_code,
+              'OUT',
+              releaseQty,
+              'Material Request',
+              mr.id,
+              mr.mr_number,
+              {
+                remarks: `Material released for MR: ${mr.mr_number}`,
+                userId: req.user?.id || 1,
+                warehouse: sourceWarehouse,
+                materialName: item.item_name,
+                materialType: item.item_type,
+                unit: item.uom
+              },
+              connection
+            );
+          }
+        }
+      }
+
+      await connection.query('UPDATE material_requests SET status = ? WHERE id = ?', [normalizedStatus, id]);
+      
+      await connection.commit();
       res.json({ message: `Material Request status updated to ${normalizedStatus}` });
     } catch (error) {
+      if (connection) await connection.rollback();
       console.error('Error in updateStatus:', error);
       res.status(500).json({ message: error.message });
+    } finally {
+      if (connection) connection.release();
     }
   },
 

@@ -31,13 +31,17 @@ const StockBalance = () => {
 
       if (!response.ok) throw new Error('Failed to fetch Stock Balance');
       const data = await response.json();
-      setBalances(Array.isArray(data) ? data : []);
+      const filteredData = (Array.isArray(data) ? data : []).filter(item => {
+        const type = (item.material_type || '').toUpperCase();
+        return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+      });
+      setBalances(filteredData);
 
-      const totalBalance = data.reduce((sum, item) => sum + (parseFloat(item.current_balance) || 0), 0);
-      const lowStock = data.filter(item => (parseFloat(item.current_balance) || 0) < 10).length;
+      const totalBalance = filteredData.reduce((sum, item) => sum + (parseFloat(item.current_balance) || 0), 0);
+      const lowStock = filteredData.filter(item => (parseFloat(item.current_balance) || 0) < 10).length;
 
       setStats({
-        totalItems: data.length,
+        totalItems: filteredData.length,
         totalBalance,
         lowStock
       });
