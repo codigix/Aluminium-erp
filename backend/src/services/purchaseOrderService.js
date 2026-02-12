@@ -94,16 +94,36 @@ const createPurchaseOrder = async (data) => {
       const [mr] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [mrId]);
       if (!mr.length) throw new Error('Material Request not found');
       
+      const mrData = mr[0];
+      let planId = null;
+      if (mrData.notes && mrData.notes.includes('Generated from Production Plan')) {
+        const match = mrData.notes.match(/Generated from Production Plan (PP-[^ ]+)/);
+        if (match) {
+          const planCode = match[1];
+          const [plans] = await connection.query('SELECT id FROM production_plans WHERE plan_code = ?', [planCode]);
+          if (plans.length > 0) planId = plans[0].id;
+        }
+      }
+
       const [mrItems] = await connection.query(`
-        SELECT mri.*, sb.valuation_rate 
+        SELECT mri.*, sb.valuation_rate,
+               COALESCE(
+                 (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE soi.item_code = mri.item_code AND soi.bom_cost > 0),
+                 (SELECT MAX(rate) FROM production_plan_materials ppm WHERE ppm.plan_id = ? AND ppm.item_code = mri.item_code AND ppm.rate > 0),
+                 (SELECT MAX(rate) FROM production_plan_sub_assemblies psa WHERE psa.plan_id = ? AND psa.item_code = mri.item_code AND psa.rate > 0),
+                 (SELECT MAX(rate) FROM production_plan_items ppi WHERE ppi.plan_id = ? AND ppi.item_code = mri.item_code AND ppi.rate > 0),
+                 (SELECT MAX(rate) FROM sales_order_item_materials som WHERE som.item_code = mri.item_code AND som.rate > 0),
+                 (SELECT MAX(rate) FROM sales_order_item_components soc WHERE soc.component_code = mri.item_code AND soc.rate > 0),
+                 mri.unit_rate
+               ) as bom_rate
         FROM material_request_items mri
         LEFT JOIN (SELECT item_code, MAX(valuation_rate) as valuation_rate FROM stock_balance GROUP BY item_code) sb ON mri.item_code = sb.item_code
         WHERE mri.mr_id = ?
-      `, [mrId]);
+      `, [planId, planId, planId, mrId]);
       
       items = mrItems.map(item => {
         const qty = parseFloat(item.quantity) || 0;
-        const rate = parseFloat(item.unit_rate || item.valuation_rate) || 0;
+        const rate = parseFloat(item.bom_rate || item.unit_rate || item.valuation_rate) || 0;
         const amount = qty * rate;
         const cgstPercent = 9;
         const sgstPercent = 9;
@@ -113,6 +133,7 @@ const createPurchaseOrder = async (data) => {
 
         return {
           ...item,
+          design_qty: item.design_qty || item.quantity,
           description: item.item_name || item.description,
           material_name: item.item_name || item.material_name,
           material_type: item.item_type || item.material_type,
@@ -229,15 +250,16 @@ const createPurchaseOrder = async (data) => {
 
         await connection.execute(
           `INSERT INTO purchase_order_items (
-            purchase_order_id, item_code, description, quantity, unit, unit_rate, amount,
+            purchase_order_id, item_code, description, design_qty, quantity, unit, unit_rate, amount,
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
             material_name, material_type, drawing_no, drawing_id
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             poId,
             item.item_code || null,
             item.description || null,
+            item.design_qty || 0,
             item.quantity || 0,
             item.unit || 'NOS',
             rate,
@@ -319,10 +341,20 @@ const getPurchaseOrders = async (filters = {}) => {
   if (pos.length > 0) {
     const poIds = pos.map(p => p.id);
     const [items] = await pool.query(
-      `SELECT poi.*, soi.status as sales_order_item_status 
+      `SELECT 
+        poi.*,
+        COALESCE(
+          (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE soi.item_code = poi.item_code AND soi.bom_cost > 0),
+          (SELECT MAX(rate) FROM sales_order_item_materials som WHERE som.item_code = poi.item_code AND som.rate > 0),
+          (SELECT MAX(rate) FROM sales_order_item_components soc WHERE soc.component_code = poi.item_code AND soc.rate > 0),
+          poi.unit_rate
+        ) as unit_rate,
+        (SELECT status FROM sales_order_items soi 
+         WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
+         AND soi.sales_order_id = po.sales_order_id 
+         LIMIT 1) as sales_order_item_status 
        FROM purchase_order_items poi
        LEFT JOIN purchase_orders po ON po.id = poi.purchase_order_id
-       LEFT JOIN sales_order_items soi ON (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) AND soi.sales_order_id = po.sales_order_id
        WHERE poi.purchase_order_id IN (?)`,
       [poIds]
     );
@@ -359,9 +391,15 @@ const getPurchaseOrderById = async (poId) => {
       poi.id,
       poi.item_code,
       COALESCE(poi.description, sb.material_name, poi.item_code) as description,
+      poi.design_qty,
       poi.quantity,
       poi.unit,
-      poi.unit_rate,
+      COALESCE(
+        (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE soi.item_code = poi.item_code AND soi.bom_cost > 0),
+        (SELECT MAX(rate) FROM sales_order_item_materials som WHERE som.item_code = poi.item_code AND som.rate > 0),
+        (SELECT MAX(rate) FROM sales_order_item_components soc WHERE soc.component_code = poi.item_code AND soc.rate > 0),
+        poi.unit_rate
+      ) as unit_rate,
       poi.amount,
       poi.cgst_percent,
       poi.cgst_amount,
@@ -372,10 +410,12 @@ const getPurchaseOrderById = async (poId) => {
       poi.material_type,
       poi.drawing_no,
       poi.accepted_quantity,
-      soi.status as sales_order_item_status
+      (SELECT status FROM sales_order_items soi 
+       WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
+       AND soi.sales_order_id = ? 
+       LIMIT 1) as sales_order_item_status
      FROM purchase_order_items poi
-     LEFT JOIN stock_balance sb ON poi.item_code = sb.item_code
-     LEFT JOIN sales_order_items soi ON (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) AND soi.sales_order_id = ?
+     LEFT JOIN (SELECT item_code, MAX(material_name) as material_name FROM stock_balance GROUP BY item_code) sb ON poi.item_code = sb.item_code
      WHERE poi.purchase_order_id = ?`,
     [po.sales_order_id, poId]
   );
@@ -462,16 +502,16 @@ const updatePurchaseOrder = async (poId, payload) => {
         if (item.id) {
           await connection.execute(
             `UPDATE purchase_order_items 
-             SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, description = ?, item_code = ?, unit = ?
+             SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, description = ?, item_code = ?, unit = ?
              WHERE id = ? AND purchase_order_id = ?`,
-            [rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, item.description, item.item_code, item.unit, item.id, poId]
+            [rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, qty, item.description, item.item_code, item.unit, item.id, poId]
           );
         } else {
           await connection.execute(
             `INSERT INTO purchase_order_items 
-             (purchase_order_id, item_code, description, quantity, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [poId, item.item_code, item.description, qty, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount]
+             (purchase_order_id, item_code, description, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [poId, item.item_code, item.description, qty, qty, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount]
           );
         }
       }

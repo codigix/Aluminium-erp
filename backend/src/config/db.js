@@ -345,6 +345,7 @@ const ensurePoMaterialRequestColumns = async () => {
     const existingItemCols = new Set(itemCols.map(c => c.Field));
     const requiredItemCols = [
       { name: 'accepted_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'design_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
@@ -1159,6 +1160,7 @@ const ensureProductionPlanTables = async () => {
         sales_order_id INT NULL,
         sales_order_item_id INT NULL,
         item_code VARCHAR(120),
+        description TEXT,
         bom_no VARCHAR(100),
         design_qty DECIMAL(12, 3),
         uom VARCHAR(20),
@@ -1200,6 +1202,7 @@ const ensureProductionPlanTables = async () => {
     }
 
     if (!existingPpiCols.has('item_code')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN item_code VARCHAR(120) AFTER sales_order_item_id');
+    if (!existingPpiCols.has('description')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN description TEXT AFTER item_code');
     if (!existingPpiCols.has('bom_no')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN bom_no VARCHAR(100) AFTER item_code');
     if (!existingPpiCols.has('warehouse')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN warehouse VARCHAR(100) AFTER planned_qty');
     if (!existingPpiCols.has('design_qty')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN design_qty DECIMAL(12, 3) AFTER bom_no');
@@ -1212,6 +1215,7 @@ const ensureProductionPlanTables = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         plan_id INT NOT NULL,
         item_code VARCHAR(120) NOT NULL,
+        description TEXT,
         required_qty DECIMAL(12, 3) NOT NULL,
         rate DECIMAL(12, 2) DEFAULT 0,
         bom_no VARCHAR(100),
@@ -1227,6 +1231,8 @@ const ensureProductionPlanTables = async () => {
     // Ensure missing columns in production_plan_sub_assemblies
     const [saCols] = await connection.query('SHOW COLUMNS FROM production_plan_sub_assemblies');
     const existingSaCols = new Set(saCols.map(c => c.Field));
+    if (!existingSaCols.has('description')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN description TEXT AFTER item_code');
+    if (!existingSaCols.has('design_qty')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN design_qty DECIMAL(12, 3) AFTER description');
     if (!existingSaCols.has('source_fg')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN source_fg VARCHAR(120) AFTER manufacturing_type');
     if (!existingSaCols.has('rate')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER required_qty');
 
@@ -1253,6 +1259,9 @@ const ensureProductionPlanTables = async () => {
     // Ensure rate column exists for existing table
     const [ppmCols] = await connection.query('SHOW COLUMNS FROM production_plan_materials');
     const existingPpmCols = new Set(ppmCols.map(c => c.Field));
+    if (!existingPpmCols.has('design_qty')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN design_qty DECIMAL(12, 3) AFTER material_name');
+    }
     if (!existingPpmCols.has('rate')) {
       await connection.query('ALTER TABLE production_plan_materials ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER required_qty');
     }

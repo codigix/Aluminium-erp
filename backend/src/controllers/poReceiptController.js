@@ -9,7 +9,8 @@ const createPOReceipt = async (req, res, next) => {
       receiptDate,
       receivedQuantity,
       notes,
-      items
+      items,
+      req.user?.id || 1
     );
     res.status(201).json({ message: 'PO Receipt created', data: result });
   } catch (error) {

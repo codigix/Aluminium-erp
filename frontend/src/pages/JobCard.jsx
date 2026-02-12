@@ -38,7 +38,7 @@ const JobCard = () => {
   });
 
   const calculateEfficiency = (jc) => {
-    if (!jc.start_time || jc.status === 'PENDING') return 0;
+    if (!jc || !jc.start_time || jc.status === 'PENDING') return 0;
     const startTime = new Date(jc.start_time);
     const endTime = jc.end_time ? new Date(jc.end_time) : new Date();
     const actualTimeMinutes = (endTime - startTime) / (1000 * 60);
@@ -1058,7 +1058,7 @@ const JobCard = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-lg font-bold text-slate-900">
-                      {selectedJC?.planned_qty > 0 ? Math.round((selectedJC.accepted_qty / selectedJC.planned_qty) * 100) : 0}%
+                      {selectedJC?.planned_qty > 0 ? Math.round(((selectedJC?.accepted_qty || 0) / selectedJC.planned_qty) * 100) : 0}%
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Acceptance Rate</span>
                   </div>

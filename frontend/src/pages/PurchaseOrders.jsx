@@ -26,15 +26,15 @@ const formatCurrency = (value, currency = 'INR') => {
   if (value === 0) return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: currency || 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(0);
   if (!value || isNaN(value)) return '—';
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: currency || 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 };
 
@@ -437,10 +437,10 @@ const PurchaseOrders = () => {
             id: item.id,
             item_code: item.item_code || '',
             description: item.description || '',
-            quantity: item.quantity || 0,
+            quantity: item.design_qty || item.quantity || 0,
             unit: item.unit || 'NOS',
             rate: item.unit_rate || item.rate || 0,
-            amount: item.amount || (item.quantity * (item.unit_rate || item.rate || 0))
+            amount: item.amount || ((item.design_qty || item.quantity) * (item.unit_rate || item.rate || 0))
           }))
         });
         setShowManualCreateModal(true);
@@ -731,6 +731,15 @@ const PurchaseOrders = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </button>
+          <button
+            onClick={() => handleDeletePO(row.id)}
+            className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-rose-50 shadow-sm active:scale-90"
+            title="Delete PO"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
       )
     }
@@ -743,7 +752,7 @@ const PurchaseOrders = () => {
           <tr>
             <th className="px-4 py-2 text-left">Description</th>
             <th className="px-4 py-2 text-left">Material</th>
-            <th className="px-4 py-2 text-center">Qty</th>
+            <th className="px-4 py-2 text-center">Design Qty</th>
             <th className="px-4 py-2 text-right">Unit Rate</th>
             <th className="px-4 py-2 text-right">Total</th>
           </tr>
@@ -764,7 +773,7 @@ const PurchaseOrders = () => {
                   {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
                 </td>
                 <td className="px-4 py-2 text-slate-600">{item.material_name || '—'}</td>
-                <td className="px-4 py-2 text-center ">{item.quantity} {item.unit || 'NOS'}</td>
+                <td className="px-4 py-2 text-center ">{Number(item.design_qty || item.quantity || 0).toFixed(3)} {item.unit || 'NOS'}</td>
                 <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.unit_rate)}</td>
                 <td className="px-4 py-2 text-right  text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
               </tr>
@@ -1036,7 +1045,7 @@ const PurchaseOrders = () => {
                     <thead>
                       <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                         <th className="px-4 py-3 text-left">Item Details</th>
-                        <th className="px-4 py-3 text-center w-24">QTY</th>
+                        <th className="px-4 py-3 text-center w-24">DESIGN QTY</th>
                         <th className="px-4 py-3 text-center w-24">UOM</th>
                         <th className="px-4 py-3 text-center w-32">RATE</th>
                         <th className="px-4 py-3 text-right w-32">AMOUNT</th>
@@ -1308,7 +1317,7 @@ const PurchaseOrders = () => {
                         <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                           <th className="px-4 py-3 text-left">Description</th>
                           <th className="px-4 py-3 text-left">Material</th>
-                          <th className="px-4 py-3 text-center">Qty</th>
+                          <th className="px-4 py-3 text-center">Design Qty</th>
                           <th className="px-4 py-3 text-right">Rate</th>
                           <th className="px-4 py-3 text-right">Total</th>
                         </tr>
@@ -1321,7 +1330,7 @@ const PurchaseOrders = () => {
                               {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
                             </td>
                             <td className="px-4 py-3 text-xs text-slate-500">{item.material_name || '—'}</td>
-                            <td className="px-4 py-3 text-center text-xs text-slate-600 font-bold">{item.quantity} {item.unit || 'NOS'}</td>
+                            <td className="px-4 py-3 text-center text-xs text-slate-600 font-bold">{Number(item.design_qty || item.quantity || 0).toFixed(3)} {item.unit || 'NOS'}</td>
                             <td className="px-4 py-3 text-right text-xs text-slate-500">{formatCurrency(item.unit_rate)}</td>
                             <td className="px-4 py-3 text-right text-xs font-bold text-slate-800">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
                           </tr>

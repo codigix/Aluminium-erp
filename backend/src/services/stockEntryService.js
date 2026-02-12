@@ -305,39 +305,51 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
   return items;
 };
 
-const autoCreateStockEntryFromGRN = async (grnId, userId) => {
+const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = null) => {
   console.log(`[StockEntry] Auto-creating for GRN: ${grnId}, User: ${userId}`);
-  const connection = await pool.getConnection();
+  const connection = providedConnection || await pool.getConnection();
+  const shouldRelease = !providedConnection;
+  const shouldCommit = !providedConnection;
+
   try {
-    await connection.beginTransaction();
+    if (shouldCommit) await connection.beginTransaction();
 
     // 1. Get GRN details
     const [grns] = await connection.query('SELECT * FROM grns WHERE id = ?', [grnId]);
     if (grns.length === 0) throw new Error('GRN not found');
     const grn = grns[0];
 
-    // 2. Get default warehouse ID (Consumables Store or similar)
+    // 2. Get default warehouse ID
     const [allWhs] = await connection.query('SELECT id, warehouse_name FROM warehouses');
-    console.log(`[StockEntry] Available warehouses: ${allWhs.map(w => w.warehouse_name).join(', ')}`);
-
-    const preferredWh = allWhs.find(w => w.warehouse_name === 'Consumables Store' || w.warehouse_name === 'Main Warehouse' || w.warehouse_name === 'RM-HOLD');
-    const toWarehouseId = preferredWh ? preferredWh.id : (allWhs.length > 0 ? allWhs[0].id : null);
     
-    console.log(`[StockEntry] Selected warehouse ID: ${toWarehouseId} (${preferredWh?.warehouse_name || allWhs[0]?.warehouse_name || 'None'})`);
+    // Check if there's a warehouse assigned in the GRN items
+    const [grnItemWhs] = await connection.query(
+      'SELECT DISTINCT warehouse_id FROM grn_items WHERE grn_id = ? AND warehouse_id IS NOT NULL',
+      [grnId]
+    );
+
+    let toWarehouseId = null;
+    if (grnItemWhs.length > 0) {
+      toWarehouseId = grnItemWhs[0].warehouse_id;
+    } else {
+      const preferredWh = allWhs.find(w => 
+        w.warehouse_name === 'Consumables Store' || 
+        w.warehouse_name === 'Main Warehouse' || 
+        w.warehouse_name === 'RM-HOLD'
+      );
+      toWarehouseId = preferredWh ? preferredWh.id : (allWhs.length > 0 ? allWhs[0].id : null);
+    }
 
     // 3. Get items from GRN
     const items = await getStockEntryItemsFromGRN(grnId, connection);
-    console.log(`[StockEntry] Found ${items.length} items in GRN`);
 
     if (items.length === 0) {
-      console.log('[StockEntry] No items found, skipping');
-      await connection.rollback();
+      if (shouldCommit) await connection.rollback();
       return { success: false, message: 'No items in GRN' };
     }
 
     // 4. Create Stock Entry
     const entryNo = await generateEntryNo('Material Receipt');
-    console.log(`[StockEntry] Generated Entry No: ${entryNo}`);
 
     const [result] = await connection.execute(
       `INSERT INTO stock_entries 
@@ -357,15 +369,11 @@ const autoCreateStockEntryFromGRN = async (grnId, userId) => {
     );
 
     const entryId = result.insertId;
-    console.log(`[StockEntry] Created Entry ID: ${entryId}`);
 
     // 5. Create Stock Entry Items
     let itemsAdded = 0;
     for (const item of items) {
-      if (parseFloat(item.quantity) <= 0) {
-        console.log(`[StockEntry] Skipping item ${item.item_code} with 0 quantity`);
-        continue;
-      }
+      if (parseFloat(item.quantity) <= 0) continue;
       
       await connection.execute(
         `INSERT INTO stock_entry_items 
@@ -384,24 +392,21 @@ const autoCreateStockEntryFromGRN = async (grnId, userId) => {
     }
 
     if (itemsAdded === 0) {
-      console.log('[StockEntry] No items with positive quantity, skipping');
-      await connection.rollback();
+      if (shouldCommit) await connection.rollback();
       return { success: false, message: 'No items with positive quantity' };
     }
 
-    // 6. Process Stock Movement (Updates Ledger and Balance)
+    // 6. Process Stock Movement
     await processStockMovement(entryId, connection, userId);
-    console.log('[StockEntry] Stock movement processed');
 
-    await connection.commit();
-    console.log('[StockEntry] Transaction committed successfully');
+    if (shouldCommit) await connection.commit();
     return { success: true, entryId, entryNo };
   } catch (error) {
-    await connection.rollback();
+    if (shouldCommit) await connection.rollback();
     console.error('[StockEntry] Error auto-creating stock entry:', error);
     throw error;
   } finally {
-    connection.release();
+    if (shouldRelease) connection.release();
   }
 };
 

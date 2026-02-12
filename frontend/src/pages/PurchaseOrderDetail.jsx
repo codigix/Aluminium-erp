@@ -9,8 +9,8 @@ const formatCurrency = (value, currency = 'INR') => {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: currency || 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value || 0);
 };
 
@@ -235,8 +235,9 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                 <thead className="bg-slate-50/50">
                   <tr>
                     <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Item</th>
-                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Quantity</th>
-                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Received</th>
+                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Design Qty</th>
+                    {/* Hiding Received column as requested */}
+                    {/* <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Received</th> */}
                     <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Rate</th>
                     <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
                   </tr>
@@ -254,10 +255,11 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                           <p className="text-[10px] text-slate-400 font-bold mt-0.5">{item.item_code}</p>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className="text-xs font-black text-slate-800">{item.quantity}</span>
+                          <span className="text-xs font-black text-slate-800">{Number(item.design_qty || item.quantity || 0).toFixed(3)}</span>
                           <span className="text-[9px] text-slate-400 font-bold ml-1 uppercase">{item.unit}</span>
                         </td>
-                        <td className="px-6 py-4">
+                        {/* Hiding Received column as requested */}
+                        {/* <td className="px-6 py-4">
                           <div className="flex flex-col items-center gap-1.5 min-w-[120px]">
                             <div className="flex justify-between w-full text-[9px] font-black">
                               <span className="text-blue-600">{received} {item.unit}</span>
@@ -270,7 +272,7 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                               />
                             </div>
                           </div>
-                        </td>
+                        </td> */}
                         <td className="px-6 py-4 text-center">
                           <div className="flex flex-col items-center">
                             <span className="text-xs font-black text-slate-700">{formatCurrency(item.unit_rate, po.currency)}</span>

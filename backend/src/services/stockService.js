@@ -12,12 +12,13 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
   `;
   
   const params = [itemCode];
-  if (warehouse) {
+  if (warehouse && warehouse !== 'ALL') {
     query += ` AND warehouse = ? `;
     params.push(warehouse);
-  } else {
+  } else if (warehouse === null) {
     query += ` AND (warehouse IS NULL OR warehouse = '') `;
   }
+  // If warehouse === 'ALL', no additional filter is added
 
   const [ledgerData] = await executor.query(query, params);
 
@@ -134,23 +135,24 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
 const getStockBalance = async (drawingNo = null) => {
   let query = `
     SELECT 
-      id,
+      MIN(id) as id,
       item_code,
-      item_description,
-      material_name,
-      material_type,
-      unit,
-      valuation_rate,
-      selling_rate,
-      no_of_cavity,
-      weight_per_unit,
-      weight_uom,
-      drawing_no,
-      drawing_id,
-      revision,
-      material_grade,
-      warehouse,
-      last_updated
+      MAX(item_description) as item_description,
+      MAX(material_name) as material_name,
+      MAX(material_type) as material_type,
+      MAX(unit) as unit,
+      MAX(valuation_rate) as valuation_rate,
+      MAX(selling_rate) as selling_rate,
+      MAX(no_of_cavity) as no_of_cavity,
+      MAX(weight_per_unit) as weight_per_unit,
+      MAX(weight_uom) as weight_uom,
+      MAX(drawing_no) as drawing_no,
+      MAX(drawing_id) as drawing_id,
+      MAX(revision) as revision,
+      MAX(material_grade) as material_grade,
+      MAX(warehouse) as warehouse,
+      MAX(last_updated) as last_updated,
+      SUM(current_balance) as current_balance
     FROM stock_balance
   `;
 
@@ -160,13 +162,14 @@ const getStockBalance = async (drawingNo = null) => {
     params.push(drawingNo);
   }
 
-  query += ` ORDER BY id DESC `;
+  query += ` GROUP BY item_code ORDER BY id DESC `;
 
   const [balances] = await pool.query(query, params);
 
   const result = [];
   for (const balance of balances) {
-    const details = await calculateBalanceDetailsFromLedger(balance.item_code, balance.warehouse);
+    // For consolidated view, we calculate totals from ledger across ALL warehouses
+    const details = await calculateBalanceDetailsFromLedger(balance.item_code, 'ALL');
     
     const [poItems] = await pool.query(`
       SELECT COALESCE(SUM(quantity), 0) as po_qty FROM purchase_order_items WHERE item_code = ?
@@ -265,6 +268,24 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Get existing balance for this item and warehouse
     let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, connection);
 
+    // If not found for this specific warehouse, try to find the "master" entry (usually the one without a warehouse or the first one)
+    // to inherit material details correctly and prevent duplicates in UI if the UI doesn't filter by warehouse
+    if (!existingBalance) {
+      const [masterRows] = await connection.query(
+        'SELECT * FROM stock_balance WHERE item_code = ? LIMIT 1',
+        [itemCode]
+      );
+      if (masterRows.length > 0) {
+        // We use the master details but we STILL want to create/update a specific warehouse record if 'warehouse' is provided
+        const master = masterRows[0];
+        if (!options.materialName) options.materialName = master.material_name;
+        if (!options.materialType) options.materialType = master.material_type;
+        if (!options.drawingNo) options.drawingNo = master.drawing_no;
+        if (!options.drawingId) options.drawingId = master.drawing_id;
+        if (!options.unit) options.unit = master.unit;
+      }
+    }
+
     let currentBalance = existingBalance ? parseFloat(existingBalance.current_balance) || 0 : 0;
     let newBalance = 0;
     const qty = parseFloat(quantity) || 0;
@@ -288,7 +309,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     if (!matName) {
       const [nameRows] = await connection.query(`
         SELECT material_name, material_type, drawing_no, drawing_id 
-        FROM purchase_order_items 
+        FROM stock_balance 
         WHERE item_code = ? AND material_name IS NOT NULL 
         LIMIT 1
       `, [itemCode]);
@@ -299,19 +320,18 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
         drawingNo = drawingNo || nameRows[0].drawing_no;
         drawingId = drawingId || nameRows[0].drawing_id;
       } else {
-        // Try stock_ledger for historical data
-        const [ledgerRows] = await connection.query(`
+        const [poRows] = await connection.query(`
           SELECT material_name, material_type, drawing_no, drawing_id 
-          FROM stock_ledger 
+          FROM purchase_order_items 
           WHERE item_code = ? AND material_name IS NOT NULL 
-          ORDER BY id DESC LIMIT 1
+          LIMIT 1
         `, [itemCode]);
-        
-        if (ledgerRows.length > 0) {
-          matName = ledgerRows[0].material_name;
-          matType = ledgerRows[0].material_type;
-          drawingNo = drawingNo || ledgerRows[0].drawing_no;
-          drawingId = drawingId || ledgerRows[0].drawing_id;
+
+        if (poRows.length > 0) {
+          matName = poRows[0].material_name;
+          matType = poRows[0].material_type;
+          drawingNo = drawingNo || poRows[0].drawing_no;
+          drawingId = drawingId || poRows[0].drawing_id;
         }
       }
     }
@@ -337,26 +357,39 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
     const ledgerId = (await connection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
 
-    // Recalculate balance from ledger for accuracy
-    const details = await calculateBalanceDetailsFromLedger(itemCode, warehouse, connection);
+    // Recalculate balance from ledger for accuracy (consolidated)
+    const details = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', connection);
     newBalance = details.current_balance;
 
     // Update the ledger entry with the correct balance_after
     await connection.execute('UPDATE stock_ledger SET balance_after = ? WHERE id = ?', [newBalance, ledgerId]);
 
-    // Update or insert into stock_balance
-    if (existingBalance) {
+    // IMPORTANT: Update or insert into stock_balance
+    // We always want to update the "Master" record if it exists, or the specific warehouse one.
+    // To prevent duplicates in UI, we check for ANY existing balance for this item first if specific one doesn't exist.
+    let balanceToUpdate = existingBalance;
+    if (!balanceToUpdate) {
+      const [anyBalance] = await connection.query('SELECT * FROM stock_balance WHERE item_code = ? LIMIT 1', [itemCode]);
+      if (anyBalance.length > 0) balanceToUpdate = anyBalance[0];
+    }
+
+    if (balanceToUpdate) {
       await connection.execute(`
         UPDATE stock_balance 
-        SET current_balance = ?, material_name = ?, material_type = ?, drawing_no = ?, drawing_id = ?, last_updated = CURRENT_TIMESTAMP
+        SET current_balance = current_balance + ?, 
+            material_name = COALESCE(?, material_name), 
+            material_type = COALESCE(?, material_type), 
+            drawing_no = COALESCE(?, drawing_no), 
+            drawing_id = COALESCE(?, drawing_id), 
+            last_updated = CURRENT_TIMESTAMP
         WHERE id = ?
-      `, [newBalance, matName, matType, drawingNo, drawingId, existingBalance.id]);
+      `, [qtyIn - qtyOut, matName, matType, drawingNo, drawingId, balanceToUpdate.id]);
     } else {
       await connection.execute(`
         INSERT INTO stock_balance 
         (item_code, current_balance, material_name, material_type, drawing_no, drawing_id, warehouse, unit)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [itemCode, newBalance, matName, matType, drawingNo, drawingId, warehouse, options.unit || 'NOS']);
+      `, [itemCode, qtyIn - qtyOut, matName, matType, drawingNo, drawingId, warehouse, options.unit || 'NOS']);
     }
 
     if (shouldRelease) {

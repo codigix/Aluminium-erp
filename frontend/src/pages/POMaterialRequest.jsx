@@ -913,7 +913,7 @@ const POMaterialRequest = () => {
                   <thead>
                     <tr className="bg-slate-50/50 border-b border-slate-100">
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item Details</th>
-                      <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</th>
+                      <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Design Qty</th>
                       <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Warehouse</th>
                       <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Stock Level</th>
                       <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
@@ -942,8 +942,8 @@ const POMaterialRequest = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            <span className="px-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700">
-                              {Number(item.quantity).toFixed(3)} {item.uom}
+                            <span className="text-xs font-bold text-slate-700">
+                              {Number(item.design_qty || 0).toFixed(3)}
                             </span>
                           </td>
                           <td className="px-6 py-5 text-center text-xs font-medium text-slate-600">

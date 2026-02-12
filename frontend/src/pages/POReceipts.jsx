@@ -237,18 +237,25 @@ const POReceipts = () => {
 
         if (response.ok) {
           const detailedPO = await response.json();
-          const items = (detailedPO.items || []).map(item => ({
-            ...item,
-            item_code: item.item_code || '',
-            material_name: item.material_name || item.description,
-            description: item.description || '',
-            quantity: item.quantity || 0,
-            received_qty: item.quantity || 0,
-            rate: item.unit_rate || item.rate || 0,
-            amount: (item.quantity || 0) * (item.unit_rate || item.rate || 0),
-            warehouse: warehouses[0]?.warehouse_code || 'main',
-            unit: item.unit || 'NOS'
-          }));
+          const items = (detailedPO.items || []).map(item => {
+            const dQty = parseFloat(item.design_qty || 0);
+            const qQty = parseFloat(item.quantity || 0);
+            const finalQty = dQty > 0 ? dQty : qQty;
+            
+            return {
+              ...item,
+              item_code: item.item_code || '',
+              material_name: item.material_name || item.description,
+              description: item.description || '',
+              design_qty: dQty,
+              quantity: qQty,
+              received_qty: finalQty,
+              rate: parseFloat(item.unit_rate || item.rate || 0),
+              amount: finalQty * parseFloat(item.unit_rate || item.rate || 0),
+              warehouse: warehouses[0]?.warehouse_code || 'main',
+              unit: item.unit || 'NOS'
+            };
+          });
 
           setFormData({
             ...formData,
@@ -823,10 +830,10 @@ const POReceipts = () => {
         isOpen={showCreateModal} 
         onClose={() => setShowCreateModal(false)} 
         title="Create GRN Request"
-        maxWidth="max-w-6xl"
+        size="full"
       >
         <form onSubmit={handleCreateReceipt} className="relative">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6 overflow-y-auto max-h-[70vh]">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
             {/* Sidebar: Receipt Context */}
             <div className="lg:col-span-1 space-y-6 border-r border-slate-100 pr-6">
               <div className="space-y-4">
@@ -939,8 +946,8 @@ const POReceipts = () => {
                     <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200">
                       <th className="px-6 py-4">Item Details</th>
                       <th className="px-4 py-4">Warehouse</th>
-                      <th className="px-4 py-4 text-center">PO Qty</th>
-                      <th className="px-4 py-4 text-center">Received</th>
+                      <th className="px-4 py-4 text-center">Design Qty</th>
+                      <th className="px-4 py-4 text-center">Receiving Qty</th>
                       <th className="px-4 py-4 text-center">Rate</th>
                       <th className="px-4 py-4 text-center">Total</th>
                       <th className="px-4 py-4 text-center">Action</th>
@@ -999,8 +1006,21 @@ const POReceipts = () => {
                             )}
                           </select>
                         </td>
-                        <td className="px-4 py-4 text-center font-black text-slate-500 text-xs">{item.quantity || 0}</td>
+                        <td className="px-4 py-4 text-center font-black text-slate-500 text-xs">
+                          {Number(item.design_qty > 0 ? item.design_qty : item.quantity).toFixed(3)}
+                        </td>
                         <td className="px-4 py-4">
+                          <div className="flex justify-center">
+                            <input
+                              type="number"
+                              value={item.received_qty}
+                              onChange={(e) => handleItemChange(idx, 'received_qty', e.target.value)}
+                              className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-black text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
+                            />
+                          </div>
+                        </td>
+                        {/* Received column hidden as requested */}
+                        {/* <td className="px-4 py-4">
                           <div className="flex justify-center">
                             <input
                               type="number"
@@ -1009,7 +1029,7 @@ const POReceipts = () => {
                               className="w-20 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-black text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
                             />
                           </div>
-                        </td>
+                        </td> */}
                         <td className="px-4 py-4 text-center">
                            <input
                               type="number"

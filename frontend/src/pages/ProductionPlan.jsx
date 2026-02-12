@@ -622,12 +622,17 @@ const ProductionPlan = () => {
   const calculatePlanDetails = () => {
     // Collect all materials from all items (already exploded from backend)
     const allMaterials = newPlan.items.flatMap(item => 
-      (item.materials || []).map(mat => ({
-        ...mat,
-        totalRequiredQty: parseFloat(mat.required_qty || mat.qty_per_pc || 0) * (item.plannedQty || 1),
-        bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
-        source_fg: item.itemCode
-      }))
+      (item.materials || []).map(mat => {
+        // The backend returns required_qty per unit if called with multiplier 1
+        const baseQty = parseFloat(mat.required_qty || mat.qty_per_pc || 0);
+        return {
+          ...mat,
+          totalDesignQty: newPlan.targetQuantity || 0,
+          totalPlannedQty: baseQty * (newPlan.targetQuantity || 1),
+          bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
+          source_fg: item.itemCode
+        };
+      })
     );
 
     // Filter by category for display sections
@@ -636,13 +641,21 @@ const ProductionPlan = () => {
 
     const subAssembliesToDisplay = isViewing 
       ? (newPlan.subAssemblies || []) 
-      : newPlan.items.flatMap(item => (item.components || []).map(comp => ({
-          ...comp,
-          itemCode: comp.item_code || comp.component_code,
-          bomNo: comp.bom_no || 'BOM-SUB',
-          parentPlannedQty: item.plannedQty || 1,
-          source_fg: item.itemCode
-        })));
+      : newPlan.items.flatMap(item => (item.components || []).map(comp => {
+          const baseQty = parseFloat(comp.quantity || 0);
+          const totalQty = baseQty * (newPlan.targetQuantity || 1);
+          return {
+            ...comp,
+            itemCode: comp.item_code || comp.component_code,
+            bomNo: comp.bom_no || 'BOM-SUB',
+            designQty: newPlan.targetQuantity || 0,
+            plannedQty: totalQty,
+            parentDesignQty: newPlan.targetQuantity || 1,
+            parentPlannedQty: newPlan.targetQuantity || 1,
+            requiredQty: totalQty,
+            source_fg: item.itemCode
+          };
+        }));
 
     const operationsToDisplay = isViewing 
       ? (newPlan.operations || []).map(op => ({
@@ -969,6 +982,7 @@ const ProductionPlan = () => {
                   <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-full ml-2 uppercase tracking-tight">{subAssembliesToDisplay.length} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Manufacturing breakdown of intermediate components</p>
+                <p className="text-[10px] text-rose-600 mt-1 font-bold uppercase tracking-tight">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
               </div>
               <button className="ml-auto p-1 hover:bg-slate-50 rounded text-rose-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
@@ -983,7 +997,8 @@ const ProductionPlan = () => {
                     <th className="px-4 py-3 font-medium">Sub Assembly Item Code</th>
                     <th className="px-4 py-3 font-medium">Target Warehouse</th>
                     <th className="px-4 py-3 font-medium">Scheduled Date</th>
-                    <th className="px-4 py-3 font-medium text-center">Required Qty</th>
+                    <th className="px-4 py-3 font-medium text-center">Design Qty</th>
+                    <th className="px-4 py-3 font-medium text-center">Planned Qty</th>
                     <th className="px-4 py-3 font-medium">Bom No</th>
                     <th className="px-4 py-3 font-medium">Source FG</th>
                     <th className="px-4 py-3 font-medium">Raw Materials</th>
@@ -1017,8 +1032,11 @@ const ProductionPlan = () => {
                           <span className="text-xs font-medium">{isViewing ? (sa.scheduled_date ? sa.scheduled_date.split('T')[0] : '-') : '2026-02-04'}</span>
                         </div>
                       </td>
+                      <td className="px-4 py-4 text-center font-bold text-slate-700">
+                        {Number(isViewing ? (sa.design_qty || sa.required_qty) : (sa.designQty || 0)).toFixed(3)}
+                      </td>
                       <td className="px-4 py-4 text-center">
-                        <div className="font-bold text-rose-600">{Number(sa.requiredQty || sa.required_qty || (sa.quantity * sa.parentPlannedQty) || 0).toFixed(0)}</div>
+                        <div className="font-bold text-rose-600">{Number(isViewing ? sa.required_qty : (sa.plannedQty || 0)).toFixed(3)}</div>
                         <div className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">NOS</div>
                       </td>
                       <td className="px-4 py-4">
@@ -1080,6 +1098,7 @@ const ProductionPlan = () => {
                   <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-bold rounded-full ml-2 uppercase tracking-tight">{totalMaterialCount} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Consolidated material explosion across all levels</p>
+                <p className="text-[10px] text-amber-600 mt-1 font-bold uppercase tracking-tight">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
               </div>
               <button className="ml-auto p-1 hover:bg-slate-50 rounded text-amber-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
@@ -1097,7 +1116,8 @@ const ProductionPlan = () => {
                   <thead className="text-left text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
                     <tr>
                       <th className="px-4 py-2 font-medium">Item</th>
-                      <th className="px-4 py-2 font-medium text-right">Required Qty</th>
+                      <th className="px-4 py-2 font-medium text-right">Design Qty</th>
+                      <th className="px-4 py-2 font-medium text-right">Planned Qty</th>
                       <th className="px-4 py-2 font-medium">Warehouse</th>
                       <th className="px-4 py-2 font-medium">BOM Ref</th>
                       <th className="px-4 py-2 font-medium text-center">Status</th>
@@ -1110,9 +1130,12 @@ const ProductionPlan = () => {
                           <div className="font-bold text-slate-800 text-xs">{mat.material_name}</div>
                           <div className="text-[10px] text-slate-400">{mat.description || 'Direct Material'}</div>
                         </td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-700">
+                          {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <div className="font-bold text-amber-600">
-                            {Number(isViewing ? mat.required_qty : mat.totalRequiredQty).toFixed(3)}
+                            {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
                           <div className="text-[9px] text-slate-400 font-bold uppercase">{isViewing ? mat.uom : mat.unit}</div>
                         </td>
@@ -1148,7 +1171,8 @@ const ProductionPlan = () => {
                   <thead className="text-left text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
                     <tr>
                       <th className="px-4 py-2 font-medium">Component Specification</th>
-                      <th className="px-4 py-2 font-medium text-right">Required Qty</th>
+                      <th className="px-4 py-2 font-medium text-right">Design Qty</th>
+                      <th className="px-4 py-2 font-medium text-right">Planned Qty</th>
                       <th className="px-4 py-2 font-medium">Source Assembly</th>
                       <th className="px-4 py-2 font-medium">BOM Ref</th>
                     </tr>
@@ -1160,9 +1184,12 @@ const ProductionPlan = () => {
                           <div className="font-bold text-slate-800 text-xs uppercase tracking-tight">{mat.material_name}</div>
                           <div className="text-[10px] text-slate-400 italic font-medium">{mat.description || 'Raw Material'}</div>
                         </td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-700">
+                          {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <div className="font-bold text-rose-600">
-                            {Number(isViewing ? mat.required_qty : mat.totalRequiredQty).toFixed(3)}
+                            {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
                           <div className="text-[8px] text-slate-400 font-bold uppercase">{isViewing ? mat.uom : mat.unit}</div>
                         </td>
@@ -1353,6 +1380,8 @@ const ProductionPlan = () => {
         })),
         subAssemblies: subAssembliesToDisplay.map(sa => ({
           ...sa,
+          description: sa.description || sa.item_description || sa.item_name || null,
+          designQty: newPlan.targetQuantity || 0,
           requiredQty: parseFloat(sa.quantity || 0) * (sa.parentPlannedQty || 1),
           bomNo: sa.bomNo || sa.bom_no || null,
           itemCode: sa.itemCode || sa.subAssemblyItemCode || null,
@@ -1362,7 +1391,8 @@ const ProductionPlan = () => {
           ...m,
           itemCode: m.material_code || m.item_code || m.item || null,
           materialName: m.material_name || m.item || null,
-          requiredQty: m.required_qty || m.totalRequiredQty || 0,
+          designQty: newPlan.targetQuantity || 0,
+          requiredQty: m.totalPlannedQty || m.required_qty || 0,
           bomRef: m.bom_ref || m.bom_no || null,
           sourceAssembly: m.source_assembly || null,
           category: m.material_category || null

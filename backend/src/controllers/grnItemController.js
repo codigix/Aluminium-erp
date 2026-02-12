@@ -74,7 +74,8 @@ const createGRNWithItems = async (req, res, next) => {
           poItemId,
           item.poQty || 0,
           item.acceptedQty || 0,
-          item.remarks
+          item.remarks,
+          item.warehouseId || item.warehouse_id
         );
 
         grnItemResults.push(grnItem);

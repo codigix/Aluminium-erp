@@ -180,6 +180,17 @@ export const Badge = ({ children, variant = 'default', className = '' }) => {
 };
 
 export const Modal = ({ isOpen, onClose, title, children, className = '', size = '4xl' }) => {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const isDark = className.includes('bg-slate-900') || className.includes('bg-[#1e293b]') || className.includes('dark');
@@ -199,11 +210,12 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
   };
 
   const maxWidth = sizeClasses[size] || 'max-w-4xl';
+  const isFull = size === 'full';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className={`rounded-xl shadow-2xl ${maxWidth} w-full mx-4 max-h-[90vh] overflow-y-auto overflow-x-hidden border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
-        <div className={`sticky top-0 z-10 border-b p-4 flex items-center justify-between ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900'}`}>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-start bg-black/60 backdrop-blur-sm overflow-y-auto py-4 sm:py-8" onClick={onClose}>
+      <div className={`rounded-xl shadow-2xl ${maxWidth} w-full ${isFull ? 'min-h-full mx-0 rounded-none !my-0' : 'mx-4 h-fit max-h-[90vh] overflow-y-auto'} border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
+        <div className={`sticky top-0 z-10 border-b p-4 flex items-center justify-between ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900 shadow-sm'}`}>
           <h2 className="text-lg font-bold tracking-tight">{title}</h2>
           <button onClick={onClose} className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

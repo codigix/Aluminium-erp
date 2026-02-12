@@ -218,11 +218,13 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const sa of subAssemblies) {
         await connection.execute(
           `INSERT INTO production_plan_sub_assemblies 
-           (plan_id, item_code, required_qty, rate, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, description, design_qty, required_qty, rate, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             sa.itemCode || sa.subAssemblyItemCode || sa.item_code || null,
+            sa.description || sa.item_description || sa.name || null,
+            sa.designQty || finalTargetQty || 0,
             sa.requiredQty || 0,
             sa.rate || 0,
             sa.bomNo || sa.bom_no || null,
@@ -244,12 +246,13 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
             mat.materialName || mat.material_name || mat.item || null,
+            mat.designQty || finalTargetQty || 0,
             mat.requiredQty || mat.required_qty || 0,
             mat.rate || 0,
             mat.uom || mat.unit || 'Nos',
@@ -348,13 +351,14 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const item of items) {
         await connection.execute(
           `INSERT INTO production_plan_items 
-           (plan_id, sales_order_id, sales_order_item_id, item_code, bom_no, design_qty, uom, planned_qty, rate, warehouse, planned_start_date, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, sales_order_id, sales_order_item_id, item_code, description, bom_no, design_qty, uom, planned_qty, rate, warehouse, planned_start_date, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             item.salesOrderId || finalSalesOrderId,
             item.salesOrderItemId || null,
             item.itemCode || null,
+            item.description || item.item_description || null,
             item.bomNo || finalBomNo,
             item.designQty || finalTargetQty || 0,
             item.uom || 'Nos',
@@ -373,11 +377,13 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const sa of subAssemblies) {
         await connection.execute(
           `INSERT INTO production_plan_sub_assemblies 
-           (plan_id, item_code, required_qty, rate, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, description, design_qty, required_qty, rate, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             sa.itemCode || sa.subAssemblyItemCode || sa.item_code || null,
+            sa.description || sa.item_description || sa.name || null,
+            sa.designQty || finalTargetQty || 0,
             sa.requiredQty || 0,
             sa.rate || 0,
             sa.bomNo || sa.bom_no || null,
@@ -399,12 +405,13 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
             mat.materialName || mat.material_name || mat.item || null,
+            mat.designQty || finalTargetQty || 0,
             mat.requiredQty || mat.required_qty || 0,
             mat.rate || 0,
             mat.uom || mat.unit || 'Nos',
@@ -950,13 +957,14 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
     // 2. Aggregate everything into a single map
     const aggregatedMap = new Map();
 
-    const addToMap = (itemCode, qty, uom, name, warehouse, defaultWarehouse, category, rate) => {
+    const addToMap = (itemCode, qty, uom, name, warehouse, defaultWarehouse, category, rate, designQty) => {
       if (!itemCode && !name) return;
       
       const code = (itemCode || name).trim();
       const targetWarehouse = warehouse || defaultWarehouse;
-      // Aggregation key: use both code and name to distinguish items even if they share codes
-      const key = `${code.toUpperCase()}|${(name || code).trim().toUpperCase()}`;
+      // Aggregation key: use code to distinguish items. 
+      // Now that we have the ACTUAL material code for materials, they will aggregate correctly.
+      const key = code.toUpperCase();
       
       // Correct Item Type Mapping
       const mapItemType = (code, cat) => {
@@ -978,6 +986,7 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
       if (aggregatedMap.has(key)) {
         const existing = aggregatedMap.get(key);
         existing.quantity += Number(qty);
+        existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
         // Upgrade type to RAW_MATERIAL if it was previously something else but now identified as material
         if (existing.item_type !== 'RAW_MATERIAL') {
           const newType = mapItemType(code, category);
@@ -988,6 +997,7 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
         aggregatedMap.set(key, {
           item_code: code,
           quantity: Number(qty),
+          design_qty: Number(designQty || 0),
           uom: uom || 'Nos',
           material_name: name || code,
           warehouse: targetWarehouse,
@@ -999,7 +1009,7 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
 
     // Step 1: Add Finished Goods (FG)
     const [fgItems] = await connection.query(`
-      SELECT ppi.*, COALESCE(soi.description, oi.description, ppi.item_code) as item_name,
+      SELECT ppi.*, COALESCE(ppi.description, soi.description, oi.description, ppi.item_code) as item_name,
              COALESCE(sb.valuation_rate, 0) as stock_rate
       FROM production_plan_items ppi
       LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
@@ -1010,12 +1020,12 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
 
     for (const fg of fgItems) {
       const effectiveRate = fg.rate || fg.stock_rate || 0;
-      addToMap(fg.item_code, fg.planned_qty, fg.uom, fg.item_name, fg.warehouse, 'Finished Goods - NC', 'FG', effectiveRate);
+      addToMap(fg.item_code, fg.planned_qty, fg.uom, fg.item_name, fg.warehouse, 'Finished Goods - NC', 'FG', effectiveRate, fg.design_qty);
     }
 
     // Step 2: Add Sub Assemblies (SA)
     const [saItems] = await connection.query(`
-      SELECT sa.*, COALESCE(sb.material_name, sa.item_code) as item_name,
+      SELECT sa.*, COALESCE(sa.description, sb.material_name, sa.item_code) as item_name,
              COALESCE(sb.valuation_rate, 0) as stock_rate
       FROM production_plan_sub_assemblies sa
       LEFT JOIN (
@@ -1026,14 +1036,20 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
 
     for (const sa of saItems) {
       const effectiveRate = sa.rate || sa.stock_rate || 0;
-      addToMap(sa.item_code, sa.required_qty, 'Nos', sa.item_name, sa.target_warehouse, 'Work In Progress - NC', 'SUB_ASSEMBLY', effectiveRate);
+      addToMap(sa.item_code, sa.required_qty, 'Nos', sa.item_name, sa.target_warehouse, 'Work In Progress - NC', 'SUB_ASSEMBLY', effectiveRate, sa.design_qty);
     }
 
     // Step 3: Add Materials (CORE & EXPLODED)
     const [materials] = await connection.query(`
-      SELECT ppm.*, COALESCE(sb.valuation_rate, 0) as stock_rate
+      SELECT ppm.*, 
+             COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
+             COALESCE(actual_sb.valuation_rate, 0) as stock_rate
       FROM production_plan_materials ppm
-      LEFT JOIN (SELECT item_code, MAX(valuation_rate) as valuation_rate FROM stock_balance GROUP BY item_code) sb ON ppm.item_code = sb.item_code
+      LEFT JOIN (
+        SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate 
+        FROM stock_balance 
+        GROUP BY material_name
+      ) actual_sb ON ppm.material_name = actual_sb.material_name
       WHERE ppm.plan_id = ?
     `, [planId]);
 
@@ -1041,7 +1057,7 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
       // Prioritize rate from production_plan_materials (which came from BOM)
       const effectiveRate = mat.rate || mat.stock_rate || 0;
       // Force it to be RAW_MATERIAL because it's from the materials table
-      addToMap(mat.item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'Store - NC', 'RAW_MATERIAL', effectiveRate);
+      addToMap(mat.actual_item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'Store - NC', 'RAW_MATERIAL', effectiveRate, mat.design_qty);
     }
 
     if (aggregatedMap.size === 0) {
@@ -1093,13 +1109,14 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
     for (const item of aggregatedItems) {
       await connection.execute(
         `INSERT INTO material_request_items (
-          mr_id, item_code, item_name, item_type, quantity, unit_rate, uom, warehouse
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           mrId,
           item.item_code,
           item.material_name,
           item.item_type,
+          item.design_qty || 0,
           item.quantity,
           item.unit_rate || 0,
           item.uom,

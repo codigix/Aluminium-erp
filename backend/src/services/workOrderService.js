@@ -249,18 +249,6 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     }
   }
   
-  // If still no operations, create one default Job Card to allow progress tracking
-  if (operationsToUse.length === 0) {
-    const jcNo = await generateJobCardNo(connection);
-    await connection.execute(
-      `INSERT INTO job_cards 
-       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, hourly_rate, operation_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [jcNo, workOrderId, null, null, wo.quantity, initialStatus, 0, 0, 'Production / Assembly']
-    );
-    return;
-  }
-
   // 4. Create Job Cards for defined operations
   for (const op of operationsToUse) {
     const [masterOps] = await connection.query(

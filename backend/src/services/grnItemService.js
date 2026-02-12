@@ -54,7 +54,7 @@ const determineInventoryPostingQty = (acceptedQty, rejectedQty, isApproved = fal
   return acceptedQty;
 };
 
-const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null) => {
+const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null, warehouseId = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -78,8 +78,8 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
     const [result] = await connection.execute(
       `INSERT INTO grn_items (
         grn_id, po_item_id, po_qty, received_qty, accepted_qty, rejected_qty,
-        shortage_qty, overage_qty, status, remarks, is_approved
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        shortage_qty, overage_qty, status, remarks, is_approved, warehouse_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         grnId,
         poItemId,
@@ -91,7 +91,8 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
         overageQty,
         grnItemStatus,
         remarks,
-        false
+        false,
+        warehouseId
       ]
     );
 
@@ -111,7 +112,8 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
       overage_qty: overageQty,
       status: grnItemStatus,
       remarks,
-      is_approved: false
+      is_approved: false,
+      warehouse_id: warehouseId
     };
   } catch (error) {
     await connection.rollback();

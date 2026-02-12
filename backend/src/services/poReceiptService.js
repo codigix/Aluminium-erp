@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const stockEntryService = require('./stockEntryService');
 
 const getPOReceipts = async (filters = {}) => {
   let query = `
@@ -60,7 +61,7 @@ const getPOReceiptById = async (receiptId) => {
   return { ...receipt, items };
 };
 
-const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items = []) => {
+const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items = [], userId = 1) => {
   if (!poId) {
     const error = new Error('Purchase Order ID is required');
     error.statusCode = 400;
@@ -110,6 +111,9 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
     const grnId = grnResult.insertId;
 
     if (Array.isArray(items) && items.length > 0) {
+      // Pre-fetch all warehouses to map code/name to ID
+      const [allWarehouses] = await connection.query('SELECT id, warehouse_code, warehouse_name FROM warehouses');
+      
       for (const item of items) {
         await connection.execute(
           `INSERT INTO po_receipt_items (receipt_id, po_item_id, received_quantity)
@@ -117,13 +121,41 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
           [receiptId, item.id, item.received_qty || 0]
         );
 
+        // Map warehouse code/name to ID
+        const warehouse = allWarehouses.find(w => 
+          w.warehouse_code === item.warehouse || 
+          w.warehouse_name === item.warehouse
+        );
+        const warehouseId = warehouse ? warehouse.id : null;
+
         // Also create GRN item
         await connection.execute(
-          `INSERT INTO grn_items (grn_id, po_item_id, po_qty, received_qty, accepted_qty, status)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [grnId, item.id, item.quantity || 0, item.received_qty || 0, item.received_qty || 0, 'PENDING']
+          `INSERT INTO grn_items (grn_id, po_item_id, po_qty, received_qty, accepted_qty, status, warehouse_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            grnId, 
+            item.id, 
+            item.quantity || 0, 
+            item.received_qty || 0, 
+            item.received_qty || 0, 
+            'PENDING',
+            warehouseId
+          ]
         );
       }
+    }
+
+    // Auto-create Stock Entry from GRN
+    try {
+      // Pass the connection to ensure it's part of the same transaction
+      const stockResult = await stockEntryService.autoCreateStockEntryFromGRN(grnId, userId, connection);
+      if (stockResult.success) {
+        console.log(`[PO Receipt] Auto-created stock entry ${stockResult.entryNo} for GRN: ${grnId}`);
+      }
+    } catch (stockError) {
+      console.error('[PO Receipt] Stock entry auto-creation failed:', stockError.message);
+      // We might want to decide if this should roll back the whole transaction
+      // For now, let's keep it non-blocking or log it properly
     }
 
     await connection.commit();
