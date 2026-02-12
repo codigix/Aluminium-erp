@@ -705,7 +705,7 @@ const POReceipts = () => {
         isOpen={showViewModal} 
         onClose={() => setShowViewModal(false)}
         title={selectedReceiptForView ? `GRN Details - GRN-${String(selectedReceiptForView.id).padStart(4, '0')}` : 'GRN Details'}
-        maxWidth="max-w-4xl"
+        size="6xl"
       >
         {selectedReceiptForView && (
           <div className="p-8 space-y-8 bg-slate-50/30">
@@ -830,7 +830,7 @@ const POReceipts = () => {
         isOpen={showCreateModal} 
         onClose={() => setShowCreateModal(false)} 
         title="Create GRN Request"
-        size="full"
+        size="6xl"
       >
         <form onSubmit={handleCreateReceipt} className="relative">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
