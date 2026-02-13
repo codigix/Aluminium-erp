@@ -91,6 +91,85 @@ const getQuotationPDF = async (req, res, next) => {
   }
 };
 
+const uploadVendorResponse = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const filePath = req.file.path;
+    await quotationService.updateQuotation(req.params.quotationId, {
+      received_pdf_path: filePath
+    });
+    
+    // Auto-mark as RECEIVED if status is currently SENT or DRAFT
+    const quotation = await quotationService.getQuotationById(req.params.quotationId);
+    if (['SENT', 'DRAFT'].includes(quotation.status)) {
+      await quotationService.updateQuotationStatus(req.params.quotationId, 'RECEIVED');
+    }
+    
+    res.json({ message: 'Vendor response uploaded successfully', path: filePath });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const parseQuotationPDF = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const items = await quotationService.parseVendorQuotationPDF(req.file.path);
+    res.json(items);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getReceivedQuotationPDF = async (req, res, next) => {
+  try {
+    const quotation = await quotationService.getQuotationById(req.params.quotationId);
+    if (!quotation.received_pdf_path) {
+      return res.status(404).json({ error: 'Received PDF not found' });
+    }
+    
+    const fs = require('fs');
+    const path = require('path');
+    const absolutePath = path.isAbsolute(quotation.received_pdf_path) 
+      ? quotation.received_pdf_path 
+      : path.join(process.cwd(), quotation.received_pdf_path);
+      
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ error: 'PDF file not found on disk' });
+    }
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.sendFile(absolutePath);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const parseReceivedQuotationPDF = async (req, res, next) => {
+  try {
+    const quotation = await quotationService.getQuotationById(req.params.quotationId);
+    if (!quotation.received_pdf_path) {
+      return res.status(404).json({ error: 'Received PDF not found' });
+    }
+    
+    const path = require('path');
+    const absolutePath = path.isAbsolute(quotation.received_pdf_path) 
+      ? quotation.received_pdf_path 
+      : path.join(process.cwd(), quotation.received_pdf_path);
+      
+    const items = await quotationService.parseVendorQuotationPDF(absolutePath);
+    res.json(items);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createQuotation,
   getQuotations,
@@ -100,5 +179,9 @@ module.exports = {
   deleteQuotation,
   getQuotationStats,
   sendQuotationEmail,
-  getQuotationPDF
+  getQuotationPDF,
+  uploadVendorResponse,
+  parseQuotationPDF,
+  getReceivedQuotationPDF,
+  parseReceivedQuotationPDF
 };

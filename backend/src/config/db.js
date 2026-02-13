@@ -1514,7 +1514,7 @@ const ensureQuotationCommunicationTable = async () => {
         id INT PRIMARY KEY AUTO_INCREMENT,
         quotation_id INT NOT NULL,
         quotation_type ENUM('CLIENT', 'VENDOR') NOT NULL,
-        sender_type ENUM('SYSTEM', 'CLIENT', 'VENDOR') NOT NULL,
+        sender_type ENUM('SYSTEM', 'CLIENT', 'VENDOR', 'INTERNAL') NOT NULL,
         sender_email VARCHAR(255),
         message TEXT NOT NULL,
         email_message_id VARCHAR(255),
@@ -1523,7 +1523,15 @@ const ensureQuotationCommunicationTable = async () => {
         INDEX idx_quotation (quotation_id, quotation_type)
       )
     `);
-    console.log('Quotation communication table synchronized');
+
+    // Add received_pdf_path to quotations if not exists
+    const [cols] = await connection.query('SHOW COLUMNS FROM quotations');
+    const existing = new Set(cols.map(c => c.Field));
+    if (!existing.has('received_pdf_path')) {
+      await connection.query('ALTER TABLE quotations ADD COLUMN received_pdf_path VARCHAR(500) NULL');
+    }
+
+    console.log('Quotation communication table and related columns synchronized');
   } catch (error) {
     console.error('Quotation communication table sync failed', error.message);
   } finally {

@@ -33,16 +33,19 @@ const createPdfParseFn = moduleRef => {
       if (!buffer) {
         return {};
       }
-      const parser = new pdfParseClass({ data: buffer });
+      
       try {
-        const result = await parser.getText();
-        return result || {};
-      } finally {
-        if (typeof parser.destroy === 'function') {
-          try {
-            await parser.destroy();
-          } catch {}
+        // Handle mehmet-kozan/pdf-parse (v2.x)
+        const parser = new pdfParseClass(new Uint8Array(buffer));
+        if (typeof parser.load === 'function') {
+          await parser.load();
         }
+        const result = await parser.getText();
+        const text = typeof result === 'string' ? result : (result?.text || '');
+        return { text };
+      } catch (e) {
+        console.error('PDF Parse error:', e.message);
+        return {};
       }
     };
   }

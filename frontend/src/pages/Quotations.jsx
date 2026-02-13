@@ -10,6 +10,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 const rfqStatusColors = {
   DRAFT: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'Draft' },
   SENT: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Sent' },
+  EMAIL_RECEIVED: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-600', badge: 'bg-sky-100 text-sky-700', label: 'Email Received' },
   RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
   REVIEWED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Reviewed' },
   CLOSED: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-700', label: 'Closed' },
@@ -66,7 +67,8 @@ const Quotations = () => {
     amount: 0,
     validUntil: '',
     items: [],
-    notes: ''
+    notes: '',
+    recordFile: null
   });
   const [emailData, setEmailData] = useState({
     to: '',
@@ -350,7 +352,8 @@ const Quotations = () => {
       quotationId: '',
       items: [],
       amount: 0,
-      notes: ''
+      notes: '',
+      recordFile: null
     });
   };
 
@@ -395,7 +398,8 @@ const Quotations = () => {
             items: filteredItems,
             amount: detailedQuotation.total_amount || 0,
             validUntil: detailedQuotation.valid_until ? new Date(detailedQuotation.valid_until).toISOString().split('T')[0] : '',
-            notes: `Response to ${quotation.quote_number}`
+            notes: `Response to ${quotation.quote_number}`,
+            received_pdf_path: detailedQuotation.received_pdf_path
           });
         }
       } catch (error) {
@@ -417,6 +421,13 @@ const Quotations = () => {
     const newItems = [...recordData.items];
     newItems[index][field] = value;
     
+    // Recalculate item amount
+    if (field === 'quantity' || field === 'unit_rate') {
+      const qty = parseFloat(newItems[index].quantity) || 0;
+      const rate = parseFloat(newItems[index].unit_rate) || 0;
+      newItems[index].amount = qty * rate;
+    }
+    
     // Recalculate total amount
     const totalAmount = newItems.reduce((sum, item) => {
       const qty = parseFloat(item.quantity) || 0;
@@ -429,6 +440,156 @@ const Quotations = () => {
       items: newItems,
       amount: totalAmount
     });
+  };
+
+  const handleRecordFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setRecordData({ ...recordData, recordFile: file });
+
+    // Auto-fetch rates from PDF
+    try {
+      const token = localStorage.getItem('authToken');
+      const formData = new FormData();
+      formData.append('pdf', file);
+
+      const response = await fetch(`${API_BASE}/quotations/parse-pdf`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Failed to parse PDF');
+
+      const parsedItems = await response.json();
+      
+      // Map parsed items to existing items in recordData
+      const updatedItems = recordData.items.map(existingItem => {
+        const existingDrawingNo = (existingItem.drawing_no || existingItem.item_code || '').toLowerCase().trim();
+        const existingMaterialName = (existingItem.material_name || '').toLowerCase().trim();
+
+        // Try to find a match by material name or drawing no
+        const match = parsedItems.find(pi => {
+          const piDrawingNo = (pi.drawing_no || '').toLowerCase().trim();
+          const piMaterialName = (pi.material_name || '').toLowerCase().trim();
+
+          // Match by Drawing No (Exact or one contains the other)
+          const drawingMatch = piDrawingNo && existingDrawingNo && (
+            piDrawingNo === existingDrawingNo || 
+            piDrawingNo.includes(existingDrawingNo) || 
+            existingDrawingNo.includes(piDrawingNo)
+          );
+
+          // Match by Material Name
+          const materialMatch = piMaterialName && existingMaterialName && (
+            piMaterialName.includes(existingMaterialName) || 
+            existingMaterialName.includes(piMaterialName)
+          );
+
+          return drawingMatch || materialMatch;
+        });
+
+        if (match) {
+          const newRate = parseFloat(match.unit_rate) || 0;
+          const newQty = parseFloat(match.quantity) || parseFloat(existingItem.quantity) || 0;
+          const newAmount = parseFloat(match.amount) || (newQty * newRate);
+          
+          return {
+            ...existingItem,
+            unit_rate: newRate,
+            quantity: newQty,
+            uom: match.unit || existingItem.uom || 'NOS',
+            amount: newAmount
+          };
+        }
+        return existingItem;
+      });
+
+      const totalAmount = updatedItems.reduce((sum, item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.unit_rate) || 0;
+        return sum + (qty * rate);
+      }, 0);
+
+      setRecordData(prev => ({
+        ...prev,
+        items: updatedItems,
+        amount: totalAmount
+      }));
+
+      successToast('Rates auto-filled from PDF');
+    } catch (error) {
+      console.error('PDF parsing error:', error);
+    }
+  };
+
+  const handleParseReceivedPDF = async () => {
+    if (!recordData.quotationId) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/${recordData.quotationId}/parse-received-pdf`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to parse saved PDF');
+
+      const parsedItems = await response.json();
+      
+      const updatedItems = recordData.items.map(existingItem => {
+        const existingDrawingNo = (existingItem.drawing_no || existingItem.item_code || '').toLowerCase().trim();
+        const existingMaterialName = (existingItem.material_name || '').toLowerCase().trim();
+
+        const match = parsedItems.find(pi => {
+          const piDrawingNo = (pi.drawing_no || '').toLowerCase().trim();
+          const piMaterialName = (pi.material_name || '').toLowerCase().trim();
+
+          const drawingMatch = piDrawingNo && existingDrawingNo && (
+            piDrawingNo === existingDrawingNo || 
+            piDrawingNo.includes(existingDrawingNo) || 
+            existingDrawingNo.includes(piDrawingNo)
+          );
+
+          const materialMatch = piMaterialName && existingMaterialName && (
+            piMaterialName.includes(existingMaterialName) || 
+            existingMaterialName.includes(piMaterialName)
+          );
+
+          return drawingMatch || materialMatch;
+        });
+
+        if (match) {
+          const newRate = parseFloat(match.unit_rate) || 0;
+          const newQty = parseFloat(match.quantity) || parseFloat(existingItem.quantity) || 0;
+          const newAmount = parseFloat(match.amount) || (newQty * newRate);
+          
+          return {
+            ...existingItem,
+            unit_rate: newRate,
+            quantity: newQty,
+            uom: match.unit || existingItem.uom || 'NOS',
+            amount: newAmount
+          };
+        }
+        return existingItem;
+      });
+
+      const totalAmount = updatedItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      
+      setRecordData(prev => ({ 
+        ...prev, 
+        items: updatedItems,
+        amount: totalAmount
+      }));
+      successToast('Data auto-filled from saved PDF');
+    } catch (error) {
+      errorToast(error.message || 'Failed to parse saved PDF');
+    }
   };
 
   const handleRecordAddEmptyItem = () => {
@@ -532,7 +693,8 @@ const Quotations = () => {
 
     try {
       const token = localStorage.getItem('authToken');
-      // Update the quotation with received items and rates
+      
+      // 1. Update text fields and items
       const response = await fetch(`${API_BASE}/quotations/${recordData.quotationId}`, {
         method: 'PUT',
         headers: {
@@ -548,19 +710,35 @@ const Quotations = () => {
 
       if (!response.ok) throw new Error('Failed to record quote details');
 
-      // Update status to RECEIVED
-      await fetch(`${API_BASE}/quotations/${recordData.quotationId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: 'RECEIVED' })
-      });
+      // 2. Upload file if present
+      if (recordData.recordFile) {
+        const fileFormData = new FormData();
+        fileFormData.append('pdf', recordData.recordFile);
+        
+        const uploadRes = await fetch(`${API_BASE}/quotations/${recordData.quotationId}/upload-response`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: fileFormData
+        });
+        
+        if (!uploadRes.ok) throw new Error('Failed to upload vendor PDF');
+      } else {
+        // If no file, manually update status to RECEIVED (upload endpoint does this automatically if file present)
+        await fetch(`${API_BASE}/quotations/${recordData.quotationId}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: 'RECEIVED' })
+        });
+      }
 
       successToast('Quote details recorded successfully');
       setShowCreateModal(false);
-      setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, validUntil: '', items: [], notes: '' });
+      setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, validUntil: '', items: [], notes: '', recordFile: null });
       fetchQuotations();
       fetchStats();
     } catch (error) {
@@ -568,9 +746,44 @@ const Quotations = () => {
     }
   };
 
-  const handleViewPDF = (quotationId) => {
-    const pdfUrl = `${API_BASE}/quotations/${quotationId}/pdf`;
-    window.open(pdfUrl, '_blank');
+  const handleViewPDF = async (quotationId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/${quotationId}/pdf`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      errorToast('Could not view PDF');
+      console.error(error);
+    }
+  };
+
+  const handleViewReceivedPDF = async (quotationId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/${quotationId}/received-pdf`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch received PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      errorToast('Could not view vendor PDF');
+      console.error(error);
+    }
   };
 
   const handleApproveQuote = async (quotationId) => {
@@ -651,6 +864,23 @@ const Quotations = () => {
       attachPDF: true
     });
     setShowEmailModal(true);
+  };
+
+  const openRecordModal = (q) => {
+    const projectId = q.mr_id ? `MR-${q.mr_id}` : (q.sales_order_id ? String(q.sales_order_id) : '');
+    
+    setRecordData({
+      projectId: projectId,
+      vendorId: String(q.vendor_id),
+      quotationId: q.id,
+      amount: q.total_amount || 0,
+      validUntil: q.valid_until ? new Date(q.valid_until).toISOString().split('T')[0] : '',
+      items: q.items || [],
+      notes: q.notes || `Response to ${q.quote_number}`,
+      recordFile: null
+    });
+    setActiveTab('received');
+    setShowCreateModal(true);
   };
 
   const handleSendEmail = async (e) => {
@@ -751,7 +981,7 @@ const Quotations = () => {
     return quotations.filter(q => {
       const isTabMatch = activeTab === 'sent' 
         ? true 
-        : ['RECEIVED', 'REVIEWED', 'PENDING'].includes(q.status);
+        : ['RECEIVED', 'REVIEWED', 'PENDING', 'EMAIL_RECEIVED'].includes(q.status);
       const matchesStatus = filterStatus === 'All Quotations' || q.status === filterStatus;
       return isTabMatch && matchesStatus;
     });
@@ -830,33 +1060,59 @@ const Quotations = () => {
           <button
             onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100"
-            title="View PDF"
+            title="View RFQ PDF"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </button>
+          {q.received_pdf_path && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleViewReceivedPDF(q.id); }}
+              className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-transparent hover:border-cyan-100"
+              title="View Vendor PDF"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </button>
+          )}
           {activeTab === 'sent' && (
             <>
-              <button
-                onClick={(e) => { e.stopPropagation(); openEmailModal(q); }}
-                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100"
-                title={q.status === 'SENT' ? 'Resend RFQ' : 'Send RFQ'}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
-                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-transparent hover:border-amber-100"
-                title="Edit RFQ"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-              </button>
+              {['DRAFT', 'SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEmailModal(q); }}
+                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100"
+                  title={q.status === 'SENT' ? 'Resend RFQ' : 'Send RFQ'}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              )}
+              {['SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openRecordModal(q); }}
+                  className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-transparent hover:border-cyan-100"
+                  title="Record Vendor Response"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                  </svg>
+                </button>
+              )}
+              {q.status !== 'RECEIVED' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
+                  className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-transparent hover:border-amber-100"
+                  title="Edit RFQ"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              )}
             </>
           )}
           {activeTab === 'received' && q.status === 'RECEIVED' && (
@@ -1314,7 +1570,7 @@ const Quotations = () => {
                       </select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                       <label className="block text-xs  text-slate-500  tracking-wider mb-1">Total Amount (₹)</label>
                       <div className="text-xl text-slate-900">{formatCurrency(recordData.amount)}</div>
@@ -1328,11 +1584,35 @@ const Quotations = () => {
                         className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Attach Vendor PDF</label>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handleRecordFileChange}
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="block text-sm font-medium text-slate-700">Line Items</label>
+                      <div className="flex items-center gap-4">
+                        <label className="block text-sm font-medium text-slate-700">Line Items</label>
+                        {recordData.received_pdf_path && (
+                          <button
+                            type="button"
+                            onClick={handleParseReceivedPDF}
+                            className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-all"
+                            title="Extract rates and quantities from the PDF received via email"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Auto-fill from Email PDF
+                          </button>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={handleRecordAddEmptyItem}
@@ -1346,6 +1626,7 @@ const Quotations = () => {
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
+                            <th className="px-3 py-2  text-slate-600" style={{ width: '150px' }}>DRAWING NO</th>
                             <th className="px-3 py-2  text-slate-600">MATERIAL NAME</th>
                             <th className="px-3 py-2  text-slate-600" style={{ width: '120px' }}>TYPE</th>
                             <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '90px' }}>DESIGN QTY</th>
@@ -1357,13 +1638,34 @@ const Quotations = () => {
                         <tbody className="divide-y divide-slate-100">
                           {recordData.items.length === 0 ? (
                             <tr>
-                              <td colSpan="6" className="px-3 py-8 text-center text-slate-400">
+                              <td colSpan="7" className="px-3 py-8 text-center text-slate-400">
                                 Select a project and vendor to load items, or add manually.
                               </td>
                             </tr>
                           ) : (
                             recordData.items.map((item, idx) => (
                               <tr key={idx} className="hover:bg-slate-50">
+                                <td className="px-3 py-2">
+                                  <div className="relative">
+                                    <input
+                                      type="text"
+                                      value={item.drawing_no || item.item_code || ''}
+                                      onChange={(e) => handleRecordItemChange(idx, 'drawing_no', e.target.value)}
+                                      className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all pr-7"
+                                      placeholder="Drawing..."
+                                    />
+                                    {(item.drawing_no || item.item_code) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handlePreviewByNo(item.drawing_no || item.item_code)}
+                                        className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
+                                        title="Preview Drawing"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-3 py-2">
                                   <input
                                     type="text"
@@ -1372,19 +1674,6 @@ const Quotations = () => {
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
                                     placeholder="Material..."
                                   />
-                                  {item.item_code && (
-                                    <div className="text-[10px] text-slate-400 px-2 mt-0.5 flex items-center gap-2">
-                                      Code: {item.item_code}
-                                      <button
-                                        type="button"
-                                        onClick={() => handlePreviewByNo(item.item_code)}
-                                        className="text-indigo-600 hover:text-indigo-800 transition-colors"
-                                        title="Preview Drawing"
-                                      >
-                                        <Eye className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  )}
                                 </td>
                                 <td className="px-3 py-2">
                                   <input
