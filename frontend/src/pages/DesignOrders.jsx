@@ -2092,7 +2092,7 @@ const DesignOrders = () => {
                       <option value="Set">Set</option>
                     </select>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 hidden">
                     <label className="text-xs  text-slate-500  tracking-wider">Valuation Rate</label>
                     <input 
                       type="number" 
@@ -2102,7 +2102,7 @@ const DesignOrders = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs  text-slate-500  tracking-wider">Selling Rate</label>
+                    <label className="text-xs  text-slate-500  tracking-wider">Valuation Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
@@ -2260,7 +2260,7 @@ const DesignOrders = () => {
                             <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">Material Name</th>
                             <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">Group</th>
                             <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">UOM</th>
-                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200 text-center">Selling Rate</th>
+                            <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200 text-center">Valuation Rate</th>
                             <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200 text-center">Weight/Unit</th>
                             <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200">Drawing No</th>
                             <th className="px-4 py-3 text-[10px]  text-slate-500  tracking-wider border-b border-slate-200 text-right">Actions</th>
