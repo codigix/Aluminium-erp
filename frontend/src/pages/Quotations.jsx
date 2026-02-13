@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Card, DataTable } from '../components/ui.jsx';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, DataTable, Modal, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -81,6 +81,16 @@ const Quotations = () => {
     validUntil: '',
     items: []
   });
+
+  const [selectedQuotes, setSelectedQuotes] = useState([]);
+  const [selectedMR, setSelectedMR] = useState('');
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareData, setCompareData] = useState([]);
+
+  useEffect(() => {
+    setSelectedQuotes([]);
+    setSelectedMR('');
+  }, [activeTab, filterStatus]);
 
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -854,6 +864,32 @@ const Quotations = () => {
     }
   };
 
+  const handleCompare = async () => {
+    if (selectedQuotes.length < 2) {
+      errorToast('Select at least 2 quotes to compare');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const fetchDetails = selectedQuotes.map(id => 
+        fetch(`${API_BASE}/quotations/${id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(res => res.json())
+      );
+
+      const detailedQuotes = await Promise.all(fetchDetails);
+      setCompareData(detailedQuotes);
+      setShowCompareModal(true);
+    } catch (error) {
+      console.error('Error fetching compare data:', error);
+      errorToast('Failed to load comparison data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openEmailModal = (quotation) => {
     const vendor = vendors.find(v => v.id === quotation.vendor_id);
     setSelectedQuotation(quotation);
@@ -991,154 +1027,197 @@ const Quotations = () => {
     return vendors.find(v => v.id === vendorId)?.vendor_name || 'Unknown Vendor';
   };
 
-  const columns = [
-    {
-      key: 'quote_number',
-      label: 'Quote No.',
-      sortable: true,
-      render: (val, q) => (
-        <div className="font-medium text-slate-900">
-          <div className="text-sm  tracking-tight">{val}</div>
-          {q.sales_order_id && (
-            <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-              <span className="px-1.5 py-0.5 bg-slate-100 rounded ">SO-{q.sales_order_id}</span>
-              {q.project_name && <span className="truncate max-w-[120px]">{q.project_name}</span>}
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
-      key: 'vendor_id',
-      label: 'Vendor',
-      sortable: true,
-      render: (val) => (
-        <div className="flex flex-col">
-          <span className="text-slate-900 ">{getVendorName(val)}</span>
-          <span className="text-[10px] text-slate-400  tracking-wider font-medium">Vendor ID: #{val}</span>
-        </div>
-      )
-    },
-    {
-      key: activeTab === 'sent' ? 'valid_until' : 'total_amount',
-      label: activeTab === 'sent' ? 'Valid Until' : 'Total Amount',
-      sortable: true,
-      render: (val, q) => activeTab === 'sent' ? (
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-slate-700">{formatDate(val)}</span>
-          {val && daysValid(val) > 0 && (
-            <span className="text-[9px]  px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 w-fit">
-              {daysValid(val)} days left
-            </span>
-          )}
-          {val && daysValid(val) <= 0 && (
-            <span className="text-[9px]  px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 w-fit">
-              Expired
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className=" text-indigo-600 text-sm">{formatCurrency(val)}</div>
-      )
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      sortable: true,
-      render: (val) => (
-        <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px]  tracking-wider border ${rfqStatusColors[val]?.badge}`}>
-          {rfqStatusColors[val]?.label?.toUpperCase() || val}
-        </span>
-      )
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      className: 'text-right',
-      render: (_, q) => (
-        <div className="flex justify-end gap-1.5">
-          <button
-            onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100"
-            title="View RFQ PDF"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          </button>
-          {q.received_pdf_path && (
+  const columns = useMemo(() => {
+    const baseCols = [
+      {
+        key: 'quote_number',
+        label: 'Quote No.',
+        sortable: true,
+        render: (val, q) => (
+          <div className="font-medium text-slate-900">
+            <div className="text-sm  tracking-tight">{val}</div>
+            {q.sales_order_id && (
+              <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                <span className="px-1.5 py-0.5 bg-slate-100 rounded ">SO-{q.sales_order_id}</span>
+                {q.project_name && <span className="truncate max-w-[120px]">{q.project_name}</span>}
+              </div>
+            )}
+          </div>
+        )
+      },
+      {
+        key: 'vendor_id',
+        label: 'Vendor',
+        sortable: true,
+        render: (val) => (
+          <div className="flex flex-col">
+            <span className="text-slate-900 ">{getVendorName(val)}</span>
+            <span className="text-[10px] text-slate-400  tracking-wider font-medium">Vendor ID: #{val}</span>
+          </div>
+        )
+      },
+      {
+        key: activeTab === 'sent' ? 'valid_until' : 'total_amount',
+        label: activeTab === 'sent' ? 'Valid Until' : 'Total Amount',
+        sortable: true,
+        render: (val, _) => activeTab === 'sent' ? (
+          <div className="flex flex-col gap-1">
+            <span className="font-medium text-slate-700">{formatDate(val)}</span>
+            {val && daysValid(val) > 0 && (
+              <span className="text-[9px]  px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 w-fit">
+                {daysValid(val)} days left
+              </span>
+            )}
+            {val && daysValid(val) <= 0 && (
+              <span className="text-[9px]  px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 w-fit">
+                Expired
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className=" text-indigo-600 text-sm">{formatCurrency(val)}</div>
+        )
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        sortable: true,
+        render: (val) => (
+          <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px]  tracking-wider border ${rfqStatusColors[val]?.badge}`}>
+            {rfqStatusColors[val]?.label?.toUpperCase() || val}
+          </span>
+        )
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        className: 'text-right',
+        render: (_, q) => (
+          <div className="flex justify-end gap-1.5">
             <button
-              onClick={(e) => { e.stopPropagation(); handleViewReceivedPDF(q.id); }}
-              className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-transparent hover:border-cyan-100"
-              title="View Vendor PDF"
+              onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
+              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100"
+              title="View RFQ PDF"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </button>
-          )}
-          {activeTab === 'sent' && (
-            <>
-              {['DRAFT', 'SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); openEmailModal(q); }}
-                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100"
-                  title={q.status === 'SENT' ? 'Resend RFQ' : 'Send RFQ'}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </button>
-              )}
-              {['SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); openRecordModal(q); }}
-                  className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-transparent hover:border-cyan-100"
-                  title="Record Vendor Response"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                  </svg>
-                </button>
-              )}
-              {q.status !== 'RECEIVED' && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
-                  className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-transparent hover:border-amber-100"
-                  title="Edit RFQ"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
-              )}
-            </>
-          )}
-          {activeTab === 'received' && q.status === 'RECEIVED' && (
+            {q.received_pdf_path && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleViewReceivedPDF(q.id); }}
+                className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-transparent hover:border-cyan-100"
+                title="View Vendor PDF"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+            )}
+            {activeTab === 'sent' && (
+              <>
+                {['DRAFT', 'SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openEmailModal(q); }}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100"
+                    title={q.status === 'SENT' ? 'Resend RFQ' : 'Send RFQ'}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                )}
+                {['SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openRecordModal(q); }}
+                    className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-transparent hover:border-cyan-100"
+                    title="Record Vendor Response"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    </svg>
+                  </button>
+                )}
+                {q.status !== 'RECEIVED' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
+                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-transparent hover:border-amber-100"
+                    title="Edit RFQ"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                )}
+              </>
+            )}
+            {activeTab === 'received' && q.status === 'RECEIVED' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleApproveQuote(q.id); }}
+                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-transparent hover:border-emerald-100"
+                title="Approve Quote"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+            )}
             <button
-              onClick={(e) => { e.stopPropagation(); handleApproveQuote(q.id); }}
-              className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-transparent hover:border-emerald-100"
-              title="Approve Quote"
+              onClick={(e) => { e.stopPropagation(); handleDeleteQuotation(q.id); }}
+              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
+              title="Delete"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
-          )}
-          <button
-            onClick={(e) => { e.stopPropagation(); handleDeleteQuotation(q.id); }}
-            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
-            title="Delete"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
-      )
+          </div>
+        )
+      }
+    ];
+
+    if (activeTab === 'received') {
+      return [
+        {
+          key: 'selection',
+          label: (
+            <input
+              type="checkbox"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+              checked={selectedQuotes.length === displayQuotations.length && displayQuotations.length > 0}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setSelectedQuotes(displayQuotations.map(q => q.id));
+                } else {
+                  setSelectedQuotes([]);
+                }
+              }}
+            />
+          ),
+          render: (_, q) => (
+            <input
+              type="checkbox"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+              checked={selectedQuotes.includes(q.id)}
+              onChange={(e) => {
+                e.stopPropagation();
+                if (e.target.checked) {
+                  setSelectedQuotes(prev => [...prev, q.id]);
+                } else {
+                  setSelectedQuotes(prev => prev.filter(id => id !== q.id));
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )
+        },
+        ...baseCols
+      ];
     }
-  ];
+
+    return baseCols;
+  }, [activeTab, selectedQuotes, displayQuotations, vendors, quotations, getVendorName, handleApproveQuote, handleDeleteQuotation, openEmailModal]);
 
   return (
     <div className="space-y-6">
@@ -1178,7 +1257,7 @@ const Quotations = () => {
         </div>
       </div>
 
-      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
         <div className="flex gap-2 p-1 bg-slate-50 rounded-xl w-fit border border-slate-100">
           <button
             onClick={() => setActiveTab('sent')}
@@ -1202,6 +1281,49 @@ const Quotations = () => {
             Received Quotes
           </button>
         </div>
+
+        {activeTab === 'received' && (
+          <div className="flex items-center gap-3">
+            <div className="w-64">
+              <SearchableSelect
+                options={materialRequests.map(mr => ({
+                  label: mr.mr_number,
+                  value: mr.id,
+                  sub: mr.department
+                }))}
+                value={selectedMR}
+                onChange={(e) => {
+                  const mrId = e.target.value;
+                  setSelectedMR(mrId);
+                  if (mrId) {
+                    const related = displayQuotations.filter(q => String(q.mr_id) === String(mrId) && q.status === 'RECEIVED');
+                    setSelectedQuotes(related.map(q => q.id));
+                  } else {
+                    setSelectedQuotes([]);
+                  }
+                }}
+                placeholder="Filter by MR to compare"
+                labelField="label"
+                valueField="value"
+                subLabelField="sub"
+              />
+            </div>
+            <button
+              onClick={handleCompare}
+              disabled={selectedQuotes.length < 2}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all ${
+                selectedQuotes.length >= 2
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Compare Quotes {selectedQuotes.length > 0 && `(${selectedQuotes.length})`}
+            </button>
+          </div>
+        )}
       </div>
 
       <DataTable 
@@ -1924,6 +2046,97 @@ const Quotations = () => {
           </div>
         </div>
       )}
+      {showCompareModal && compareData.length > 0 && (
+        <Modal
+          isOpen={showCompareModal}
+          onClose={() => setShowCompareModal(false)}
+          title="Compare Vendor Quotations"
+          size="full"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[800px]">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="p-3 border text-left text-xs font-bold text-slate-600 sticky left-0 bg-slate-50 z-10">Item / Drawing No.</th>
+                  {compareData.map((q, idx) => (
+                    <th key={idx} className="p-3 border text-center text-xs font-bold text-slate-800 bg-indigo-50/50" colSpan="2">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-indigo-600">{getVendorName(q.vendor_id)}</span>
+                        <span className="text-[10px] text-slate-500 font-normal">{q.quote_number}</span>
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+                <tr className="bg-slate-50/50 text-[10px] uppercase tracking-wider text-slate-400">
+                  <th className="p-2 border sticky left-0 bg-slate-50/50 z-10"></th>
+                  {compareData.map((_, idx) => (
+                    <React.Fragment key={idx}>
+                      <th className="p-2 border text-right">Unit Rate</th>
+                      <th className="p-2 border text-right">Total</th>
+                    </React.Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="text-xs">
+                {/* Collect all unique items */}
+                {Array.from(new Set(compareData.flatMap(q => (q.items || []).map(item => item.item_code || item.drawing_no)))).map((itemCode, itemIdx) => {
+                  const firstItem = compareData.flatMap(q => q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
+                  return (
+                    <tr key={itemIdx} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3 border font-medium text-slate-900 sticky left-0 bg-white z-10">
+                        <div className="flex flex-col">
+                          <span>{itemCode}</span>
+                          <span className="text-[10px] text-slate-400 font-normal">{firstItem?.material_name}</span>
+                        </div>
+                      </td>
+                      {compareData.map((q, qIdx) => {
+                        const item = (q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
+                        return (
+                          <React.Fragment key={qIdx}>
+                            <td className="p-3 border text-right text-slate-600 font-mono">
+                              {item ? formatCurrency(item.unit_rate) : '—'}
+                            </td>
+                            <td className={`p-3 border text-right font-mono ${item ? 'text-indigo-600 font-bold' : 'text-slate-300'}`}>
+                              {item ? formatCurrency(item.amount || (item.unit_rate * item.quantity)) : '—'}
+                            </td>
+                          </React.Fragment>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 font-bold">
+                  <td className="p-4 border text-right sticky left-0 bg-slate-50 z-10">GRAND TOTAL</td>
+                  {compareData.map((q, idx) => (
+                    <td key={idx} className="p-4 border text-right text-indigo-700 text-sm" colSpan="2">
+                      {formatCurrency(q.total_amount)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border text-right sticky left-0 bg-white z-10">Actions</td>
+                  {compareData.map((q, idx) => (
+                    <td key={idx} className="p-4 border text-center" colSpan="2">
+                      <button
+                        onClick={() => {
+                          handleApproveQuote(q.id);
+                          setShowCompareModal(false);
+                        }}
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 transition-all shadow-sm"
+                      >
+                        Approve this Quote
+                      </button>
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Modal>
+      )}
+
       <DrawingPreviewModal 
         isOpen={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}

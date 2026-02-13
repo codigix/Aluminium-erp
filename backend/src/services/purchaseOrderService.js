@@ -55,7 +55,7 @@ const previewPurchaseOrder = async (quotationId) => {
 };
 
 const createPurchaseOrder = async (data) => {
-  const { quotationId, mrId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id } = data;
+  const { quotationId, mrId: providedMrId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id } = data;
   
   const connection = await pool.getConnection();
   try {
@@ -63,6 +63,7 @@ const createPurchaseOrder = async (data) => {
 
     let finalVendorId = vendorId || vendor_id;
     let sales_order_id = null;
+    let actualMrId = providedMrId;
     let total_amount = 0;
     let items = [];
 
@@ -79,6 +80,7 @@ const createPurchaseOrder = async (data) => {
       const quote = quotation[0];
       finalVendorId = quote.vendor_id;
       sales_order_id = quote.sales_order_id;
+      actualMrId = providedMrId || quote.mr_id;
       total_amount = quote.total_amount;
 
       const [quoteItems] = await connection.query(
@@ -89,9 +91,9 @@ const createPurchaseOrder = async (data) => {
         [quote.sales_order_id, quotationId]
       );
       items = quoteItems;
-    } else if (mrId) {
+    } else if (actualMrId) {
       // Create PO from Material Request
-      const [mr] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [mrId]);
+      const [mr] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [actualMrId]);
       if (!mr.length) throw new Error('Material Request not found');
       
       const mrData = mr[0];
@@ -119,7 +121,7 @@ const createPurchaseOrder = async (data) => {
         FROM material_request_items mri
         LEFT JOIN (SELECT item_code, MAX(valuation_rate) as valuation_rate FROM stock_balance GROUP BY item_code) sb ON mri.item_code = sb.item_code
         WHERE mri.mr_id = ?
-      `, [planId, planId, planId, mrId]);
+      `, [planId, planId, planId, actualMrId]);
       
       items = mrItems.map(item => {
         const qty = parseFloat(item.quantity) || 0;
@@ -204,7 +206,7 @@ const createPurchaseOrder = async (data) => {
       }
     }
 
-    const poStatus = (mrId && !finalVendorId) ? 'PO_REQUEST' : 'DRAFT';
+    const poStatus = (actualMrId && !finalVendorId) ? 'PO_REQUEST' : 'DRAFT';
 
     const [result] = await connection.execute(
       `INSERT INTO purchase_orders (po_number, quotation_id, mr_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes)
@@ -212,7 +214,7 @@ const createPurchaseOrder = async (data) => {
       [
         poNumber,
         quotationId || null,
-        mrId || null,
+        actualMrId || null,
         finalVendorId || null,
         sales_order_id || null,
         poStatus,
@@ -224,10 +226,10 @@ const createPurchaseOrder = async (data) => {
 
     const poId = result.insertId;
     
-    if (mrId) {
+    if (actualMrId) {
       await connection.execute(
         'UPDATE material_requests SET linked_po_id = ?, linked_po_number = ?, status = ? WHERE id = ?',
-        [poId, poNumber, 'PROCESSING', mrId]
+        [poId, poNumber, 'PROCESSING', actualMrId]
       );
     }
     

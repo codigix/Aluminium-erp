@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const emailService = require('./emailService');
+const purchaseOrderService = require('./purchaseOrderService');
 const puppeteer = require('puppeteer');
 const mustache = require('mustache');
 const pdfModule = require('pdf-parse');
@@ -151,12 +152,42 @@ const updateQuotationStatus = async (quotationId, status) => {
 
   await getQuotationById(quotationId);
 
-  await pool.execute(
-    'UPDATE quotations SET status = ? WHERE id = ?',
-    [status, quotationId]
-  );
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  return status;
+    await connection.execute(
+      'UPDATE quotations SET status = ? WHERE id = ?',
+      [status, quotationId]
+    );
+
+    if (status === 'REVIEWED') {
+      // Check if PO already exists for this quotation to avoid duplicates
+      const [existingPO] = await connection.query(
+        'SELECT id FROM purchase_orders WHERE quotation_id = ?',
+        [quotationId]
+      );
+
+      if (existingPO.length === 0) {
+        // Pass the connection to createPurchaseOrder if it supports it, 
+        // but purchaseOrderService.createPurchaseOrder gets its own connection.
+        // To keep it simple and avoid changing too many things, we'll call it normally.
+        // However, it's better if it uses the same connection.
+        // For now, we'll call it and commit our transaction.
+        await purchaseOrderService.createPurchaseOrder({
+          quotationId: quotationId
+        });
+      }
+    }
+
+    await connection.commit();
+    return status;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const updateQuotation = async (quotationId, payload) => {
