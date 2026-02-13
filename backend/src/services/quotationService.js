@@ -387,23 +387,31 @@ const generateQuotationPDF = async (quotationId) => {
         <thead>
           <tr>
             <th style="width: 20%">Drawing No</th>
-            <th style="width: 30%">Description</th>
-            <th style="width: 30%">Material Name</th>
-            <th style="width: 10%">Type</th>
-            <th style="width: 10%">Quantity</th>
+            <th style="width: 25%">Material Name</th>
+            <th style="width: 15%">Type</th>
+            <th style="width: 10%">Design Qty</th>
+            <th style="width: 15%">Rate (₹)</th>
+            <th style="width: 15%">Amount</th>
           </tr>
         </thead>
         <tbody>
           {{#items}}
           <tr>
-            <td>{{item_code}}</td>
-            <td>{{description}}</td>
+            <td>{{drawing_no}}</td>
             <td>{{material_name}}</td>
             <td>{{material_type}}</td>
-            <td>{{quantity}}</td>
+            <td>{{quantity}} {{unit}}</td>
+            <td>{{unit_rate}}</td>
+            <td>{{amount}}</td>
           </tr>
           {{/items}}
         </tbody>
+        <tfoot style="background: #f8fafc; font-weight: bold;">
+          <tr>
+            <td colspan="5" style="text-align: right; padding: 12px 8px;">Total Value:</td>
+            <td style="padding: 12px 8px;">₹{{total_amount}}</td>
+          </tr>
+        </tfoot>
       </table>
 
       {{#notes}}
@@ -432,9 +440,13 @@ const generateQuotationPDF = async (quotationId) => {
     location: vendor?.location || 'N/A',
     phone: vendor?.phone || 'N/A',
     project_ref: quotation.sales_order_id ? `SO-${quotation.sales_order_id}` : 'General Requirement',
+    total_amount: parseFloat(quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     items: quotation.items.map(i => ({
       ...i,
-      quantity: parseFloat(i.quantity).toFixed(2)
+      drawing_no: i.drawing_no || i.item_code || '—',
+      quantity: parseFloat(i.quantity).toFixed(3),
+      unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     }))
   };
 

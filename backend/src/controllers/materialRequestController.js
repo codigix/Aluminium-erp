@@ -257,6 +257,7 @@ const materialRequestController = {
           item.item_code,
           item.item_name || null,
           item.item_type || null,
+          item.design_qty || item.quantity,
           item.quantity,
           item.unit_rate || 0,
           item.uom || 'pcs',
@@ -264,7 +265,7 @@ const materialRequestController = {
         ]);
 
         await connection.query(
-          'INSERT INTO material_request_items (mr_id, item_code, item_name, item_type, quantity, unit_rate, uom, warehouse) VALUES ?',
+          'INSERT INTO material_request_items (mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse) VALUES ?',
           [itemValues]
         );
       }

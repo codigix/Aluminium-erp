@@ -1001,6 +1001,7 @@ function App() {
     { label: 'Workstations', moduleId: 'workstation-master', icon: 'factory', indent: true },
     { label: 'Operations', moduleId: 'operation-master', icon: 'settings', indent: true },
     { label: 'Inventory', isGroup: true, groupId: 'inventory-group' },
+    { label: 'Quotations', moduleId: 'quotations', icon: 'clipboard', indent: true },
     { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard', indent: true },
     { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'cart', indent: true },
     { label: 'Purchase Receipt', moduleId: 'po-receipts', icon: 'inbox', indent: true },

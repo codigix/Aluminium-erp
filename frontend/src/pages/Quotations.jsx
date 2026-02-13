@@ -46,6 +46,7 @@ const Quotations = () => {
   const [loading, setLoading] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
+  const [materialRequests, setMaterialRequests] = useState([]);
   const [filterStatus, setFilterStatus] = useState('All Quotations');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -56,7 +57,7 @@ const Quotations = () => {
     salesOrderId: '',
     validUntil: '',
     notes: '',
-    items: [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+    items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
   });
   const [recordData, setRecordData] = useState({
     projectId: '',
@@ -115,6 +116,7 @@ const Quotations = () => {
     fetchStats();
     fetchVendors();
     fetchSalesOrders();
+    fetchMaterialRequests();
   }, []);
 
   const fetchQuotations = async () => {
@@ -196,6 +198,26 @@ const Quotations = () => {
     }
   };
 
+  const fetchMaterialRequests = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/material-requests`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Filter to show relevant MRs for procurement (e.g., DRAFT, APPROVED)
+        setMaterialRequests(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching material requests:', error);
+    }
+  };
+
   const handleAddItem = () => {
     setFormData({
       ...formData,
@@ -204,32 +226,77 @@ const Quotations = () => {
   };
 
   const handleSalesOrderChange = async (e) => {
-    const soId = e.target.value;
-    const selectedSO = salesOrders.find(so => String(so.id) === String(soId));
+    const value = e.target.value;
     
-    let targetDate = '';
-    if (selectedSO && selectedSO.target_dispatch_date) {
-      // Format YYYY-MM-DD for date input
-      targetDate = new Date(selectedSO.target_dispatch_date).toISOString().split('T')[0];
-    }
-
-    setFormData({ 
-      ...formData, 
-      salesOrderId: soId,
-      validUntil: targetDate || formData.validUntil 
-    });
-
-    if (!soId) {
-      setFormData(prev => ({
-        ...prev,
-        items: [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+    // Clear items if nothing selected
+    if (!value) {
+      setFormData(prev => ({ 
+        ...prev, 
+        salesOrderId: '',
+        items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
       }));
       return;
     }
 
+    const token = localStorage.getItem('authToken');
+
+    // Case 1: Material Request Selection (Pre-fixed with MR-)
+    if (value.startsWith('MR-')) {
+      const mrId = value.split('MR-')[1];
+      setFormData(prev => ({ ...prev, salesOrderId: value }));
+      
+      try {
+        const response = await fetch(`${API_BASE}/material-requests/${mrId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const mrData = await response.json();
+          const mrItems = (mrData.items || [])
+            .filter(item => {
+              const type = (item.material_type || '').toUpperCase();
+              return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
+            })
+            .map(item => ({
+            drawing_no: item.item_code || '—',
+            material_name: item.name || item.item_description || '',
+            material_type: item.material_type || '',
+            quantity: item.design_qty || item.quantity || 0,
+            uom: item.uom || 'NOS',
+            unit_rate: item.unit_rate || item.rate || 0
+          }));
+
+          setFormData(prev => ({
+            ...prev,
+            items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching material request details:', error);
+      }
+      return;
+    }
+
+    // Case 2: Project Selection (Existing Logic)
+    const soId = value;
+    const selectedSO = salesOrders.find(so => String(so.id) === String(soId));
+    
+    let targetDate = '';
+    if (selectedSO && selectedSO.target_dispatch_date) {
+      targetDate = new Date(selectedSO.target_dispatch_date).toISOString().split('T')[0];
+    }
+
+    setFormData(prev => ({ 
+      ...prev, 
+      salesOrderId: soId,
+      validUntil: targetDate || prev.validUntil 
+    }));
+
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/${soId}/timeline`, {
+      const response = await fetch(`${API_BASE}/material-requirements/project/${soId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -237,25 +304,20 @@ const Quotations = () => {
       });
 
       if (response.ok) {
-        const items = await response.json();
-        
-        // Flatten materials into line items for the RFQ
-        const materialItems = [];
-        items.forEach(item => {
-          if (item.materials && item.materials.length > 0) {
-            item.materials.forEach(mat => {
-              materialItems.push({
-                drawing_no: item.drawing_no || item.item_code || '', // Use actual drawing number
-                description: item.description || '',
-                material_name: mat.material_name || '',
-                material_type: mat.material_type || '',
-                quantity: (parseFloat(item.quantity) * parseFloat(mat.qty_per_pc)) || 0,
-                uom: mat.uom || 'NOS',
-                unit_rate: 0
-              });
-            });
-          }
-        });
+        const requirements = await response.json();
+        const materialItems = requirements
+          .filter(req => {
+            const type = (req.material_type || '').toUpperCase();
+            return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
+          })
+          .map(req => ({
+          drawing_no: req.drawing_no || '—',
+          material_name: req.material_name || '',
+          material_type: req.material_type || '',
+          quantity: req.shortage > 0 ? req.shortage : req.total_required,
+          uom: req.uom || 'NOS',
+          unit_rate: req.rate || req.unit_rate || 0
+        }));
 
         setFormData(prev => ({
           ...prev,
@@ -263,7 +325,7 @@ const Quotations = () => {
         }));
       }
     } catch (error) {
-      console.error('Error fetching sales order items:', error);
+      console.error('Error fetching material requirements:', error);
     }
   };
 
@@ -293,12 +355,21 @@ const Quotations = () => {
   };
 
   const handleRecordVendorChange = async (vendorId) => {
-    // Find the quotation for this project and vendor
-    const quotation = quotations.find(q => 
-      String(q.sales_order_id) === String(recordData.projectId) && 
-      String(q.vendor_id) === String(vendorId) &&
-      ['SENT', 'DRAFT'].includes(q.status)
-    );
+    // Find the quotation for this project/MR and vendor
+    const quotation = quotations.find(q => {
+      const isVendorMatch = String(q.vendor_id) === String(vendorId);
+      const isStatusMatch = ['SENT', 'DRAFT'].includes(q.status);
+      
+      let isProjectMatch = false;
+      if (recordData.projectId.startsWith('MR-')) {
+        const mrId = recordData.projectId.split('MR-')[1];
+        isProjectMatch = String(q.mr_id) === String(mrId);
+      } else {
+        isProjectMatch = String(q.sales_order_id) === String(recordData.projectId);
+      }
+      
+      return isVendorMatch && isStatusMatch && isProjectMatch;
+    });
 
     if (quotation) {
       try {
@@ -312,11 +383,16 @@ const Quotations = () => {
 
         if (response.ok) {
           const detailedQuotation = await response.json();
+          const filteredItems = (detailedQuotation.items || []).filter(item => {
+            const type = (item.material_type || '').toUpperCase();
+            return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
+          });
+          
           setRecordData({
             ...recordData,
             vendorId,
             quotationId: quotation.id,
-            items: detailedQuotation.items || [],
+            items: filteredItems,
             amount: detailedQuotation.total_amount || 0,
             validUntil: detailedQuotation.valid_until ? new Date(detailedQuotation.valid_until).toISOString().split('T')[0] : '',
             notes: `Response to ${quotation.quote_number}`
@@ -386,33 +462,61 @@ const Quotations = () => {
 
     try {
       const token = localStorage.getItem('authToken');
+      
+      const payload = {
+        ...formData,
+        vendorId: parseInt(formData.vendorId),
+        validUntil: formData.validUntil || null
+      };
+
+      // Handle MR vs Sales Order
+      if (formData.salesOrderId && String(formData.salesOrderId).startsWith('MR-')) {
+        payload.mrId = parseInt(formData.salesOrderId.split('MR-')[1]);
+        payload.salesOrderId = null;
+      } else {
+        payload.salesOrderId = formData.salesOrderId ? parseInt(formData.salesOrderId) : null;
+        payload.mrId = null;
+      }
+
       const response = await fetch(`${API_BASE}/quotations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...formData,
-          vendorId: parseInt(formData.vendorId),
-          salesOrderId: formData.salesOrderId ? parseInt(formData.salesOrderId) : null,
-          validUntil: formData.validUntil || null
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) throw new Error('Failed to create quotation');
 
-      successToast('Quotation created successfully');
+      const result = await response.json();
+      const createdQuotation = result.data;
+      const vendor = vendors.find(v => String(v.id) === String(payload.vendorId));
+
       setShowCreateModal(false);
       setFormData({
         vendorId: '',
         salesOrderId: '',
         validUntil: '',
         notes: '',
-        items: [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+        items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
       });
-      fetchQuotations();
-      fetchStats();
+
+      // Open email modal for the newly created quotation
+      if (vendor) {
+        setSelectedQuotation(createdQuotation);
+        setEmailData({
+          to: vendor.email || '',
+          subject: `Request for Quotation: ${createdQuotation.quote_number}`,
+          message: `Dear ${vendor.vendor_name},\n\nPlease find attached our Request for Quotation ${createdQuotation.quote_number}. We look forward to receiving your best quote.\n\nRegards,\nProcurement Team`,
+          attachPDF: true
+        });
+        setShowEmailModal(true);
+      } else {
+        successToast('Quotation created successfully');
+        fetchQuotations();
+        fetchStats();
+      }
     } catch (error) {
       errorToast(error.message || 'Failed to create quotation');
     }
@@ -599,7 +703,6 @@ const Quotations = () => {
     // Map backend item fields to frontend BOM fields
     const mappedItems = (quotation.items || []).map(item => ({
       drawing_no: item.item_code || '',
-      description: item.description || '',
       material_name: item.material_name || '',
       material_type: item.material_type || '',
       quantity: item.quantity || 0,
@@ -610,7 +713,7 @@ const Quotations = () => {
     setEditFormData({
       vendorId: quotation.vendor_id,
       validUntil: quotation.valid_until ? new Date(quotation.valid_until).toISOString().split('T')[0] : '',
-      items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
     });
     setShowEditModal(true);
   };
@@ -791,9 +894,8 @@ const Quotations = () => {
         <thead className="text-slate-400  text-[9px]  tracking-wider">
           <tr>
             <th className="px-4 py-3 text-left">Drawing / Item</th>
-            <th className="px-4 py-3 text-left">Description</th>
             <th className="px-4 py-3 text-left">Material</th>
-            <th className="px-4 py-3 text-center">Qty</th>
+            <th className="px-4 py-3 text-center">Design Qty</th>
             {activeTab === 'received' && (
               <>
                 <th className="px-4 py-3 text-right">Unit Rate</th>
@@ -828,7 +930,6 @@ const Quotations = () => {
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 text-slate-600">{item.description || '—'}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-col">
                     <span className="text-slate-700 font-medium">{item.material_name}</span>
@@ -868,24 +969,35 @@ const Quotations = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-blue-600 rounded-xl shadow-lg shadow-blue-100">
+          <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-200">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           </div>
-          <div>
-            <h1 className="text-2xl  text-slate-900">Vendor Quotations</h1>
-            <p className="text-sm text-slate-500 font-medium">Manage and compare vendor quotes</p>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+              <span>Buying</span>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
+              <span>Procurement</span>
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Vendor Quotations</h1>
+            <p className="text-xs text-slate-500 font-medium">Manage and compare vendor quotes</p>
           </div>
         </div>
-       <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => fetchQuotations()}
+            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded-xl transition-all border border-slate-200 shadow-sm active:scale-95 bg-white"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
+            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
             </svg>
             {activeTab === 'sent' ? 'Request Quote' : 'Record Quote'}
@@ -951,22 +1063,26 @@ const Quotations = () => {
 
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-600   tracking-wider mb-1">Total Quotations</p>
-            <p className="text-2xl  text-blue-900">{stats.total_quotations || 0}</p>
-          </div>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-xs text-yellow-600   tracking-wider mb-1">Pending Quotes</p>
-            <p className="text-2xl  text-yellow-900">{stats.pending_quotations || 0}</p>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <p className="text-xs text-emerald-600   tracking-wider mb-1">Approved Quotes</p>
-            <p className="text-2xl  text-emerald-900">{stats.approved_quotations || 0}</p>
-          </div>
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <p className="text-xs text-purple-600   tracking-wider mb-1">Total Value</p>
-            <p className="text-2xl  text-purple-900">{formatCurrency(stats.total_value)}</p>
-          </div>
+          {[
+            { label: 'Total Quotations', value: stats.total_quotations, sub: `Total: ${formatCurrency(stats.total_value)}`, icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
+            { label: 'Pending Quotes', value: stats.pending_quotations, sub: 'Awaiting response', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-amber-50', iconColor: 'text-amber-500' },
+            { label: 'Approved Quotes', value: stats.approved_quotations, sub: 'Ready for PO', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
+            { label: 'Received', value: stats.received_quotations || (stats.total_quotations - stats.pending_quotations), sub: 'Vendor responses', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-blue-50', iconColor: 'text-blue-500' },
+          ].map((stat, idx) => (
+            <div key={idx} className={`${stat.bg} border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group`}>
+              {stat.bg !== 'bg-white' && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110"></div>}
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-2">
+                  <p className={`text-[10px] font-bold ${stat.bg === 'bg-white' ? 'text-slate-400' : 'text-blue-100'} uppercase tracking-wider`}>{stat.label}</p>
+                  <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded-xl shadow-sm`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} /></svg>
+                  </div>
+                </div>
+                <p className={`text-2xl font-black ${stat.text} tracking-tight`}>{stat.value || 0}</p>
+                <p className={`text-[10px] ${stat.subText} mt-1 font-medium`}>{stat.sub}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -996,10 +1112,25 @@ const Quotations = () => {
                         onChange={handleSalesOrderChange}
                         className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value="">Select Project to Load Requirements</option>
-                        {salesOrders.map(so => (
-                          <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
-                        ))}
+                        <option value="">Select Project/MR to Load Requirements</option>
+                        
+                        {salesOrders.length > 0 && (
+                          <optgroup label="Projects (Sales Orders)">
+                            {salesOrders.map(so => (
+                              <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
+                            ))}
+                          </optgroup>
+                        )}
+
+                        {materialRequests.length > 0 && (
+                          <optgroup label="Material Requests">
+                            {materialRequests.map(mr => (
+                              <option key={`mr-${mr.id}`} value={`MR-${mr.id}`}>
+                                {mr.mr_number} ({mr.department || 'No Dept'})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
 
@@ -1049,10 +1180,11 @@ const Quotations = () => {
                       <div className="space-y-2">
                         <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wider">
                           <div className="col-span-2">Drawing No</div>
-                          <div className="col-span-3">Description</div>
                           <div className="col-span-3">Material Name</div>
                           <div className="col-span-2">Type</div>
-                          <div className="col-span-1">Qty</div>
+                          <div className="col-span-1 text-center">Design Qty</div>
+                          <div className="col-span-2 text-center">Rate (₹)</div>
+                          <div className="col-span-1 text-right">Amount</div>
                           <div className="col-span-1"></div>
                         </div>
                         {formData.items.map((item, idx) => (
@@ -1078,13 +1210,6 @@ const Quotations = () => {
                             </div>
                             <input
                               type="text"
-                              placeholder="Description"
-                              value={item.description}
-                              onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                            <input
-                              type="text"
                               placeholder="Material Name"
                               value={item.material_name}
                               onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
@@ -1099,11 +1224,21 @@ const Quotations = () => {
                             />
                             <input
                               type="number"
-                              placeholder="Qty"
+                              placeholder="Design Qty"
                               value={item.quantity}
                               onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
+                            <input
+                              type="number"
+                              placeholder="Rate"
+                              value={item.unit_rate}
+                              onChange={(e) => handleItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <div className="col-span-1 text-right text-xs font-medium text-slate-700">
+                              {formatCurrency((item.quantity || 0) * (item.unit_rate || 0))}
+                            </div>
                             <div className="col-span-1 flex justify-center">
                               <button
                                 type="button"
@@ -1135,16 +1270,31 @@ const Quotations = () => {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                     <label className="block text-sm font-medium text-slate-700 mb-1">Select Project</label>
+                     <label className="block text-sm font-medium text-slate-700 mb-1">Select Project/MR</label>
                       <select
                         value={recordData.projectId}
                         onChange={(e) => handleRecordProjectChange(e.target.value)}
                         className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value="">-- Select Project to Filter Quotes --</option>
-                        {salesOrders.map(so => (
-                          <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
-                        ))}
+                        <option value="">-- Select Project/MR to Filter Quotes --</option>
+                        
+                        {salesOrders.length > 0 && (
+                          <optgroup label="Projects (Sales Orders)">
+                            {salesOrders.map(so => (
+                              <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
+                            ))}
+                          </optgroup>
+                        )}
+
+                        {materialRequests.length > 0 && (
+                          <optgroup label="Material Requests">
+                            {materialRequests.map(mr => (
+                              <option key={`mr-rec-${mr.id}`} value={`MR-${mr.id}`}>
+                                {mr.mr_number} ({mr.department || 'No Dept'})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
 
@@ -1196,19 +1346,18 @@ const Quotations = () => {
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
-                            <th className="px-3 py-2  text-slate-600">DESCRIPTION</th>
                             <th className="px-3 py-2  text-slate-600">MATERIAL NAME</th>
-                            <th className="px-3 py-2  text-slate-600" style={{ width: '100px' }}>TYPE</th>
-                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '70px' }}>QTY</th>
-                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '100px' }}>PRICE</th>
-                            <th className="px-3 py-2 text-right  text-slate-600" style={{ width: '100px' }}>TOTAL</th>
+                            <th className="px-3 py-2  text-slate-600" style={{ width: '120px' }}>TYPE</th>
+                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '90px' }}>DESIGN QTY</th>
+                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '120px' }}>RATE (₹)</th>
+                            <th className="px-3 py-2 text-right  text-slate-600" style={{ width: '120px' }}>AMOUNT</th>
                             <th className="px-3 py-2 text-center" style={{ width: '40px' }}></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {recordData.items.length === 0 ? (
                             <tr>
-                              <td colSpan="7" className="px-3 py-8 text-center text-slate-400">
+                              <td colSpan="6" className="px-3 py-8 text-center text-slate-400">
                                 Select a project and vendor to load items, or add manually.
                               </td>
                             </tr>
@@ -1218,10 +1367,10 @@ const Quotations = () => {
                                 <td className="px-3 py-2">
                                   <input
                                     type="text"
-                                    value={item.description}
-                                    onChange={(e) => handleRecordItemChange(idx, 'description', e.target.value)}
+                                    value={item.material_name}
+                                    onChange={(e) => handleRecordItemChange(idx, 'material_name', e.target.value)}
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
-                                    placeholder="Item description..."
+                                    placeholder="Material..."
                                   />
                                   {item.item_code && (
                                     <div className="text-[10px] text-slate-400 px-2 mt-0.5 flex items-center gap-2">
@@ -1240,15 +1389,6 @@ const Quotations = () => {
                                 <td className="px-3 py-2">
                                   <input
                                     type="text"
-                                    value={item.material_name}
-                                    onChange={(e) => handleRecordItemChange(idx, 'material_name', e.target.value)}
-                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
-                                    placeholder="Material..."
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <input
-                                    type="text"
                                     value={item.material_type}
                                     onChange={(e) => handleRecordItemChange(idx, 'material_type', e.target.value)}
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
@@ -1261,6 +1401,7 @@ const Quotations = () => {
                                     value={item.quantity}
                                     onChange={(e) => handleRecordItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
                                     className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="Design Qty"
                                   />
                                 </td>
                                 <td className="px-3 py-2">
@@ -1337,7 +1478,16 @@ const Quotations = () => {
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-md text-slate-900 text-xs">Send Quotation via Email</h3>
-              <button onClick={() => setShowEmailModal(false)} className="text-slate-500 text-2xl">✕</button>
+              <button 
+                onClick={() => {
+                  setShowEmailModal(false);
+                  fetchQuotations();
+                  fetchStats();
+                }} 
+                className="text-slate-500 text-2xl"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={handleSendEmail} className="">
@@ -1386,7 +1536,11 @@ const Quotations = () => {
               <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setShowEmailModal(false)}
+                  onClick={() => {
+                    setShowEmailModal(false);
+                    fetchQuotations();
+                    fetchStats();
+                  }}
                   className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
                 >
                   Cancel
@@ -1445,7 +1599,7 @@ const Quotations = () => {
                     onClick={() => {
                       setEditFormData({
                         ...editFormData,
-                        items: [...editFormData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+                        items: [...editFormData.items, { drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
                       });
                     }}
                     className="px-3 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700"
@@ -1461,10 +1615,11 @@ const Quotations = () => {
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wide">
                       <div className="col-span-2">Drawing No</div>
-                      <div className="col-span-3">Description</div>
                       <div className="col-span-3">Material Name</div>
                       <div className="col-span-2">Type</div>
-                      <div className="col-span-1">Qty</div>
+                      <div className="col-span-1 text-center">Design Qty</div>
+                      <div className="col-span-2 text-center">Rate (₹)</div>
+                      <div className="col-span-1 text-right">Amount</div>
                       <div className="col-span-1"></div>
                     </div>
                     {editFormData.items.map((item, idx) => (
@@ -1479,17 +1634,6 @@ const Quotations = () => {
                             setEditFormData({...editFormData, items: newItems});
                           }}
                           className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Description"
-                          value={item.description}
-                          onChange={(e) => {
-                            const newItems = [...editFormData.items];
-                            newItems[idx].description = e.target.value;
-                            setEditFormData({...editFormData, items: newItems});
-                          }}
-                          className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <input
                           type="text"
@@ -1515,15 +1659,29 @@ const Quotations = () => {
                         />
                         <input
                           type="number"
-                          placeholder="Qty"
+                          placeholder="Design Qty"
                           value={item.quantity}
                           onChange={(e) => {
                             const newItems = [...editFormData.items];
                             newItems[idx].quantity = parseFloat(e.target.value) || 0;
                             setEditFormData({...editFormData, items: newItems});
                           }}
-                          className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
+                        <input
+                          type="number"
+                          placeholder="Rate"
+                          value={item.unit_rate}
+                          onChange={(e) => {
+                            const newItems = [...editFormData.items];
+                            newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
+                            setEditFormData({...editFormData, items: newItems});
+                          }}
+                          className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <div className="col-span-1 text-right text-xs font-medium text-slate-700">
+                          {formatCurrency((item.quantity || 0) * (item.unit_rate || 0))}
+                        </div>
                         <div className="col-span-1 flex justify-center">
                           <button
                             type="button"
