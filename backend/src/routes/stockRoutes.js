@@ -40,7 +40,7 @@ router.put('/items/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE
   }
 });
 
-router.delete('/items/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.delete('/items/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const result = await stockService.deleteStockBalance(req.params.id);
     res.json(result);
@@ -81,7 +81,7 @@ router.get('/balance/:itemCode', authenticate, authorize(['STOCK_VIEW', 'DESIGN_
   }
 });
 
-router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const { itemCode, transactionType, quantity, refDocType, refDocId, refDocNumber, remarks } = req.body;
     const userId = req.user?.id;
@@ -108,7 +108,7 @@ router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE']), async (r
   }
 });
 
-router.delete('/ledger/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.delete('/ledger/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     await stockService.deleteStockLedgerEntry(req.params.id);
     res.json({ success: true });
@@ -117,7 +117,7 @@ router.delete('/ledger/:id', authenticate, authorize(['STOCK_MANAGE']), async (r
   }
 });
 
-router.delete('/balance/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.delete('/balance/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     await stockService.deleteStockBalance(req.params.id);
     res.json({ success: true });
