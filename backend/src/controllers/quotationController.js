@@ -104,7 +104,7 @@ const uploadVendorResponse = async (req, res, next) => {
     
     // Auto-mark as RECEIVED if status is currently SENT or DRAFT
     const quotation = await quotationService.getQuotationById(req.params.quotationId);
-    if (['SENT', 'DRAFT'].includes(quotation.status)) {
+    if (['SENT', 'DRAFT', 'EMAIL_RECEIVED'].includes(quotation.status)) {
       await quotationService.updateQuotationStatus(req.params.quotationId, 'RECEIVED');
     }
     
