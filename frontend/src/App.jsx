@@ -54,7 +54,6 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000')
 const API_HOST = API_BASE
-const isProduction = import.meta.env.PROD || window.location.hostname.includes('aluminiumerp.codigix.co');
 const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
@@ -217,27 +216,13 @@ function App() {
   }, [user?.department_code, accessRules])
 
   useEffect(() => {
-    if (token && user && activeModule === 'dashboard' && !isProduction) {
+    if (token && user && activeModule === 'dashboard') {
       const firstFunctionalModule = allowedModules.find(m => m !== 'dashboard')
       if (firstFunctionalModule) {
         navigate(`/${firstFunctionalModule}`, { replace: true })
       }
     }
-  }, [token, user, activeModule, allowedModules, navigate, isProduction])
-
-  // 🛡️ PRODUCTION ROUTE GUARD & URL CLEANER
-  useEffect(() => {
-    if (isProduction) {
-      // Clear browser address bar path in production
-      if (window.location.pathname !== '/') {
-        window.history.replaceState(null, '', '/');
-      }
-      // Internal navigation for MemoryRouter
-      if (location.pathname !== '/') {
-        navigate('/', { replace: true });
-      }
-    }
-  }, [isProduction]);
+  }, [token, user, activeModule, allowedModules, navigate])
 
   const [authMode, setAuthMode] = useState('login')
   const [loginEmail, setLoginEmail] = useState('')
@@ -372,11 +357,9 @@ function App() {
       showToast(`Welcome, ${data.user.first_name || data.user.username}!`)
       
       // Redirect to first allowed module based on department
-      if (!isProduction) {
-        const userAllowed = DEPARTMENT_MODULES[data.user.department_code] || []
-        if (userAllowed.length > 0) {
-          navigate(`/${userAllowed[0]}`)
-        }
+      const userAllowed = DEPARTMENT_MODULES[data.user.department_code] || []
+      if (userAllowed.length > 0) {
+        navigate(`/${userAllowed[0]}`)
       }
     } catch (error) {
       showToast(error.message)
@@ -1417,31 +1400,13 @@ function App() {
               </div>
             ) : (
               <>
-                {isProduction ? (
-                  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-                    <div className="h-20 w-20 rounded-3xl bg-slate-900 flex items-center justify-center mb-6 shadow-xl">
-                      <Building2 className="h-10 w-10 text-white" />
-                    </div>
-                    <h2 className="text-3xl font-bold text-slate-900 mb-2">SPTECHPIONEER ERP</h2>
-                    <p className="text-slate-500 max-w-md">The production environment is currently restricted to authorized access only. Internal modules are hidden for security.</p>
-                    <div className="mt-8">
-                      <button 
-                        onClick={handleLogout}
-                        className="px-6 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition shadow-lg"
-                      >
-                        Logout Session
-                      </button>
-                    </div>
+                {toast && (
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-2xl text-sm shadow-sm">
+                    {toast}
                   </div>
-                ) : (
-                  <>
-                    {toast && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-2xl text-sm shadow-sm">
-                        {toast}
-                      </div>
-                    )}
+                )}
 
-                    {activeModule === 'company-master' && (
+                {activeModule === 'company-master' && (
                   <CompanyMaster
                     companies={companies}
                     showCreatePanel={showCreatePanel}
@@ -1591,7 +1556,7 @@ function App() {
                   <BOMApproval />
                 )}
 
-                {activeModule === 'bom-form' && !isProduction && (
+                {activeModule === 'bom-form' && (
                   <BOMFormPage />
                 )}
 
@@ -1602,7 +1567,7 @@ function App() {
                   <OperationMaster showForm={showOperationForm} setShowForm={setShowOperationForm} />
                 )}
 
-                {activeModule === 'project-requests' && !isProduction && (
+                {activeModule === 'project-requests' && (
                   <ProjectRequests />
                 )}
 
@@ -1633,8 +1598,6 @@ function App() {
                 {activeModule === 'stock-entries' && (
                   <StockEntries />
                 )}
-              </>
-            )}
               </>
             )}
           </div>
