@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const stockEntryService = require('./stockEntryService');
+const qcInspectionsService = require('./qcInspectionsService');
 
 const getPOReceipts = async (filters = {}) => {
   let query = `
@@ -123,10 +124,11 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       const [allWarehouses] = await connection.query('SELECT id, warehouse_code, warehouse_name FROM warehouses');
       
       for (const item of filteredItems) {
+        const receivedQty = item.received_qty || item.receivedQty || 0;
         await connection.execute(
           `INSERT INTO po_receipt_items (receipt_id, po_item_id, received_quantity)
            VALUES (?, ?, ?)`,
-          [receiptId, item.id, item.received_qty || 0]
+          [receiptId, item.id, receivedQty]
         );
 
         // Map warehouse code/name to ID
@@ -144,8 +146,8 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
             grnId, 
             item.id, 
             item.design_qty || item.quantity || 0, 
-            item.received_qty || 0, 
-            item.received_qty || 0, 
+            receivedQty, 
+            receivedQty, 
             'PENDING',
             warehouseId
           ]
@@ -162,8 +164,22 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       }
     } catch (stockError) {
       console.error('[PO Receipt] Stock entry auto-creation failed:', stockError.message);
-      // We might want to decide if this should roll back the whole transaction
-      // For now, let's keep it non-blocking or log it properly
+    }
+
+    // Auto-create QC record
+    try {
+      await qcInspectionsService.createQC(
+        grnId,
+        dateValue,
+        receivedQuantity || 0,
+        0,
+        null,
+        'Auto-created from Purchase Receipt',
+        connection
+      );
+      console.log(`[PO Receipt] Auto-created QC record for GRN: ${grnId}`);
+    } catch (qcError) {
+      console.error('[PO Receipt] QC auto-creation failed:', qcError.message);
     }
 
     await connection.commit();

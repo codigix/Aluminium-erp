@@ -56,7 +56,8 @@ router.patch('/items/:qcItemId', authenticate, authorize(['QC_EDIT']), async (re
 router.post('/', authenticate, authorize(['QC_CREATE']), async (req, res) => {
   try {
     const { grnId, inspectionDate, passQuantity, failQuantity, defects, remarks } = req.body;
-    const qc = await qcService.createQC(grnId, inspectionDate, passQuantity, failQuantity, defects, remarks);
+    const qcId = await qcService.createQC(grnId, inspectionDate, passQuantity, failQuantity, defects, remarks);
+    const qc = await qcService.getQCWithDetails(qcId);
     res.status(201).json(qc);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });

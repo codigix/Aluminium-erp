@@ -346,11 +346,15 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
     }
 
     // 3. Get items from GRN
-    const items = await getStockEntryItemsFromGRN(grnId, connection);
+    const allItems = await getStockEntryItemsFromGRN(grnId, connection);
+    
+    // Filter items with positive quantity
+    const items = allItems.filter(item => parseFloat(item.quantity) > 0);
 
     if (items.length === 0) {
+      console.warn(`[StockEntry] No items with positive quantity found for GRN: ${grnId}. Skipping stock entry creation.`);
       if (shouldCommit) await connection.rollback();
-      return { success: false, message: 'No items in GRN' };
+      return { success: false, message: 'No items with positive quantity in GRN' };
     }
 
     // 4. Create Stock Entry
@@ -367,7 +371,7 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
         toWarehouseId,
         grn.grn_date || new Date(),
         grnId,
-        `Auto-created from GRN ${grn.po_number}`,
+        `Auto-created from GRN ${grn.po_number || ''}`,
         userId,
         'submitted'
       ]
@@ -376,10 +380,7 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
     const entryId = result.insertId;
 
     // 5. Create Stock Entry Items
-    let itemsAdded = 0;
     for (const item of items) {
-      if (parseFloat(item.quantity) <= 0) continue;
-      
       await connection.execute(
         `INSERT INTO stock_entry_items 
          (stock_entry_id, item_code, quantity, uom, valuation_rate, amount)
@@ -390,15 +391,9 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
           item.quantity,
           item.uom || 'NOS',
           item.valuation_rate || 0,
-          (item.quantity * (item.valuation_rate || 0))
+          (parseFloat(item.quantity) * parseFloat(item.valuation_rate || 0))
         ]
       );
-      itemsAdded++;
-    }
-
-    if (itemsAdded === 0) {
-      if (shouldCommit) await connection.rollback();
-      return { success: false, message: 'No items with positive quantity' };
     }
 
     // 6. Process Stock Movement

@@ -235,13 +235,37 @@ const ensureQuotationItemColumns = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
+    
+    // Update quotations table first
+    const [qCols] = await connection.query('SHOW COLUMNS FROM quotations');
+    const existingQCols = new Set(qCols.map(c => c.Field));
+    const requiredQCols = [
+      { name: 'tax_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'grand_total', definition: 'DECIMAL(14, 2) DEFAULT 0' }
+    ];
+    
+    const missingQCols = requiredQCols.filter(c => !existingQCols.has(c.name));
+    if (missingQCols.length > 0) {
+      const alterQSql = `ALTER TABLE quotations ${missingQCols
+        .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
+        .join(', ')};`;
+      await connection.query(alterQSql);
+      console.log('Quotation tax columns synchronized');
+    }
+
     const [columns] = await connection.query('SHOW COLUMNS FROM quotation_items');
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
-      { name: 'drawing_id', definition: 'INT NULL' }
+      { name: 'drawing_id', definition: 'INT NULL' },
+      { name: 'design_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'cgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
+      { name: 'cgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'sgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
+      { name: 'sgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -338,6 +362,19 @@ const ensurePoMaterialRequestColumns = async () => {
         .join(', ')};`;
       await connection.query(alterPoSql);
       console.log('Purchase Order material request columns synchronized');
+    }
+
+    // Ensure quotation_id and vendor_id are nullable for MR-based POs
+    const quotationIdCol = poCols.find(c => c.Field === 'quotation_id');
+    if (quotationIdCol && quotationIdCol.Null === 'NO') {
+      await connection.query('ALTER TABLE purchase_orders MODIFY COLUMN quotation_id INT NULL');
+      console.log('Purchase Order quotation_id made nullable');
+    }
+
+    const vendorIdCol = poCols.find(c => c.Field === 'vendor_id');
+    if (vendorIdCol && vendorIdCol.Null === 'NO') {
+      await connection.query('ALTER TABLE purchase_orders MODIFY COLUMN vendor_id INT NULL');
+      console.log('Purchase Order vendor_id made nullable');
     }
 
     // Update purchase_order_items table
@@ -1835,6 +1872,56 @@ const ensureGrnExcessApprovalsTable = async () => {
   }
 };
 
+const ensureQCInspectionsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // Create qc_inspections table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS qc_inspections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        grn_id INT NOT NULL,
+        inspection_date DATE,
+        pass_quantity DECIMAL(12, 3) DEFAULT 0,
+        fail_quantity DECIMAL(12, 3) DEFAULT 0,
+        status ENUM('PENDING', 'IN_PROGRESS', 'PASSED', 'FAILED', 'ACCEPTED', 'REJECTED', 'SHORTAGE') DEFAULT 'PENDING',
+        defects TEXT,
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create qc_inspection_items table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS qc_inspection_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        qc_inspection_id INT NOT NULL,
+        grn_item_id INT NOT NULL,
+        item_code VARCHAR(100),
+        po_qty DECIMAL(12, 3) DEFAULT 0,
+        received_qty DECIMAL(12, 3) DEFAULT 0,
+        accepted_qty DECIMAL(12, 3) DEFAULT 0,
+        rejected_qty DECIMAL(12, 3) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'PENDING',
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (qc_inspection_id) REFERENCES qc_inspections(id) ON DELETE CASCADE,
+        FOREIGN KEY (grn_item_id) REFERENCES grn_items(id) ON DELETE CASCADE
+      )
+    `);
+    
+    console.log('QC Inspections tables synchronized');
+  } catch (error) {
+    console.error('QC Inspections table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -1850,6 +1937,7 @@ const bootstrapDatabase = async () => {
   await ensureGrnColumns();
   await ensureGrnItemsTable();
   await ensureGrnExcessApprovalsTable();
+  await ensureQCInspectionsTable();
   await ensurePoMaterialRequestColumns();
   await ensureStockColumns();
   await ensureStockEntryTables();

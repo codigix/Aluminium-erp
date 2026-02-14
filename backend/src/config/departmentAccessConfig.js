@@ -148,11 +148,12 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.CLOSED],
-    allowedModules: [],
+    allowedModules: ['dashboard', 'invoice-received', 'payment-processing', 'payment-history'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
       'COMPANY_VIEW',
+      'PURCHASE_ORDER_VIEW',
       'DASHBOARD_VIEW',
       'STATUS_CHANGE',
       'DATA_EXPORT'
@@ -195,7 +196,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
-    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses'],
+    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'invoice-received', 'payment-processing', 'payment-history'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',

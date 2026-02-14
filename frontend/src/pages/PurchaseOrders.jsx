@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, DataTable, SearchableSelect } from '../components/ui.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import Swal from 'sweetalert2';
@@ -14,6 +14,7 @@ const poStatusColors = {
   ACKNOWLEDGED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-50 text-cyan-700', label: 'acknowledged', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
   RECEIVED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700', label: 'received', icon: 'M19 14l-7 7m0 0l-7-7m7 7V3' },
   CLOSED: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-50 text-slate-700', label: 'closed', icon: 'M5 13l4 4L19 7' },
+  FULFILLED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700', label: 'fulfilled', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
   COMPLETED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700', label: 'completed', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
 };
 
@@ -48,6 +49,13 @@ const PurchaseOrders = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailData, setEmailData] = useState({
+    to: '',
+    subject: '',
+    message: '',
+    attachPDF: true
+  });
   const [selectedPO, setSelectedPO] = useState(null);
   const [poItems, setPoItems] = useState([]);
   const [poSuggestions, setPoSuggestions] = useState([]);
@@ -72,6 +80,8 @@ const PurchaseOrders = () => {
   const [vendors, setVendors] = useState([]);
   const [stockItems, setStockItems] = useState([]);
   const [showManualCreateModal, setShowManualCreateModal] = useState(false);
+  const invoiceInputRef = useRef(null);
+  const [uploadingPoId, setUploadingPoId] = useState(null);
   const [manualFormData, setManualFormData] = useState({
     id: null,
     vendorId: '',
@@ -248,6 +258,39 @@ const PurchaseOrders = () => {
       setPos([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !uploadingPoId) return;
+
+    const formData = new FormData();
+    formData.append('invoice', file);
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${uploadingPoId}/invoice`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        successToast('Invoice uploaded successfully');
+        fetchPOs();
+      } else {
+        const errorData = await response.json();
+        errorToast(errorData.message || 'Failed to upload invoice');
+      }
+    } catch (error) {
+      console.error('Error uploading invoice:', error);
+      errorToast('Error uploading invoice');
+    } finally {
+      setUploadingPoId(null);
+      e.target.value = ''; // Reset input
     }
   };
 
@@ -615,6 +658,79 @@ const PurchaseOrders = () => {
     }
   };
 
+  const handleViewPDF = async (poId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${poId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } else {
+        errorToast('Failed to generate PDF');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast('Network error');
+    }
+  };
+
+  const openEmailModal = async (po) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/vendors/${po.vendor_id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const vendor = response.ok ? await response.json() : null;
+      
+      setSelectedPO(po);
+      setEmailData({
+        to: vendor?.email || '',
+        subject: `Purchase Order: ${po.po_number}`,
+        message: `Dear ${vendor?.vendor_name || 'Vendor'},\n\nPlease find attached our Purchase Order ${po.po_number}.\n\nRegards,\nSPTECHPIONEER Procurement Team`,
+        attachPDF: true
+      });
+      setShowEmailModal(true);
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast('Failed to load vendor details');
+    }
+  };
+
+  const handleSendEmail = async (e) => {
+    e.preventDefault();
+    if (!emailData.to) return errorToast('Recipient email is required');
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${selectedPO.id}/send-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(emailData)
+      });
+
+      if (response.ok) {
+        successToast('Purchase Order sent to vendor');
+        setShowEmailModal(false);
+        fetchPOs();
+      } else {
+        const error = await response.json();
+        errorToast(error.message || 'Failed to send email');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast('Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const columns = [
     {
       label: 'PO Details',
@@ -627,7 +743,7 @@ const PurchaseOrders = () => {
           </span>
           <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-0.5">
             <svg className="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
-            #MR-{row.quotation_id || row.id}
+            {row.mr_number || (row.quotation_id ? `QT-${row.quotation_id}` : `ID-${row.id}`)}
           </span>
         </div>
       )
@@ -741,6 +857,33 @@ const PurchaseOrders = () => {
             </svg>
           </button>
           <button
+            onClick={() => {
+              if (row.invoice_url) {
+                window.open(`${API_BASE}/${row.invoice_url}`, '_blank');
+              } else {
+                setUploadingPoId(row.id);
+                invoiceInputRef.current?.click();
+              }
+            }}
+            className={`p-2 rounded-xl transition-all border shadow-sm active:scale-90 ${row.invoice_url ? 'text-emerald-500 bg-emerald-50 border-emerald-100 hover:bg-emerald-100' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600 border-slate-50'}`}
+            title={row.invoice_url ? "View Invoice" : "Upload Invoice"}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          </button>
+          {row.vendor_id && (
+            <button
+              onClick={() => openEmailModal(row)}
+              className={`p-2 rounded-full transition-all border shadow-sm active:scale-90 ${row.status === 'SENT' ? 'text-emerald-500 bg-emerald-50 border-emerald-50' : 'text-blue-600 bg-blue-50 border-blue-50'}`}
+              title={row.status === 'SENT' ? "Resend PO to Vendor" : "Send PO to Vendor"}
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z" />
+              </svg>
+            </button>
+          )}
+          <button
             onClick={() => handleEditPO(row.id)}
             className="p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600 rounded-xl transition-all border border-slate-50 shadow-sm active:scale-90"
           >
@@ -762,59 +905,6 @@ const PurchaseOrders = () => {
     }
   ];
 
-  const renderExpandedRow = (po) => (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mx-4">
-      <table className="w-full text-xs">
-        <thead className="bg-slate-50 text-slate-400  text-[9px]  tracking-wider">
-          <tr>
-            <th className="px-4 py-2 text-left">Description</th>
-            <th className="px-4 py-2 text-left">Material</th>
-            <th className="px-4 py-2 text-center">Design Qty</th>
-            <th className="px-4 py-2 text-right">Unit Rate</th>
-            <th className="px-4 py-2 text-right">Total</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {po.items && po.items.length > 0 ? (
-            po.items.map((item, idx) => (
-              <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                <td className="px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-slate-900">{item.description}</p>
-                    {item.sales_order_item_status === 'Rejected' && (
-                      <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 animate-pulse  border border-rose-200">
-                        Rejected Drawing
-                      </span>
-                    )}
-                  </div>
-                  {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
-                </td>
-                <td className="px-4 py-2 text-slate-600">{item.material_name || '—'}</td>
-                <td className="px-4 py-2 text-center ">{Number(item.design_qty || item.quantity || 0).toFixed(3)} {item.unit || 'NOS'}</td>
-                <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.unit_rate)}</td>
-                <td className="px-4 py-2 text-right  text-slate-900">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="5" className="px-4 py-6 text-center text-slate-400 italic">No items found for this PO</td>
-            </tr>
-          )}
-        </tbody>
-        {po.items && po.items.length > 0 && (
-          <tfoot className="bg-slate-50/50">
-            <tr>
-              <td colSpan="4" className="px-4 py-2 text-right  text-slate-500">Total Amount:</td>
-              <td className="px-4 py-2 text-right  text-indigo-600 text-sm">
-                {formatCurrency(po.total_amount)}
-              </td>
-            </tr>
-          </tfoot>
-        )}
-      </table>
-    </div>
-  );
-
   const filteredPOs = pos.filter(po => {
     const matchesSearch = !searchTerm || 
       po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -830,6 +920,10 @@ const PurchaseOrders = () => {
       <PurchaseOrderDetail 
         po={selectedPO} 
         onBack={() => setViewMode('list')} 
+        onRefresh={() => {
+          handleViewPODetail(selectedPO.id);
+          fetchPOs();
+        }}
       />
     );
   }
@@ -953,6 +1047,7 @@ const PurchaseOrders = () => {
             <option value="SENT">Sent</option>
             <option value="ACKNOWLEDGED">Acknowledged</option>
             <option value="RECEIVED">Received</option>
+            <option value="FULFILLED">Fulfilled</option>
             <option value="CLOSED">Closed</option>
           </select>
         </div>
@@ -969,7 +1064,6 @@ const PurchaseOrders = () => {
           columns={columns}
           data={filteredPOs}
           loading={loading}
-          renderExpanded={renderExpandedRow}
           hideHeader={true}
           className="border-none shadow-none rounded-none"
         />
@@ -1571,6 +1665,125 @@ const PurchaseOrders = () => {
           </div>
         </div>
       )}
+
+      {/* Email Modal */}
+      {showEmailModal && selectedPO && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
+            <div className="flex justify-between items-center p-6 border-b border-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800 tracking-tight">Send PO to Vendor</h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{selectedPO.po_number} • {selectedPO.vendor_name}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowEmailModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSendEmail} className="p-6 space-y-5">
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Recipient Email *</label>
+                  <input
+                    type="email"
+                    value={emailData.to}
+                    onChange={(e) => setEmailData({...emailData, to: e.target.value})}
+                    placeholder="vendor@example.com"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Subject</label>
+                  <input
+                    type="text"
+                    value={emailData.subject}
+                    onChange={(e) => setEmailData({...emailData, subject: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Message</label>
+                  <textarea
+                    value={emailData.message}
+                    onChange={(e) => setEmailData({...emailData, message: e.target.value})}
+                    rows="5"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none"
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                  <div className="p-2 bg-emerald-500 text-white rounded-lg">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">Attachment</p>
+                    <p className="text-xs font-bold text-emerald-600">PurchaseOrder_{selectedPO.po_number}.pdf</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="attachPDF"
+                      checked={emailData.attachPDF}
+                      onChange={(e) => setEmailData({...emailData, attachPDF: e.target.checked})}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                    />
+                    <label htmlFor="attachPDF" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Include</label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEmailModal(false)}
+                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z" /></svg>
+                      Send Email
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      <input
+        type="file"
+        ref={invoiceInputRef}
+        className="hidden"
+        accept="application/pdf"
+        onChange={handleFileChange}
+      />
     </div>
   );
 };

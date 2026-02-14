@@ -45,15 +45,26 @@ const createQuotation = async (payload) => {
 
     const quotationId = result.insertId;
     let totalAmount = 0;
+    let totalTaxAmount = 0;
 
     if (Array.isArray(items) && items.length > 0) {
       for (const item of items) {
-        const amount = (item.quantity || 0) * (item.unit_rate || 0);
-        totalAmount += amount;
+        const designQty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
+        const qty = parseFloat(item.quantity) || designQty || 0;
+        const rate = parseFloat(item.unit_rate) || 0;
+        const amount = Number((qty * rate).toFixed(2));
+        const cgstPercent = 9;
+        const sgstPercent = 9;
+        const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
+        const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
+        const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
+        
+        totalAmount = Number((totalAmount + amount).toFixed(2));
+        totalTaxAmount = Number((totalTaxAmount + cgstAmount + sgstAmount).toFixed(2));
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -62,18 +73,26 @@ const createQuotation = async (payload) => {
             item.material_name || null,
             item.material_type || null,
             item.drawing_no || null,
-            item.quantity || 0,
+            qty,
+            designQty,
             item.uom || item.unit || 'NOS',
-            item.unit_rate || 0,
-            amount
+            rate,
+            amount,
+            cgstPercent,
+            cgstAmount,
+            sgstPercent,
+            sgstAmount,
+            totalItemAmount
           ]
         );
       }
     }
 
+    const grandTotal = totalAmount + totalTaxAmount;
+
     await connection.execute(
-      'UPDATE quotations SET total_amount = ? WHERE id = ?',
-      [totalAmount, quotationId]
+      'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ? WHERE id = ?',
+      [totalAmount, totalTaxAmount, grandTotal, quotationId]
     );
 
     await connection.commit();
@@ -169,14 +188,9 @@ const updateQuotationStatus = async (quotationId, status) => {
       );
 
       if (existingPO.length === 0) {
-        // Pass the connection to createPurchaseOrder if it supports it, 
-        // but purchaseOrderService.createPurchaseOrder gets its own connection.
-        // To keep it simple and avoid changing too many things, we'll call it normally.
-        // However, it's better if it uses the same connection.
-        // For now, we'll call it and commit our transaction.
         await purchaseOrderService.createPurchaseOrder({
           quotationId: quotationId
-        });
+        }, connection);
       }
     }
 
@@ -227,14 +241,25 @@ const updateQuotation = async (quotationId, payload) => {
       await connection.execute('DELETE FROM quotation_items WHERE quotation_id = ?', [quotationId]);
 
       let totalAmount = 0;
+      let totalTaxAmount = 0;
 
       for (const item of items) {
-        const amount = (item.quantity || 0) * (item.unit_rate || 0);
-        totalAmount += amount;
+        const designQty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
+        const qty = parseFloat(item.quantity) || designQty || 0;
+        const rate = parseFloat(item.unit_rate) || 0;
+        const amount = Number((qty * rate).toFixed(2));
+        const cgstPercent = 9;
+        const sgstPercent = 9;
+        const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
+        const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
+        const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
+        
+        totalAmount = Number((totalAmount + amount).toFixed(2));
+        totalTaxAmount = Number((totalTaxAmount + cgstAmount + sgstAmount).toFixed(2));
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, unit, unit_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -243,17 +268,25 @@ const updateQuotation = async (quotationId, payload) => {
             item.material_name || null,
             item.material_type || null,
             item.drawing_no || null,
-            item.quantity || 0,
+            qty,
+            designQty,
             item.uom || item.unit || 'NOS',
-            item.unit_rate || 0,
-            amount
+            rate,
+            amount,
+            cgstPercent,
+            cgstAmount,
+            sgstPercent,
+            sgstAmount,
+            totalItemAmount
           ]
         );
       }
 
+      const grandTotal = totalAmount + totalTaxAmount;
+
       await connection.execute(
-        'UPDATE quotations SET total_amount = ? WHERE id = ?',
-        [totalAmount, quotationId]
+        'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ? WHERE id = ?',
+        [totalAmount, totalTaxAmount, grandTotal, quotationId]
       );
     }
 
@@ -455,8 +488,20 @@ const generateQuotationPDF = async (quotationId) => {
         </tbody>
         <tfoot style="background: #f8fafc; font-weight: bold;">
           <tr>
-            <td colspan="5" style="text-align: right; padding: 12px 8px;">Total Value:</td>
-            <td style="padding: 12px 8px;">₹{{total_amount}}</td>
+            <td colspan="5" style="text-align: right; padding: 8px 8px;">Subtotal:</td>
+            <td style="padding: 8px 8px;">₹{{total_amount}}</td>
+          </tr>
+          <tr style="color: #64748b; font-size: 11px;">
+            <td colspan="5" style="text-align: right; padding: 4px 8px;">CGST (9%):</td>
+            <td style="padding: 4px 8px;">₹{{cgst_total}}</td>
+          </tr>
+          <tr style="color: #64748b; font-size: 11px;">
+            <td colspan="5" style="text-align: right; padding: 4px 8px;">SGST (9%):</td>
+            <td style="padding: 4px 8px;">₹{{sgst_total}}</td>
+          </tr>
+          <tr class="total-row">
+            <td colspan="5" style="text-align: right; padding: 12px 8px; font-size: 14px;">Grand Total:</td>
+            <td style="padding: 12px 8px; font-size: 14px; color: #2563eb;">₹{{grand_total}}</td>
           </tr>
         </tfoot>
       </table>
@@ -488,6 +533,9 @@ const generateQuotationPDF = async (quotationId) => {
     phone: vendor?.phone || 'N/A',
     project_ref: quotation.mr_id ? `MR: ${quotation.mr_number}` : (quotation.sales_order_id ? `SO: ${quotation.project_name || quotation.sales_order_id}` : 'General Requirement'),
     total_amount: parseFloat(quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    cgst_total: (parseFloat(quotation.tax_amount || 0) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    sgst_total: (parseFloat(quotation.tax_amount || 0) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    grand_total: parseFloat(quotation.grand_total || quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     items: (quotation.items || []).map(i => {
       const qty = parseFloat(i.quantity || 0);
       const rate = parseFloat(i.unit_rate || 0);

@@ -90,7 +90,7 @@ const getAllQCs = async () => {
   const result = [];
   for (const qc of qcs) {
     const [qcItems] = await pool.query(
-      `SELECT po_qty, accepted_qty, rejected_qty, status FROM qc_inspection_items WHERE qc_inspection_id = ?`,
+      `SELECT id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status FROM qc_inspection_items WHERE qc_inspection_id = ?`,
       [qc.id]
     );
     
@@ -102,23 +102,34 @@ const getAllQCs = async () => {
       shortage: orderedQty > acceptedQty ? orderedQty - acceptedQty : 0,
       overage: acceptedQty > orderedQty ? acceptedQty - orderedQty : 0,
       items: qcItems.length,
-      accepted_quantity: acceptedQty
+      accepted_quantity: acceptedQty,
+      items_detail: qcItems.map(item => ({
+        id: item.id,
+        item_code: item.item_code,
+        ordered_qty: parseFloat(item.po_qty) || 0,
+        received_qty: parseFloat(item.received_qty) || 0,
+        accepted_qty: parseFloat(item.accepted_qty) || 0,
+        status: item.status
+      }))
     });
   }
   
   return result;
 };
 
-const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defects, remarks) => {
+const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defects, remarks, providedConnection = null) => {
   if (!grnId) {
     const error = new Error('GRN ID is required');
     error.statusCode = 400;
     throw error;
   }
 
-  const connection = await pool.getConnection();
+  const connection = providedConnection || await pool.getConnection();
+  const shouldRelease = !providedConnection;
+  const shouldCommit = !providedConnection;
+
   try {
-    await connection.beginTransaction();
+    if (shouldCommit) await connection.beginTransaction();
 
     const [grn] = await connection.query(
       'SELECT id FROM grns WHERE id = ?',
@@ -163,13 +174,13 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
       );
     }
 
-    await connection.commit();
-    return getQCWithDetails(qcId);
+    if (shouldCommit) await connection.commit();
+    return qcId; // Returning ID instead of full details to avoid complex getQCWithDetails with connection
   } catch (error) {
-    await connection.rollback();
+    if (shouldCommit) await connection.rollback();
     throw error;
   } finally {
-    connection.release();
+    if (shouldRelease) connection.release();
   }
 };
 

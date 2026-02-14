@@ -1117,17 +1117,6 @@ const POReceipts = () => {
                             />
                           </div>
                         </td>
-                        {/* Received column hidden as requested */}
-                        {/* <td className="px-4 py-4">
-                          <div className="flex justify-center">
-                            <input
-                              type="number"
-                              value={item.received_qty}
-                              onChange={(e) => handleItemChange(idx, 'received_qty', e.target.value)}
-                              className="w-20 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-black text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
-                            />
-                          </div>
-                        </td> */}
                         <td className="px-4 py-4 text-center">
                            <input
                               type="number"

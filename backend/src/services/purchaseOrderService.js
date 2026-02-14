@@ -1,4 +1,7 @@
 const pool = require('../config/db');
+const emailService = require('./emailService');
+const puppeteer = require('puppeteer');
+const mustache = require('mustache');
 
 const generatePONumber = async () => {
   const currentYear = new Date().getFullYear();
@@ -54,18 +57,24 @@ const previewPurchaseOrder = async (quotationId) => {
   };
 };
 
-const createPurchaseOrder = async (data) => {
+const createPurchaseOrder = async (data, existingConnection = null) => {
   const { quotationId, mrId: providedMrId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id } = data;
   
-  const connection = await pool.getConnection();
+  const connection = existingConnection || await pool.getConnection();
+  const shouldManageConnection = !existingConnection;
+
   try {
-    await connection.beginTransaction();
+    if (shouldManageConnection) {
+      await connection.beginTransaction();
+    }
 
     let finalVendorId = vendorId || vendor_id;
     let sales_order_id = null;
     let actualMrId = providedMrId;
     let total_amount = 0;
     let items = [];
+
+    let actualExpectedDeliveryDate = expectedDeliveryDate;
 
     if (quotationId) {
       const [quotation] = await connection.query(
@@ -81,7 +90,11 @@ const createPurchaseOrder = async (data) => {
       finalVendorId = quote.vendor_id;
       sales_order_id = quote.sales_order_id;
       actualMrId = providedMrId || quote.mr_id;
-      total_amount = quote.total_amount;
+      total_amount = parseFloat(quote.grand_total) || parseFloat(quote.total_amount) || 0;
+      
+      if (!actualExpectedDeliveryDate && quote.valid_until) {
+        actualExpectedDeliveryDate = new Date(quote.valid_until).toISOString().split('T')[0];
+      }
 
       const [quoteItems] = await connection.query(
         `SELECT qi.*, soi.status as sales_order_item_status 
@@ -90,7 +103,22 @@ const createPurchaseOrder = async (data) => {
          WHERE qi.quotation_id = ?`,
         [quote.sales_order_id, quotationId]
       );
-      items = quoteItems;
+      items = quoteItems.map(item => {
+        const qty = parseFloat(item.quantity) || 0;
+        const designQty = parseFloat(item.design_qty) || qty;
+        return {
+          ...item,
+          quantity: qty,
+          design_qty: designQty,
+          unit_rate: parseFloat(item.unit_rate) || 0,
+          amount: parseFloat(item.amount) || (qty * parseFloat(item.unit_rate || 0)),
+          cgst_percent: parseFloat(item.cgst_percent) || 9,
+          cgst_amount: parseFloat(item.cgst_amount) || 0,
+          sgst_percent: parseFloat(item.sgst_percent) || 9,
+          sgst_amount: parseFloat(item.sgst_amount) || 0,
+          total_amount: parseFloat(item.total_amount) || 0
+        };
+      });
     } else if (actualMrId) {
       // Create PO from Material Request
       const [mr] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [actualMrId]);
@@ -125,6 +153,7 @@ const createPurchaseOrder = async (data) => {
       
       items = mrItems.map(item => {
         const qty = parseFloat(item.quantity) || 0;
+        const designQty = parseFloat(item.design_qty) || qty;
         const rate = parseFloat(item.bom_rate || item.unit_rate || item.valuation_rate) || 0;
         const amount = qty * rate;
         const cgstPercent = 9;
@@ -135,7 +164,8 @@ const createPurchaseOrder = async (data) => {
 
         return {
           ...item,
-          design_qty: item.design_qty || item.quantity,
+          design_qty: designQty,
+          quantity: qty,
           description: item.item_name || item.description,
           material_name: item.item_name || item.material_name,
           material_type: item.item_type || item.material_type,
@@ -152,7 +182,7 @@ const createPurchaseOrder = async (data) => {
         };
       });
       
-      total_amount = items.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+      total_amount = items.reduce((sum, item) => Number(sum) + (Number(item.total_amount) || 0), 0);
       // Removed: if (!finalVendorId) throw new Error('Vendor is required for PO from Material Request');
     } else {
       // Manual PO
@@ -161,6 +191,7 @@ const createPurchaseOrder = async (data) => {
       
       items = manualItems.map(item => {
         const qty = parseFloat(item.quantity) || 0;
+        const designQty = parseFloat(item.design_qty) || qty;
         const rate = parseFloat(item.rate || item.unit_rate) || 0;
         const amount = qty * rate;
         const cgstPercent = item.cgst_percent || 9;
@@ -170,6 +201,8 @@ const createPurchaseOrder = async (data) => {
         const totalItemAmount = amount + cgstAmount + sgstAmount;
         return {
           ...item,
+          quantity: qty,
+          design_qty: designQty,
           unit_rate: rate,
           amount: amount,
           cgst_percent: cgstPercent,
@@ -179,31 +212,13 @@ const createPurchaseOrder = async (data) => {
           total_amount: totalItemAmount
         };
       });
-      total_amount = items.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+      total_amount = items.reduce((sum, item) => Number(sum) + (Number(item.total_amount) || 0), 0);
     }
 
     let poNumber = manualPoNumber;
     
     if (!poNumber) {
       poNumber = await generatePONumber();
-
-      if (sales_order_id) {
-        const [salesOrder] = await connection.query(
-          'SELECT customer_po_id FROM sales_orders WHERE id = ?',
-          [sales_order_id]
-        );
-
-        if (salesOrder.length && salesOrder[0].customer_po_id) {
-          const [customerPO] = await connection.query(
-            'SELECT po_number FROM customer_pos WHERE id = ?',
-            [salesOrder[0].customer_po_id]
-          );
-
-          if (customerPO.length && customerPO[0].po_number) {
-            poNumber = customerPO[0].po_number;
-          }
-        }
-      }
     }
 
     const poStatus = (actualMrId && !finalVendorId) ? 'PO_REQUEST' : 'DRAFT';
@@ -219,7 +234,7 @@ const createPurchaseOrder = async (data) => {
         sales_order_id || null,
         poStatus,
         total_amount || 0,
-        expectedDeliveryDate || null,
+        actualExpectedDeliveryDate || null,
         notes || null
       ]
     );
@@ -242,13 +257,15 @@ const createPurchaseOrder = async (data) => {
         const qty = parseFloat(item.quantity) || 0;
         const rate = parseFloat(item.unit_rate || item.rate) || 0;
         const amount = qty * rate;
-        const cgstPercent = item.cgst_percent || 9;
-        const sgstPercent = item.sgst_percent || 9;
-        const cgstAmount = (amount * cgstPercent) / 100;
-        const sgstAmount = (amount * sgstPercent) / 100;
-        const totalItemAmount = amount + cgstAmount + sgstAmount;
+        const cgstPercent = parseFloat(item.cgst_percent) || 0;
+        const sgstPercent = parseFloat(item.sgst_percent) || 0;
+        const cgstAmount = parseFloat(item.cgst_amount) || (amount * cgstPercent) / 100;
+        const sgstAmount = parseFloat(item.sgst_amount) || (amount * sgstPercent) / 100;
         
-        actualTotalAmount += totalItemAmount;
+        // Force numeric calculation to avoid string concatenation
+        const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
+        
+        actualTotalAmount = Number((actualTotalAmount + totalItemAmount).toFixed(2));
 
         await connection.execute(
           `INSERT INTO purchase_order_items (
@@ -261,9 +278,9 @@ const createPurchaseOrder = async (data) => {
             poId,
             item.item_code || null,
             item.description || null,
-            item.design_qty || 0,
-            item.quantity || 0,
-            item.unit || 'NOS',
+            (parseFloat(item.design_qty) || qty),
+            qty,
+            item.unit || item.uom || 'NOS',
             rate,
             amount,
             cgstPercent,
@@ -294,13 +311,19 @@ const createPurchaseOrder = async (data) => {
       );
     }
 
-    await connection.commit();
+    if (shouldManageConnection) {
+      await connection.commit();
+    }
     return { id: poId, po_number: poNumber };
   } catch (error) {
-    await connection.rollback();
+    if (shouldManageConnection) {
+      await connection.rollback();
+    }
     throw error;
   } finally {
-    connection.release();
+    if (shouldManageConnection) {
+      connection.release();
+    }
   }
 };
 
@@ -444,7 +467,7 @@ const getPurchaseOrderById = async (poId) => {
 const updatePurchaseOrder = async (poId, payload) => {
   const { status, poNumber, expectedDeliveryDate, notes, items, vendorId } = payload;
   
-  const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'COMPLETED', 'CLOSED'];
+  const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'COMPLETED', 'CLOSED', 'FULFILLED'];
   if (status && !validStatuses.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
@@ -466,6 +489,14 @@ const updatePurchaseOrder = async (poId, payload) => {
     if (status) {
       updates.push('status = ?');
       params.push(status);
+
+      if (status === 'FULFILLED') {
+        // Automatically mark all items as accepted when fulfilled
+        await connection.execute(
+          'UPDATE purchase_order_items SET accepted_quantity = quantity WHERE purchase_order_id = ?',
+          [poId]
+        );
+      }
     }
     if (poNumber) {
       updates.push('po_number = ?');
@@ -496,31 +527,32 @@ const updatePurchaseOrder = async (poId, payload) => {
       let totalAmount = 0;
       for (const item of items) {
         const qty = parseFloat(item.quantity) || 0;
+        const designQty = parseFloat(item.design_qty) || qty;
         const rate = parseFloat(item.unit_rate) || parseFloat(item.rate) || 0;
-        const amount = qty * rate;
+        const amount = Number((qty * rate).toFixed(2));
         
         // Default to 18% GST (9% CGST + 9% SGST)
         const cgstPercent = item.cgst_percent || 9;
         const sgstPercent = item.sgst_percent || 9;
-        const cgstAmount = (amount * cgstPercent) / 100;
-        const sgstAmount = (amount * sgstPercent) / 100;
-        const totalItemAmount = amount + cgstAmount + sgstAmount;
+        const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
+        const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
+        const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
         
-        totalAmount += totalItemAmount;
+        totalAmount = Number((totalAmount + totalItemAmount).toFixed(2));
 
         if (item.id) {
           await connection.execute(
             `UPDATE purchase_order_items 
              SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, description = ?, item_code = ?, unit = ?
              WHERE id = ? AND purchase_order_id = ?`,
-            [rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, qty, item.description, item.item_code, item.unit, item.id, poId]
+            [rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, item.description, item.item_code, item.unit, item.id, poId]
           );
         } else {
           await connection.execute(
             `INSERT INTO purchase_order_items 
              (purchase_order_id, item_code, description, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [poId, item.item_code, item.description, qty, qty, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount]
+            [poId, item.item_code, item.description, qty, designQty, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount]
           );
         }
       }
@@ -554,7 +586,7 @@ const getPurchaseOrderStats = async () => {
       SUM(CASE WHEN status = 'ORDERED' THEN 1 ELSE 0 END) as submitted_pos,
       SUM(CASE WHEN status IN ('ORDERED', 'SENT', 'ACKNOWLEDGED') THEN 1 ELSE 0 END) as to_receive_pos,
       SUM(CASE WHEN status = 'PARTIALLY_RECEIVED' THEN 1 ELSE 0 END) as partial_pos,
-      SUM(CASE WHEN status IN ('RECEIVED', 'COMPLETED') THEN 1 ELSE 0 END) as fulfilled_pos,
+      SUM(CASE WHEN status IN ('RECEIVED', 'COMPLETED', 'FULFILLED') THEN 1 ELSE 0 END) as fulfilled_pos,
       SUM(total_amount) as total_value
     FROM purchase_orders
   `);
@@ -699,6 +731,220 @@ const handleStoreAcceptance = async (poId, payload) => {
   }
 };
 
+const generatePurchaseOrderPDF = async (poId) => {
+  const po = await getPurchaseOrderById(poId);
+  const [vendorRows] = await pool.query('SELECT * FROM vendors WHERE id = ?', [po.vendor_id]);
+  const vendor = vendorRows[0];
+
+  const htmlTemplate = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
+        .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
+        .quote-title { text-align: right; }
+        .quote-title h2 { margin: 0; color: #64748b; font-size: 18px; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+        .section-label { font-weight: bold; color: #64748b; font-size: 12px; margin-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th { background: #f8fafc; color: #64748b; text-align: left; padding: 12px 8px; font-size: 11px; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+        .notes-section { background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #cbd5e1; }
+        .footer { margin-top: 50px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+        .total-row { font-weight: bold; background: #eff6ff; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="company-info">
+          <h1>SPTECHPIONEER PVT LTD</h1>
+          <p>Industrial Area, Sector 5<br>Pune, Maharashtra - 411026</p>
+        </div>
+        <div class="quote-title">
+          <h2>Purchase Order</h2>
+          <p><strong>PO No:</strong> {{po_number}}<br>
+          <strong>Date:</strong> {{created_at}}<br>
+          <strong>Expected Date:</strong> {{expected_delivery_date}}</p>
+        </div>
+      </div>
+
+      <div class="details-grid">
+        <div>
+          <div class="section-label">Vendor Information</div>
+          <p><strong>{{vendor_name}}</strong><br>
+          {{location}}<br>
+          Email: {{vendor_email}}<br>
+          Phone: {{phone}}</p>
+        </div>
+        <div style="text-align: right;">
+          <div class="section-label">Reference</div>
+          <p>{{project_ref}}</p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 20%">Drawing No</th>
+            <th style="width: 25%">Material Name</th>
+            <th style="width: 15%">Type</th>
+            <th style="width: 10%">Qty</th>
+            <th style="width: 15%">Rate (₹)</th>
+            <th style="width: 15%">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#items}}
+          <tr>
+            <td>{{drawing_no}}</td>
+            <td>{{material_name}}</td>
+            <td>{{material_type}}</td>
+            <td>{{quantity}} {{unit}}</td>
+            <td>{{unit_rate}}</td>
+            <td>{{amount}}</td>
+          </tr>
+          {{/items}}
+        </tbody>
+        <tfoot style="background: #f8fafc; font-weight: bold;">
+          <tr>
+            <td colspan="5" style="text-align: right; padding: 8px 8px;">Subtotal:</td>
+            <td style="padding: 8px 8px;">₹{{subtotal}}</td>
+          </tr>
+          <tr style="color: #64748b; font-size: 11px;">
+            <td colspan="5" style="text-align: right; padding: 4px 8px;">CGST (9%):</td>
+            <td style="padding: 4px 8px;">₹{{cgst_total}}</td>
+          </tr>
+          <tr style="color: #64748b; font-size: 11px;">
+            <td colspan="5" style="text-align: right; padding: 4px 8px;">SGST (9%):</td>
+            <td style="padding: 4px 8px;">₹{{sgst_total}}</td>
+          </tr>
+          <tr class="total-row">
+            <td colspan="5" style="text-align: right; padding: 12px 8px; font-size: 14px;">Grand Total:</td>
+            <td style="padding: 12px 8px; font-size: 14px; color: #2563eb;">₹{{total_amount}}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      {{#notes}}
+      <div class="notes-section">
+        <div class="section-label">Special Instructions & Notes</div>
+        <p>{{notes}}</p>
+      </div>
+      {{/notes}}
+
+      <div class="footer">
+        <p>This is a computer-generated document. No signature is required.<br>
+        SPTECHPIONEER PVT LTD | Confidential | Page 1 of 1</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const subtotal = po.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  const cgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || 0), 0);
+  const sgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || 0), 0);
+
+  const viewData = {
+    ...po,
+    created_at: formatDate(po.created_at),
+    expected_delivery_date: formatDate(po.expected_delivery_date),
+    vendor_name: vendor?.vendor_name || 'N/A',
+    vendor_email: vendor?.email || 'N/A',
+    location: vendor?.location || 'N/A',
+    phone: vendor?.phone || 'N/A',
+    project_ref: po.mr_number ? `MR: ${po.mr_number}` : 'Direct Procurement',
+    subtotal: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    cgst_total: cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    sgst_total: sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    total_amount: parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    items: (po.items || []).map(i => {
+      const dQty = parseFloat(i.design_qty);
+      const qty = parseFloat(i.quantity);
+      const displayQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+      
+      return {
+        ...i,
+        drawing_no: i.drawing_no || i.item_code || '—',
+        material_name: i.material_name || i.description || '—',
+        material_type: i.material_type || '—',
+        quantity: displayQty.toFixed(3),
+        unit: i.unit || 'NOS',
+        unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      };
+    })
+  };
+
+  const html = mustache.render(htmlTemplate, viewData);
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({ 
+    format: 'A4', 
+    printBackground: true,
+    margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+  });
+  await browser.close();
+
+  return pdf;
+};
+
+const sendPurchaseOrderEmail = async (poId, emailData) => {
+  const { to, subject, message, attachPDF } = emailData;
+
+  const po = await getPurchaseOrderById(poId);
+
+  if (!to || !subject || !message) {
+    throw new Error('Email recipient, subject, and message are required');
+  }
+
+  try {
+    let attachments = [];
+    if (attachPDF) {
+      const pdfBuffer = await generatePurchaseOrderPDF(poId);
+      attachments.push({
+        filename: `PurchaseOrder_${po.po_number}.pdf`,
+        content: pdfBuffer
+      });
+    }
+
+    const emailResult = await emailService.sendEmail(to, subject, message, attachments);
+    
+    await pool.execute(
+      'UPDATE purchase_orders SET status = ? WHERE id = ?',
+      ['SENT', poId]
+    );
+
+    return {
+      id: poId,
+      sent_to: to,
+      sent_at: new Date(),
+      message: emailResult.message,
+      messageId: emailResult.messageId
+    };
+  } catch (error) {
+    console.error(`[sendPurchaseOrderEmail] Error: ${error.message}`);
+    throw error;
+  }
+};
+
+const updatePurchaseOrderInvoice = async (poId, invoiceUrl) => {
+  const [result] = await pool.execute(
+    'UPDATE purchase_orders SET invoice_url = ? WHERE id = ?',
+    [invoiceUrl, poId]
+  );
+  if (result.affectedRows === 0) throw new Error('Purchase Order not found');
+  return { id: poId, invoice_url: invoiceUrl };
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -709,5 +955,8 @@ module.exports = {
   getPurchaseOrderStats,
   getPOMaterialRequests,
   approvePurchaseOrder,
-  handleStoreAcceptance
+  handleStoreAcceptance,
+  generatePurchaseOrderPDF,
+  sendPurchaseOrderEmail,
+  updatePurchaseOrderInvoice
 };

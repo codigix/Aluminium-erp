@@ -14,7 +14,7 @@ const formatCurrency = (value, currency = 'INR') => {
   }).format(value || 0);
 };
 
-const PurchaseOrderDetail = ({ po, onBack }) => {
+const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
   if (!po) return null;
 
   const steps = [
@@ -33,7 +33,7 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
       </svg>
     )},
-    { label: 'Fulfilled', status: ['COMPLETED', 'CLOSED'], icon: (color) => (
+    { label: 'Fulfilled', status: ['COMPLETED', 'CLOSED', 'FULFILLED'], icon: (color) => (
       <svg className={`w-5 h-5 ${color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
@@ -42,10 +42,34 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
 
   const currentStatus = po.status?.toUpperCase() || 'DRAFT';
   const getStepIndex = (status) => {
-    if (['COMPLETED', 'CLOSED', 'ORDERED'].includes(status)) return 3;
+    if (['COMPLETED', 'CLOSED', 'FULFILLED'].includes(status)) return 3;
     if (['RECEIVED', 'ACKNOWLEDGED'].includes(status)) return 2;
-    if (['SUBMITTED', 'SENT'].includes(status)) return 1;
+    if (['SUBMITTED', 'SENT', 'ORDERED'].includes(status)) return 1;
     return 0;
+  };
+
+  const handleReceiveMaterial = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/purchase-orders/${po.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'FULFILLED' })
+      });
+
+      if (response.ok) {
+        if (onRefresh) {
+          onRefresh();
+        } else {
+          window.location.reload();
+        }
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
   };
 
   const activeStepIndex = getStepIndex(currentStatus);
@@ -89,6 +113,17 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {['SUBMITTED', 'SENT', 'RECEIVED', 'ACKNOWLEDGED'].includes(currentStatus) && (
+            <button 
+              onClick={handleReceiveMaterial}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 uppercase tracking-wider"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              Receive Material
+            </button>
+          )}
           <button className="p-2.5 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded-xl transition-all shadow-sm active:scale-95">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 00-2 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
           </button>
@@ -259,8 +294,16 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                           <p className="text-[10px] text-slate-400 font-bold mt-0.5">{item.item_code}</p>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className="text-xs font-black text-slate-800">{Number(item.design_qty || item.quantity || 0).toFixed(3)}</span>
-                          <span className="text-[9px] text-slate-400 font-bold ml-1 uppercase">{item.unit}</span>
+                          <span className="text-xs font-black text-slate-800">
+                            {(() => {
+                              const dQty = parseFloat(item.design_qty);
+                              const qty = parseFloat(item.quantity);
+                              // Prioritize design_qty if it's non-zero, otherwise use quantity
+                              const displayQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+                              return Number(displayQty).toFixed(3);
+                            })()}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-bold ml-1 uppercase">{item.unit || item.uom}</span>
                         </td>
                         {/* Hiding Received column as requested */}
                         {/* <td className="px-6 py-4">
@@ -280,20 +323,19 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
                         <td className="px-6 py-4 text-center">
                           <div className="flex flex-col items-center">
                             <span className="text-xs font-black text-slate-700">{formatCurrency(item.unit_rate, po.currency)}</span>
-                            <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-tighter mt-0.5">
-                              +{(item.cgst_percent || 0) + (item.sgst_percent || 0) || 18}% GST
-                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex flex-col items-end">
                             <span className="text-xs font-black text-slate-800">
-                              {formatCurrency(item.amount || ((item.design_qty || item.quantity || 0) * (item.unit_rate || 0)), po.currency)}
+                              {(() => {
+                                const dQty = parseFloat(item.design_qty);
+                                const qty = parseFloat(item.quantity);
+                                const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+                                const rate = parseFloat(item.unit_rate) || 0;
+                                return formatCurrency(parseFloat(item.amount) || (effectiveQty * rate), po.currency);
+                              })()}
                             </span>
-                            <div className="flex gap-2 text-[8px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">
-                              <span>C: {formatCurrency(item.cgst_amount || (item.quantity * item.unit_rate * 0.09), po.currency)}</span>
-                              <span>S: {formatCurrency(item.sgst_amount || (item.quantity * item.unit_rate * 0.09), po.currency)}</span>
-                            </div>
                           </div>
                         </td>
                       </tr>
@@ -306,16 +348,51 @@ const PurchaseOrderDetail = ({ po, onBack }) => {
             <div className="p-6 bg-slate-50/30 border-t border-slate-50 space-y-3">
               <div className="flex justify-end gap-12 text-xs">
                 <span className="text-slate-400 font-bold uppercase tracking-widest">Subtotal</span>
-                <span className="text-slate-600 font-black w-32 text-right">{formatCurrency(filteredItems.reduce((sum, i) => sum + (parseFloat(i.amount) || (i.quantity * i.unit_rate)), 0), po.currency)}</span>
+                <span className="text-slate-600 font-black w-32 text-right">
+                  {formatCurrency(filteredItems.reduce((sum, i) => {
+                    const dQty = parseFloat(i.design_qty);
+                    const qty = parseFloat(i.quantity);
+                    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+                    return sum + (parseFloat(i.amount) || (effectiveQty * (parseFloat(i.unit_rate) || 0)));
+                  }, 0), po.currency)}
+                </span>
               </div>
               <div className="flex justify-end gap-12 text-xs">
-                <span className="text-slate-400 font-bold uppercase tracking-widest">GST (CGST 9% + SGST 9%)</span>
-                <span className="text-emerald-500 font-black w-32 text-right">+ {formatCurrency(filteredItems.reduce((sum, i) => sum + (parseFloat(i.cgst_amount || 0) + parseFloat(i.sgst_amount || 0)) || (i.quantity * i.unit_rate * 0.18), 0), po.currency)}</span>
+                <span className="text-slate-400 font-bold uppercase tracking-widest">CGST (9%)</span>
+                <span className="text-emerald-500 font-black w-32 text-right">
+                  + {formatCurrency(filteredItems.reduce((sum, i) => {
+                    const dQty = parseFloat(i.design_qty);
+                    const qty = parseFloat(i.quantity);
+                    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+                    const tax = parseFloat(i.cgst_amount) || (effectiveQty * (parseFloat(i.unit_rate) || 0) * 0.09);
+                    return sum + tax;
+                  }, 0), po.currency)}
+                </span>
+              </div>
+              <div className="flex justify-end gap-12 text-xs">
+                <span className="text-slate-400 font-bold uppercase tracking-widest">SGST (9%)</span>
+                <span className="text-emerald-500 font-black w-32 text-right">
+                  + {formatCurrency(filteredItems.reduce((sum, i) => {
+                    const dQty = parseFloat(i.design_qty);
+                    const qty = parseFloat(i.quantity);
+                    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+                    const tax = parseFloat(i.sgst_amount) || (effectiveQty * (parseFloat(i.unit_rate) || 0) * 0.09);
+                    return sum + tax;
+                  }, 0), po.currency)}
+                </span>
               </div>
             </div>
             <div className="bg-blue-600 px-8 py-4 flex justify-between items-center text-white">
               <span className="text-xs font-black uppercase tracking-[0.2em]">Grand Total</span>
-              <span className="text-xl font-black">{formatCurrency(po.total_amount || filteredItems.reduce((sum, i) => sum + (parseFloat(i.total_amount) || (i.quantity * i.unit_rate * 1.18)), 0), po.currency)}</span>
+              <span className="text-xl font-black">
+                {formatCurrency(parseFloat(po.total_amount) || filteredItems.reduce((sum, i) => {
+                    const dQty = parseFloat(i.design_qty);
+                    const qty = parseFloat(i.quantity);
+                    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+                    const total = parseFloat(i.total_amount) || (effectiveQty * (parseFloat(i.unit_rate) || 0) * 1.18);
+                    return sum + total;
+                }, 0), po.currency)}
+              </span>
             </div>
           </div>
         </div>

@@ -72,20 +72,20 @@ const createGRNWithItems = async (req, res, next) => {
         const grnItem = await grnItemService.createGRNItem(
           grn.id,
           poItemId,
-          item.poQty || 0,
-          item.acceptedQty || 0,
+          item.poQty || item.po_qty || 0,
+          item.acceptedQty || item.accepted_qty || 0,
           item.remarks,
           item.warehouseId || item.warehouse_id
         );
 
         grnItemResults.push(grnItem);
-        totalAcceptedQty += item.acceptedQty || 0;
+        totalAcceptedQty += (item.acceptedQty || item.accepted_qty || 0);
 
         try {
           await inventoryPostingService.postInventoryFromGRN(
             grn.id,
             poItemId,
-            item.acceptedQty || 0,
+            item.acceptedQty || item.accepted_qty || 0,
             0,
             grn.po_number
           );

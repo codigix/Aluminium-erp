@@ -233,7 +233,7 @@ const Quotations = () => {
   const handleAddItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      items: [...formData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
   };
 
@@ -245,7 +245,7 @@ const Quotations = () => {
       setFormData(prev => ({ 
         ...prev, 
         salesOrderId: '',
-        items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+        items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
       }));
       return;
     }
@@ -267,7 +267,7 @@ const Quotations = () => {
 
         if (response.ok) {
           const mrData = await response.json();
-          const mrItems = (mrData.items || [])
+            const mrItems = (mrData.items || [])
             .filter(item => {
               const type = (item.material_type || '').toUpperCase();
               return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
@@ -276,14 +276,15 @@ const Quotations = () => {
             drawing_no: item.item_code || '—',
             material_name: item.name || item.item_description || '',
             material_type: item.material_type || '',
-            quantity: item.design_qty || item.quantity || 0,
+            design_qty: parseFloat(item.design_qty) || parseFloat(item.quantity) || 0,
+            quantity: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0,
             uom: item.uom || 'NOS',
             unit_rate: item.unit_rate || item.rate || 0
           }));
 
           setFormData(prev => ({
             ...prev,
-            items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+            items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
           }));
         }
       } catch (error) {
@@ -322,14 +323,21 @@ const Quotations = () => {
             const type = (req.material_type || '').toUpperCase();
             return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
           })
-          .map(req => ({
-          drawing_no: req.drawing_no || '—',
-          material_name: req.material_name || '',
-          material_type: req.material_type || '',
-          quantity: req.shortage > 0 ? req.shortage : req.total_required,
-          uom: req.uom || 'NOS',
-          unit_rate: req.rate || req.unit_rate || 0
-        }));
+          .map(req => {
+            const shortage = parseFloat(req.shortage) || 0;
+            const totalRequired = parseFloat(req.total_required) || 0;
+            const finalQty = shortage > 0 ? shortage : totalRequired;
+            
+            return {
+              drawing_no: req.drawing_no || '—',
+              material_name: req.material_name || '',
+              material_type: req.material_type || '',
+              design_qty: finalQty,
+              quantity: finalQty,
+              uom: req.uom || 'NOS',
+              unit_rate: parseFloat(req.rate || req.unit_rate) || 0
+            };
+          });
 
         setFormData(prev => ({
           ...prev,
@@ -432,15 +440,23 @@ const Quotations = () => {
     newItems[index][field] = value;
     
     // Recalculate item amount
-    if (field === 'quantity' || field === 'unit_rate') {
-      const qty = parseFloat(newItems[index].quantity) || 0;
+    if (field === 'quantity' || field === 'unit_rate' || field === 'design_qty') {
+      const qty = parseFloat(newItems[index].quantity) || parseFloat(newItems[index].design_qty) || 0;
       const rate = parseFloat(newItems[index].unit_rate) || 0;
       newItems[index].amount = qty * rate;
+      
+      // Sync quantity and design_qty to prioritize design_qty
+      if (field === 'design_qty') {
+        newItems[index].quantity = value;
+      }
+      if (field === 'quantity' && (newItems[index].design_qty === undefined || newItems[index].design_qty === 0)) {
+        newItems[index].design_qty = value;
+      }
     }
     
-    // Recalculate total amount
+    // Recalculate total amount (subtotal)
     const totalAmount = newItems.reduce((sum, item) => {
-      const qty = parseFloat(item.quantity) || 0;
+      const qty = parseFloat(item.quantity) || parseFloat(item.design_qty) || 0;
       const rate = parseFloat(item.unit_rate) || 0;
       return sum + (qty * rate);
     }, 0);
@@ -519,7 +535,7 @@ const Quotations = () => {
       });
 
       const totalAmount = updatedItems.reduce((sum, item) => {
-        const qty = parseFloat(item.quantity) || 0;
+        const qty = parseFloat(item.quantity) || parseFloat(item.design_qty) || 0;
         const rate = parseFloat(item.unit_rate) || 0;
         return sum + (qty * rate);
       }, 0);
@@ -605,14 +621,14 @@ const Quotations = () => {
   const handleRecordAddEmptyItem = () => {
     setRecordData({
       ...recordData,
-      items: [...recordData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      items: [...recordData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
   };
 
   const handleRecordRemoveItem = (index) => {
     const newItems = recordData.items.filter((_, i) => i !== index);
     const totalAmount = newItems.reduce((sum, item) => {
-      const qty = parseFloat(item.quantity) || 0;
+      const qty = parseFloat(item.quantity) || parseFloat(item.design_qty) || 0;
       const rate = parseFloat(item.unit_rate) || 0;
       return sum + (qty * rate);
     }, 0);
@@ -1057,7 +1073,7 @@ const Quotations = () => {
         )
       },
       {
-        key: activeTab === 'sent' ? 'valid_until' : 'total_amount',
+        key: activeTab === 'sent' ? 'valid_until' : 'grand_total',
         label: activeTab === 'sent' ? 'Valid Until' : 'Total Amount',
         sortable: true,
         render: (val, _) => activeTab === 'sent' ? (
@@ -1559,6 +1575,24 @@ const Quotations = () => {
                       rows="3"
                     />
                   </div>
+
+                  {/* Summary Section for Request Quote */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Subtotal:</span>
+                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_rate || 0)), 0))}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>GST (18%):</span>
+                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_rate || 0)), 0) * 0.18)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
+                        <span>Grand Total:</span>
+                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_rate || 0)), 0) * 1.18)}</span>
+                      </div>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>
@@ -1608,28 +1642,40 @@ const Quotations = () => {
                       </select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <label className="block text-xs  text-slate-500  tracking-wider mb-1">Total Amount (₹)</label>
-                      <div className="text-xl text-slate-900">{formatCurrency(recordData.amount)}</div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                        <label className="block text-[9px]  text-slate-500  tracking-wider mb-1 uppercase font-bold">Subtotal</label>
+                        <div className="text-sm font-bold text-slate-700">{formatCurrency(recordData.amount)}</div>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                        <label className="block text-[9px]  text-slate-500  tracking-wider mb-1 uppercase font-bold">GST (18%)</label>
+                        <div className="text-sm font-bold text-slate-700">{formatCurrency(recordData.amount * 0.18)}</div>
+                        </div>
+                        <div className="bg-blue-50 p-2 rounded-lg border border-blue-200">
+                        <label className="block text-[9px]  text-blue-500  tracking-wider mb-1 uppercase font-bold">Total</label>
+                        <div className="text-base font-black text-blue-900">{formatCurrency(recordData.amount * 1.18)}</div>
+                        </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
-                      <input
-                        type="date"
-                        value={recordData.validUntil}
-                        onChange={(e) => setRecordData({...recordData, validUntil: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Attach Vendor PDF</label>
-                      <input
-                        type="file"
-                        accept="application/pdf"
-                        onChange={handleRecordFileChange}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                        <label className="block text-[10px] font-medium text-slate-700 mb-1">Valid Until</label>
+                        <input
+                            type="date"
+                            value={recordData.validUntil}
+                            onChange={(e) => setRecordData({...recordData, validUntil: e.target.value})}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        </div>
+                        <div>
+                        <label className="block text-[10px] font-medium text-slate-700 mb-1">Attach Vendor PDF</label>
+                        <input
+                            type="file"
+                            accept="application/pdf"
+                            onChange={handleRecordFileChange}
+                            className="w-full px-2 py-1 border border-slate-200 rounded text-[10px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        </div>
                     </div>
                   </div>
 
@@ -1725,10 +1771,10 @@ const Quotations = () => {
                                 <td className="px-3 py-2">
                                   <input
                                     type="number"
-                                    value={item.quantity}
-                                    onChange={(e) => handleRecordItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                                    className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500"
-                                    placeholder="Design Qty"
+                                    value={item.design_qty || item.quantity || 0}
+                                    onChange={(e) => handleRecordItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                                    placeholder="0.000"
                                   />
                                 </td>
                                 <td className="px-3 py-2">
@@ -1741,7 +1787,7 @@ const Quotations = () => {
                                   />
                                 </td>
                                 <td className="px-3 py-2 text-right font-medium text-slate-700">
-                                  {formatCurrency((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0))}
+                                  {formatCurrency((parseFloat(item.quantity) || parseFloat(item.design_qty) || 0) * (parseFloat(item.unit_rate) || 0))}
                                 </td>
                                 <td className="px-3 py-2 text-center">
                                   <button
@@ -1760,9 +1806,19 @@ const Quotations = () => {
                     </div>
 
                     {recordData.items.length > 0 && (
-                      <div className="mt-4 p-4 bg-blue-50 rounded-lg flex justify-between items-center border border-blue-100">
-                        <span className="text-sm  text-blue-700">Quotation Total</span>
-                        <span className="text-xl  text-blue-900">{formatCurrency(recordData.amount)}</span>
+                      <div className="mt-4 p-4 bg-blue-50 rounded-lg flex flex-col gap-2 border border-blue-100">
+                        <div className="flex justify-between items-center text-xs text-blue-600">
+                          <span>Subtotal</span>
+                          <span>{formatCurrency(recordData.amount)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-emerald-600 font-bold border-t border-blue-100 pt-2">
+                          <span>GST (18%)</span>
+                          <span>+ {formatCurrency(recordData.amount * 0.18)}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-t-2 border-blue-200 pt-2">
+                          <span className="text-sm font-black text-blue-800 uppercase tracking-wider">Grand Total</span>
+                          <span className="text-2xl font-black text-blue-900">{formatCurrency(recordData.amount * 1.18)}</span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2051,7 +2107,7 @@ const Quotations = () => {
           isOpen={showCompareModal}
           onClose={() => setShowCompareModal(false)}
           title="Compare Vendor Quotations"
-          size="full"
+          size="6xl"
         >
           <div className="overflow-x-auto">
             <table className="w-full border-collapse min-w-[800px]">

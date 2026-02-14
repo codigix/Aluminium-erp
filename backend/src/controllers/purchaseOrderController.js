@@ -96,6 +96,42 @@ const approvePurchaseOrder = async (req, res, next) => {
   }
 };
 
+const getPurchaseOrderPDF = async (req, res, next) => {
+  try {
+    const pdfBuffer = await purchaseOrderService.generatePurchaseOrderPDF(req.params.poId);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=PO-${req.params.poId}.pdf`,
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const sendPurchaseOrderEmail = async (req, res, next) => {
+  try {
+    const result = await purchaseOrderService.sendPurchaseOrderEmail(req.params.poId, req.body);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const uploadInvoice = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const invoiceUrl = `uploads/${req.file.filename}`;
+    const result = await purchaseOrderService.updatePurchaseOrderInvoice(req.params.poId, invoiceUrl);
+    res.json({ message: 'Invoice uploaded successfully', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -106,5 +142,8 @@ module.exports = {
   getPurchaseOrderStats,
   getPOMaterialRequests,
   handleStoreAcceptance,
-  approvePurchaseOrder
+  approvePurchaseOrder,
+  getPurchaseOrderPDF,
+  sendPurchaseOrderEmail,
+  uploadInvoice
 };
