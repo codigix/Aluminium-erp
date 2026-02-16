@@ -599,7 +599,7 @@ const DesignOrders = () => {
       }
       
       successToast(`Material ${isEditingMaterial ? 'updated' : 'created'} successfully`);
-      fetchItemsList(materialFormData.drawingNo);
+      await fetchItemsList(materialFormData.drawingNo);
       setTargetOrderItemId(null);
       setIsEditingMaterial(false);
       setEditingMaterialId(null);
@@ -2092,22 +2092,13 @@ const DesignOrders = () => {
                       <option value="Set">Set</option>
                     </select>
                   </div>
-                  <div className="space-y-1.5 hidden">
+                  <div className="space-y-1.5">
                     <label className="text-xs  text-slate-500  tracking-wider">Valuation Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.valuationRate}
                       onChange={(e) => setMaterialFormData({...materialFormData, valuationRate: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs  text-slate-500  tracking-wider">Valuation Rate</label>
-                    <input 
-                      type="number" 
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                      value={materialFormData.sellingRate}
-                      onChange={(e) => setMaterialFormData({...materialFormData, sellingRate: e.target.value})}
                     />
                   </div>
 
@@ -2305,7 +2296,7 @@ const DesignOrders = () => {
                                       </span>
                                     </td>
                                     <td className="px-4 py-3 text-xs text-slate-600">{item.unit}</td>
-                                    <td className="px-4 py-3 text-xs text-slate-600 text-center">₹{item.selling_rate || 0}</td>
+                                    <td className="px-4 py-3 text-xs text-slate-600 text-center">₹{item.valuation_rate || 0}</td>
                                     <td className="px-4 py-3 text-xs text-slate-600 text-center">{item.weight_per_unit || 0} {item.weight_uom}</td>
                                     <td className="px-4 py-3 text-xs text-slate-600 ">{item.drawing_no || '-'}</td>
                                     <td className="px-4 py-3 text-xs text-right">

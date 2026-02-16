@@ -230,62 +230,6 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     }
   ];
 
-  const renderExpanded = (qc) => (
-    <div className="p-5 bg-slate-50/50 rounded-xl m-2 border border-slate-200 animate-in slide-in-from-top-1 duration-200">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-1">
-            <ListTodo className="w-4 h-4 text-indigo-600" />
-            <h4 className="text-[10px] font-bold text-slate-900 tracking-wider uppercase">Items Verification</h4>
-          </div>
-          
-          {qc.items_detail && qc.items_detail.length > 0 ? (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-[11px]">
-                <thead className="bg-slate-50 border-b border-slate-200 text-[9px] font-bold text-slate-500 uppercase">
-                  <tr>
-                    <th className="px-3 py-1.5 text-left">Item Code</th>
-                    <th className="px-3 py-1.5 text-right">Received</th>
-                    <th className="px-3 py-1.5 text-right">Accepted</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {qc.items_detail.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50">
-                      <td className="px-3 py-1.5 font-medium text-slate-900">{item.item_code}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-slate-600">{item.received_qty}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-emerald-600 font-medium">{item.accepted_qty}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 italic">No item breakdown available</p>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
-            <div className="flex items-center gap-2 mb-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-              <p className="text-[10px] font-bold text-amber-600 tracking-wider uppercase">Defects</p>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              {qc.defects || "No specific defects reported."}
-            </p>
-          </div>
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-            <p className="text-[10px] font-bold text-blue-600 tracking-wider uppercase mb-1">Remarks</p>
-            <p className="text-xs text-slate-700 leading-relaxed italic">
-              "{qc.remarks || 'Auto-created inspection record.'}"
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const tabs = [
     { id: 'incoming', label: 'Incoming QC', icon: Inbox, color: 'text-blue-600', bg: 'bg-blue-50' },
     { id: 'in-process', label: 'In-Process QC', icon: Search, color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -331,8 +275,6 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 columns={columns}
                 data={qcInspections}
                 loading={loading}
-                expandable={true}
-                renderExpanded={renderExpanded}
                 searchPlaceholder="Search by GRN or PO..."
               />
             </Card>
@@ -416,79 +358,120 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       </div>
 
       <Modal
-        show={showViewModal}
+        isOpen={showViewModal}
         onClose={() => setShowViewModal(false)}
         title={`Inspection Details - GRN-${String(selectedQC?.grn_id).padStart(4, '0')}`}
-        size="lg"
+        size="6xl"
       >
         {selectedQC && (
-          <div className="space-y-6">
+          <div className="space-y-8 p-2">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Status</p>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider border ${qcStatusColors[selectedQC.status]?.badge}`}>
+              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Status</p>
+                <span className={`inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-black tracking-wider border ${qcStatusColors[selectedQC.status]?.badge}`}>
                   {qcStatusColors[selectedQC.status]?.label || selectedQC.status}
                 </span>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">PO Number</p>
-                <p className="text-sm font-bold text-slate-900">{selectedQC.po_number || '—'}</p>
+              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">PO Number</p>
+                <p className="text-sm font-black text-slate-900">{selectedQC.po_number || '—'}</p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Pass Quantity</p>
-                <p className="text-sm font-bold text-emerald-600">{selectedQC.pass_quantity || selectedQC.accepted_quantity || 0}</p>
+              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1.5">Pass Quantity</p>
+                <p className="text-sm font-black text-emerald-600">{selectedQC.pass_quantity || selectedQC.accepted_quantity || 0}</p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Fail Quantity</p>
-                <p className="text-sm font-bold text-red-600">{selectedQC.fail_quantity || 0}</p>
+              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1.5">Fail Quantity</p>
+                <p className="text-sm font-black text-red-600">{selectedQC.fail_quantity || 0}</p>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <ListTodo className="w-4 h-4 text-indigo-600" />
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Items breakdown</h4>
-              </div>
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
-                    <tr>
-                      <th className="px-4 py-2.5 text-left">Item Code</th>
-                      <th className="px-4 py-2.5 text-right">Ordered</th>
-                      <th className="px-4 py-2.5 text-right">Received</th>
-                      <th className="px-4 py-2.5 text-right">Accepted</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {selectedQC.items_detail?.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-2.5 font-medium text-slate-900">{item.item_code}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-slate-500">{item.ordered_qty}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-blue-600">{item.received_qty}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-emerald-600 font-bold">{item.accepted_qty}</td>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+                    <ListTodo className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Items Verification</h4>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase">Item wise quality check results</p>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-[24px] border border-slate-100 overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/80">
+                      <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">
+                        <th className="px-6 py-4">Item Details</th>
+                        <th className="px-4 py-4">Warehouse</th>
+                        <th className="px-4 py-4 text-center">Design Qty</th>
+                        <th className="px-4 py-4 text-center">Received</th>
+                        <th className="px-4 py-4 text-center">Accepted</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {selectedQC.items_detail?.map((item, idx) => (
+                        <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
+                          <td className="px-6 py-4">
+                            <div className="font-black text-slate-900 text-xs">{item.item_code}</div>
+                            <div className="text-[10px] text-slate-500 font-bold uppercase mt-0.5 truncate max-w-[200px]">{item.material_name || item.description}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="text-[10px] font-black text-slate-500 uppercase bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                              {item.warehouse_name || '—'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-center font-black text-slate-400 text-xs">{parseFloat(item.ordered_qty || 0).toFixed(3)}</td>
+                          <td className="px-4 py-4 text-center font-black text-slate-600 text-xs">{parseFloat(item.received_qty || 0).toFixed(3)}</td>
+                          <td className="px-4 py-4 text-center font-black text-emerald-600 text-xs">{parseFloat(item.accepted_qty || 0).toFixed(3)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="p-5 bg-amber-50/50 rounded-3xl border border-amber-100/50 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Defects</h4>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium bg-white/50 p-4 rounded-2xl border border-amber-50">
+                    {selectedQC.defects || "No specific defects reported."}
+                  </p>
+                </div>
+
+                <div className="p-5 bg-blue-50/50 rounded-3xl border border-blue-100/50 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                      <Beaker className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Remarks</h4>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed italic font-medium bg-white/50 p-4 rounded-2xl border border-blue-50">
+                    "{selectedQC.remarks || 'Auto-created inspection record.'}"
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                <p className="text-[10px] font-bold text-amber-600 uppercase mb-2">Defects</p>
-                <p className="text-xs text-slate-700">{selectedQC.defects || "None reported."}</p>
-              </div>
-              <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                <p className="text-[10px] font-bold text-blue-600 uppercase mb-2">Remarks</p>
-                <p className="text-xs text-slate-700">{selectedQC.remarks || "No additional remarks."}</p>
-              </div>
+            <div className="flex justify-end pt-4 border-t border-slate-50">
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="px-8 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
+              >
+                Close Details
+              </button>
             </div>
           </div>
         )}
       </Modal>
 
       <Modal
-        show={showEditModal}
+        isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         title="Update QC Inspection"
       >

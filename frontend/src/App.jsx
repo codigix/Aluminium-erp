@@ -998,7 +998,6 @@ function App() {
     { label: 'Quality Assurance', isGroup: true, groupId: 'quality-group' },
     { label: 'Quality Dashboard', moduleId: 'quality-dashboard', icon: 'trending', indent: true },
     { label: 'Quality Control', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
-    { label: 'QC Inspections', moduleId: 'qc-inspections', icon: 'search', indent: true },
     { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
     { label: 'Quality Reports', moduleId: 'quality-reports', icon: 'files', indent: true },
     { label: 'Accounts', isGroup: true, groupId: 'accounts-group' },

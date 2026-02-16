@@ -1900,6 +1900,7 @@ const ensureQCInspectionsTable = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         qc_inspection_id INT NOT NULL,
         grn_item_id INT NOT NULL,
+        warehouse_id INT NULL,
         item_code VARCHAR(100),
         po_qty DECIMAL(12, 3) DEFAULT 0,
         received_qty DECIMAL(12, 3) DEFAULT 0,
@@ -1910,9 +1911,17 @@ const ensureQCInspectionsTable = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (qc_inspection_id) REFERENCES qc_inspections(id) ON DELETE CASCADE,
-        FOREIGN KEY (grn_item_id) REFERENCES grn_items(id) ON DELETE CASCADE
+        FOREIGN KEY (grn_item_id) REFERENCES grn_items(id) ON DELETE CASCADE,
+        FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL
       )
     `);
+
+    // Ensure warehouse_id column exists
+    const [cols] = await connection.query("SHOW COLUMNS FROM qc_inspection_items LIKE 'warehouse_id'");
+    if (cols.length === 0) {
+      await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN warehouse_id INT NULL AFTER grn_item_id");
+      await connection.query("ALTER TABLE qc_inspection_items ADD FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL");
+    }
     
     console.log('QC Inspections tables synchronized');
   } catch (error) {

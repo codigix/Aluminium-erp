@@ -139,7 +139,7 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
   return ledger;
 };
 
-const getStockBalance = async (drawingNo = null) => {
+const getStockBalance = async (drawingNo = null, includeAll = false) => {
   let query = `
     SELECT 
       MIN(id) as id,
@@ -169,9 +169,9 @@ const getStockBalance = async (drawingNo = null) => {
     params.push(drawingNo);
   }
 
-  // Filter out FG and Sub Assembly
-  if (drawingNo) {
-    query += " AND UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY') ";
+  // Filter out FG and Sub Assembly from general view, but show them if drawingNo is specified or includeAll is true
+  if (drawingNo || includeAll) {
+    // No additional type filter
   } else {
     query += " WHERE UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY') ";
   }

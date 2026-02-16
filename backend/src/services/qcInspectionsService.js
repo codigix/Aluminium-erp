@@ -31,14 +31,21 @@ const getQCWithDetails = async (qcId) => {
     
     const [qcItems] = await pool.query(
       `SELECT 
-        id,
-        item_code, 
-        po_qty, 
-        received_qty,
-        accepted_qty, 
-        rejected_qty, 
-        status 
-       FROM qc_inspection_items WHERE qc_inspection_id = ?`,
+        qci.id,
+        qci.item_code, 
+        qci.po_qty, 
+        qci.received_qty,
+        qci.accepted_qty, 
+        qci.rejected_qty, 
+        qci.status,
+        poi.material_name,
+        poi.description,
+        w.warehouse_name
+       FROM qc_inspection_items qci
+       LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
+       LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+       LEFT JOIN warehouses w ON qci.warehouse_id = w.id
+       WHERE qci.qc_inspection_id = ?`,
       [qcId]
     );
     
@@ -53,6 +60,9 @@ const getQCWithDetails = async (qcId) => {
     qc.items_detail = qcItems.map(item => ({
       id: item.id,
       item_code: item.item_code,
+      material_name: item.material_name,
+      description: item.description,
+      warehouse_name: item.warehouse_name,
       ordered_qty: parseFloat(item.po_qty) || 0,
       received_qty: parseFloat(item.received_qty) || 0,
       accepted_qty: parseFloat(item.accepted_qty) || 0,
@@ -90,7 +100,22 @@ const getAllQCs = async () => {
   const result = [];
   for (const qc of qcs) {
     const [qcItems] = await pool.query(
-      `SELECT id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status FROM qc_inspection_items WHERE qc_inspection_id = ?`,
+      `SELECT 
+        qci.id,
+        qci.item_code, 
+        qci.po_qty, 
+        qci.received_qty, 
+        qci.accepted_qty, 
+        qci.rejected_qty, 
+        qci.status,
+        poi.material_name,
+        poi.description,
+        w.warehouse_name
+       FROM qc_inspection_items qci 
+       LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
+       LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+       LEFT JOIN warehouses w ON qci.warehouse_id = w.id
+       WHERE qci.qc_inspection_id = ?`,
       [qc.id]
     );
     
@@ -106,6 +131,9 @@ const getAllQCs = async () => {
       items_detail: qcItems.map(item => ({
         id: item.id,
         item_code: item.item_code,
+        material_name: item.material_name,
+        description: item.description,
+        warehouse_name: item.warehouse_name,
         ordered_qty: parseFloat(item.po_qty) || 0,
         received_qty: parseFloat(item.received_qty) || 0,
         accepted_qty: parseFloat(item.accepted_qty) || 0,
@@ -158,7 +186,8 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
         gi.received_qty, 
         gi.accepted_qty, 
         gi.rejected_qty, 
-        gi.status 
+        gi.status,
+        gi.warehouse_id
        FROM grn_items gi
        LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
        WHERE gi.grn_id = ?`,
@@ -168,9 +197,9 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
     for (const item of grnItems) {
       await connection.execute(
         `INSERT INTO qc_inspection_items 
-         (qc_inspection_id, grn_item_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [qcId, item.id, item.item_code, item.po_qty, item.received_qty, item.accepted_qty, item.rejected_qty, 'PENDING']
+         (qc_inspection_id, grn_item_id, warehouse_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [qcId, item.id, item.warehouse_id, item.item_code, item.po_qty, item.received_qty, item.accepted_qty, item.rejected_qty, 'PENDING']
       );
     }
 
@@ -397,21 +426,27 @@ const updateQCItem = async (qcItemId, updates) => {
 const getQCItems = async (qcId) => {
   const [items] = await pool.query(
     `SELECT 
-      id,
-      qc_inspection_id,
-      grn_item_id,
-      item_code,
-      po_qty,
-      received_qty,
-      accepted_qty,
-      rejected_qty,
-      status,
-      remarks,
-      created_at,
-      updated_at
-    FROM qc_inspection_items 
-    WHERE qc_inspection_id = ?
-    ORDER BY created_at ASC`,
+      qci.id,
+      qci.qc_inspection_id,
+      qci.grn_item_id,
+      qci.item_code,
+      qci.po_qty,
+      qci.received_qty,
+      qci.accepted_qty,
+      qci.rejected_qty,
+      qci.status,
+      qci.remarks,
+      qci.created_at,
+      qci.updated_at,
+      poi.material_name,
+      poi.description,
+      w.warehouse_name
+    FROM qc_inspection_items qci
+    LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
+    LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+    LEFT JOIN warehouses w ON qci.warehouse_id = w.id
+    WHERE qci.qc_inspection_id = ?
+    ORDER BY qci.created_at ASC`,
     [qcId]
   );
 

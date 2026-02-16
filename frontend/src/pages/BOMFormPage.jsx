@@ -501,8 +501,8 @@ const BOMFormPage = () => {
       if (showLoading) setLoading(true);
       const token = localStorage.getItem('authToken');
 
-      // Fetch Stock Items (Raw Materials) FIRST so we have latest rates
-      const stockResponse = await fetch(`${API_BASE}/stock/balance`, {
+      // Fetch Stock Items (Raw Materials and Producible items like FG/SFG)
+      const stockResponse = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       let latestStockItems = [];
@@ -1234,7 +1234,14 @@ const BOMFormPage = () => {
                         })
                       ].filter(opt => {
                         const group = (opt.item_group || '').toLowerCase();
-                        const isFinishedOrSub = group.includes('finished') || group.includes('sub') || group.includes('assembly') || group === 'fg' || group === 'sfg';
+                        const isFinishedOrSub = group.includes('finished') || 
+                                              group.includes('sub') || 
+                                              group.includes('assembly') || 
+                                              group === 'fg' || 
+                                              group === 'sfg' ||
+                                              group === 'sub-assembly' ||
+                                              group === 'semi finished' ||
+                                              group === 'semi-finished';
 
                         if (drawingFilter) {
                           const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
@@ -1305,7 +1312,14 @@ const BOMFormPage = () => {
                         })
                       ].filter(opt => {
                         const group = (opt.item_group || '').toLowerCase();
-                        const isFinishedOrSub = group.includes('finished') || group.includes('sub') || group.includes('assembly') || group === 'fg' || group === 'sfg';
+                        const isFinishedOrSub = group.includes('finished') || 
+                                              group.includes('sub') || 
+                                              group.includes('assembly') || 
+                                              group === 'fg' || 
+                                              group === 'sfg' ||
+                                              group === 'sub-assembly' ||
+                                              group === 'semi finished' ||
+                                              group === 'semi-finished';
 
                         if (drawingFilter) {
                           const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');

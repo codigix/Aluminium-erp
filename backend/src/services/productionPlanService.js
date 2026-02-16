@@ -626,7 +626,7 @@ const getSalesOrderFullDetails = async (id) => {
      FROM (
        SELECT *, ROW_NUMBER() OVER (PARTITION BY sales_order_id, drawing_no ORDER BY id DESC) as rn
        FROM sales_order_items
-       WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG'))
+       WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'Assembly'))
      ) soi
      LEFT JOIN (
        SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty

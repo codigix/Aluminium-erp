@@ -145,7 +145,7 @@ const getDesignOrderItemsBySalesOrder = async (salesOrderId) => {
       LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
            AND soi.item_code = poi.item_code 
            AND (soi.drawing_no = poi.drawing_no OR (soi.drawing_no IS NULL AND poi.drawing_no IS NULL))
-      WHERE soi.sales_order_id = ? AND (soi.item_type IN ('FG', 'SFG'))
+      WHERE soi.sales_order_id = ? AND (soi.item_type IN ('FG', 'SFG', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'Assembly'))
     `, [salesOrderId]);
   }
   return rows;

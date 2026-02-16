@@ -472,7 +472,7 @@ const ProductionPlan = () => {
         if (boms.length === 1) {
           const singleBomId = boms[0].id.toString();
           setSelectedBomId(singleBomId);
-          handleBomSelect(singleBomId);
+          handleBomSelect(singleBomId, boms, designData);
         }
       }
     } catch (error) {
@@ -481,7 +481,7 @@ const ProductionPlan = () => {
     }
   };
 
-  const handleBomSelect = (bomId) => {
+  const handleBomSelect = (bomId, itemsOverride = null, designItemsOverride = null) => {
     setSelectedBomId(bomId);
     setIsViewing(false);
     if (!bomId) {
@@ -491,12 +491,13 @@ const ProductionPlan = () => {
 
     // When a BOM is selected, find the item in designOrderItems or selectedOrderDetails and select it
     // The user wants STRICT behavior: only this item should be in the plan
-    const itemsToSearch = selectedOrderDetails?.items || readyItems;
+    const itemsToSearch = itemsOverride || selectedOrderDetails?.items || readyItems;
     const itemInReady = itemsToSearch.find(item => (item.id || item.sales_order_item_id).toString() === bomId.toString());
     
     if (itemInReady) {
+      const designItemsToSearch = designItemsOverride || designOrderItems;
       // Find matching design order item to get quantity
-      const designItem = designOrderItems.find(d => 
+      const designItem = designItemsToSearch.find(d => 
         String(d.item_code).trim() === String(itemInReady.item_code).trim() && 
         (String(d.drawing_no || '').trim() === String(itemInReady.drawing_no || '').trim())
       );
