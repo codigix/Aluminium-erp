@@ -1446,7 +1446,7 @@ const DesignOrders = () => {
                       <div className="p-5 bg-slate-50/50">
                         {viewMode === 'grid' ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                            {group.orders.map((order) => (
+                            {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order) => (
                               <div key={`${order.id}-${order.item_id}`} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col h-full">
                                 {/* Card Header */}
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-start gap-3 bg-slate-50/30">
@@ -1556,7 +1556,7 @@ const DesignOrders = () => {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
-                                {group.orders.map((order) => (
+                                {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order) => (
                                   <tr key={`${order.id}-${order.item_id}`} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-4 py-3">
                                       <div className="flex flex-col">

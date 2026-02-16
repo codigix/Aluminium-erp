@@ -306,18 +306,19 @@ const BOMFormPage = () => {
     stockItems.forEach(item => {
       if (!isComponentType(item.material_type)) return;
 
+      const isSA = (item.item_code || "").startsWith("SA-");
       if (!showAllDrawings) {
-        if (productDrawing && item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== productDrawing) return;
+        if (productDrawing && item.drawing_no !== productDrawing) return;
+        if (productForm.itemGroup === "FG" && !isSA) return;
       }
 
-      if (item.item_code === currentItemCode) return; // Skip self
+      if (currentItemCode && item.item_code === currentItemCode) return; // Skip self by code
 
       if (!seenCodes.has(item.item_code)) {
         // Find if this item has an approved BOM cost
         const bomInfo = approvedBOMs.find(b => b.item_code === item.item_code);
         const bomCost = bomInfo ? parseFloat(bomInfo.bom_cost) : 0;
 
-        const isSA = (item.item_code || '').startsWith('SA-');
         options.push({
           label: isSA ? `${item.material_name}${bomCost > 0 ? ` | ₹${Math.round(bomCost)}` : ''}` : `${item.item_code} - ${item.material_name}`,
           value: item.item_code,
@@ -336,8 +337,10 @@ const BOMFormPage = () => {
       // and match the drawing center philosophy
       if (item.item_code === currentItemCode) return; // Skip self
 
+      const isSA = (item.item_code || "").startsWith("SA-");
       if (!showAllDrawings) {
-        if (productDrawing && item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== productDrawing) return;
+        if (productDrawing && item.drawing_no !== productDrawing) return;
+        if (productForm.itemGroup === "FG" && !isSA) return;
       }
 
       if (!seenCodes.has(item.item_code)) {
@@ -345,7 +348,6 @@ const BOMFormPage = () => {
         const bomInfo = approvedBOMs.find(b => b.item_code === item.item_code || (b.drawing_no === item.drawing_no && b.drawing_no !== 'N/A'));
         const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? parseFloat(bomInfo.bom_cost) : 0);
 
-        const isSA = (item.item_code || '').startsWith('SA-');
         options.push({
           label: isSA ? `${item.description || item.material_name}${bomCost > 0 ? ` | ₹${Math.round(bomCost)}` : ''}` : `${item.item_code} - ${item.description || item.material_name}`,
           value: item.item_code,
@@ -359,7 +361,7 @@ const BOMFormPage = () => {
     });
 
     return options.sort((a, b) => a.label.localeCompare(b.label));
-  }, [stockItems, approvedDrawings, approvedBOMs, showAllDrawings, selectedItem, productForm.itemCode, productForm.drawingNo]);
+  }, [stockItems, approvedDrawings, approvedBOMs, showAllDrawings, selectedItem, productForm.itemCode, productForm.drawingNo, productForm.itemGroup]);
 
   const location = useLocation();
 

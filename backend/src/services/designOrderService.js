@@ -21,6 +21,7 @@ const listDesignOrders = async () => {
       soi.description,
       soi.status as item_status,
       soi.rejection_reason as item_rejection_reason,
+      soi.item_type,
       COALESCE(
         poi.quantity, 
         (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
