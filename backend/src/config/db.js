@@ -35,14 +35,14 @@ const ensureJobCardColumns = async () => {
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
-    if (!missing.length) return;
+    if (missing.length > 0) {
+      const alterSql = `ALTER TABLE job_cards ${missing
+        .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+        .join(', ')};`;
 
-    const alterSql = `ALTER TABLE job_cards ${missing
-      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
-      .join(', ')};`;
-
-    await connection.query(alterSql);
-    console.log('Job Card columns synchronized');
+      await connection.query(alterSql);
+      console.log('Job Card columns synchronized');
+    }
 
     // Create detailed logging tables
     await connection.query(`
@@ -1781,6 +1781,8 @@ const ensureStockEntryTables = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         stock_entry_id INT NOT NULL,
         item_code VARCHAR(100) NOT NULL,
+        material_name VARCHAR(255),
+        material_type VARCHAR(100),
         quantity DECIMAL(12, 3) NOT NULL,
         uom VARCHAR(20),
         batch_no VARCHAR(100),
@@ -1789,6 +1791,17 @@ const ensureStockEntryTables = async () => {
         FOREIGN KEY (stock_entry_id) REFERENCES stock_entries(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure material_name and material_type columns exist
+    const [seItemsCols] = await connection.query("SHOW COLUMNS FROM stock_entry_items");
+    const existingSeItemsCols = new Set(seItemsCols.map(c => c.Field));
+    
+    if (!existingSeItemsCols.has('material_name')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN material_name VARCHAR(255) AFTER item_code");
+    }
+    if (!existingSeItemsCols.has('material_type')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN material_type VARCHAR(100) AFTER material_name");
+    }
     console.log('Stock Entry tables synchronized');
   } catch (error) {
     console.error('Stock Entry table sync failed', error.message);
@@ -1894,6 +1907,13 @@ const ensureQCInspectionsTable = async () => {
       )
     `);
 
+    // Ensure invoice_url column exists in qc_inspections
+    const [qcCols] = await connection.query("SHOW COLUMNS FROM qc_inspections LIKE 'invoice_url'");
+    if (qcCols.length === 0) {
+      await connection.query("ALTER TABLE qc_inspections ADD COLUMN invoice_url VARCHAR(255) NULL AFTER remarks");
+      console.log('QC Inspections invoice_url column added');
+    }
+
     // Create qc_inspection_items table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS qc_inspection_items (
@@ -1921,6 +1941,13 @@ const ensureQCInspectionsTable = async () => {
     if (cols.length === 0) {
       await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN warehouse_id INT NULL AFTER grn_item_id");
       await connection.query("ALTER TABLE qc_inspection_items ADD FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL");
+    }
+
+    // Ensure remarks column exists in qc_inspection_items
+    const [itemRemarksCol] = await connection.query("SHOW COLUMNS FROM qc_inspection_items LIKE 'remarks'");
+    if (itemRemarksCol.length === 0) {
+      await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN remarks TEXT AFTER status");
+      console.log('QC Inspection items remarks column added');
     }
     
     console.log('QC Inspections tables synchronized');

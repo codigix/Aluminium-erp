@@ -298,7 +298,9 @@ const QCInspections = () => {
       className: 'text-right',
       render: (val, row) => (
         <div className="flex flex-col items-end">
-          <span className="text-emerald-600 ">{val || row.accepted_quantity || 0}</span>
+          <span className="text-emerald-600 ">
+            {row.status === 'PENDING' ? 'Pending' : (val || row.accepted_quantity || 0)}
+          </span>
           <span className="text-red-500 text-[10px] ">Fail: {row.fail_quantity || 0}</span>
         </div>
       )
@@ -379,7 +381,9 @@ const QCInspections = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
               <p className="text-[10px]  text-slate-400 tracking-wider  mb-1">Pass Quantity</p>
-              <p className="text-sm  text-emerald-600">{qc.pass_quantity || qc.accepted_quantity || 0}</p>
+              <p className="text-sm  text-emerald-600">
+                {qc.status === 'PENDING' ? 'Pending' : (qc.pass_quantity || qc.accepted_quantity || 0)}
+              </p>
             </div>
             <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
               <p className="text-[10px]  text-slate-400 tracking-wider  mb-1">Fail Quantity</p>
@@ -671,8 +675,8 @@ const QCInspections = () => {
 
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 <StatMiniCard label="Items Ordered" value={selectedQC.items || 0} icon={ListTodo} colorClass="bg-blue-50 text-blue-600" />
-                <StatMiniCard label="Accepted" value={selectedQC.accepted_quantity || 0} icon={CheckCircle} colorClass="bg-emerald-50 text-emerald-600" />
-                <StatMiniCard label="Pass Qty" value={selectedQC.pass_quantity || 0} icon={CheckCircle} colorClass="bg-indigo-50 text-indigo-600" />
+                <StatMiniCard label="Accepted" value={selectedQC.status === 'PENDING' ? 'Pending' : (selectedQC.accepted_quantity || 0)} icon={CheckCircle} colorClass="bg-emerald-50 text-emerald-600" />
+                <StatMiniCard label="Pass Qty" value={selectedQC.status === 'PENDING' ? 'Pending' : (selectedQC.pass_quantity || 0)} icon={CheckCircle} colorClass="bg-indigo-50 text-indigo-600" />
                 <StatMiniCard label="Fail Qty" value={selectedQC.fail_quantity || 0} icon={XCircle} colorClass="bg-red-50 text-red-600" />
                 <StatMiniCard label="Shortage" value={selectedQC.shortage || 0} icon={AlertTriangle} colorClass="bg-orange-50 text-orange-600" />
               </div>

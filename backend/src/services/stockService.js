@@ -302,17 +302,22 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Get existing balance for this item and warehouse
     let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection);
 
-    // If not found for this specific warehouse, try to find the "master" entry
-    if (!existingBalance) {
-      const [masterRows] = await useConnection.query(
-        'SELECT * FROM stock_balance WHERE item_code = ? LIMIT 1',
+    // If not found for this specific warehouse, check if a "Master/Generic" entry exists (item with no warehouse)
+    // and we should probably use that or update it if this is the first movement.
+    if (!existingBalance && warehouse) {
+      const [genericBalance] = await useConnection.query(
+        'SELECT * FROM stock_balance WHERE item_code = ? AND (warehouse IS NULL OR warehouse = "") LIMIT 1',
         [itemCode]
       );
-      if (masterRows.length > 0) {
-        const master = masterRows[0];
-        if (!options.materialName) options.materialName = master.material_name;
-        if (!options.materialType) options.materialType = master.material_type;
-        if (!options.unit) options.unit = master.unit;
+      if (genericBalance.length > 0) {
+        existingBalance = genericBalance[0];
+        // If the generic record has 0 balance, we can "adopt" it for this warehouse
+        if (parseFloat(existingBalance.current_balance) === 0) {
+          await useConnection.execute(
+            'UPDATE stock_balance SET warehouse = ? WHERE id = ?',
+            [warehouse, existingBalance.id]
+          );
+        }
       }
     }
 
@@ -390,30 +395,28 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Update the ledger entry with the correct balance_after
     await useConnection.execute('UPDATE stock_ledger SET balance_after = ? WHERE id = ?', [newBalance, ledgerId]);
 
-    // IMPORTANT: Update or insert into stock_balance
-    // We always want to update the "Master" record if it exists, or the specific warehouse one.
-    let balanceToUpdate = existingBalance;
-    if (!balanceToUpdate) {
-      const [anyBalance] = await useConnection.query('SELECT * FROM stock_balance WHERE item_code = ? LIMIT 1', [itemCode]);
-      if (anyBalance.length > 0) balanceToUpdate = anyBalance[0];
-    }
-
-    if (balanceToUpdate) {
-      await useConnection.execute(`
-        UPDATE stock_balance 
-        SET current_balance = current_balance + ?, 
-            material_name = COALESCE(?, material_name), 
-            material_type = COALESCE(?, material_type), 
-            last_updated = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [qtyIn - qtyOut, matName, matType, balanceToUpdate.id]);
-    } else {
-      await useConnection.execute(`
-        INSERT INTO stock_balance 
-        (item_code, current_balance, material_name, material_type, warehouse, unit)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [itemCode, qtyIn - qtyOut, matName, matType, warehouse, options.unit || 'NOS']);
-    }
+    // Use Upsert (INSERT ... ON DUPLICATE KEY UPDATE) for reliability
+    // This handles both new warehouse records and updates to existing ones
+    await useConnection.execute(`
+      INSERT INTO stock_balance 
+      (item_code, material_name, material_type, warehouse, unit, current_balance, valuation_rate, item_description, last_updated)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON DUPLICATE KEY UPDATE 
+        current_balance = VALUES(current_balance),
+        material_name = COALESCE(VALUES(material_name), material_name),
+        material_type = COALESCE(VALUES(material_type), material_type),
+        valuation_rate = CASE WHEN VALUES(valuation_rate) > 0 THEN VALUES(valuation_rate) ELSE valuation_rate END,
+        last_updated = CURRENT_TIMESTAMP
+    `, [
+      itemCode, 
+      matName, 
+      matType, 
+      warehouse, 
+      options.unit || existingBalance?.unit || 'NOS', 
+      newBalance, // We use the absolute balance from ledger
+      valuationRate,
+      options.remarks || options.description || existingBalance?.item_description || null
+    ]);
 
     if (shouldRelease) {
       await useConnection.commit();

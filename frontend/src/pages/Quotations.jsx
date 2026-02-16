@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, DataTable, Modal, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { Eye } from 'lucide-react';
@@ -41,6 +42,7 @@ const daysValid = (validUntil) => {
 };
 
 const Quotations = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('sent');
   const [quotations, setQuotations] = useState([]);
   const [stats, setStats] = useState(null);

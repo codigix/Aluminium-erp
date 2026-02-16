@@ -1,5 +1,8 @@
 const pool = require('../config/db');
 const stockService = require('./stockService');
+const emailService = require('./emailService');
+const puppeteer = require('puppeteer');
+const mustache = require('mustache');
 
 const getQCWithDetails = async (qcId) => {
   const [qcs] = await pool.query(
@@ -12,12 +15,14 @@ const getQCWithDetails = async (qcId) => {
       qc.status,
       qc.defects,
       qc.remarks,
+      qc.invoice_url,
       qc.created_at,
       qc.updated_at,
       g.po_number,
       po.id AS po_id,
       po.vendor_id,
-      v.vendor_name AS vendor_name
+      v.vendor_name AS vendor_name,
+      v.email AS vendor_email
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
@@ -85,11 +90,13 @@ const getAllQCs = async () => {
       qc.status,
       qc.defects,
       qc.remarks,
+      qc.invoice_url,
       qc.created_at,
       qc.updated_at,
       g.po_number,
       po.vendor_id,
-      v.vendor_name AS vendor_name
+      v.vendor_name AS vendor_name,
+      v.email AS vendor_email
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
@@ -528,6 +535,263 @@ const getQCStats = async () => {
   };
 };
 
+const sendQCAlertEmail = async (qcId, emailData) => {
+  const { to, subject, message, attachPDF } = emailData;
+
+  const qc = await getQCWithDetails(qcId);
+
+  if (!to || !subject || !message) {
+    throw new Error('Email recipient, subject, and message are required');
+  }
+
+  try {
+    let attachments = [];
+    if (attachPDF) {
+      const pdfBuffer = await generateQCInspectionPDF(qcId);
+      attachments.push({
+        filename: `QC_Report_GRN-${String(qc.grn_id).padStart(4, '0')}.pdf`,
+        content: pdfBuffer
+      });
+    }
+
+    const emailResult = await emailService.sendEmail(to, subject, message, attachments);
+    
+    return {
+      id: qcId,
+      sent_to: to,
+      sent_at: new Date(),
+      message: emailResult.message,
+      messageId: emailResult.messageId
+    };
+  } catch (error) {
+    console.error(`[sendQCAlertEmail] Error: ${error.message}`);
+    throw error;
+  }
+};
+
+const generateQCInspectionPDF = async (qcId) => {
+  const qc = await getQCWithDetails(qcId);
+  if (!qc) throw new Error('QC Inspection not found');
+
+  const htmlTemplate = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
+        .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
+        .report-title { text-align: right; }
+        .report-title h2 { margin: 0; color: #64748b; font-size: 18px; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+        .section-label { font-weight: bold; color: #64748b; font-size: 12px; margin-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th { background: #f8fafc; color: #64748b; text-align: left; padding: 12px 8px; font-size: 11px; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+        .status-passed { background: #ecfdf5; color: #059669; border: 1px solid #10b981; }
+        .status-failed { background: #fef2f2; color: #dc2626; border: 1px solid #ef4444; }
+        .status-pending { background: #fffbeb; color: #d97706; border: 1px solid #f59e0b; }
+        .notes-section { background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #cbd5e1; margin-bottom: 20px; }
+        .footer { margin-top: 50px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="company-info">
+          <h1>SPTECHPIONEER PVT LTD</h1>
+          <p>Industrial Area, Sector 5<br>Pune, Maharashtra - 411026</p>
+        </div>
+        <div class="report-title">
+          <h2>QC Inspection Report</h2>
+          <p><strong>GRN No:</strong> GRN-{{grn_padded}}<br>
+          <strong>PO No:</strong> {{po_number}}<br>
+          <strong>Date:</strong> {{inspection_date}}</p>
+        </div>
+      </div>
+
+      <div class="details-grid">
+        <div>
+          <div class="section-label">Vendor Information</div>
+          <p><strong>{{vendor_name}}</strong><br>
+          Email: {{vendor_email}}</p>
+        </div>
+        <div style="text-align: right;">
+          <div class="section-label">Inspection Status</div>
+          <span class="status-badge status-{{status_lower}}">{{status}}</span>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Item Details</th>
+            <th style="text-align: center">Ordered</th>
+            <th style="text-align: center">Received</th>
+            <th style="text-align: center">Accepted</th>
+            <th style="text-align: center">Rejected</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#items_detail}}
+          <tr>
+            <td>
+              <strong>{{material_name}}</strong><br>
+              <span style="font-size: 10px; color: #64748b">{{item_code}}</span>
+            </td>
+            <td style="text-align: center">{{ordered_qty}}</td>
+            <td style="text-align: center">{{received_qty}}</td>
+            <td style="text-align: center; color: #059669; font-weight: bold">{{accepted_qty}}</td>
+            <td style="text-align: center; color: #dc2626">{{rejected_qty}}</td>
+            <td>{{remarks}}</td>
+          </tr>
+          {{/items_detail}}
+          {{^items_detail}}
+          <tr>
+            <td colspan="6" style="text-align: center; padding: 20px; color: #64748b; font-style: italic;">
+              No shortages or overages detected in this inspection.
+            </td>
+          </tr>
+          {{/items_detail}}
+        </tbody>
+      </table>
+
+      {{#defects}}
+      <div class="notes-section">
+        <div class="section-label">Reported Defects</div>
+        <p>{{defects}}</p>
+      </div>
+      {{/defects}}
+
+      {{#remarks}}
+      <div class="notes-section">
+        <div class="section-label">Overall Remarks</div>
+        <p>{{remarks}}</p>
+      </div>
+      {{/remarks}}
+
+      <div class="footer">
+        <p>This is a computer-generated Quality Control report. No signature is required.<br>
+        SPTECHPIONEER PVT LTD | Quality Assurance Department</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const viewData = {
+    ...qc,
+    grn_padded: String(qc.grn_id).padStart(4, '0'),
+    inspection_date: formatDate(qc.inspection_date),
+    status_lower: qc.status?.toLowerCase(),
+    items_detail: (qc.items_detail || [])
+      .filter(i => {
+        const ordered = parseFloat(i.ordered_qty) || 0;
+        const accepted = parseFloat(i.accepted_qty) || 0;
+        const rejected = parseFloat(i.rejected_qty) || 0;
+        return Math.abs(ordered - accepted) > 0.001 || rejected > 0.001;
+      })
+      .map(i => ({
+        ...i,
+        ordered_qty: parseFloat(i.ordered_qty || 0).toFixed(3),
+        received_qty: parseFloat(i.received_qty || 0).toFixed(3),
+        accepted_qty: parseFloat(i.accepted_qty || 0).toFixed(3),
+        rejected_qty: parseFloat(i.rejected_qty || 0).toFixed(3),
+        remarks: i.remarks || '—'
+      }))
+  };
+
+  const html = mustache.render(htmlTemplate, viewData);
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({ 
+    format: 'A4', 
+    printBackground: true,
+    margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+  });
+  await browser.close();
+
+  return pdf;
+};
+
+const updateQCInvoice = async (qcId, invoiceUrl) => {
+  const [result] = await pool.execute(
+    'UPDATE qc_inspections SET invoice_url = ? WHERE id = ?',
+    [invoiceUrl, qcId]
+  );
+  if (result.affectedRows === 0) throw new Error('QC Inspection not found');
+  return { id: qcId, invoice_url: invoiceUrl };
+};
+
+const getRejectedItems = async () => {
+  const [items] = await pool.query(
+    `(SELECT 
+      CONCAT('GRN-', qci.id) as id,
+      qci.item_code,
+      CASE 
+        WHEN COALESCE(qci.accepted_qty, 0) > COALESCE(qci.po_qty, 0) THEN qci.accepted_qty - qci.po_qty
+        ELSE GREATEST(COALESCE(qci.rejected_qty, 0), CASE WHEN COALESCE(qci.po_qty, 0) > COALESCE(qci.accepted_qty, 0) THEN qci.po_qty - qci.accepted_qty ELSE 0 END)
+      END as rejected_qty,
+      CASE 
+        WHEN qci.status != 'PENDING' AND qci.status IS NOT NULL THEN qci.status
+        WHEN COALESCE(qci.accepted_qty, 0) > COALESCE(qci.po_qty, 0) THEN 'OVERAGE'
+        WHEN COALESCE(qci.po_qty, 0) > COALESCE(qci.accepted_qty, 0) THEN 'SHORTAGE'
+        ELSE 'REJECTED'
+      END as item_status,
+      qci.remarks as item_remarks,
+      qc.inspection_date as date,
+      g.po_number as po_number,
+      qc.grn_id as ref_id,
+      'GRN' as ref_type,
+      v.vendor_name as source_name,
+      poi.material_name as material_name
+    FROM qc_inspection_items qci
+    JOIN qc_inspections qc ON qci.qc_inspection_id = qc.id
+    LEFT JOIN grns g ON qc.grn_id = g.id
+    LEFT JOIN purchase_orders po ON g.po_number = po.po_number
+    LEFT JOIN vendors v ON po.vendor_id = v.id
+    LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
+    LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+    WHERE COALESCE(qci.rejected_qty, 0) > 0 OR COALESCE(qci.po_qty, 0) > COALESCE(qci.accepted_qty, 0) OR COALESCE(qci.accepted_qty, 0) > COALESCE(qci.po_qty, 0))
+    
+    UNION ALL
+    
+    (SELECT 
+      CONCAT('JC-', ql.id) as id,
+      wo.item_code as item_code,
+      ql.rejected_qty,
+      ql.status as item_status,
+      ql.rejection_reason as item_remarks,
+      ql.check_date as date,
+      wo.wo_number as po_number,
+      jc.id as ref_id,
+      'JOB_CARD' as ref_type,
+      CONCAT('Op: ', COALESCE(o.operation_name, jc.operation_name)) as source_name,
+      wo.item_name as material_name
+    FROM job_card_quality_logs ql
+    JOIN job_cards jc ON ql.job_card_id = jc.id
+    JOIN work_orders wo ON jc.work_order_id = wo.id
+    LEFT JOIN operations o ON jc.operation_id = o.id
+    WHERE ql.rejected_qty > 0)
+    
+    ORDER BY date DESC`
+  );
+  
+  return items.map(item => ({
+    ...item,
+    reference_number: item.ref_type === 'GRN' 
+      ? `GRN-${String(item.ref_id).padStart(4, '0')}` 
+      : `JC-${String(item.ref_id).padStart(4, '0')}`
+  }));
+};
+
 module.exports = {
   getQCWithDetails,
   getAllQCs,
@@ -536,5 +800,8 @@ module.exports = {
   updateQCItem,
   getQCItems,
   deleteQC,
-  getQCStats
+  getQCStats,
+  sendQCAlertEmail,
+  updateQCInvoice,
+  getRejectedItems
 };

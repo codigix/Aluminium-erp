@@ -155,17 +155,6 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       }
     }
 
-    // Auto-create Stock Entry from GRN
-    try {
-      // Pass the connection to ensure it's part of the same transaction
-      const stockResult = await stockEntryService.autoCreateStockEntryFromGRN(grnId, userId, connection);
-      if (stockResult.success) {
-        console.log(`[PO Receipt] Auto-created stock entry ${stockResult.entryNo} for GRN: ${grnId}`);
-      }
-    } catch (stockError) {
-      console.error('[PO Receipt] Stock entry auto-creation failed:', stockError.message);
-    }
-
     // Auto-create QC record
     try {
       await qcInspectionsService.createQC(

@@ -148,8 +148,8 @@ const QualityControl = () => {
     }
   };
 
-  const handleViewDetails = async (id, type) => {
-    setDetailModal({ open: true, data: null, type, loading: true });
+  const handleViewDetails = async (id, type, status) => {
+    setDetailModal({ open: true, data: null, type, status, loading: true });
     try {
       const token = localStorage.getItem('authToken');
       const endpoint = type === 'grn' ? `${API_BASE}/grn-items/${id}/details` : `${API_BASE}/qc-inspections/${id}/items`;
@@ -378,7 +378,7 @@ const QualityControl = () => {
                         <td className="p-2 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
-                              onClick={() => handleViewDetails(grn.id, 'grn')}
+                              onClick={() => handleViewDetails(grn.id, 'grn', grn.status)}
                               className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                               title="View Details"
                             >
@@ -401,8 +401,8 @@ const QualityControl = () => {
                           GRN-{String(qc.grnId).padStart(4, '0')}
                         </td>
                         <td className="p-2 text-slate-500">{formatDate(qc.inspectionDate)}</td>
-                        <td className="p-2 text-right font-mono  text-emerald-600">{qc.passQuantity}</td>
-                        <td className="p-2 text-right font-mono  text-red-600">{qc.failQuantity || 0}</td>
+                        <td className="p-2 text-right font-mono  text-emerald-600">{qc.status === 'PENDING' ? 'Pending' : (qc.passQuantity || 0)}</td>
+                        <td className="p-2 text-right font-mono  text-red-600">{qc.status === 'PENDING' ? 'Pending' : (qc.failQuantity || 0)}</td>
                         <td className="p-2">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px]   tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
                             {qcStatusColors[qc.status]?.label || qc.status}
@@ -411,7 +411,7 @@ const QualityControl = () => {
                         <td className="p-2 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
-                              onClick={() => handleViewDetails(qc.id, 'qc')}
+                              onClick={() => handleViewDetails(qc.id, 'qc', qc.status)}
                               className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                               title="View Details"
                             >
@@ -753,7 +753,9 @@ const QualityControl = () => {
                           <td className="p-2 text-slate-600">{item.description || item.item_description || 'N/A'}</td>
                           <td className="p-2 text-right">{item.po_qty || item.ordered_qty || 0}</td>
                           <td className="p-2 text-right">{item.received_qty || 0}</td>
-                          <td className="p-2 text-right font-semibold text-emerald-600">{item.accepted_qty || 0}</td>
+                          <td className="p-2 text-right font-semibold text-emerald-600">
+                            {detailModal.status === 'PENDING' ? 'Pending' : (item.accepted_qty || 0)}
+                          </td>
                           <td className="p-2 text-center">
                             <button 
                               onClick={() => setPreviewDrawing({

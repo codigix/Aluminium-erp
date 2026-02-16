@@ -117,11 +117,13 @@ const createStockEntry = async (data, userId) => {
       for (const item of data.items) {
         await connection.execute(
           `INSERT INTO stock_entry_items 
-           (stock_entry_id, item_code, quantity, uom, batch_no, valuation_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (stock_entry_id, item_code, material_name, material_type, quantity, uom, batch_no, valuation_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             entryId,
             item.itemCode,
+            item.materialName || null,
+            item.materialType || null,
             item.quantity,
             item.uom || null,
             item.batchNo || null,
@@ -191,7 +193,17 @@ const processStockMovement = async (entryId, connection, userId) => {
 
   for (const item of items) {
     console.log(`[StockMovement] Item: ${item.item_code}, Qty: ${item.quantity}, Type: ${entry.entry_type}`);
+    const ledgerOptions = { 
+      connection, 
+      warehouse: toWarehouseName || fromWarehouseName, 
+      valuationRate: item.valuation_rate,
+      materialName: item.material_name,
+      materialType: item.material_type,
+      unit: item.uom
+    };
+
     if (entry.entry_type === 'Material Receipt') {
+      ledgerOptions.warehouse = toWarehouseName;
       await stockService.addStockLedgerEntry(
         item.item_code,
         'IN',
@@ -201,9 +213,10 @@ const processStockMovement = async (entryId, connection, userId) => {
         entry.entry_no,
         `Receipt into ${toWarehouseName || 'Warehouse'}. ${entry.remarks || ''}`,
         userId,
-        { connection, warehouse: toWarehouseName, valuationRate: item.valuation_rate }
+        ledgerOptions
       );
     } else if (entry.entry_type === 'Material Issue') {
+      ledgerOptions.warehouse = fromWarehouseName;
       await stockService.addStockLedgerEntry(
         item.item_code,
         'OUT',
@@ -213,10 +226,11 @@ const processStockMovement = async (entryId, connection, userId) => {
         entry.entry_no,
         `Issue from ${fromWarehouseName || 'Warehouse'}. ${entry.remarks || ''}`,
         userId,
-        { warehouse: fromWarehouseName, valuationRate: item.valuation_rate }
+        ledgerOptions
       );
     } else if (entry.entry_type === 'Material Transfer') {
       // OUT from source
+      const outOptions = { ...ledgerOptions, warehouse: fromWarehouseName };
       await stockService.addStockLedgerEntry(
         item.item_code,
         'OUT',
@@ -226,9 +240,10 @@ const processStockMovement = async (entryId, connection, userId) => {
         entry.entry_no,
         `Transfer from ${fromWarehouseName} to ${toWarehouseName}`,
         userId,
-        { warehouse: fromWarehouseName, valuationRate: item.valuation_rate }
+        outOptions
       );
       // IN to destination
+      const inOptions = { ...ledgerOptions, warehouse: toWarehouseName };
       await stockService.addStockLedgerEntry(
         item.item_code,
         'IN',
@@ -238,7 +253,7 @@ const processStockMovement = async (entryId, connection, userId) => {
         entry.entry_no,
         `Transfer from ${fromWarehouseName} to ${toWarehouseName}`,
         userId,
-        { warehouse: toWarehouseName, valuationRate: item.valuation_rate }
+        inOptions
       );
     } else if (entry.entry_type === 'Material Adjustment') {
       const type = item.quantity >= 0 ? 'IN' : 'OUT';
@@ -251,7 +266,7 @@ const processStockMovement = async (entryId, connection, userId) => {
         entry.entry_no,
         `Adjustment in ${fromWarehouseName || toWarehouseName || 'Warehouse'}. ${entry.remarks || ''}`,
         userId,
-        { warehouse: fromWarehouseName || toWarehouseName, valuationRate: item.valuation_rate }
+        ledgerOptions
       );
     }
   }
@@ -294,17 +309,38 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
   const [items] = await executor.query(`
     SELECT 
       poi.item_code,
+      gi.id as grn_item_id,
       gi.accepted_qty as quantity,
-      poi.unit as uom,
-      poi.unit_rate as valuation_rate,
-      poi.material_type
+      COALESCE(poi.unit, 'NOS') as uom,
+      COALESCE(poi.unit_rate, 0) as valuation_rate,
+      poi.material_type,
+      poi.material_name
     FROM grn_items gi
-    JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+    LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
     WHERE gi.grn_id = ?
   `, [grnId]);
   
-  // Filter out FG and Sub Assembly
+  // For items without item_code, try to find them in stock_balance by name
+  for (const item of items) {
+    if (!item.item_code && item.material_name) {
+      const [sb] = await executor.query(
+        'SELECT item_code FROM stock_balance WHERE material_name = ? AND material_type = ? LIMIT 1',
+        [item.material_name, item.material_type]
+      );
+      if (sb.length > 0) {
+        item.item_code = sb[0].item_code;
+      } else {
+        // Fallback: Generate a code from the name if no code exists
+        item.item_code = item.material_name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15).toUpperCase() + '-' + item.grn_item_id;
+      }
+    } else if (!item.item_code) {
+      item.item_code = `ITEM-${item.grn_item_id}`;
+    }
+  }
+  
+  // Filter out items without item_code and filter by type
   return items.filter(item => {
+    if (!item.item_code) return false;
     const type = (item.material_type || '').toUpperCase();
     return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
   });
@@ -383,11 +419,13 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
     for (const item of items) {
       await connection.execute(
         `INSERT INTO stock_entry_items 
-         (stock_entry_id, item_code, quantity, uom, valuation_rate, amount)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+         (stock_entry_id, item_code, material_name, material_type, quantity, uom, valuation_rate, amount)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           entryId,
           item.item_code,
+          item.material_name || null,
+          item.material_type || null,
           item.quantity,
           item.uom || 'NOS',
           item.valuation_rate || 0,
