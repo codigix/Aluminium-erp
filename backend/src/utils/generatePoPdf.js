@@ -4,7 +4,7 @@ const path = require('path');
 const mustache = require('mustache');
 
 const generatePoPdf = async (data) => {
-  const { type = 'receipt', receipt, po, items = [] } = data;
+  const { type = 'receipt', receipt, po, grn, items = [] } = data;
   
   try {
     const templatePath = path.join(__dirname, '../../templates/po-receipt.html');
@@ -35,17 +35,32 @@ const generatePoPdf = async (data) => {
       logoPath: path.join(__dirname, '../../assets/logo.png'),
       isReceipt: type === 'receipt',
       isPO: type === 'po',
+      isGRN: type === 'grn',
       items: items.map((item, idx) => ({
         sr: idx + 1,
         itemCode: item.item_code || item.itemCode || '—',
         description: item.description || '—',
-        qty: parseFloat(item.quantity || 0).toFixed(3),
+        qty: parseFloat(item.quantity || item.po_qty || 0).toFixed(3),
+        receivedQty: parseFloat(item.received_quantity || item.accepted_qty || 0).toFixed(3),
         rate: formatCurrency(item.unit_rate || item.rate || 0),
-        amount: formatCurrency(item.amount || (parseFloat(item.quantity || 0) * parseFloat(item.unit_rate || item.rate || 0)))
+        amount: formatCurrency(item.amount || (parseFloat(item.quantity || item.po_qty || 0) * parseFloat(item.unit_rate || item.rate || 0)))
       }))
     };
 
-    if (type === 'receipt' && receipt) {
+    if (type === 'grn' && grn) {
+      renderData = {
+        ...renderData,
+        poNumber: grn.poNumber || grn.po_number || '—',
+        poDate: formatDate(grn.createdAt || grn.created_at),
+        receiptId: `GRN-${String(grn.id).padStart(4, '0')}`,
+        receiptDate: formatDate(grn.grnDate || grn.grn_date),
+        refNo: grn.poNumber || grn.po_number || '—',
+        vendorName: grn.vendorName || grn.vendor_name || '—',
+        notes: grn.notes || '',
+        subTotal: formatCurrency(0),
+        grandTotal: formatCurrency(0)
+      };
+    } else if (type === 'receipt' && receipt) {
       renderData = {
         ...renderData,
         poNumber: receipt.po_number || '—',
@@ -106,7 +121,9 @@ const generatePoPdf = async (data) => {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    const pdfFileName = type === 'receipt' 
+    const pdfFileName = type === 'grn'
+      ? `GRN_${grn?.id || Date.now()}.pdf`
+      : type === 'receipt' 
       ? `PO_Receipt_${receipt?.id || Date.now()}.pdf`
       : `PO_${po?.po_number || Date.now()}.pdf`;
 

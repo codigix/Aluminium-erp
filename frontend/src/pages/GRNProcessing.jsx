@@ -58,6 +58,8 @@ const GRNProcessing = () => {
   });
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedGRNForView, setSelectedGRNForView] = useState(null);
   const [user, setUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -411,6 +413,52 @@ const GRNProcessing = () => {
     }
   };
 
+  const handleViewGRN = async (grnId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/grn-items/${grnId}/details`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch GRN details');
+      
+      const data = await response.json();
+      const grn = grns.find(g => g.id === grnId);
+      setSelectedGRNForView({ ...grn, ...data });
+      setShowViewModal(true);
+    } catch (error) {
+      console.error('Error fetching GRN details:', error);
+      errorToast('Failed to load GRN details');
+    }
+  };
+
+  const handlePrintGRN = async (grnId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/grns/${grnId}/pdf`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (error) {
+      console.error('Error printing GRN:', error);
+      errorToast('Failed to print GRN. Please ensure the backend supports GRN PDF generation.');
+    }
+  };
+
   const filteredGrns = grns.filter(grn => {
     const matchesSearch = 
       String(grn.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -493,6 +541,10 @@ const GRNProcessing = () => {
       render: (_, row) => (
         <div className="flex justify-end gap-2">
           <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrintGRN(row.id);
+            }}
             className="p-1.5 border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-600 hover:border-indigo-100 transition-colors flex items-center gap-1.5 text-[10px] font-medium"
             title="Print GRN"
           >
@@ -502,7 +554,7 @@ const GRNProcessing = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              // handleViewGRN(row.id);
+              handleViewGRN(row.id);
             }}
             className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors shadow-sm"
             title="View Details"
@@ -851,6 +903,97 @@ const GRNProcessing = () => {
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 active:scale-95"
               >
                 {submitting ? 'Processing...' : 'Create GRN'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showViewModal && selectedGRNForView && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">GRN Details: GRN-{String(selectedGRNForView.id).padStart(4, '0')}</h2>
+                <p className="text-sm text-slate-500">View recorded material receipt and verify quantities</p>
+              </div>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">PO Number</div>
+                  <div className="text-sm font-bold text-slate-900">{selectedGRNForView.poNumber}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">GRN Date</div>
+                  <div className="text-sm font-bold text-slate-900">{new Date(selectedGRNForView.grnDate).toLocaleDateString('en-IN')}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Supplier</div>
+                  <div className="text-sm font-bold text-slate-900">{selectedGRNForView.vendorName}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Status</div>
+                  <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${itemStatusColors[selectedGRNForView.status] || itemStatusColors.PENDING}`}>
+                    {selectedGRNForView.status?.toLowerCase()}
+                  </div>
+                </div>
+              </div>
+
+              {selectedGRNForView.notes && (
+                <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-amber-500 mb-1">Notes</div>
+                  <div className="text-sm text-amber-800">{selectedGRNForView.notes}</div>
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Item Details</th>
+                      <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">PO Qty</th>
+                      <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Accepted Qty</th>
+                      <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(selectedGRNForView.items || []).map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="p-3">
+                          <div className="text-sm font-bold text-slate-900">{item.material_name}</div>
+                          <div className="text-[10px] text-slate-500">{item.item_code} • {item.material_type}</div>
+                        </td>
+                        <td className="p-3 text-center text-sm font-medium text-slate-600">{item.po_qty}</td>
+                        <td className="p-3 text-center text-sm font-bold text-indigo-600">{item.accepted_qty}</td>
+                        <td className="p-3 text-xs text-slate-500">{item.remarks || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                onClick={() => handlePrintGRN(selectedGRNForView.id)}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+              >
+                <Printer className="w-4 h-4" />
+                Print GRN
+              </button>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-white transition-all"
+              >
+                Close
               </button>
             </div>
           </div>

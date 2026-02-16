@@ -171,6 +171,12 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       console.error('[PO Receipt] QC auto-creation failed:', qcError.message);
     }
 
+    // Update PO status to RECEIVED
+    await connection.execute(
+      'UPDATE purchase_orders SET status = ? WHERE id = ?',
+      ['RECEIVED', poId]
+    );
+
     await connection.commit();
     return { id: receiptId, po_id: poId };
   } catch (error) {

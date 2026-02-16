@@ -364,7 +364,7 @@ const updateQC = async (qcId, updates) => {
 
     if (currentStatus === 'ACCEPTED' || currentStatus === 'SHORTAGE' || currentStatus === 'PASSED') {
       const [linked] = await connection.query(
-        `SELECT po.sales_order_id
+        `SELECT po.sales_order_id, po.id as po_id
          FROM qc_inspections qc
          LEFT JOIN grns g ON qc.grn_id = g.id
          LEFT JOIN purchase_orders po ON g.po_number = po.po_number
@@ -373,11 +373,21 @@ const updateQC = async (qcId, updates) => {
         [qcId]
       );
 
-      if (linked.length && linked[0].sales_order_id) {
-        await connection.execute(
-          'UPDATE sales_orders SET status = ?, material_available = 1 WHERE id = ?',
-          ['MATERIAL_READY', linked[0].sales_order_id]
-        );
+      if (linked.length) {
+        if (linked[0].sales_order_id) {
+          await connection.execute(
+            'UPDATE sales_orders SET status = ?, material_available = 1 WHERE id = ?',
+            ['MATERIAL_READY', linked[0].sales_order_id]
+          );
+        }
+
+        // Update PO status to FULFILLED when QC passes
+        if (linked[0].po_id && (currentStatus === 'ACCEPTED' || currentStatus === 'PASSED')) {
+          await connection.execute(
+            'UPDATE purchase_orders SET status = ? WHERE id = ?',
+            ['FULFILLED', linked[0].po_id]
+          );
+        }
       }
     }
 
