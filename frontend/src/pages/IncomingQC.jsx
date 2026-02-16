@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, DataTable, Modal, FormControl } from '../components/ui.jsx';
-import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database } from 'lucide-react';
+import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database, ShoppingCart } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -354,6 +354,81 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     }
   };
 
+  const handleCreatePO = async (qc) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      
+      // Fetch the latest full details for this QC to ensure we have all item details
+      const detailsRes = await fetch(`${API_BASE}/qc-inspections/${qc.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!detailsRes.ok) throw new Error('Failed to fetch inspection details');
+      const fullQC = await detailsRes.json();
+      const items = fullQC.items_detail || fullQC.items || [];
+
+      const rejectedItems = items.filter(item => 
+        parseFloat(item.rejected_qty || 0) > 0 || parseFloat(item.shortage || 0) > 0
+      );
+      
+      if (rejectedItems.length === 0) {
+        errorToast('No rejected items or shortages found to create a new PO.');
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: 'Create Purchase Order?',
+        text: `This will create a new PO for ${rejectedItems.length} items with shortages or rejections.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Create PO',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#3b82f6'
+      });
+
+      if (!result.isConfirmed) return;
+
+      const response = await fetch(`${API_BASE}/purchase-orders`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          vendorId: fullQC.vendor_id,
+          notes: `Auto-generated from QC Inspection (GRN-${String(fullQC.grn_id).padStart(4, '0')}) - Replacement/Shortage Fulfillment`,
+          items: rejectedItems.map(item => {
+            const reorderQty = parseFloat(item.rejected_qty || 0) > 0 
+              ? parseFloat(item.rejected_qty) 
+              : parseFloat(item.shortage);
+              
+            return {
+              item_code: item.item_code,
+              description: item.description || item.material_name,
+              quantity: reorderQty,
+              unit: item.unit || 'NOS',
+              rate: item.rate || 0,
+              amount: reorderQty * (parseFloat(item.rate) || 0)
+            };
+          })
+        })
+      });
+
+      if (response.ok) {
+        successToast('Purchase Order created successfully');
+      } else {
+        const error = await response.json();
+        errorToast(error.message || 'Failed to create PO');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast(error.message || 'Error creating Purchase Order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const columns = [
     {
       label: 'GRN #',
@@ -411,29 +486,47 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           <button onClick={(e) => { e.stopPropagation(); handleEditQC(row); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors bg-white border border-slate-100" title="Edit Inspection">
             <Edit className="w-3.5 h-3.5" />
           </button>
-          <button 
-            onClick={(e) => { 
-              e.stopPropagation(); 
-              if (row.invoice_url) {
-                window.open(`${API_BASE}/${row.invoice_url}`, '_blank');
-              } else {
-                setUploadingQcId(row.id);
-                invoiceInputRef.current?.click();
-              }
-            }} 
-            className={`p-1.5 rounded-lg transition-colors bg-white border border-slate-100 ${row.invoice_url ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-            title={row.invoice_url ? "View Invoice" : "Upload Invoice"}
-          >
-            <Paperclip className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); openEmailModal(row); }} 
-            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors bg-white border border-slate-100"
-            title="Send Notification"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
-          {['PASSED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && (
+          {activeTab === 'in-process' && (
+            <>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  if (row.invoice_url) {
+                    window.open(`${API_BASE}/${row.invoice_url}`, '_blank');
+                  } else {
+                    setUploadingQcId(row.id);
+                    invoiceInputRef.current?.click();
+                  }
+                }} 
+                className={`p-1.5 rounded-lg transition-colors bg-white border border-slate-100 ${row.invoice_url ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                title={row.invoice_url ? "View Invoice" : "Upload Invoice"}
+              >
+                <Paperclip className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); openEmailModal(row); }} 
+                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors bg-white border border-slate-100"
+                title="Send Notification"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleCreatePO(row); }} 
+                className="p-1.5 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors bg-white border border-slate-100"
+                title="Create PO"
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
+                className="p-1.5 text-blue-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors bg-white border border-slate-100"
+                title="Create Stock Entry"
+              >
+                <Database className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+          {['PASSED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab !== 'in-process' && (
             <button 
               onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
               className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors bg-white border border-slate-100"

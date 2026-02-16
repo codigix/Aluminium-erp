@@ -45,6 +45,7 @@ const getQCWithDetails = async (qcId) => {
         qci.status,
         poi.material_name,
         poi.description,
+        poi.unit_rate,
         w.warehouse_name
        FROM qc_inspection_items qci
        LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
@@ -67,10 +68,12 @@ const getQCWithDetails = async (qcId) => {
       item_code: item.item_code,
       material_name: item.material_name,
       description: item.description,
+      rate: parseFloat(item.unit_rate) || 0,
       warehouse_name: item.warehouse_name,
       ordered_qty: parseFloat(item.po_qty) || 0,
       received_qty: parseFloat(item.received_qty) || 0,
       accepted_qty: parseFloat(item.accepted_qty) || 0,
+      rejected_qty: parseFloat(item.rejected_qty) || 0,
       shortage: Math.max(0, (parseFloat(item.po_qty) || 0) - (parseFloat(item.accepted_qty) || 0)),
       overage: Math.max(0, (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.po_qty) || 0))
     }));
@@ -117,6 +120,7 @@ const getAllQCs = async () => {
         qci.status,
         poi.material_name,
         poi.description,
+        poi.unit_rate,
         w.warehouse_name
        FROM qc_inspection_items qci 
        LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
@@ -140,10 +144,14 @@ const getAllQCs = async () => {
         item_code: item.item_code,
         material_name: item.material_name,
         description: item.description,
+        rate: parseFloat(item.unit_rate) || 0,
         warehouse_name: item.warehouse_name,
         ordered_qty: parseFloat(item.po_qty) || 0,
         received_qty: parseFloat(item.received_qty) || 0,
         accepted_qty: parseFloat(item.accepted_qty) || 0,
+        rejected_qty: parseFloat(item.rejected_qty) || 0,
+        shortage: Math.max(0, (parseFloat(item.po_qty) || 0) - (parseFloat(item.accepted_qty) || 0)),
+        overage: Math.max(0, (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.po_qty) || 0)),
         status: item.status
       }))
     });

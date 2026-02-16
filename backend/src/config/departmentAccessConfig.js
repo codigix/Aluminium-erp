@@ -125,7 +125,8 @@ const DEPARTMENT_ACCESS_RULES = {
       'COMPANY_VIEW',
       'DASHBOARD_VIEW',
       'PROD_VIEW',
-      'QC_VIEW', 'QC_CREATE', 'QC_EDIT'
+      'QC_VIEW', 'QC_CREATE', 'QC_EDIT',
+      'PURCHASE_ORDER_CREATE'
     ]
   },
 
