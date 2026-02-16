@@ -52,7 +52,10 @@ const DEPARTMENT_ACCESS_RULES = {
       'PO_VIEW',
       'COMPANY_VIEW',
       'DASHBOARD_VIEW',
-      'STATUS_CHANGE'
+      'STATUS_CHANGE',
+      'DESIGN_VIEW', 'DESIGN_MANAGE',
+      'BOM_VIEW', 'BOM_MANAGE',
+      'PROD_VIEW'
     ]
   },
 
@@ -100,7 +103,10 @@ const DEPARTMENT_ACCESS_RULES = {
       'PO_VIEW',
       'COMPANY_VIEW',
       'DASHBOARD_VIEW',
-      'STATUS_CHANGE'
+      'STATUS_CHANGE',
+      'PROD_VIEW', 'PROD_MANAGE',
+      'DESIGN_VIEW',
+      'BOM_VIEW'
     ]
   },
 
@@ -117,7 +123,9 @@ const DEPARTMENT_ACCESS_RULES = {
       'ORDER_VIEW',
       'PO_VIEW',
       'COMPANY_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'PROD_VIEW',
+      'QC_VIEW', 'QC_CREATE', 'QC_EDIT'
     ]
   },
 
@@ -184,7 +192,8 @@ const DEPARTMENT_ACCESS_RULES = {
       'GRN_VIEW',
       'GRN_CREATE',
       'GRN_EDIT',
-      'GRN_DELETE'
+      'GRN_DELETE',
+      'PROD_VIEW'
     ]
   },
 

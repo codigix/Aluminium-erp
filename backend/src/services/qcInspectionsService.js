@@ -214,7 +214,7 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
 };
 
 const updateQC = async (qcId, updates) => {
-  const { inspectionDate, passQuantity, failQuantity, status, defects, remarks } = updates;
+  const { inspectionDate, passQuantity, failQuantity, status, defects, remarks, items } = updates;
   
   const setClause = [];
   const values = [];
@@ -249,8 +249,6 @@ const updateQC = async (qcId, updates) => {
     values.push(remarks);
   }
 
-
-
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -262,6 +260,44 @@ const updateQC = async (qcId, updates) => {
         `UPDATE qc_inspections SET ${setClause.join(', ')} WHERE id = ?`,
         values
       );
+    }
+
+    // Update items if provided
+    if (items && Array.isArray(items)) {
+      for (const item of items) {
+        if (item.id) {
+          await connection.execute(
+            `UPDATE qc_inspection_items 
+             SET accepted_qty = ?, rejected_qty = ?, status = ?, remarks = ? 
+             WHERE id = ?`,
+            [
+              item.accepted_qty || 0,
+              item.rejected_qty || 0,
+              item.status || status || 'PENDING',
+              item.remarks || null,
+              item.id
+            ]
+          );
+
+          // Also update grn_items
+          const [qcItem] = await connection.query(
+            'SELECT grn_item_id FROM qc_inspection_items WHERE id = ?',
+            [item.id]
+          );
+
+          if (qcItem.length) {
+            await connection.execute(
+              'UPDATE grn_items SET accepted_qty = ?, rejected_qty = ?, status = ? WHERE id = ?',
+              [
+                item.accepted_qty || 0,
+                item.rejected_qty || 0,
+                item.status || status || 'PENDING',
+                qcItem[0].grn_item_id
+              ]
+            );
+          }
+        }
+      }
     }
 
     const [qcData] = await connection.query(

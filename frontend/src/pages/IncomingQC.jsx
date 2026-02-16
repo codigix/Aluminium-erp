@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, DataTable, Modal, FormControl } from '../components/ui.jsx';
-import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle } from 'lucide-react';
+import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -18,6 +18,7 @@ const qcStatusColors = {
 const IncomingQC = ({ initialTab = 'incoming' }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [qcInspections, setQcInspections] = useState([]);
+  const [jobCards, setJobCards] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [selectedQC, setSelectedQC] = useState(null);
@@ -28,7 +29,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     remarks: '',
     defects: '',
     passQuantity: '',
-    failQuantity: ''
+    failQuantity: '',
+    items: []
   });
 
   useEffect(() => {
@@ -62,6 +64,34 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     }
   }, []);
 
+  const fetchJobCards = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      console.log('Fetching job cards from:', `${API_BASE}/job-cards`);
+      const response = await fetch(`${API_BASE}/job-cards`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Job cards response status:', response.status);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Job cards received:', data.length);
+        setJobCards(Array.isArray(data) ? data : []);
+      } else {
+        const err = await response.text();
+        console.error('Job cards error response:', err);
+      }
+    } catch (error) {
+      console.error('Error fetching job cards:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const fetchStats = useCallback(async () => {
     try {
       const token = localStorage.getItem('authToken');
@@ -90,8 +120,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     if (activeTab === 'incoming') {
       fetchQCInspections();
       fetchStats();
+    } else if (activeTab === 'in-process') {
+      fetchJobCards();
     }
-  }, [activeTab, fetchQCInspections, fetchStats]);
+  }, [activeTab, fetchQCInspections, fetchJobCards, fetchStats]);
 
   const handleViewQC = (qc) => {
     setSelectedQC(qc);
@@ -105,9 +137,39 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       remarks: qc.remarks || '',
       defects: qc.defects || '',
       passQuantity: qc.pass_quantity || qc.accepted_quantity || 0,
-      failQuantity: qc.fail_quantity || 0
+      failQuantity: qc.fail_quantity || 0,
+      items: (qc.items_detail || []).map(item => ({
+        ...item,
+        accepted_qty: item.accepted_qty || item.received_qty || 0,
+        rejected_qty: item.rejected_qty || 0,
+        remarks: item.remarks || ''
+      }))
     });
     setShowEditModal(true);
+  };
+
+  const handleItemQtyChange = (idx, value) => {
+    const newItems = [...editFormData.items];
+    const qty = parseFloat(value) || 0;
+    newItems[idx].accepted_qty = qty;
+    
+    // Auto-calculate total pass/fail quantity if needed, 
+    // but usually these are sums of item quantities
+    const totalAccepted = newItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
+    const totalRejected = newItems.reduce((sum, item) => sum + (parseFloat(item.rejected_qty) || 0), 0);
+
+    setEditFormData({
+      ...editFormData,
+      items: newItems,
+      passQuantity: totalAccepted,
+      failQuantity: totalRejected
+    });
+  };
+
+  const handleItemRemarksChange = (idx, value) => {
+    const newItems = [...editFormData.items];
+    newItems[idx].remarks = value;
+    setEditFormData({ ...editFormData, items: newItems });
   };
 
   const handleUpdateQC = async (e) => {
@@ -237,6 +299,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   ];
 
   const renderContent = () => {
+    console.log('Rendering content for tab:', activeTab, 'JobCards count:', jobCards.length);
     switch (activeTab) {
       case 'incoming':
         return (
@@ -282,25 +345,34 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         );
       case 'in-process':
         return (
-          <Card title="In-Process Quality Control" subtitle="Real-time production quality monitoring and line inspections">
-            <div className="flex flex-col items-center justify-center py-24 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-              <div className="relative mb-4">
-                <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
-                  <Beaker className="w-8 h-8" />
-                </div>
-                <div className="absolute -bottom-1 -right-1 bg-white p-1 rounded-lg shadow-sm border border-slate-100">
-                  <Clock className="w-4 h-4 text-amber-500" />
-                </div>
-              </div>
-              <h3 className="text-slate-900 font-bold">In-Process Quality Control</h3>
-              <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
-                The real-time production monitoring module is currently under development.
-              </p>
-              <div className="mt-6 px-4 py-1.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-full border border-emerald-200">
-                Feature Coming Soon
-              </div>
-            </div>
-          </Card>
+          <div className="space-y-4">
+            <Card title="In-Process Quality Control" subtitle="Real-time production quality monitoring and line inspections">
+              <DataTable
+                columns={[
+                  { label: 'Job Card #', key: 'job_card_no', sortable: true, render: (val) => <span className="font-mono font-bold text-indigo-600">{val}</span> },
+                  { label: 'Work Order', key: 'wo_number', sortable: true },
+                  { label: 'Operation', key: 'operation_name', sortable: true },
+                  { label: 'Workstation', key: 'workstation_name' },
+                  { label: 'Planned', key: 'planned_qty', className: 'text-right' },
+                  { label: 'Produced', key: 'produced_qty', className: 'text-right', render: (val) => <span className="text-blue-600 font-bold">{val || 0}</span> },
+                  { label: 'Accepted', key: 'accepted_qty', className: 'text-right', render: (val) => <span className="text-emerald-600 font-bold">{val || 0}</span> },
+                  { label: 'Rejected', key: 'rejected_qty', className: 'text-right', render: (val) => <span className="text-rose-500 font-bold">{val || 0}</span> },
+                  { label: 'Status', key: 'status', render: (val) => (
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium tracking-wider border ${
+                      val === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                      val === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                      'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}>
+                      {val}
+                    </span>
+                  )}
+                ]}
+                data={jobCards}
+                loading={loading}
+                searchPlaceholder="Search by Job Card or WO..."
+              />
+            </Card>
+          </div>
         );
       case 'final':
         return (
@@ -413,8 +485,13 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                       {selectedQC.items_detail?.map((item, idx) => (
                         <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
                           <td className="px-6 py-4">
-                            <div className="font-black text-slate-900 text-xs">{item.item_code}</div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase mt-0.5 truncate max-w-[200px]">{item.material_name || item.description}</div>
+                            <div className="font-black text-slate-900 text-xs">{item.material_name || item.item_code || 'Unnamed Item'}</div>
+                            <div className="text-[10px] text-blue-600 font-bold uppercase mt-0.5">{item.item_code}</div>
+                            {item.description && (
+                              <div className="text-[8px] text-slate-400 font-medium truncate max-w-[180px] italic mt-0.5">
+                                {item.description}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-4">
                             <span className="text-[10px] font-black text-slate-500 uppercase bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
@@ -473,76 +550,153 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title="Update QC Inspection"
+        title="QUALITY CONTROL INSPECTION"
+        size="6xl"
       >
-        <form onSubmit={handleUpdateQC} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <FormControl label="Pass Quantity">
-              <input
-                type="number"
-                className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                value={editFormData.passQuantity}
-                onChange={(e) => setEditFormData({ ...editFormData, passQuantity: e.target.value })}
+        <form onSubmit={handleUpdateQC} className="space-y-6 p-2">
+          {/* Top Info */}
+          <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-6">
+               <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">GRN Number</span>
+                  <span className="text-xs font-black text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
+               </div>
+               <div className="h-8 w-px bg-slate-200"></div>
+               <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PO Number</span>
+                  <span className="text-xs font-black text-slate-700">{selectedQC?.po_number || '—'}</span>
+               </div>
+            </div>
+            <div className="flex items-center gap-4">
+               <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm">
+                  <Clock className="w-5 h-5" />
+               </div>
+               <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inspection Date</p>
+                  <p className="text-xs font-black text-slate-900">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <FormControl label="INSPECTION STATUS">
+              <select
+                className="w-full px-4 py-2.5 bg-white rounded-xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-black text-xs text-slate-700 uppercase tracking-wider"
+                value={editFormData.status}
+                onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
                 required
-              />
+              >
+                <option value="PENDING">Pending</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="PASSED">Passed</option>
+                <option value="FAILED">Failed</option>
+                <option value="ACCEPTED">Accepted</option>
+                <option value="SHORTAGE">Shortage</option>
+                <option value="OVERAGE">Overage</option>
+              </select>
             </FormControl>
-            <FormControl label="Fail Quantity">
-              <input
-                type="number"
-                className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                value={editFormData.failQuantity}
-                onChange={(e) => setEditFormData({ ...editFormData, failQuantity: e.target.value })}
+            <FormControl label="OVERALL REMARKS">
+              <textarea
+                className="w-full px-4 py-2 bg-white rounded-xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-xs font-medium"
+                value={editFormData.remarks}
+                onChange={(e) => setEditFormData({ ...editFormData, remarks: e.target.value })}
+                placeholder="General inspection notes..."
+                rows="1"
               />
             </FormControl>
           </div>
 
-          <FormControl label="Inspection Status">
-            <select
-              className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-              value={editFormData.status}
-              onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
-              required
-            >
-              <option value="PENDING">Pending</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="PASSED">Passed</option>
-              <option value="FAILED">Failed</option>
-              <option value="ACCEPTED">Accepted (with minor defects)</option>
-              <option value="SHORTAGE">Shortage</option>
-            </select>
-          </FormControl>
+          <div className="space-y-4">
+             <div className="bg-white rounded-[24px] border border-slate-100 overflow-hidden shadow-sm">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50/80">
+                    <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">
+                      <th className="px-6 py-4">Item Details</th>
+                      <th className="px-4 py-4 text-center">Ordered</th>
+                      <th className="px-4 py-4 text-center">Invoice</th>
+                      <th className="px-4 py-4 text-center">Received Quantity</th>
+                      <th className="px-4 py-4 text-center text-rose-500">Shortage</th>
+                      <th className="px-4 py-4 text-center text-blue-500">Overage</th>
+                      <th className="px-6 py-4">Item Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {editFormData.items.map((item, idx) => {
+                      const shortage = Math.max(0, parseFloat(item.received_qty || 0) - parseFloat(item.accepted_qty || 0));
+                      const overage = Math.max(0, parseFloat(item.accepted_qty || 0) - parseFloat(item.received_qty || 0));
+                      
+                      return (
+                        <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
+                          <td className="px-6 py-4">
+                            <div className="font-black text-slate-900 text-xs">{item.material_name || item.item_code || 'Unnamed Item'}</div>
+                            <div className="text-[10px] text-blue-600 font-bold uppercase mt-0.5">{item.item_code}</div>
+                            {item.description && (
+                              <div className="text-[8px] text-slate-400 font-medium truncate max-w-[180px] italic mt-0.5">
+                                {item.description}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center font-black text-slate-400 text-xs">
+                            {parseFloat(item.ordered_qty || 0).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-4 text-center font-black text-slate-900 text-xs">
+                            {parseFloat(item.received_qty || 0).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex justify-center">
+                              <input
+                                type="number"
+                                value={item.accepted_qty}
+                                onChange={(e) => handleItemQtyChange(idx, e.target.value)}
+                                className="w-20 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-center text-xs font-black text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
+                              />
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-center font-black text-rose-500 text-xs">
+                            {shortage > 0 ? shortage.toFixed(0) : '0'}
+                          </td>
+                          <td className="px-4 py-4 text-center font-black text-blue-500 text-xs">
+                            {overage > 0 ? overage.toFixed(0) : '0'}
+                          </td>
+                          <td className="px-6 py-4">
+                             <input
+                               type="text"
+                               value={item.remarks}
+                               onChange={(e) => handleItemRemarksChange(idx, e.target.value)}
+                               placeholder="Defects etc..."
+                               className="w-full bg-transparent text-[10px] font-bold text-slate-500 placeholder:text-slate-300 outline-none border-b border-transparent focus:border-slate-200 pb-1"
+                             />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+             </div>
+          </div>
 
-          <FormControl label="Defects identified">
-            <textarea
-              className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none min-h-[80px]"
-              value={editFormData.defects}
-              onChange={(e) => setEditFormData({ ...editFormData, defects: e.target.value })}
-              placeholder="Describe any quality issues..."
-            />
-          </FormControl>
-
-          <FormControl label="Additional Remarks">
-            <textarea
-              className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-              value={editFormData.remarks}
-              onChange={(e) => setEditFormData({ ...editFormData, remarks: e.target.value })}
-            />
-          </FormControl>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowEditModal(false)}
-              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200"
-            >
-              Update Inspection
-            </button>
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-6 border-t border-slate-100">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Received</p>
+              <p className="text-xl font-black text-blue-600">{editFormData.passQuantity} <span className="text-xs font-bold text-slate-400">Units</span></p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="px-8 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-50 transition-all active:scale-95"
+              >
+                CANCEL
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                SAVE INSPECTION RESULTS
+              </button>
+            </div>
           </div>
         </form>
       </Modal>
