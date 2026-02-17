@@ -5,7 +5,8 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.get('/', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW']), async (req, res) => {
   try {
-    const items = await stockService.getStockBalance();
+    const { includeAll } = req.query;
+    const items = await stockService.getStockBalance(null, includeAll === 'true');
     res.json(items);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
@@ -61,8 +62,8 @@ router.get('/ledger', authenticate, authorize(['STOCK_VIEW']), async (req, res) 
 
 router.get('/balance', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
-    const { drawingNo } = req.query;
-    const balances = await stockService.getStockBalance(drawingNo);
+    const { drawingNo, includeAll } = req.query;
+    const balances = await stockService.getStockBalance(drawingNo, includeAll === 'true');
     res.json(balances);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });

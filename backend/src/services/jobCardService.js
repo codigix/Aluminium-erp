@@ -235,7 +235,25 @@ const updateJobCard = async (id, data) => {
 };
 
 const deleteJobCard = async (id) => {
-  await pool.execute('DELETE FROM job_cards WHERE id = ?', [id]);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    // Delete associated logs first
+    await connection.execute('DELETE FROM job_card_time_logs WHERE job_card_id = ?', [id]);
+    await connection.execute('DELETE FROM job_card_quality_logs WHERE job_card_id = ?', [id]);
+    await connection.execute('DELETE FROM job_card_downtime_logs WHERE job_card_id = ?', [id]);
+    
+    // Delete the job card
+    await connection.execute('DELETE FROM job_cards WHERE id = ?', [id]);
+    
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 module.exports = {

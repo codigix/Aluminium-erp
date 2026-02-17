@@ -44,6 +44,15 @@ const createQuotation = async (payload) => {
     );
 
     const quotationId = result.insertId;
+
+    // Update Material Request status to PROCESSING if mrId is provided
+    if (mrId) {
+      await connection.execute(
+        'UPDATE material_requests SET status = ? WHERE id = ?',
+        ['PROCESSING', mrId]
+      );
+    }
+
     let totalAmount = 0;
     let totalTaxAmount = 0;
 

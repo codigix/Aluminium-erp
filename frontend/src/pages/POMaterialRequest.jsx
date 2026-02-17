@@ -7,6 +7,7 @@ import { successToast, errorToast } from '../utils/toast';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const POMaterialRequest = () => {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -156,33 +157,48 @@ const POMaterialRequest = () => {
     }
   };
 
-  const handleCreatePO = async (mr) => {
+  const handleRequestQuote = async (mr) => {
     try {
+      const result = await Swal.fire({
+        title: 'Request for Quote',
+        text: `Are you sure you want to send an RFQ request for ${mr.mr_number}?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Send Request'
+      });
+
+      if (!result.isConfirmed) return;
+
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/purchase-orders`, {
-        method: 'POST',
+      
+      // Update status to PROCESSING via API
+      const response = await fetch(`${API_BASE}/material-requests/${mr.id}/status`, {
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          mrId: mr.id
-        })
+        body: JSON.stringify({ status: 'PROCESSING' })
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        successToast(`Purchase Order Request created successfully`);
-        setShowViewModal(false);
-        fetchRequests();
-      } else {
-        const err = await response.json();
-        errorToast(err.message || "Failed to create Purchase Order Request");
-      }
+      if (!response.ok) throw new Error('Failed to update request status');
+
+      await Swal.fire({
+        title: 'Sent Successfully!',
+        text: 'The RFQ request has been sent to the procurement team.',
+        icon: 'success',
+        confirmButtonColor: '#10b981'
+      });
+
+      fetchRequests();
+      setShowViewModal(false);
+
     } catch (error) {
-      console.error('Error:', error);
-      errorToast(error.message || "Network error");
+      console.error('Error initiating RFQ:', error);
+      errorToast(error.message || 'Failed to send request');
     } finally {
       setLoading(false);
     }
@@ -1136,12 +1152,13 @@ const POMaterialRequest = () => {
             }).some(item => {
               const totalStock = item.stocks ? item.stocks.reduce((acc, st) => acc + (Number(st.current_stock) || 0), 0) : 0;
               return totalStock < Number(item.quantity);
-            }) && !selectedRequest?.linked_po_id && selectedRequest?.status?.toUpperCase() !== 'COMPLETED' && (
+            }) && !selectedRequest?.linked_po_id && 
+               !['PROCESSING', 'PO_CREATED', 'COMPLETED'].includes(selectedRequest?.status?.toUpperCase()) && (
               <button 
-                onClick={() => handleCreatePO(selectedRequest)}
+                onClick={() => handleRequestQuote(selectedRequest)}
                 className="px-8 py-3 bg-indigo-500 text-white rounded-2xl text-xs font-bold hover:bg-indigo-600 flex items-center gap-3 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
               >
-                Create Purchase Order
+                Request Quote (RFQ)
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
               </button>
             )}

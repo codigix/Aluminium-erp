@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, DataTable, Modal, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { Eye } from 'lucide-react';
@@ -41,6 +42,7 @@ const daysValid = (validUntil) => {
 };
 
 const Quotations = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('sent');
   const [quotations, setQuotations] = useState([]);
   const [stats, setStats] = useState(null);
@@ -359,6 +361,12 @@ const Quotations = () => {
   const handleItemChange = (index, field, value) => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
+    
+    // Always sync quantity with design_qty if it's the one being changed
+    if (field === 'design_qty') {
+      newItems[index].quantity = value;
+    }
+
     setFormData({ ...formData, items: newItems });
   };
 
@@ -441,22 +449,19 @@ const Quotations = () => {
     
     // Recalculate item amount
     if (field === 'quantity' || field === 'unit_rate' || field === 'design_qty') {
-      const qty = parseFloat(newItems[index].quantity) || parseFloat(newItems[index].design_qty) || 0;
-      const rate = parseFloat(newItems[index].unit_rate) || 0;
-      newItems[index].amount = qty * rate;
-      
-      // Sync quantity and design_qty to prioritize design_qty
+      // Always sync quantity with design_qty if it's the one being changed
       if (field === 'design_qty') {
         newItems[index].quantity = value;
       }
-      if (field === 'quantity' && (newItems[index].design_qty === undefined || newItems[index].design_qty === 0)) {
-        newItems[index].design_qty = value;
-      }
+
+      const qty = parseFloat(newItems[index].design_qty || newItems[index].quantity) || 0;
+      const rate = parseFloat(newItems[index].unit_rate) || 0;
+      newItems[index].amount = qty * rate;
     }
     
     // Recalculate total amount (subtotal)
     const totalAmount = newItems.reduce((sum, item) => {
-      const qty = parseFloat(item.quantity) || parseFloat(item.design_qty) || 0;
+      const qty = parseFloat(item.design_qty || item.quantity) || 0;
       const rate = parseFloat(item.unit_rate) || 0;
       return sum + (qty * rate);
     }, 0);
@@ -984,9 +989,10 @@ const Quotations = () => {
     setSelectedQuotation(quotation);
     // Map backend item fields to frontend BOM fields
     const mappedItems = (quotation.items || []).map(item => ({
-      drawing_no: item.item_code || '',
+      drawing_no: item.drawing_no || item.item_code || '',
       material_name: item.material_name || '',
       material_type: item.material_type || '',
+      design_qty: item.design_qty || item.quantity || 0,
       quantity: item.quantity || 0,
       uom: item.unit || 'NOS',
       unit_rate: item.unit_rate || 0
@@ -995,7 +1001,7 @@ const Quotations = () => {
     setEditFormData({
       vendorId: quotation.vendor_id,
       validUntil: quotation.valid_until ? new Date(quotation.valid_until).toISOString().split('T')[0] : '',
-      items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
     setShowEditModal(true);
   };
@@ -1488,66 +1494,66 @@ const Quotations = () => {
                       </p>
                     ) : (
                       <div className="space-y-2">
-                        <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wider">
-                          <div className="col-span-2">Drawing No</div>
-                          <div className="col-span-3">Material Name</div>
-                          <div className="col-span-2">Type</div>
-                          <div className="col-span-1 text-center">Design Qty</div>
-                          <div className="col-span-2 text-center">Rate (₹)</div>
-                          <div className="col-span-1 text-right">Amount</div>
-                          <div className="col-span-1"></div>
-                        </div>
-                        {formData.items.map((item, idx) => (
-                          <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                            <div className="col-span-2 relative">
+                          <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wider">
+                            <div className="col-span-2">Drawing No</div>
+                            <div className="col-span-3">Material Name</div>
+                            <div className="col-span-2">Type</div>
+                            <div className="col-span-1 text-center">Design Qty</div>
+                            <div className="col-span-2 text-center">Rate (₹)</div>
+                            <div className="col-span-1 text-right">Amount</div>
+                            <div className="col-span-1"></div>
+                          </div>
+                          {formData.items.map((item, idx) => (
+                            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                              <div className="col-span-2 relative">
+                                <input
+                                  type="text"
+                                  placeholder="Drawing No"
+                                  value={item.drawing_no}
+                                  onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
+                                  className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 pr-7"
+                                />
+                                {item.drawing_no && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePreviewByNo(item.drawing_no)}
+                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
+                                    title="Preview Drawing"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                               <input
                                 type="text"
-                                placeholder="Drawing No"
-                                value={item.drawing_no}
-                                onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 pr-7"
+                                placeholder="Material Name"
+                                value={item.material_name}
+                                onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
+                                className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              {item.drawing_no && (
-                                <button
-                                  type="button"
-                                  onClick={() => handlePreviewByNo(item.drawing_no)}
-                                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
-                                  title="Preview Drawing"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                            <input
-                              type="text"
-                              placeholder="Material Name"
-                              value={item.material_name}
-                              onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
-                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                            <input
-                              type="text"
-                              placeholder="Type"
-                              value={item.material_type}
-                              onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
-                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                            <input
-                              type="number"
-                              placeholder="Design Qty"
-                              value={item.quantity}
-                              onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                            <input
-                              type="number"
-                              placeholder="Rate"
-                              value={item.unit_rate}
-                              onChange={(e) => handleItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
-                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                              <input
+                                type="text"
+                                placeholder="Type"
+                                value={item.material_type}
+                                onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
+                                className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              <input
+                                type="number"
+                                placeholder="Design"
+                                value={item.design_qty}
+                                onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
+                                className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              <input
+                                type="number"
+                                placeholder="Rate"
+                                value={item.unit_rate}
+                                onChange={(e) => handleItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
+                                className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
                             <div className="col-span-1 text-right text-xs font-medium text-slate-700">
-                              {formatCurrency((item.quantity || 0) * (item.unit_rate || 0))}
+                              {formatCurrency((item.design_qty || 0) * (item.unit_rate || 0))}
                             </div>
                             <div className="col-span-1 flex justify-center">
                               <button
@@ -1581,15 +1587,15 @@ const Quotations = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs text-slate-500">
                         <span>Subtotal:</span>
-                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_rate || 0)), 0))}</span>
+                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.design_qty || 0) * (item.unit_rate || 0)), 0))}</span>
                       </div>
                       <div className="flex justify-between text-xs text-slate-500">
                         <span>GST (18%):</span>
-                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_rate || 0)), 0) * 0.18)}</span>
+                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.design_qty || 0) * (item.unit_rate || 0)), 0) * 0.18)}</span>
                       </div>
                       <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
                         <span>Grand Total:</span>
-                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_rate || 0)), 0) * 1.18)}</span>
+                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.design_qty || 0) * (item.unit_rate || 0)), 0) * 1.18)}</span>
                       </div>
                     </div>
                   </div>
@@ -1713,7 +1719,7 @@ const Quotations = () => {
                             <th className="px-3 py-2  text-slate-600" style={{ width: '150px' }}>DRAWING NO</th>
                             <th className="px-3 py-2  text-slate-600">MATERIAL NAME</th>
                             <th className="px-3 py-2  text-slate-600" style={{ width: '120px' }}>TYPE</th>
-                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '90px' }}>DESIGN QTY</th>
+                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '80px' }}>DESIGN QTY</th>
                             <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '120px' }}>RATE (₹)</th>
                             <th className="px-3 py-2 text-right  text-slate-600" style={{ width: '120px' }}>AMOUNT</th>
                             <th className="px-3 py-2 text-center" style={{ width: '40px' }}></th>
@@ -1771,23 +1777,23 @@ const Quotations = () => {
                                 <td className="px-3 py-2">
                                   <input
                                     type="number"
-                                    value={item.design_qty || item.quantity || 0}
+                                    value={item.design_qty || 0}
                                     onChange={(e) => handleRecordItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
-                                    className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500 font-bold"
-                                    placeholder="0.000"
+                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center"
+                                    placeholder="0.00"
                                   />
                                 </td>
                                 <td className="px-3 py-2">
                                   <input
                                     type="number"
-                                    value={item.unit_rate}
+                                    value={item.unit_rate || 0}
                                     onChange={(e) => handleRecordItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
                                     className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500"
                                     placeholder="0"
                                   />
                                 </td>
                                 <td className="px-3 py-2 text-right font-medium text-slate-700">
-                                  {formatCurrency((parseFloat(item.quantity) || parseFloat(item.design_qty) || 0) * (parseFloat(item.unit_rate) || 0))}
+                                  {formatCurrency((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0))}
                                 </td>
                                 <td className="px-3 py-2 text-center">
                                   <button
@@ -1982,7 +1988,7 @@ const Quotations = () => {
                     onClick={() => {
                       setEditFormData({
                         ...editFormData,
-                        items: [...editFormData.items, { drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+                        items: [...editFormData.items, { drawing_no: '', material_name: '', material_type: '', design_qty: 0, quantity: 0, uom: 'NOS', unit_rate: 0 }]
                       });
                     }}
                     className="px-3 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700"
@@ -2042,11 +2048,13 @@ const Quotations = () => {
                         />
                         <input
                           type="number"
-                          placeholder="Design Qty"
-                          value={item.quantity}
+                          placeholder="Design"
+                          value={item.design_qty}
                           onChange={(e) => {
                             const newItems = [...editFormData.items];
-                            newItems[idx].quantity = parseFloat(e.target.value) || 0;
+                            const val = parseFloat(e.target.value) || 0;
+                            newItems[idx].design_qty = val;
+                            newItems[idx].quantity = val;
                             setEditFormData({...editFormData, items: newItems});
                           }}
                           className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -2063,7 +2071,7 @@ const Quotations = () => {
                           className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <div className="col-span-1 text-right text-xs font-medium text-slate-700">
-                          {formatCurrency((item.quantity || 0) * (item.unit_rate || 0))}
+                          {formatCurrency((item.design_qty || item.quantity || 0) * (item.unit_rate || 0))}
                         </div>
                         <div className="col-span-1 flex justify-center">
                           <button
@@ -2153,7 +2161,7 @@ const Quotations = () => {
                               {item ? formatCurrency(item.unit_rate) : '—'}
                             </td>
                             <td className={`p-3 border text-right font-mono ${item ? 'text-indigo-600 font-bold' : 'text-slate-300'}`}>
-                              {item ? formatCurrency(item.amount || (item.unit_rate * item.quantity)) : '—'}
+                              {item ? formatCurrency(item.amount || (item.unit_rate * (item.design_qty || item.quantity))) : '—'}
                             </td>
                           </React.Fragment>
                         );

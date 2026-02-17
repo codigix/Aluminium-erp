@@ -599,7 +599,7 @@ const DesignOrders = () => {
       }
       
       successToast(`Material ${isEditingMaterial ? 'updated' : 'created'} successfully`);
-      fetchItemsList(materialFormData.drawingNo);
+      await fetchItemsList(materialFormData.drawingNo);
       setTargetOrderItemId(null);
       setIsEditingMaterial(false);
       setEditingMaterialId(null);
@@ -1446,7 +1446,7 @@ const DesignOrders = () => {
                       <div className="p-5 bg-slate-50/50">
                         {viewMode === 'grid' ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                            {group.orders.map((order) => (
+                            {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order) => (
                               <div key={`${order.id}-${order.item_id}`} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col h-full">
                                 {/* Card Header */}
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-start gap-3 bg-slate-50/30">
@@ -1556,7 +1556,7 @@ const DesignOrders = () => {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
-                                {group.orders.map((order) => (
+                                {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order) => (
                                   <tr key={`${order.id}-${order.item_id}`} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-4 py-3">
                                       <div className="flex flex-col">
@@ -1886,6 +1886,46 @@ const DesignOrders = () => {
                           )}
                         </div>
                         <p className="text-xs text-slate-600 mt-2">{item.item_description || item.description || 'No description provided'}</p>
+                        
+                        {item.drawing_pdf && (
+                          <div className="mt-4 border rounded-lg overflow-hidden bg-white">
+                            {['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(item.drawing_pdf.toLowerCase().split('.').pop()) ? (
+                              <div className="relative group">
+                                <img 
+                                  src={`${API_BASE.replace('/api', '')}/${item.drawing_pdf}`} 
+                                  alt="Drawing" 
+                                  className="max-w-full h-auto object-contain mx-auto max-h-[400px] cursor-pointer"
+                                  onClick={() => handlePreview(item)}
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors pointer-events-none flex items-center justify-center">
+                                  <span className="opacity-0 group-hover:opacity-100 bg-white/90 text-slate-900 px-3 py-1.5 rounded-full text-[10px] font-medium shadow-sm transition-opacity">
+                                    Click to Enlarge
+                                  </span>
+                                </div>
+                              </div>
+                            ) : item.drawing_pdf.toLowerCase().endsWith('.pdf') ? (
+                              <div className="p-6 flex flex-col items-center justify-center bg-slate-50/50">
+                                <div className="w-12 h-12 bg-red-100 text-red-600 rounded-xl flex items-center justify-center mb-3">
+                                  <FileText className="w-6 h-6" />
+                                </div>
+                                <h4 className="text-sm font-medium text-slate-900 mb-1">PDF Drawing Available</h4>
+                                <p className="text-xs text-slate-500 mb-4">This drawing is in PDF format and cannot be previewed directly here.</p>
+                                <button 
+                                  onClick={() => handlePreview(item)}
+                                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-all flex items-center gap-2"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Open PDF Preview
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="p-6 text-center text-slate-500 text-xs">
+                                Preview not available for this file type
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {(item.item_status === 'REJECTED' || item.status === 'REJECTED') && (item.item_rejection_reason || item.rejection_reason || item.reason) && (
                           <div className="mt-2 p-2 bg-red-50 rounded border border-red-100">
                             <p className="text-[10px] text-red-500 italic leading-snug">
@@ -2092,22 +2132,13 @@ const DesignOrders = () => {
                       <option value="Set">Set</option>
                     </select>
                   </div>
-                  <div className="space-y-1.5 hidden">
+                  <div className="space-y-1.5">
                     <label className="text-xs  text-slate-500  tracking-wider">Valuation Rate</label>
                     <input 
                       type="number" 
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
                       value={materialFormData.valuationRate}
                       onChange={(e) => setMaterialFormData({...materialFormData, valuationRate: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs  text-slate-500  tracking-wider">Valuation Rate</label>
-                    <input 
-                      type="number" 
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                      value={materialFormData.sellingRate}
-                      onChange={(e) => setMaterialFormData({...materialFormData, sellingRate: e.target.value})}
                     />
                   </div>
 
@@ -2305,7 +2336,7 @@ const DesignOrders = () => {
                                       </span>
                                     </td>
                                     <td className="px-4 py-3 text-xs text-slate-600">{item.unit}</td>
-                                    <td className="px-4 py-3 text-xs text-slate-600 text-center">₹{item.selling_rate || 0}</td>
+                                    <td className="px-4 py-3 text-xs text-slate-600 text-center">₹{item.valuation_rate || 0}</td>
                                     <td className="px-4 py-3 text-xs text-slate-600 text-center">{item.weight_per_unit || 0} {item.weight_uom}</td>
                                     <td className="px-4 py-3 text-xs text-slate-600 ">{item.drawing_no || '-'}</td>
                                     <td className="px-4 py-3 text-xs text-right">
