@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Modal, DataTable, Badge, FormControl, StatusBadge } from '../components/ui.jsx';
+import { Card, Modal, DataTable, Badge, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -366,30 +366,33 @@ const OperationMaster = ({ showForm, setShowForm }) => {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-500">Operation Name *</label>
-              <input 
-                type="text" 
-                name="operation_name"
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
+              <SearchableSelect 
                 placeholder="e.g., VMC Machining"
+                options={Array.from(new Set(operations.map(op => op.operation_name))).map(name => ({
+                  label: name,
+                  value: name
+                }))}
                 value={formData.operation_name}
-                onChange={handleInputChange}
-                required
+                onChange={(e) => {
+                  setFormData(prev => ({ ...prev, operation_name: e.target.value }));
+                }}
+                allowCustom={true}
               />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-500">Workstation *</label>
-              <select 
-                name="workstation_id"
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
+              <SearchableSelect 
+                placeholder="Select Workstation"
+                options={workstations.map(ws => ({
+                  label: ws.workstation_name,
+                  value: ws.id,
+                  subLabel: ws.workstation_code
+                }))}
                 value={formData.workstation_id}
-                onChange={handleInputChange}
-                required
-              >
-                <option value="">Select Workstation</option>
-                {workstations.map(ws => (
-                  <option key={ws.id} value={ws.id}>{ws.workstation_name} ({ws.workstation_code})</option>
-                ))}
-              </select>
+                onChange={(e) => setFormData(prev => ({ ...prev, workstation_id: e.target.value }))}
+                subLabelField="subLabel"
+                allowCustom={false}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -462,150 +465,6 @@ const OperationMaster = ({ showForm, setShowForm }) => {
         </form>
       </Modal>
 
-      <Card className="border-slate-200 shadow-sm overflow-hidden">
-        <div className="mb-6 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="p-2  rounded-lg">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-xl">Operation List</h2>
-              <p className="text-slate-400 text-[10px] mt-0.5">Manage manufacturing steps and standard times</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => {
-                if (!showForm) resetForm();
-                setShowForm(!showForm);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
-            >
-              {showForm ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                </svg>
-              )}
-              {showForm ? 'Close Form' : 'Add Operation'}
-            </button>
-            <button 
-              onClick={fetchOperations}
-              className="p-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-all"
-              title="Refresh Data"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div className="p-4 bg-white border-b border-slate-100 flex gap-4">
-          <div className="relative flex-1">
-            <span className="absolute left-3 top-2.5 text-slate-400">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </span>
-            <input 
-              type="text" 
-              placeholder="Search by code or name..." 
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 bg-white">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Operation Code</th>
-                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Operation Name</th>
-                <th className="p-2 text-left text-xs  text-slate-500  tracking-wider">Workstation</th>
-                <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Std Time</th>
-                <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Hourly Rate</th>
-                <th className="p-2 text-left text-xs text-slate-500  tracking-wider">Status</th>
-                <th className="p-2 text-right text-xs  text-slate-500  tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-100">
-              {loading ? (
-                <tr><td colSpan="7" className="px-6 py-8 text-center text-slate-400">Loading operations...</td></tr>
-              ) : filteredOperations.length === 0 ? (
-                <tr><td colSpan="7" className="px-6 py-8 text-center text-slate-400 italic">No operations found</td></tr>
-              ) : (
-                filteredOperations.map((op) => (
-                  <tr key={op.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-2">
-                      <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-[10px] ">{op.operation_code}</span>
-                    </td>
-                    <td className="p-2">
-                      <div className="text-sm text-slate-900">{op.operation_name}</div>
-                    </td>
-                    <td className="p-2">
-                      <div className="text-sm text-slate-600 font-medium">{op.workstation_name || 'N/A'}</div>
-                    </td>
-                    <td className="p-2 text-center">
-                      <div className="text-sm  text-slate-700">{op.std_time} {op.time_uom}</div>
-                    </td>
-                    <td className="p-2 text-center">
-                      <div className="text-sm  text-indigo-600">₹{op.hourly_rate ? parseFloat(op.hourly_rate).toFixed(2) : '0.00'}</div>
-                    </td>
-                    <td className="p-2 text-center">
-                      <StatusBadge status={op.is_active ? 'Active' : 'Inactive'} />
-                    </td>
-                    <td className="p-2 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => handleEdit(op)} 
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
-                          title="Edit"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={() => handleToggleStatus(op)} 
-                          className={`p-2 ${op.is_active ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'} rounded-lg transition-colors`} 
-                          title={op.is_active ? 'Disable' : 'Enable'}
-                        >
-                          {op.is_active ? (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          )}
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(op)} 
-                          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </div>
   );
 };

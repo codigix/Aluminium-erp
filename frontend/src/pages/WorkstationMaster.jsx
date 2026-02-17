@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, StatusBadge, FormControl, Modal, DataTable, Badge } from '../components/ui.jsx';
+import { Card, StatusBadge, FormControl, Modal, DataTable, Badge, SearchableSelect } from '../components/ui.jsx';
 import { Search, Plus, RefreshCw, Edit2, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
@@ -291,14 +291,15 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
                   />
                 </FormControl>
                 <FormControl label="Workstation Name *">
-                  <input
-                    type="text"
-                    name="workstation_name"
+                  <SearchableSelect
+                    options={Array.from(new Set(workstations.map(ws => ws.workstation_name))).map(name => ({
+                      label: name,
+                      value: name
+                    }))}
                     value={formData.workstation_name}
-                    onChange={handleInputChange}
+                    onChange={(e) => setFormData(prev => ({ ...prev, workstation_name: e.target.value }))}
                     placeholder="e.g., Assembly Line 1"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                    required
+                    allowCustom={true}
                   />
                 </FormControl>
                 <FormControl label="Location">
