@@ -3,6 +3,7 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const drawingService = require('../services/drawingService');
 const parseExcelDrawings = require('../utils/excelDrawingParser');
+const { uploadsPath } = require('../config/uploadConfig');
 
 const listDrawings = async (req, res, next) => {
   try {
@@ -57,14 +58,18 @@ const createDrawing = async (req, res, next) => {
     const excelFile = req.files?.file?.[0] || req.file;
     const zipFile = req.files?.zipFile?.[0];
 
-    const filePath = excelFile ? `uploads/${excelFile.filename}` : null;
-    if (!filePath) throw new Error('Excel or Drawing file is required');
+    const fileName = excelFile ? excelFile.filename : null;
+    if (!fileName) throw new Error('Excel or Drawing file is required');
+
+    // Use absolute path for reading the file with XLSX
+    const absoluteExcelPath = path.join(uploadsPath, fileName);
+    const dbFilePath = `uploads/${fileName}`;
 
     const uploadedBy = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'Sales';
 
     // Handle Excel + ZIP
     if ((fileType === 'XLSX' || fileType === 'XLS') && excelFile) {
-      const parsedDrawings = await parseExcelDrawings(filePath);
+      const parsedDrawings = await parseExcelDrawings(absoluteExcelPath);
       if (parsedDrawings && parsedDrawings.length > 0) {
         let zipEntries = [];
         if (zipFile) {
@@ -103,7 +108,7 @@ const createDrawing = async (req, res, next) => {
 
             if (entry) {
               const safeFileName = `${Date.now()}-${path.basename(entry.entryName).replace(/\s+/g, '_')}`;
-              const destPath = path.join(process.cwd(), 'uploads', safeFileName);
+              const destPath = path.join(uploadsPath, safeFileName);
               fs.writeFileSync(destPath, entry.getData());
               rowFilePath = `uploads/${safeFileName}`;
             }
@@ -142,7 +147,7 @@ const createDrawing = async (req, res, next) => {
       revision,
       qty,
       description,
-      filePath,
+      filePath: dbFilePath,
       fileType,
       remarks,
       uploadedBy,
