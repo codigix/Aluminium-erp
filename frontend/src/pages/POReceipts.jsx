@@ -1168,11 +1168,6 @@ const POReceipts = () => {
                 <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Total Valuation</p>
                 <p className="text-xl font-black text-emerald-600">{formatCurrency(formData.totalValuation || 0)}</p>
               </div>
-              <div className="h-10 w-[1px] bg-slate-200"></div>
-              <div>
-                <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest">Grand Total (Inc. 18% GST)</p>
-                <p className="text-xl font-black text-blue-600">{formatCurrency((formData.totalValuation || 0) * 1.18)}</p>
-              </div>
             </div>
             
             <div className="flex items-center gap-3">

@@ -730,13 +730,17 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                       {selectedQC.items_detail?.map((item, idx) => (
                         <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
                           <td className="px-6 py-4">
-                            <div className="font-black text-slate-900 text-xs">{item.material_name || item.item_code || 'Unnamed Item'}</div>
-                            <div className="text-[10px] text-blue-600 font-bold uppercase mt-0.5">{item.item_code}</div>
-                            {item.description && (
-                              <div className="text-[8px] text-slate-400 font-medium truncate max-w-[180px] italic mt-0.5">
-                                {item.description}
+                            <div className="flex flex-col gap-0.5">
+                              <div className="font-black text-slate-900 text-xs">{item.material_name || 'Unnamed Item'}</div>
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold uppercase w-fit tracking-tight border border-slate-200">
+                                {item.item_code}
                               </div>
-                            )}
+                              {item.description && (
+                                <div className="text-[8px] text-slate-400 font-medium truncate max-w-[180px] italic mt-0.5">
+                                  {item.description}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-4">
                             <span className="text-[10px] font-black text-slate-500 uppercase bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
@@ -876,13 +880,17 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                       return (
                         <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
                           <td className="px-6 py-4">
-                            <div className="font-black text-slate-900 text-xs">{item.material_name || item.item_code || 'Unnamed Item'}</div>
-                            <div className="text-[10px] text-blue-600 font-bold uppercase mt-0.5">{item.item_code}</div>
-                            {item.description && (
-                              <div className="text-[8px] text-slate-400 font-medium truncate max-w-[180px] italic mt-0.5">
-                                {item.description}
+                            <div className="flex flex-col gap-0.5">
+                              <div className="font-black text-slate-900 text-xs">{item.material_name || item.item_code || 'Unnamed Item'}</div>
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold uppercase w-fit tracking-tight border border-slate-200">
+                                {item.item_code}
                               </div>
-                            )}
+                              {item.description && (
+                                <div className="text-[8px] text-slate-400 font-medium truncate max-w-[180px] italic mt-0.5">
+                                  {item.description}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-4 text-center font-black text-slate-400 text-xs">
                             {parseFloat(item.ordered_qty || 0).toFixed(2)}

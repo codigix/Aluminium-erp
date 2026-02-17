@@ -338,6 +338,11 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     let matName = options.materialName || existingBalance?.material_name || null;
     let matType = options.materialType || existingBalance?.material_type || null;
 
+    // Normalize materialType to UPPER_CASE_WITH_UNDERSCORE
+    if (matType) {
+      matType = matType.toUpperCase().trim().replace(/ /g, '_');
+    }
+
     // Try to fetch name if still null
     if (!matName) {
       const [nameRows] = await useConnection.query(`
@@ -543,7 +548,8 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
 
     if (materialType !== null && materialType !== undefined) {
       setClauses.push('material_type = ?');
-      params.push(materialType);
+      const normalizedType = materialType.toUpperCase().trim().replace(/ /g, '_');
+      params.push(normalizedType);
     }
 
     if (existing) {
@@ -556,6 +562,7 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
         );
       }
     } else {
+      const normalizedType = (materialType || '').toUpperCase().trim().replace(/ /g, '_');
       await connection.execute(`
         INSERT INTO stock_balance (item_code, item_description, unit, po_qty, received_qty, accepted_qty, issued_qty, material_name, material_type)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -568,7 +575,7 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
         acceptedQty || 0,
         issuedQty || 0,
         materialName || null,
-        materialType || null
+        normalizedType || null
       ]);
     }
 
@@ -646,6 +653,8 @@ const createItem = async (itemData) => {
       throw error;
     }
 
+    const normalizedGroup = (itemData.itemGroup || '').toUpperCase().trim().replace(/ /g, '_');
+
     await connection.execute(`
       INSERT INTO stock_balance (
         item_code, material_name, material_type, unit, 
@@ -656,7 +665,7 @@ const createItem = async (itemData) => {
     `, [
       itemCode,
       itemData.itemName,
-      itemData.itemGroup,
+      normalizedGroup,
       itemData.defaultUom || 'Nos',
       itemData.valuationRate || 0,
       itemData.sellingRate || 0,
@@ -684,6 +693,8 @@ const updateItem = async (id, itemData) => {
   try {
     await connection.beginTransaction();
 
+    const normalizedGroup = (itemData.itemGroup || '').toUpperCase().trim().replace(/ /g, '_');
+
     await connection.execute(`
       UPDATE stock_balance SET
         item_code = ?, material_name = ?, material_type = ?, unit = ?, 
@@ -694,7 +705,7 @@ const updateItem = async (id, itemData) => {
     `, [
       itemData.itemCode,
       itemData.itemName,
-      itemData.itemGroup,
+      normalizedGroup,
       itemData.defaultUom || 'Nos',
       itemData.valuationRate || 0,
       itemData.sellingRate || 0,

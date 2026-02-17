@@ -1716,7 +1716,7 @@ const Quotations = () => {
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
-                            <th className="px-3 py-2  text-slate-600" style={{ width: '150px' }}>DRAWING NO</th>
+                            <th className="px-3 py-2  text-slate-600" style={{ width: '150px' }}>ITEM CODE / DRAWING NO</th>
                             <th className="px-3 py-2  text-slate-600">MATERIAL NAME</th>
                             <th className="px-3 py-2  text-slate-600" style={{ width: '120px' }}>TYPE</th>
                             <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '80px' }}>DESIGN QTY</th>
@@ -1764,6 +1764,11 @@ const Quotations = () => {
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
                                     placeholder="Material..."
                                   />
+                                  {item.item_code && item.item_code !== item.drawing_no && (
+                                    <div className="px-2 text-[9px] text-slate-400 font-bold uppercase truncate max-w-[150px]">
+                                      Code: {item.item_code}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="px-3 py-2">
                                   <input
