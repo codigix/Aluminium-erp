@@ -4,6 +4,69 @@ const emailService = require('./emailService');
 const puppeteer = require('puppeteer');
 const mustache = require('mustache');
 
+/**
+ * Helper to find the correct item_code from stock_balance by matching material name/type
+ * if the provided item_code is missing or inconsistent.
+ */
+const getCorrectItemCode = async (item, connection) => {
+  let itemCode = item.item_code || item.drawing_no;
+  
+  // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
+  if (itemCode && itemCode !== 'auto-generated') {
+    const [existing] = await connection.query(
+      `SELECT item_code, material_type FROM stock_balance 
+       WHERE (item_code = ? OR drawing_no = ?) 
+       AND LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+       LIMIT 1`,
+      [itemCode, itemCode, item.material_name]
+    );
+    if (existing.length > 0) {
+      // Update item type to match the existing one if needed
+      if (existing[0].material_type) {
+        item.material_type = existing[0].material_type;
+      }
+      return existing[0].item_code;
+    }
+  }
+
+  if (item.material_name) {
+    // 1. Try matching by name and material type
+    const [sb] = await connection.query(
+      `SELECT item_code FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+       AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+       LIMIT 1`,
+      [item.material_name, item.material_type, item.material_type]
+    );
+    
+    if (sb.length > 0) {
+      return sb[0].item_code;
+    }
+    
+    // 2. If not found, try matching by name only (more flexible)
+    const [sbNameOnly] = await connection.query(
+      `SELECT item_code FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+       LIMIT 1`,
+      [item.material_name]
+    );
+    
+    if (sbNameOnly.length > 0) {
+      return sbNameOnly[0].item_code;
+    }
+  }
+
+  // If we have an item code, return it as is if no match found in stock_balance
+  if (itemCode && itemCode !== 'auto-generated') return itemCode;
+
+  // 3. Fallback: Generate a standard item code using stockService logic if we have name/type
+  if (item.material_name) {
+    return await stockService.generateItemCode(item.material_name, item.material_type);
+  }
+
+  return null;
+};
+
 const getQCWithDetails = async (qcId) => {
   const [qcs] = await pool.query(
     `SELECT 
@@ -197,6 +260,8 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
       `SELECT 
         gi.id, 
         poi.item_code, 
+        poi.material_name,
+        poi.material_type,
         gi.po_qty, 
         gi.received_qty, 
         gi.accepted_qty, 
@@ -210,11 +275,13 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
     );
 
     for (const item of grnItems) {
+      const correctedItemCode = await getCorrectItemCode(item, connection);
+      
       await connection.execute(
         `INSERT INTO qc_inspection_items 
          (qc_inspection_id, grn_item_id, warehouse_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [qcId, item.id, item.warehouse_id, item.item_code, item.po_qty, item.received_qty, item.accepted_qty, item.rejected_qty, 'PENDING']
+        [qcId, item.id, item.warehouse_id, correctedItemCode, item.po_qty, item.received_qty, item.accepted_qty, item.rejected_qty, 'PENDING']
       );
     }
 
