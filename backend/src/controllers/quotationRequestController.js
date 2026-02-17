@@ -84,7 +84,7 @@ const batchApproveQuotationRequests = async (req, res, next) => {
       return res.status(400).json({ error: 'IDs array is required' });
     }
 
-    const replyPdfPath = req.file ? `/uploads/${req.file.filename}` : null;
+    const replyPdfPath = req.file ? `uploads/${req.file.filename}` : null;
 
     await connection.beginTransaction();
     for (const id of ids) {

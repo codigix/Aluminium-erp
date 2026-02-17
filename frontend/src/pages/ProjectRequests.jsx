@@ -2,7 +2,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
-const API_HOST = API_BASE.replace(/\/api$/, '');
+const UPLOAD_BASE = import.meta.env.VITE_UPLOAD_URL;
+
+// Robust URL construction
+const getFileUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  
+  // Prioritize explicit UPLOAD_BASE from .env
+  const base = UPLOAD_BASE || (API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE);
+    
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  const url = `${base.endsWith('/') ? base.slice(0, -1) : base}/${cleanPath}`;
+  
+  if (url.startsWith('http')) return url;
+  return window.location.origin + (url.startsWith('/') ? url : '/' + url);
+};
 
 const priorityColors = {
   LOW: 'text-slate-500',
@@ -157,7 +172,7 @@ const ProjectRequests = () => {
                       <td className="p-2 text-center">
                         {req.drawing_pdf ? (
                           <a 
-                            href={`${API_HOST}/${req.drawing_pdf}`} 
+                            href={getFileUrl(req.drawing_pdf)} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 font-medium"

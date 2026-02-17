@@ -4,6 +4,22 @@ import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileT
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+const UPLOAD_BASE = import.meta.env.VITE_UPLOAD_URL;
+
+// Robust URL construction
+const getFileUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  
+  // Prioritize explicit UPLOAD_BASE from .env
+  const base = UPLOAD_BASE || (API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE);
+    
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  const url = `${base.endsWith('/') ? base.slice(0, -1) : base}/${cleanPath}`;
+  
+  if (url.startsWith('http')) return url;
+  return window.location.origin + (url.startsWith('/') ? url : '/' + url);
+};
 
 const ClientQuotations = () => {
   const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'sent', or 'received'
@@ -1046,7 +1062,7 @@ const ClientQuotations = () => {
                               <div className="flex gap-2 items-center">
                                 {group.reply_pdf && (
                                   <a
-                                    href={`${API_BASE.replace('/api', '')}${group.reply_pdf}`}
+                                    href={getFileUrl(group.reply_pdf)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"

@@ -2,12 +2,29 @@ import React from 'react';
 import { Modal } from './ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+const UPLOAD_BASE = import.meta.env.VITE_UPLOAD_URL;
 
 const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
   if (!drawing) return null;
 
   const filePath = drawing.file_path || drawing.drawing_pdf || '';
-  const fileUrl = `${API_BASE.replace('/api', '')}/${filePath}`;
+  
+  // Robust URL construction
+  const getFileUrl = (path) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    
+    // Prioritize explicit UPLOAD_BASE from .env
+    const base = UPLOAD_BASE || (API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE);
+      
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    const url = `${base.endsWith('/') ? base.slice(0, -1) : base}/${cleanPath}`;
+    
+    if (url.startsWith('http')) return url;
+    return window.location.origin + (url.startsWith('/') ? url : '/' + url);
+  };
+
+  const fileUrl = getFileUrl(filePath);
   const extension = filePath.toLowerCase().split('.').pop();
   
   let type = 'other';
