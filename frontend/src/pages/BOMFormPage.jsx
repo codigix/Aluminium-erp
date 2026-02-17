@@ -146,9 +146,13 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
         </td>
         <td className="px-4 py-2 text-left text-xs text-slate-600">₹{rate.toFixed(2)}</td>
         <td className="px-4 py-2 text-left text-xs text-slate-600">
+          {item.warehouse || '—'}
+          {item.item_group && <div className="text-[9px] text-blue-500 font-medium">{item.item_group}</div>}
+        </td>
+        <td className="px-4 py-2 text-left text-xs text-slate-600">
           {actualType === 'component' ? `${itemLossPercent.toFixed(2)}%` : (item.operation || '—')}
         </td>
-        <td className="px-4 py-2 text-left text-xs  text-slate-900">
+        <td className="px-4 py-2 text-left text-xs  text-slate-900 font-medium">
           ₹{netCost.toFixed(2)}
         </td>
         {!isReadOnly && (
@@ -222,8 +226,8 @@ const BOMFormPage = () => {
     quantity: 1
   });
 
-  const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' });
-  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
+  const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' });
+  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
@@ -299,16 +303,22 @@ const BOMFormPage = () => {
     // Helper to check if item is a component type
     const isComponentType = (type) => {
       const t = (type || '').toLowerCase();
-      return t.includes('semi') || t.includes('assembly') || t.includes('finished') || t.includes('sfg') || t.includes('fg');
+      // Exclude FG/Finished goods from component selection as they shouldn't be inside another BOM normally
+      return t.includes('semi') || t.includes('assembly') || t.includes('sfg') || t.includes('sub');
     };
 
     // 1. Add Stock Items
     stockItems.forEach(item => {
-      if (!isComponentType(item.material_type)) return;
+      const type = (item.material_type || item.item_group || "").toLowerCase();
+      if (!isComponentType(type)) return;
+      
+      // Strict FG check by code prefix
+      if (item.item_code && item.item_code.startsWith("FG-")) return;
 
-      const isSA = (item.item_code || "").startsWith("SA-");
+      const isSA = (item.item_code || "").startsWith("SA-") || type.includes("assembly") || type.includes("sub");
+      
       if (!showAllDrawings) {
-        if (productDrawing && item.drawing_no !== productDrawing) return;
+        if (productDrawing && item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== productDrawing) return;
         if (productForm.itemGroup === "FG" && !isSA) return;
       }
 
@@ -320,7 +330,7 @@ const BOMFormPage = () => {
         const bomCost = bomInfo ? parseFloat(bomInfo.bom_cost) : 0;
 
         options.push({
-          label: isSA ? `${item.material_name}${bomCost > 0 ? ` | ₹${Math.round(bomCost)}` : ''}` : `${item.item_code} - ${item.material_name}`,
+          label: `${item.item_code} - ${item.material_name}${bomCost > 0 ? ` | ₹${bomCost.toLocaleString('en-IN')}` : ''}`,
           value: item.item_code,
           subLabel: item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0)),
@@ -333,23 +343,31 @@ const BOMFormPage = () => {
 
     // 2. Add Approved Drawings (Sales Order Items)
     approvedDrawings.forEach(item => {
-      // For sales order items, we trust they are components if they are in approvedDrawings
-      // and match the drawing center philosophy
+      const type = (item.item_group || "").toLowerCase();
+      const isSA = (item.item_code || "").startsWith("SA-") || type.includes("assembly") || type.includes("sub");
+      
+      if (!isSA && !showAllDrawings) return; 
+      // Strict FG check
+      if (item.item_code && item.item_code.startsWith("FG-")) {
+        if (!showAllDrawings) return; 
+      }
+      if (type.includes("finished")) {
+        if (!showAllDrawings) return;
+      }
+
       if (item.item_code === currentItemCode) return; // Skip self
 
-      const isSA = (item.item_code || "").startsWith("SA-");
       if (!showAllDrawings) {
-        if (productDrawing && item.drawing_no !== productDrawing) return;
+        if (productDrawing && item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== productDrawing) return;
         if (productForm.itemGroup === "FG" && !isSA) return;
       }
 
       if (!seenCodes.has(item.item_code)) {
-        // Also check approvedBOMs for these as well, although item.bom_cost might already be there
         const bomInfo = approvedBOMs.find(b => b.item_code === item.item_code || (b.drawing_no === item.drawing_no && b.drawing_no !== 'N/A'));
         const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? parseFloat(bomInfo.bom_cost) : 0);
 
         options.push({
-          label: isSA ? `${item.description || item.material_name}${bomCost > 0 ? ` | ₹${Math.round(bomCost)}` : ''}` : `${item.item_code} - ${item.description || item.material_name}`,
+          label: `${item.item_code} - ${item.description || item.material_name}${bomCost > 0 ? ` | ₹${bomCost.toLocaleString('en-IN')}` : ''}`,
           value: item.item_code,
           subLabel: `Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.rate || 0),
@@ -492,6 +510,28 @@ const BOMFormPage = () => {
     if (t.includes('assembly') && !t.includes('sub')) return 'Assembly';
     // If it's a component or raw material being BOM'd, it's usually a Sub Assembly
     return 'Sub Assembly';
+  };
+
+  const getMaterialItemGroupFromType = (item) => {
+    if (!item) return 'Raw Material';
+    
+    const name = (item.material_name || '').toLowerCase();
+    const ig = (item.item_group || item.itemGroup || item.material_group || '').toLowerCase();
+    const t = (item.material_type || item.materialType || '').toLowerCase();
+
+    // Priority 1: Consumables (Check name, group and type)
+    if (name.includes('consumable') || ig.includes('consumable') || t.includes('consumable')) return 'Consumable';
+    
+    // Priority 2: Sub-assemblies / SFG
+    if (name.includes('sub assembly') || name.includes('sub-assembly') || ig.includes('sub assembly') || t.includes('sub assembly') || t.includes('sub-assembly')) return 'Sub Assembly';
+    if (name.includes('sfg') || name.includes('semi') || ig.includes('sfg') || ig.includes('semi') || t.includes('sfg') || t.includes('semi')) return 'SFG';
+    
+    // Priority 3: Other groups
+    if (name.includes('tool') || ig.includes('tool') || t.includes('tool')) return 'Tooling';
+    if (name.includes('service') || ig.includes('service') || t.includes('service')) return 'Service';
+    if (name.includes('raw') || ig.includes('raw') || t.includes('raw')) return 'Raw Material';
+    
+    return 'Raw Material';
   };
 
   const toggleSection = (section) => {
@@ -910,8 +950,8 @@ const BOMFormPage = () => {
     });
     setSelectedItem(null);
     setDrawingFilter('');
-    setMaterialForm({ materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' });
-    setComponentForm({ componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
+    setMaterialForm({ materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' });
+    setComponentForm({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
     setOperationForm({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
     setScrapForm({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
   };
@@ -1576,7 +1616,7 @@ const BOMFormPage = () => {
                     </div>
                     <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
                       <button
-                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' })}
+                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' })}
                         className="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1717,38 +1757,48 @@ const BOMFormPage = () => {
                             const type = (item.material_type || '').toLowerCase();
                             const targetGroup = (materialForm.itemGroup || '').toLowerCase();
 
-                            if (!showAllDrawings) {
-                              if (targetGroup === 'raw material' || targetGroup === 'consumable') {
-                                // Show both Raw and Consumables as requested
-                                if (!type.includes('raw') && !type.includes('consumable')) return false;
-                              } else if (targetGroup === 'sub assembly' || targetGroup === 'sfg') {
-                                if (!type.includes('sub assembly') && !type.includes('semi') && !type.includes('sfg')) return false;
-                              } else if (targetGroup === 'tooling') {
-                                if (!type.includes('tool')) return false;
-                              } else if (targetGroup === 'service') {
-                                if (!type.includes('service')) return false;
-                              }
+                            // Always apply group filter unless showAllDrawings is true (Global Search)
+                            // Actually, even in Global Search, we should probably respect the group to avoid "other design items"
+                            if (targetGroup === 'raw material' || targetGroup === 'consumable') {
+                              if (!type.includes('raw') && !type.includes('consumable')) return false;
+                            } else if (targetGroup === 'sub assembly' || targetGroup === 'sfg') {
+                              if (!type.includes('sub assembly') && !type.includes('semi') && !type.includes('sfg')) return false;
+                            } else if (targetGroup === 'tooling') {
+                              if (!type.includes('tool')) return false;
+                            } else if (targetGroup === 'service') {
+                              if (!type.includes('service')) return false;
                             }
 
                             if (showAllDrawings) return true;
-                            const productDrawing = selectedItem?.drawing_no || productForm.drawingNo;
-                            return !productDrawing || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === productDrawing;
+                            
+                            const productDrawing = (selectedItem?.drawing_no || productForm.drawingNo || '').trim();
+                            const itemDrawing = (item.drawing_no || '').trim();
+
+                            if (!productDrawing) return true;
+                            
+                            // Strict drawing filter when Global Search is off: only show items for THIS drawing
+                            // If drawing number is N/A or empty, it will be hidden unless Global Search is on
+                            return itemDrawing === productDrawing;
                           })
                           .map(item => ({
                             label: item.material_name,
-                            value: item.material_name,
+                            value: item.item_code,
                             subLabel: `${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
-                          }))}
-                        value={materialForm.materialName}
+                          }))
+                          .sort((a, b) => a.label.localeCompare(b.label))
+                        }
+                        value={stockItems.find(i => i.material_name === materialForm.materialName)?.item_code || ''}
                         onChange={(e) => {
-                          const item = stockItems.find(i => i.material_name === e.target.value);
+                          const item = stockItems.find(i => i.item_code === e.target.value) || 
+                                       stockItems.find(i => i.material_name === e.target.value);
                           // Check if this material is a sub-assembly and has an approved BOM cost
                           const bomInfo = item ? approvedBOMs.find(b => b.item_code === item.item_code) : null;
                           const bomCost = bomInfo ? parseFloat(bomInfo.bom_cost) : 0;
 
                           setMaterialForm({
                             ...materialForm,
-                            materialName: e.target.value,
+                            materialName: item ? item.material_name : e.target.value,
+                            itemGroup: item ? getMaterialItemGroupFromType(item) : materialForm.itemGroup,
                             rate: item ? (bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0))) : materialForm.rate,
                             uom: item ? (item.unit || 'Kg') : materialForm.uom,
                             description: item ? item.material_name : materialForm.description
@@ -1786,7 +1836,7 @@ const BOMFormPage = () => {
 
                     <div className="md:col-span-3 space-y-1 flex flex-col justify-end">
                       <button
-                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' })}
+                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' })}
                         className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2162,7 +2212,7 @@ const BOMFormPage = () => {
                     if (collapsedSections.scrap) {
                       toggleSection('scrap');
                     } else {
-                      handleAddSectionItem('scrap', scrapForm, setScrapForm, { itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
+                      handleAddSectionItem('scrap', scrapForm, setScrapForm, { itemCode: '', itemName: '', inputQty: '1', lossPercent: '', rate: '' });
                     }
                   }}
                   className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs  hover:bg-orange-100 transition-colors flex items-center gap-1.5 border border-orange-100"
@@ -2208,14 +2258,19 @@ const BOMFormPage = () => {
                         options={stockItems
                           .filter(item => {
                             if (showAllDrawings) return true;
-                            const productDrawing = selectedItem?.drawing_no || productForm.drawingNo;
-                            return !productDrawing || !item.drawing_no || item.drawing_no === 'N/A' || item.drawing_no === productDrawing;
+                            const productDrawing = (selectedItem?.drawing_no || productForm.drawingNo || '').trim();
+                            const itemDrawing = (item.drawing_no || '').trim();
+                            
+                            if (!productDrawing) return true;
+                            return itemDrawing === productDrawing;
                           })
                           .map(item => ({
                             label: item.material_name,
                             value: item.material_name,
                             subLabel: `${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
-                          }))}
+                          }))
+                          .sort((a, b) => a.label.localeCompare(b.label))
+                        }
                         value={scrapForm.itemName}
                         onChange={(e) => {
                           const item = stockItems.find(i => i.material_name === e.target.value);
@@ -2259,7 +2314,7 @@ const BOMFormPage = () => {
                       <div className="flex gap-2">
                         <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs  text-slate-700 focus:ring-2 focus:ring-orange-500 outline-none transition-all" placeholder="0.00" step="0.01" value={scrapForm.rate} onChange={(e) => setScrapForm({ ...scrapForm, rate: e.target.value })} />
                         <button
-                          onClick={() => handleAddSectionItem('scrap', scrapForm, setScrapForm, { itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' })}
+                          onClick={() => handleAddSectionItem('scrap', scrapForm, setScrapForm, { itemCode: '', itemName: '', inputQty: '1', lossPercent: '', rate: '', parentId: '' })}
                           className="px-3 bg-orange-600 text-white rounded-lg text-xs  hover:bg-orange-700 shadow-lg shadow-orange-100 transition-all active:scale-95"
                           title="Add Scrap"
                         >
