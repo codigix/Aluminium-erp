@@ -17,6 +17,7 @@ const formatCurrency = (value, currency = 'INR') => {
 };
 
 const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
+  const navigate = useNavigate();
   if (!po) return null;
 
   const steps = [
@@ -48,6 +49,45 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     if (['RECEIVED', 'ACKNOWLEDGED'].includes(status)) return 2;
     if (['SUBMITTED', 'SENT', 'ORDERED', 'PO_REQUEST'].includes(status)) return 1;
     return 0;
+  };
+
+  const handleSubmitPO = async () => {
+    try {
+      const result = await Swal.fire({
+        title: 'Submit Purchase Order?',
+        text: 'This will finalize the order and allow material receipt.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Submit',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#059669'
+      });
+
+      if (!result.isConfirmed) return;
+
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/purchase-orders/${po.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'SUBMITTED' })
+      });
+
+      if (response.ok) {
+        Swal.fire('Submitted!', 'PO has been submitted successfully.', 'success');
+        if (onRefresh) onRefresh();
+      } else {
+        throw new Error('Failed to submit PO');
+      }
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
+    }
+  };
+
+  const handleCreateReceipt = () => {
+    navigate('/purchase-receipt', { state: { poId: po.id, autoOpen: true } });
   };
 
   const handleReceiveMaterial = async () => {
