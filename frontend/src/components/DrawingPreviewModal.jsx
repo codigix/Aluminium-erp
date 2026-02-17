@@ -14,11 +14,19 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
     
-    // Prioritize explicit UPLOAD_BASE from .env
-    const base = UPLOAD_BASE || (API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE);
-      
-    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    const url = `${base.endsWith('/') ? base.slice(0, -1) : base}/${cleanPath}`;
+    // 1. Determine base URL (priority: VITE_UPLOAD_URL -> API_BASE parent)
+    let base = UPLOAD_BASE || (API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE);
+    if (base.endsWith('/')) base = base.slice(0, -1);
+    
+    // 2. Clean the incoming path
+    let cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    
+    // 3. Prevent double 'uploads/' if base already includes it
+    if (base.toLowerCase().endsWith('/uploads') && cleanPath.toLowerCase().startsWith('uploads/')) {
+      cleanPath = cleanPath.slice(8);
+    }
+    
+    const url = `${base}/${cleanPath}`;
     
     if (url.startsWith('http')) return url;
     return window.location.origin + (url.startsWith('/') ? url : '/' + url);
@@ -56,7 +64,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
             className="max-w-full max-h-[70vh] object-contain shadow-lg rounded-md"
             onError={(e) => {
               e.target.onerror = null;
-              e.target.src = 'https://via.placeholder.com/400?text=Drawing+Not+Found';
+              e.target.style.display = 'none'; // Hide if file not found
             }}
           />
         ) : previewFile.type === 'pdf' ? (
