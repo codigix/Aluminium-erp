@@ -308,7 +308,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
   const executor = connection || pool;
   const [items] = await executor.query(`
     SELECT 
-      poi.item_code,
+      COALESCE(qci.item_code, poi.item_code) as item_code,
       gi.id as grn_item_id,
       gi.accepted_qty as quantity,
       COALESCE(poi.unit, 'NOS') as uom,
@@ -317,6 +317,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
       poi.material_name
     FROM grn_items gi
     LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+    LEFT JOIN qc_inspection_items qci ON qci.grn_item_id = gi.id
     WHERE gi.grn_id = ?
   `, [grnId]);
   
@@ -324,6 +325,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
   for (const item of items) {
     if (item.material_name) {
       // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
+      // We prioritize the one already in the item object (which might come from QC)
       if (item.item_code && item.item_code !== 'auto-generated') {
         const [existing] = await executor.query(
           `SELECT item_code, material_type FROM stock_balance 
@@ -363,7 +365,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
         
         if (sbNameOnly.length > 0) {
           item.item_code = sbNameOnly[0].item_code;
-        } else if (!item.item_code) {
+        } else if (!item.item_code || item.item_code === 'auto-generated') {
           // 3. Fallback: Only generate a standard item code if no code exists at all
           item.item_code = await stockService.generateItemCode(item.material_name, item.material_type);
         }
