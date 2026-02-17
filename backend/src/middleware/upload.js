@@ -1,15 +1,20 @@
 const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
+const { uploadsPath } = require('../config/uploadConfig');
 
-const uploadsDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
+console.log(`[Upload Middleware] Uploads directory: ${uploadsPath}`);
 
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(uploadsPath)) {
+  try {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+    console.log(`[Upload Middleware] Created uploads directory: ${uploadsPath}`);
+  } catch (err) {
+    console.error(`[Upload Middleware] Error creating uploads directory: ${err.message}`);
+  }
 }
 
 const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, uploadsDir),
+  destination: (_, __, cb) => cb(null, uploadsPath),
   filename: (_, file, cb) => {
     const timestamp = Date.now();
     const safeName = file.originalname.replace(/\s+/g, '_');
@@ -17,4 +22,9 @@ const storage = multer.diskStorage({
   }
 });
 
-module.exports = multer({ storage });
+module.exports = multer({ 
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});

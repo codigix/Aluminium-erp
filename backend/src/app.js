@@ -42,13 +42,17 @@ const grnService = require('./services/grnService');
 const qcService = require('./services/qcInspectionsService');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { authenticate } = require('./middleware/authMiddleware');
+const { uploadsPath } = require('./config/uploadConfig');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads')));
+
+// Serve uploads from root and /api for compatibility
+app.use('/uploads', express.static(uploadsPath));
+app.use('/api/uploads', express.static(uploadsPath));
 
 // --- Route Grouping ---
 const publicRouter = express.Router();
