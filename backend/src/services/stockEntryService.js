@@ -320,18 +320,53 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
     WHERE gi.grn_id = ?
   `, [grnId]);
   
-  // For items without item_code, try to find them in stock_balance by name
+  // For all items, try to find the "correct" item_code from stock_balance by matching name/type
   for (const item of items) {
-    if (!item.item_code && item.material_name) {
+    if (item.material_name) {
+      // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
+      if (item.item_code && item.item_code !== 'auto-generated') {
+        const [existing] = await executor.query(
+          `SELECT item_code, material_type FROM stock_balance 
+           WHERE (item_code = ? OR drawing_no = ?) 
+           AND LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+           LIMIT 1`,
+          [item.item_code, item.item_code, item.material_name]
+        );
+        if (existing.length > 0) {
+          item.item_code = existing[0].item_code;
+          if (existing[0].material_type) {
+            item.material_type = existing[0].material_type;
+          }
+          continue; // Move to next item
+        }
+      }
+
+      // 1. Try matching by name and material type
       const [sb] = await executor.query(
-        'SELECT item_code FROM stock_balance WHERE material_name = ? AND material_type = ? LIMIT 1',
-        [item.material_name, item.material_type]
+        `SELECT item_code FROM stock_balance 
+         WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+         AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+         LIMIT 1`,
+        [item.material_name, item.material_type, item.material_type]
       );
+      
       if (sb.length > 0) {
         item.item_code = sb[0].item_code;
       } else {
-        // Fallback: Generate a code from the name if no code exists
-        item.item_code = item.material_name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15).toUpperCase() + '-' + item.grn_item_id;
+        // 2. If not found, try matching by name only (more flexible)
+        const [sbNameOnly] = await executor.query(
+          `SELECT item_code FROM stock_balance 
+           WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+           LIMIT 1`,
+          [item.material_name]
+        );
+        
+        if (sbNameOnly.length > 0) {
+          item.item_code = sbNameOnly[0].item_code;
+        } else if (!item.item_code) {
+          // 3. Fallback: Only generate a standard item code if no code exists at all
+          item.item_code = await stockService.generateItemCode(item.material_name, item.material_type);
+        }
       }
     } else if (!item.item_code) {
       item.item_code = `ITEM-${item.grn_item_id}`;

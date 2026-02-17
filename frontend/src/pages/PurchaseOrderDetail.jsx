@@ -333,7 +333,11 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="px-6 py-4">
                           <p className="text-xs font-black text-slate-800">{item.material_name || item.description || 'N/A'}</p>
-                          <p className="text-[10px] text-slate-400 font-bold mt-0.5">{item.item_code}</p>
+                          {(item.item_code || item.drawing_no) && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-500 mt-1 uppercase tracking-wider">
+                              {item.item_code || item.drawing_no}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <span className="text-xs font-black text-slate-800">
