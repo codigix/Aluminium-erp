@@ -73,7 +73,7 @@ const BOMCreation = () => {
         return acc;
       }, {});
 
-      const groupedArray = Object.values(clientGroups).sort((a, b) => a.client_name.localeCompare(b.client_name));
+      const groupedArray = Object.values(clientGroups).sort((a, b) => (a.client_name || '').localeCompare(b.client_name || ''));
       setOrders(groupedArray);
       
       for (const client of groupedArray) {

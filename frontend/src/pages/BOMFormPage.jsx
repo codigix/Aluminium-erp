@@ -290,8 +290,8 @@ const BOMFormPage = () => {
     });
 
     return Array.from(drawingMap.entries())
-      .map(([no, name]) => ({ label: cleanText(name), value: no, subLabel: no }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .map(([no, name]) => ({ label: cleanText(name) || '', value: no, subLabel: no }))
+      .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
   }, [approvedDrawings, stockItems]);
 
   const componentOptions = useMemo(() => {
@@ -378,7 +378,7 @@ const BOMFormPage = () => {
       }
     });
 
-    return options.sort((a, b) => a.label.localeCompare(b.label));
+    return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
   }, [stockItems, approvedDrawings, approvedBOMs, showAllDrawings, selectedItem, productForm.itemCode, productForm.drawingNo, productForm.itemGroup]);
 
   const location = useLocation();
@@ -1781,11 +1781,11 @@ const BOMFormPage = () => {
                             return itemDrawing === productDrawing;
                           })
                           .map(item => ({
-                            label: item.material_name,
-                            value: item.item_code,
-                            subLabel: `${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
+                            label: item.material_name || '',
+                            value: item.item_code || '',
+                            subLabel: `${item.item_code || ''} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
                           }))
-                          .sort((a, b) => a.label.localeCompare(b.label))
+                          .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
                         }
                         value={stockItems.find(i => i.material_name === materialForm.materialName)?.item_code || ''}
                         onChange={(e) => {
@@ -2265,11 +2265,11 @@ const BOMFormPage = () => {
                             return itemDrawing === productDrawing;
                           })
                           .map(item => ({
-                            label: item.material_name,
-                            value: item.material_name,
-                            subLabel: `${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
+                            label: item.material_name || '',
+                            value: item.material_name || '',
+                            subLabel: `${item.item_code || ''} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
                           }))
-                          .sort((a, b) => a.label.localeCompare(b.label))
+                          .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
                         }
                         value={scrapForm.itemName}
                         onChange={(e) => {

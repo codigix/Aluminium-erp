@@ -68,6 +68,7 @@ const DesignOrders = () => {
   });
   const [isSubmittingMaterial, setIsSubmittingMaterial] = useState(false);
   const [targetOrderItemId, setTargetOrderItemId] = useState(null);
+  const [targetOrderItemCode, setTargetOrderItemCode] = useState(null);
   const [itemsList, setItemsList] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [isEditingMaterial, setIsEditingMaterial] = useState(false);
@@ -586,8 +587,14 @@ const DesignOrders = () => {
         throw new Error(errorData.message || `Failed to ${isEditingMaterial ? 'update' : 'create'} material`);
       }
 
-      // If we have a target order item, update its item_code (only for creation usually, but good to have)
-      if (targetOrderItemId && !isEditingMaterial) {
+      // If we have a target order item, update its item_code ONLY IF it's empty/No Code
+      // This prevents overwriting the main FG item when adding raw materials/consumables
+      const currentCode = (targetOrderItemCode || '').trim();
+      const shouldLink = targetOrderItemId && 
+                         !isEditingMaterial && 
+                         (!currentCode || currentCode === 'No Code');
+
+      if (shouldLink) {
         await fetch(`${API_BASE}/sales-orders/items/${targetOrderItemId}`, {
           method: 'PATCH',
           headers: {
@@ -596,6 +603,7 @@ const DesignOrders = () => {
           },
           body: JSON.stringify({ item_code: materialFormData.itemCode })
         });
+        setTargetOrderItemCode(materialFormData.itemCode); // Update current target code so next items don't overwrite
       }
       
       successToast(`Material ${isEditingMaterial ? 'updated' : 'created'} successfully`);
@@ -649,6 +657,7 @@ const DesignOrders = () => {
   const openAddMaterialModal = async (item = null) => {
     if (item) {
       setTargetOrderItemId(item.item_id || item.id || null);
+      setTargetOrderItemCode(item.item_code || '');
       setMaterialFormData({
         itemCode: '',
         itemName: '',
