@@ -23,7 +23,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     )},
-    { label: 'Submitted', status: ['SUBMITTED', 'ORDERED', 'SENT'], icon: (color) => (
+    { label: 'Submitted', status: ['SUBMITTED', 'ORDERED', 'SENT', 'PO_REQUEST'], icon: (color) => (
       <svg className={`w-5 h-5 ${color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
       </svg>
@@ -44,7 +44,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
   const getStepIndex = (status) => {
     if (['COMPLETED', 'CLOSED', 'FULFILLED'].includes(status)) return 3;
     if (['RECEIVED', 'ACKNOWLEDGED'].includes(status)) return 2;
-    if (['SUBMITTED', 'SENT', 'ORDERED'].includes(status)) return 1;
+    if (['SUBMITTED', 'SENT', 'ORDERED', 'PO_REQUEST'].includes(status)) return 1;
     return 0;
   };
 
