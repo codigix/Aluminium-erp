@@ -2139,6 +2139,15 @@ const DesignOrders = () => {
                       <option value="Kg">Kg</option>
                       <option value="Mtr">Mtr</option>
                       <option value="Set">Set</option>
+                      <option value="Ltr">Litre (Ltr)</option>
+                      <option value="ml">Millilitre (ml)</option>
+                      <option value="m³">Cubic Meter (m³)</option>
+                      <option value="mm">Millimeter (mm)</option>
+                      <option value="ft">Feet (ft)</option>
+                      <option value="in">Inch (in)</option>
+                      <option value="g">Gram (g)</option>
+                      <option value="Ton">Ton</option>
+                      <option value="MT">Metric Ton (MT)</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">
@@ -2181,7 +2190,11 @@ const DesignOrders = () => {
                     >
                       <option value="">Select weight UOM</option>
                       <option value="Kg">Kg</option>
-                      <option value="Gm">Gm</option>
+                      <option value="g">Gram (g)</option>
+                      <option value="Ltr">Litre (Ltr)</option>
+                      <option value="ml">Millilitre (ml)</option>
+                      <option value="Ton">Ton</option>
+                      <option value="MT">Metric Ton (MT)</option>
                     </select>
                   </div>
 
