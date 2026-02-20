@@ -44,15 +44,12 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { authenticate } = require('./middleware/authMiddleware');
 const { uploadsPath } = require('./config/uploadConfig');
 
+const { uploadsPath } = require('./config/uploadConfig');
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-
-// Serve uploads from root and /api for compatibility
-app.use('/uploads', express.static(uploadsPath));
-app.use('/api/uploads', express.static(uploadsPath));
 
 // --- Route Grouping ---
 const publicRouter = express.Router();
@@ -97,12 +94,37 @@ privateRouter.use('/material-requests', materialRequestRoutes);
 privateRouter.use('/dashboard', dashboardRoutes);
 
 const apiRouter = express.Router();
+
+// --- Robust Static File Serving ---
+// This ensures that /api/uploads/... is handled before ANY authentication
+const serveStatic = express.static(uploadsPath);
+const serveStaticFallback = express.static(path.join(process.cwd(), 'uploads'));
+const serveStaticBackendFallback = express.static(path.join(process.cwd(), 'backend', 'uploads'));
+
+// Handle cases where the path in DB is "uploads/filename.jpg"
+// If requested as /api/uploads/uploads/filename.jpg, we serve from the same folder
+apiRouter.use('/uploads/uploads', serveStatic);
+apiRouter.use('/uploads/uploads', serveStaticFallback);
+
+apiRouter.use('/uploads', serveStatic);
+apiRouter.use('/uploads', serveStaticFallback);
+apiRouter.use('/uploads', serveStaticBackendFallback);
+
+// Prevent image requests from falling through to the Auth middleware
+apiRouter.use('/uploads', (req, res) => {
+  res.status(404).json({ error: 'File not found on server disk', path: req.path });
+});
+
 apiRouter.use(publicRouter);
 apiRouter.use(privateRouter);
 
 // Mount with and without /api prefix for compatibility
 app.use('/api', apiRouter);
 app.use('/', apiRouter);
+
+// Also serve at the root level just in case
+app.use('/uploads', express.static(uploadsPath));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use(notFound);
 app.use(errorHandler);

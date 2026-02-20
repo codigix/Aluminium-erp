@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { Eye, Edit, Trash2, History, Search } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : '');
 
 const DrawingMaster = () => {
   const [drawings, setDrawings] = useState([]);

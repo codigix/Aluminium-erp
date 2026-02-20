@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, StatusBadge, Modal } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { getFileUrl } from '../utils/url';
 import { Plus, Search, RefreshCw, Filter, FileText, Send, Eye, LayoutList, LayoutGrid } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
@@ -1097,7 +1098,7 @@ const DesignOrders = () => {
                           <div className="p-4 bg-slate-50/50">
                             {viewMode === 'grid' ? (
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {group.orders.map((order) => (
+                                {group.orders.map((order, index) => (
                                   <div 
                                     key={order.item_id} 
                                     className={`bg-white rounded  border-2 transition-all group relative ${
@@ -1835,8 +1836,8 @@ const DesignOrders = () => {
                   </div>
                 ) : reviewDetails.length > 0 ? (
                   <div className="space-y-3">
-                    {reviewDetails.map(item => (
-                      <div key={item.id} className="p-3 bg-slate-50 rounded border border-slate-200">
+                    {reviewDetails.map((item, index) => (
+                      <div key={`${item.id}-${index}`} className="p-3 bg-slate-50 rounded border border-slate-200">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-3 flex-1">
                             {item.drawing_pdf && (
@@ -1901,7 +1902,7 @@ const DesignOrders = () => {
                             {['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(item.drawing_pdf.toLowerCase().split('.').pop()) ? (
                               <div className="relative group">
                                 <img 
-                                  src={`${API_BASE.replace('/api', '')}/${item.drawing_pdf}`} 
+                                  src={getFileUrl(item.drawing_pdf)} 
                                   alt="Drawing" 
                                   className="max-w-full h-auto object-contain mx-auto max-h-[400px] cursor-pointer"
                                   onClick={() => handlePreview(item)}
@@ -2343,7 +2344,7 @@ const DesignOrders = () => {
                                 );
                               })
                               .sort((a, b) => b.id - a.id)
-                              .map((item) => {
+                              .map((item, index) => {
                                 const isCurrentDrawing = materialFormData.drawingNo && item.drawing_no === materialFormData.drawingNo;
                                 return (
                                   <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
