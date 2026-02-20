@@ -15,11 +15,11 @@ export const getFileUrl = (path) => {
   let base = UPLOAD_BASE;
   
   if (!base) {
-    // If no explicit upload URL, try to derive from API_BASE
+    // Keep the /api prefix if it exists so Nginx routes to backend
     if (API_BASE.endsWith('/api')) {
-      base = API_BASE.slice(0, -4) + '/uploads';
+      base = API_BASE + '/uploads';
     } else if (API_BASE.endsWith('/api/')) {
-      base = API_BASE.slice(0, -5) + '/uploads';
+      base = API_BASE + 'uploads';
     } else {
       base = API_BASE + '/uploads';
     }

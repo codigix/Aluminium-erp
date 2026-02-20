@@ -48,6 +48,24 @@ const { uploadsPath } = require('./config/uploadConfig');
 const app = express();
 
 app.use(cors());
+
+// Debug logging for uploads in production
+app.use('/api/uploads', (req, res, next) => {
+  console.log(`[Uploads Debug] Request for: ${req.url} (Original: ${req.originalUrl})`);
+  console.log(`[Uploads Debug] Target Path: ${path.join(uploadsPath, req.url)}`);
+  next();
+});
+
+// Robust static file serving BEFORE any other complex logic
+// Handle redundant "uploads/uploads" paths from database
+app.use('/api/uploads/uploads', express.static(uploadsPath));
+app.use('/api/uploads/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Standard uploads serving
+app.use('/api/uploads', express.static(uploadsPath));
+app.use('/api/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/api/uploads', express.static(path.join(process.cwd(), 'backend', 'uploads')));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -94,31 +112,9 @@ privateRouter.use('/material-requests', materialRequestRoutes);
 privateRouter.use('/dashboard', dashboardRoutes);
 
 const apiRouter = express.Router();
-
-// --- Robust Static File Serving ---
-// This ensures that /api/uploads/... is handled before ANY authentication
-const serveStatic = express.static(uploadsPath);
-const serveStaticFallback = express.static(path.join(process.cwd(), 'uploads'));
-const serveStaticBackendFallback = express.static(path.join(process.cwd(), 'backend', 'uploads'));
-
-// Handle cases where the path in DB is "uploads/filename.jpg"
-// If requested as /api/uploads/uploads/filename.jpg, we serve from the same folder
-apiRouter.use('/uploads/uploads', serveStatic);
-apiRouter.use('/uploads/uploads', serveStaticFallback);
-
-apiRouter.use('/uploads', serveStatic);
-apiRouter.use('/uploads', serveStaticFallback);
-apiRouter.use('/uploads', serveStaticBackendFallback);
-
-// Prevent image requests from falling through to the Auth middleware
-apiRouter.use('/uploads', (req, res) => {
-  res.status(404).json({ error: 'File not found on server disk', path: req.path });
-});
-
 apiRouter.use(publicRouter);
 apiRouter.use(privateRouter);
 
-// Mount with and without /api prefix for compatibility
 app.use('/api', apiRouter);
 app.use('/', apiRouter);
 
