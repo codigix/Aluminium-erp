@@ -45,39 +45,36 @@ const { authenticate } = require('./middleware/authMiddleware');
 const { uploadsPath } = require('./config/uploadConfig');
 const app = express();
 
-app.use(cors());
-
-// GLOBAL CATCH-ALL FOR UPLOADS (No Authentication can ever touch this)
-// This handles /api/uploads, /uploads, and nested /uploads/uploads
+// 1. ABSOLUTE PRIORITY: Public Uploads (No Auth)
+// This catches requests before ANY other middleware can interfere
 app.use((req, res, next) => {
-  // Use originalUrl as well for cases where req.url is modified by previous middleware or proxy
   const url = (req.originalUrl || req.url).toLowerCase();
-  
   if (url.includes('/uploads/')) {
     const parts = url.split('/uploads/');
-    let fileName = parts[parts.length - 1];
+    const fileName = parts[parts.length - 1].split('?')[0];
     
-    // Remove query strings if any
-    fileName = fileName.split('?')[0];
-    
-    const tryPaths = [
-      path.join(uploadsPath, fileName),
-      path.join(process.cwd(), 'uploads', fileName),
-      path.join(process.cwd(), 'backend', 'uploads', fileName)
-    ];
-
-    const tryServe = (index) => {
-      if (index >= tryPaths.length) return next();
-      res.sendFile(tryPaths[index], (err) => {
-        if (err) tryServe(index + 1);
+    // Try serving directly from configured uploadsPath
+    return res.sendFile(path.join(uploadsPath, fileName), { headers: { 'X-Public-Upload': 'true' } }, (err) => {
+      if (!err) return;
+      
+      // Fallback 1: Root uploads folder
+      res.sendFile(path.join(process.cwd(), 'uploads', fileName), (err1) => {
+        if (!err1) return;
+        
+        // Fallback 2: backend/uploads folder
+        res.sendFile(path.join(process.cwd(), 'backend', 'uploads', fileName), (err2) => {
+          if (err2) {
+            // If file really doesn't exist, return 404 immediately to prevent hitting Private API
+            res.status(404).json({ error: 'File not found on server', path: fileName });
+          }
+        });
       });
-    };
-    
-    return tryServe(0);
+    });
   }
   next();
 });
 
+app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
