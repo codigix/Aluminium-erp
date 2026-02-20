@@ -8,6 +8,29 @@ import { successToast, errorToast, infoToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : '');
 
+// Robust URL construction
+const getFileUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  
+  // 1. Determine base URL (priority: VITE_UPLOAD_URL -> API_BASE)
+  let base = import.meta.env.VITE_UPLOAD_URL || API_BASE;
+  if (base.endsWith('/')) base = base.slice(0, -1);
+  
+  // 2. Clean the incoming path
+  let cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  
+  // 3. Prevent double 'uploads/' if base already includes it
+  if (base.toLowerCase().endsWith('/uploads') && cleanPath.toLowerCase().startsWith('uploads/')) {
+    cleanPath = cleanPath.slice(8);
+  }
+  
+  const url = `${base}/${cleanPath}`;
+  
+  if (url.startsWith('http')) return url;
+  return window.location.origin + (url.startsWith('/') ? url : '/' + url);
+};
+
 const DesignOrders = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
@@ -1901,7 +1924,7 @@ const DesignOrders = () => {
                             {['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(item.drawing_pdf.toLowerCase().split('.').pop()) ? (
                               <div className="relative group">
                                 <img 
-                                  src={`${API_BASE}/${item.drawing_pdf}`} 
+                                  src={getFileUrl(item.drawing_pdf)} 
                                   alt="Drawing" 
                                   className="max-w-full h-auto object-contain mx-auto max-h-[400px] cursor-pointer"
                                   onClick={() => handlePreview(item)}
