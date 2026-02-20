@@ -11,8 +11,8 @@ const getFileUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
   
-  // 1. Determine base URL (priority: VITE_UPLOAD_URL -> API_BASE parent)
-  let base = UPLOAD_BASE || (API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE);
+  // 1. Determine base URL (priority: VITE_UPLOAD_URL -> API_BASE)
+  let base = UPLOAD_BASE || API_BASE;
   if (base.endsWith('/')) base = base.slice(0, -1);
   
   // 2. Clean the incoming path
