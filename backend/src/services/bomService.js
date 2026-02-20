@@ -598,7 +598,7 @@ const getApprovedBOMs = async () => {
     FROM sales_order_items soi
     JOIN sales_orders so ON soi.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
-    WHERE so.status IN ('BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED')
+    WHERE so.status IN ('BOM_SUBMITTED', 'BOM_Approved ', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED')
     AND (
       EXISTS (SELECT 1 FROM sales_order_item_materials WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL) OR (drawing_no = soi.drawing_no AND sales_order_item_id IS NULL AND item_code IS NULL))
       OR EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL) OR (drawing_no = soi.drawing_no AND sales_order_item_id IS NULL AND item_code IS NULL))

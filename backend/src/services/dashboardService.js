@@ -4,7 +4,7 @@ const getDashboardStats = async () => {
   const [[poCounts]] = await pool.query(
     `SELECT
        SUM(CASE WHEN status = 'DRAFT' THEN 1 ELSE 0 END) AS draftPos,
-       SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) AS approvedPos
+       SUM(CASE WHEN status = 'Approved ' THEN 1 ELSE 0 END) AS approvedPos
      FROM customer_pos`
   );
 

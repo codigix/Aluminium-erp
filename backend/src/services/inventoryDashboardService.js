@@ -16,7 +16,7 @@ const getIncomingOrders = async () => {
     FROM sales_orders so
     LEFT JOIN companies c ON c.id = so.company_id
     LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-    WHERE so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION')
+    WHERE so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION')
     ORDER BY so.created_at DESC
   `);
   return salesOrders;
@@ -101,7 +101,7 @@ const getSummaryMetrics = async () => {
     SELECT 
       COUNT(*) as total_mrs,
       SUM(CASE WHEN status = 'DRAFT' THEN 1 ELSE 0 END) as draft_mrs,
-      SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as approved_mrs,
+      SUM(CASE WHEN status = 'Approved ' THEN 1 ELSE 0 END) as approved_mrs,
       SUM(CASE WHEN status = 'SUBMITTED' THEN 1 ELSE 0 END) as submitted_mrs
     FROM material_requests
   `);

@@ -12,7 +12,7 @@ async function fixEnum() {
 
   try {
     console.log('Updating material_requests status enum...');
-    await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'APPROVED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT'`);
+    await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'Approved ', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT'`);
     console.log('Enum updated successfully!');
   } catch (error) {
     console.error('Error updating enum:', error);

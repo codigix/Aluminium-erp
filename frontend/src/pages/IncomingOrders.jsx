@@ -7,8 +7,8 @@ const API_HOST = API_BASE.replace(/\/api$/, '');
 const statusColors = {
   CREATED: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', label: 'Created' },
   DESIGN_IN_REVIEW: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', label: 'Design Review' },
-  DESIGN_APPROVED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', label: 'Design Approved' },
-  BOM_APPROVED: { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', label: 'BOM Approved' },
+  DESIGN_Approved : { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', label: 'Design Approved' },
+  BOM_Approved : { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', label: 'BOM Approved' },
   BOM_SUBMITTED: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'BOM Submitted' },
   DESIGN_QUERY: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'Design Query' },
   PROCUREMENT_IN_PROGRESS: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', label: 'Procurement Active' },
@@ -63,34 +63,34 @@ const SalesOrderRow = ({ order, onAction, actionLoading }) => {
           </span>
         </td>
         <td className="px-5 py-4">
-          <span className={`px-2 py-1 rounded-full text-[10px]  border ${currentStatus.bg} ${currentStatus.border} ${currentStatus.text}  whitespace-nowrap`}>
+          <span className={`px-2 py-1 rounded text-xs   border ${currentStatus.bg} ${currentStatus.border} ${currentStatus.text}  whitespace-nowrap`}>
             {currentStatus.label}
           </span>
           {order.status === 'DESIGN_QUERY' && order.rejection_reason && (
-            <div className="mt-1.5 p-2 bg-amber-50 border border-amber-100 rounded text-[10px] text-amber-700 leading-relaxed max-w-[200px]">
+            <div className="mt-1.5 p-2 bg-amber-50 border border-amber-100 roundedtext-xs  text-amber-700 leading-relaxed max-w-[200px]">
               <span className="">Rejection Reason:</span> {order.rejection_reason}
             </div>
           )}
         </td>
         <td className="px-5 py-4 text-right">
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-center gap-2">
             <button
               onClick={() => window.open(`${API_BASE}/sales-orders/${order.id}/pdf`, '_blank')}
-              className="px-3 py-1.5 border border-indigo-200 text-indigo-600 text-xs  rounded-lg hover:bg-indigo-50 transition-all"
+              className="p-2 .5 border border-indigo-200 text-indigo-600 text-xs  rounded  hover:bg-indigo-50 transition-all"
             >
               View PDF
             </button>
             <button
               onClick={() => onAction(order.id, 'accept')}
               disabled={isProcessing}
-              className="px-3 py-1.5 bg-emerald-600 text-white text-xs  rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              className="p-2 .5 bg-emerald-600 text-white text-xs  rounded  hover:bg-emerald-700 disabled:opacity-50"
             >
               {isProcessing ? '...' : 'Accept'}
             </button>
             <button
               onClick={() => onAction(order.id, 'reject')}
               disabled={isProcessing}
-              className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs  rounded-lg hover:bg-slate-50 disabled:opacity-50"
+              className="p-2 .5 border border-slate-200 text-slate-600 text-xs  rounded  hover:bg-slate-50 disabled:opacity-50"
             >
               Reject
             </button>
@@ -174,10 +174,10 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
   };
 
   return (
-    <Card id="incoming-orders" title="Incoming Orders" subtitle="Accept or reject incoming sales orders from upstream departments" className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+    <Card id="incoming-orders" title="Incoming Orders" subtitle="Accept or reject incoming sales orders from upstream departments" className="bg-white rounded   border border-slate-100 overflow-hidden">
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded  animate-spin" />
         </div>
       ) : (
         <div className="overflow-x-auto">

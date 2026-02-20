@@ -23,8 +23,8 @@ async function checkOrphanedOrders() {
     `);
     console.table(rows);
 
-    console.log('\n--- Sales Orders with status DESIGN_APPROVED but no Design Order ---');
-    const filtered = rows.filter(r => r.status === 'DESIGN_APPROVED' && !r.design_order_id);
+    console.log('\n--- Sales Orders with status DESIGN_Approved  but no Design Order ---');
+    const filtered = rows.filter(r => r.status === 'DESIGN_Approved ' && !r.design_order_id);
     console.table(filtered);
 
   } catch (error) {

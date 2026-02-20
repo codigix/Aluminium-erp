@@ -220,7 +220,7 @@ Backend:
 ├─ Update grn_items status: EXCESS_HOLD → EXCESS_ACCEPTED
 ├─ Update is_approved: false → true
 ├─ Post to inventory: Item C +30 units (was 0, now added)
-├─ Update grn_excess_approvals status: APPROVED
+├─ Update grn_excess_approvals status: Approved 
 └─ Recalculate PO balance
 
 Result:
@@ -297,7 +297,7 @@ grn_excess_approvals
 ├─ id: 1
 ├─ grn_item_id: 44
 ├─ excess_qty: 5
-├─ status: 'PENDING' or 'APPROVED' or 'REJECTED'
+├─ status: 'PENDING' or 'Approved ' or 'REJECTED'
 ├─ approval_notes: 'Approved per agreement'
 ├─ approved_at: 2026-01-07 15:00:00
 └─ created_at: 2026-01-07 14:35:00

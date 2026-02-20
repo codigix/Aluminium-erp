@@ -19,14 +19,14 @@ const mysql = require('mysql2/promise');
     
     const [designApproved] = await pool.query(
       `SELECT COUNT(*) as cnt FROM sales_orders 
-       WHERE status = 'DESIGN_APPROVED' AND current_department = 'SALES'`
+       WHERE status = 'DESIGN_Approved ' AND current_department = 'SALES'`
     );
     
     console.log('\nDesign Approved + Sales:', designApproved[0].cnt);
     
     const [companies] = await pool.query(
       `SELECT DISTINCT company_id FROM sales_orders 
-       WHERE status = 'DESIGN_APPROVED' AND current_department = 'SALES'`
+       WHERE status = 'DESIGN_Approved ' AND current_department = 'SALES'`
     );
     
     console.log('\nCompanies with approved orders:', companies.length);

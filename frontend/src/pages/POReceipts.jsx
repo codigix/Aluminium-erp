@@ -1,6 +1,31 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, DataTable, StatusBadge, Modal, FormControl } from '../components/ui.jsx';
+import { 
+  Plus, 
+  Search, 
+  Filter, 
+  FileText, 
+  Package, 
+  RefreshCw, 
+  Eye, 
+  FileEdit, 
+  Trash2, 
+  Calendar, 
+  ChevronRight, 
+  LayoutGrid, 
+  List, 
+  CheckCircle2, 
+  User, 
+  Warehouse, 
+  ClipboardCheck,
+  X,
+  ArrowLeft,
+  Download,
+  Printer,
+  History,
+  AlertCircle
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -488,7 +513,7 @@ const POReceipts = () => {
       label: 'PO Number',
       sortable: true,
       render: (val) => (
-        <span className="text-xs font-bold text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 uppercase tracking-tight">#{val || 'Direct'}</span>
+        <span className="text-xs  text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100  tracking-tight">#{val || 'Direct'}</span>
       )
     },
     { 
@@ -498,7 +523,7 @@ const POReceipts = () => {
       render: (val) => (
         <div className="flex flex-col">
           <span className="font-black text-slate-900 text-sm tracking-tight">{val}</span>
-          <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-0.5 tracking-tighter">Active Vendor</span>
+          <span className="text-[10px] text-slate-500 font-black  tracking-widest mt-0.5 tracking-tighter">Active Vendor</span>
         </div>
       )
     },
@@ -507,8 +532,8 @@ const POReceipts = () => {
       label: 'Receipt Date',
       sortable: true,
       render: (val) => (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg text-[10px] text-slate-500 font-bold shadow-sm inline-flex">
-          <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-100 rounded text-xs  text-slate-500   inline-flex">
+          <Calendar className="w-3.5 h-3.5 text-slate-400" />
           {new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
         </div>
       )
@@ -518,19 +543,19 @@ const POReceipts = () => {
       label: 'Status',
       sortable: true,
       render: (val) => (
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold border shadow-sm ${
+        <span className={`inline-flex items-center gap-1.5 p-2  rounded text-xs  font-extrabold border  ${
           val === 'DRAFT' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
           val === 'RECEIVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
           val === 'ACKNOWLEDGED' ? 'bg-blue-50 text-blue-700 border-blue-200' :
           'bg-slate-50 text-slate-700 border-slate-200'
         }`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${
+          <div className={`w-1.5 h-1.5 rounded  ${
             val === 'DRAFT' ? 'bg-amber-500' : 
             val === 'RECEIVED' ? 'bg-emerald-500' :
             val === 'ACKNOWLEDGED' ? 'bg-blue-500' :
             'bg-slate-500'
           }`} />
-          <span className="uppercase tracking-tight">{val}</span>
+          <span className=" tracking-tight">{val}</span>
         </span>
       )
     },
@@ -539,7 +564,7 @@ const POReceipts = () => {
       label: 'Actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button 
             onClick={async () => {
               try {
@@ -556,31 +581,24 @@ const POReceipts = () => {
                 errorToast('Failed to load receipt details');
               }
             }} 
-            className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all border border-indigo-50 shadow-sm active:scale-90"
+            className="p-2 text-indigo-500 hover:bg-indigo-50 rounded  transition-all border border-indigo-50  active:scale-90"
             title="View Details"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
+            <Eye className="w-4 h-4" />
           </button>
           <button 
             onClick={() => handleOpenPdfInNewTab(row)} 
-            className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all border border-emerald-50 shadow-sm active:scale-90"
+            className="p-2 text-emerald-500 hover:bg-emerald-50 rounded  transition-all border border-emerald-50  active:scale-90"
             title="Print GRN"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 00-2 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
+            <Printer className="w-4 h-4" />
           </button>
           <button 
             onClick={() => handleDeleteReceipt(row.id)} 
-            className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-rose-50 shadow-sm active:scale-90"
+            className="p-2 text-rose-500 hover:bg-rose-50 rounded  transition-all border border-rose-50  active:scale-90"
             title="Delete Receipt"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )
@@ -597,19 +615,19 @@ const POReceipts = () => {
       label: 'Material Name',
       key: 'material_name',
       sortable: true,
-      render: (val) => <span className="text-slate-600 font-bold">{val || '—'}</span>
+      render: (val) => <span className="text-slate-600 ">{val || '—'}</span>
     },
     {
       label: 'Material Type',
       key: 'material_type',
       sortable: true,
-      render: (val) => <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{val || '—'}</span>
+      render: (val) => <span className="text-slate-500 text-xs    tracking-widest">{val || '—'}</span>
     },
     {
       label: 'Warehouse',
       key: 'warehouse',
       sortable: true,
-      render: (val) => <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{val || '—'}</span>
+      render: (val) => <span className="text-slate-500 text-xs    tracking-widest bg-slate-50 px-2 py-1 rounded  border border-slate-100">{val || '—'}</span>
     },
     {
       label: 'Current Balance',
@@ -618,7 +636,7 @@ const POReceipts = () => {
       className: 'text-right',
       render: (val) => (
         <div className="flex items-center justify-end gap-2">
-          <span className={`inline-block w-1.5 h-1.5 rounded-full ${parseFloat(val || 0) <= 0 ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
+          <span className={`inline-block w-1.5 h-1.5 rounded  ${parseFloat(val || 0) <= 0 ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
           <span className={`font-black text-xs ${parseFloat(val || 0) <= 0 ? 'text-rose-600' : 'text-slate-900'}`}>
             {parseFloat(val || 0).toFixed(3)}
           </span>
@@ -629,7 +647,7 @@ const POReceipts = () => {
       label: 'Unit',
       key: 'unit',
       sortable: true,
-      render: (val) => <span className="text-slate-400 text-[10px] font-black uppercase">{val || 'NOS'}</span>
+      render: (val) => <span className="text-slate-400text-xs  font-black ">{val || 'NOS'}</span>
     }
   ];
 
@@ -638,49 +656,47 @@ const POReceipts = () => {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-indigo-200 shadow-xl">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
+          <div className="p-3 bg-indigo-600 rounded  text-white shadow-indigo-200 shadow-xl">
+            <Warehouse className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+            <div className="flex items-center gap-2 text-xs  text-slate-400   tracking-widest">
               <span>Buying</span>
-              <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+              <ChevronRight className="w-2.5 h-2.5" />
               <span>Procurement</span>
             </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Purchase Receipts</h1>
-            <p className="text-xs text-slate-500 font-medium">Process material receipts and quality inspections</p>
+            <p className="text-xs text-slate-500 ">Process material receipts and quality inspections</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+          <div className="flex bg-slate-100 p-1 rounded  border border-slate-200">
             <button 
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center gap-2  p-2  rounded text-xs  font-black transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+              <LayoutGrid className="w-3.5 h-3.5" />
               KANBAN
             </button>
             <button 
               onClick={() => setViewMode('list')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black transition-all ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center gap-2  p-2  rounded text-xs  font-black transition-all ${viewMode === 'list' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+              <List className="w-3.5 h-3.5" />
               LIST
             </button>
           </div>
           <button
             onClick={fetchReceipts}
-            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded-xl transition-all border border-slate-200 shadow-sm active:scale-95 bg-white"
+            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
           >
-            <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+            className="flex items-center gap-2  px-5 py-2.5 bg-blue-600 text-white rounded  text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+            <Plus className="w-5 h-5" />
             Create GRN
           </button>
         </div>
@@ -689,23 +705,23 @@ const POReceipts = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         {[
-          { label: 'Total Receipts', value: stats?.total_receipts, sub: 'Total processing requests', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', color: 'blue', bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
-          { label: 'Pending QC', value: stats?.draft_receipts, sub: 'Awaiting initial check', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'orange', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-orange-50', iconColor: 'text-orange-500' },
-          { label: 'QC Review', value: stats?.qc_review_count || 0, sub: 'Quality check in progress', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', color: 'indigo', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-500' },
-          { label: 'Awaiting Storage', value: stats?.awaiting_storage || 0, sub: 'Pending warehouse entry', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', color: 'blue', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-blue-50', iconColor: 'text-blue-500' },
-          { label: 'Completed', value: stats?.received_receipts, sub: 'Successfully stored', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'emerald', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
-          { label: 'Rejected', value: stats?.rejected_count || 0, sub: 'Failed quality criteria', icon: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'rose', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-rose-50', iconColor: 'text-rose-500' },
+          { label: 'Total Receipts', value: stats?.total_receipts, sub: 'Total processing requests', icon: ClipboardCheck, color: 'blue', bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
+          { label: 'Pending QC', value: stats?.draft_receipts, sub: 'Awaiting initial check', icon: History, color: 'orange', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-orange-50', iconColor: 'text-orange-500' },
+          { label: 'QC Review', value: stats?.qc_review_count || 0, sub: 'Quality check in progress', icon: Search, color: 'indigo', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-500' },
+          { label: 'Awaiting Storage', value: stats?.awaiting_storage || 0, sub: 'Pending warehouse entry', icon: Package, color: 'blue', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-blue-50', iconColor: 'text-blue-500' },
+          { label: 'Completed', value: stats?.received_receipts, sub: 'Successfully stored', icon: CheckCircle2, color: 'emerald', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
+          { label: 'Rejected', value: stats?.rejected_count || 0, sub: 'Failed quality criteria', icon: AlertCircle, color: 'rose', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-rose-50', iconColor: 'text-rose-500' },
         ].map((stat, idx) => (
-          <div key={idx} className={`${stat.bg} border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group`}>
+          <div key={idx} className={`${stat.bg} border border-slate-200 rounded  p-4  hover:shadow-md transition-all relative overflow-hidden group`}>
             <div className="relative z-10">
               <div className="flex justify-between items-start mb-2">
-                <p className={`text-[10px] font-black ${stat.bg === 'bg-white' ? 'text-slate-500' : 'text-blue-100'} uppercase tracking-widest`}>{stat.label}</p>
-                <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded-xl shadow-sm`}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} /></svg>
+                <p className={`text-[10px] font-black ${stat.bg === 'bg-white' ? 'text-slate-500' : 'text-blue-100'}  tracking-widest`}>{stat.label}</p>
+                <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded  `}>
+                  <stat.icon className="w-4 h-4" />
                 </div>
               </div>
               <p className={`text-2xl font-black ${stat.text} tracking-tight`}>{stat.value || 0}</p>
-              <p className={`text-[10px] ${stat.subText} mt-1 font-black uppercase tracking-tighter opacity-80`}>{stat.sub}</p>
+              <p className={`text-[10px] ${stat.subText} mt-1 font-black  tracking-tighter opacity-80`}>{stat.sub}</p>
             </div>
           </div>
         ))}
@@ -713,19 +729,19 @@ const POReceipts = () => {
 
       {/* Tabs */}
       <div className="flex items-center gap-4">
-        <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex bg-white p-1 rounded  border border-slate-200 ">
           <button 
             onClick={() => setActiveTab('grn')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-black transition-all ${activeTab === 'grn' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center gap-2  px-5 py-2 rounded  text-xs font-black transition-all ${activeTab === 'grn' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            <FileText className="w-4 h-4" />
             GRN Request
           </button>
           <button 
             onClick={() => setActiveTab('stocks')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-black transition-all ${activeTab === 'stocks' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center gap-2  px-5 py-2 rounded  text-xs font-black transition-all ${activeTab === 'stocks' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+            <Package className="w-4 h-4" />
             Available Stocks
           </button>
         </div>
@@ -739,18 +755,18 @@ const POReceipts = () => {
             placeholder="Search by GRN #, PO #, or Supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
+            className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded  text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
           />
-          <svg className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         </div>
 
-        <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
-          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Status:</span>
+        <div className="flex items-center gap-2  p-2  bg-white border border-slate-200 rounded  ">
+          <Filter className="w-4 h-4 text-slate-400" />
+          <span className="text-xs text-slate-400   ">Status:</span>
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-sm font-bold text-blue-600 outline-none bg-transparent cursor-pointer"
+            className="text-sm  text-blue-600 outline-none bg-transparent cursor-pointer"
           >
             <option value="ALL">ALL STATUS</option>
             <option value="DRAFT">DRAFT</option>
@@ -759,13 +775,13 @@ const POReceipts = () => {
           </select>
         </div>
 
-        <button className="p-2.5 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all active:scale-95">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+        <button className="p-2.5 bg-emerald-500 text-white rounded  hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all active:scale-95">
+          <Filter className="w-5 h-5" />
         </button>
       </div>
 
       {/* Main Table Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded  border border-slate-200  overflow-hidden">
         {activeTab === 'grn' ? (
           <DataTable
             columns={columns}
@@ -811,16 +827,16 @@ const POReceipts = () => {
             {/* Header Status & Date */}
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</span>
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase ${
+                <span className="text-[10px] font-black text-slate-500  tracking-widest">Status</span>
+                <div className={`flex items-center gap-2  p-2 .5 rounded  bordertext-xs  font-black  ${
                   selectedReceiptForView.status === 'RECEIVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                   selectedReceiptForView.status === 'DRAFT' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                   'bg-blue-50 text-blue-700 border-blue-200'
                 }`}>
                   {selectedReceiptForView.status === 'RECEIVED' ? (
-                    <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                   ) : (
-                    <div className={`w-1.5 h-1.5 rounded-full ${
+                    <div className={`w-1.5 h-1.5 rounded  ${
                       selectedReceiptForView.status === 'DRAFT' ? 'bg-amber-500' : 'bg-blue-500'
                     }`} />
                   )}
@@ -828,7 +844,7 @@ const POReceipts = () => {
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Receipt Date</span>
+                <span className="text-[10px] font-black text-slate-500  tracking-widest">Receipt Date</span>
                 <span className="text-sm font-black text-slate-900">
                   {new Date(selectedReceiptForView.receipt_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                 </span>
@@ -837,63 +853,63 @@ const POReceipts = () => {
 
             {/* Reference & Supplier Cards */}
             <div className="grid grid-cols-2 gap-6">
-              <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-3 hover:border-indigo-100 transition-colors">
-                <div className="flex items-center gap-2 text-indigo-500">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-10V4a2 2 0 00-2-2H9a2 2 0 00-2 2v10" /></svg>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">PO Reference</span>
+              <div className="p-5 bg-white border border-slate-200 rounded   space-y-3 hover:border-indigo-100 transition-colors">
+                <div className="flex items-center gap-2  text-indigo-500">
+                  <Warehouse className="w-4 h-4" />
+                  <span className="text-[10px] font-black text-slate-400  tracking-widest">PO Reference</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-50 rounded-xl">
-                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  <div className="p-2 bg-indigo-50 rounded ">
+                    <FileText className="w-5 h-5 text-indigo-600" />
                   </div>
-                  <span className="text-sm font-black text-slate-900 uppercase tracking-tight">#{selectedReceiptForView.po_number || 'Direct'}</span>
+                  <span className="text-sm font-black text-slate-900  tracking-tight">#{selectedReceiptForView.po_number || 'Direct'}</span>
                 </div>
               </div>
 
-              <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-3 hover:border-blue-100 transition-colors">
-                <div className="flex items-center gap-2 text-blue-500">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Supplier</span>
+              <div className="p-5 bg-white border border-slate-200 rounded   space-y-3 hover:border-blue-100 transition-colors">
+                <div className="flex items-center gap-2  text-blue-500">
+                  <User className="w-4 h-4" />
+                  <span className="text-[10px] font-black text-slate-400  tracking-widest">Supplier</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-50 rounded-xl">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" /></svg>
+                  <div className="p-2 bg-blue-50 rounded ">
+                    <Warehouse className="w-5 h-5 text-blue-600" />
                   </div>
-                  <span className="text-sm font-black text-slate-900 uppercase tracking-tight">{selectedReceiptForView.vendor_name}</span>
+                  <span className="text-sm font-black text-slate-900  tracking-tight">{selectedReceiptForView.vendor_name}</span>
                 </div>
               </div>
             </div>
 
             {/* Received Items Table */}
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+              <div className="flex items-center gap-2 ">
+                <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
+                  <Package className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Received Items</h4>
+                <h4 className="text-xs font-black text-slate-900  tracking-widest">Received Items</h4>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="bg-white border border-slate-200 rounded  overflow-hidden ">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/50">
-                    <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">
-                      <th className="px-6 py-4">Item</th>
-                      <th className="px-6 py-4 text-right">Received Qty</th>
-                      <th className="px-6 py-4 text-right">Unit</th>
+                    <tr className="text-[10px] font-black text-slate-400  tracking-widest border-b border-slate-200">
+                      <th className="p-2 ">Item</th>
+                      <th className="p-2  text-right">Received Qty</th>
+                      <th className="p-2  text-right">Unit</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(selectedReceiptForView.items || []).map((item, idx) => (
                       <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4">
+                        <td className="p-2 ">
                           <div className="text-xs font-black text-slate-900">{item.item_code}</div>
-                          <div className="text-[10px] text-slate-500 font-bold uppercase mt-0.5 tracking-tight">{item.material_name || item.description}</div>
+                          <div className="text-[10px] text-slate-500   mt-0.5 tracking-tight">{item.material_name || item.description}</div>
                         </td>
-                        <td className="px-6 py-4 text-right font-black text-slate-900 text-xs">
+                        <td className="p-2  text-right font-black text-slate-900 text-xs">
                           {parseFloat(item.received_quantity || 0).toFixed(4)}
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                        <td className="p-2  text-right">
+                          <span className="text-[10px] font-black text-slate-400  tracking-widest bg-slate-100 px-2 py-1 rounded  border border-slate-200">
                             {item.unit || 'NOS'}
                           </span>
                         </td>
@@ -908,14 +924,14 @@ const POReceipts = () => {
             <div className="flex items-center justify-between pt-6 border-t border-slate-100">
               <button 
                 onClick={() => handleOpenPdfInNewTab(selectedReceiptForView)}
-                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+                className="flex items-center gap-2  p-2.5 bg-emerald-600 text-white rounded  text-xs font-black hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 00-2 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                <Printer className="w-4 h-4" />
                 PRINT GRN
               </button>
               <button 
                 onClick={() => setShowViewModal(false)}
-                className="px-8 py-2.5 bg-emerald-500 text-white rounded-xl text-xs font-black hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+                className="px-8 py-2.5 bg-emerald-500 text-white rounded  text-xs font-black hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95"
               >
                 Close
               </button>
@@ -937,31 +953,29 @@ const POReceipts = () => {
             <div className="lg:col-span-1 space-y-6 border-r border-slate-100 pr-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <div className="w-10 h-10 bg-blue-600 rounded  flex items-center justify-center text-white shadow-lg shadow-blue-100">
+                    <AlertCircle className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Receipt Context</h4>
-                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Link source and set date</p>
+                    <h4 className="text-[10px] font-black text-slate-800  tracking-widest">Receipt Context</h4>
+                    <p className="text-[8px] text-slate-400   tracking-tighter">Link source and set date</p>
                   </div>
                 </div>
                 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">GRN Number</label>
+                <FormControl label="GRN Number">
                   <input
                     type="text"
                     value={`GRN-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(receipts.length + 1).padStart(4, '0')}`}
                     readOnly
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-900 outline-none"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded text-xs font-black text-slate-900 outline-none"
                   />
-                </div>
+                </FormControl>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">Purchase Order</label>
+                <FormControl label="Purchase Order">
                   <select
                     value={formData.poId}
                     onChange={(e) => handlePoChange(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer shadow-sm"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                   >
                     <option value="">Select PO (Optional)</option>
                     {purchaseOrders.map(po => (
@@ -970,47 +984,46 @@ const POReceipts = () => {
                       </option>
                     ))}
                   </select>
-                </div>
+                </FormControl>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">Receipt Date</label>
+                <FormControl label="Receipt Date *">
                   <input
                     type="date"
                     value={formData.receiptDate}
                     onChange={(e) => setFormData({...formData, receiptDate: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                     required
                   />
-                </div>
+                </FormControl>
               </div>
 
               <div className="pt-6 border-t border-slate-100">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  <div className="w-10 h-10 bg-slate-100 rounded  flex items-center justify-center text-slate-500">
+                    <User className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Supplier Info</h4>
-                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Verified supplier details</p>
+                    <h4 className="text-[10px] font-black text-slate-800  tracking-widest">Supplier Info</h4>
+                    <p className="text-[8px] text-slate-400   tracking-tighter">Verified supplier details</p>
                   </div>
                 </div>
                 
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3 shadow-inner">
+                <div className="p-4 bg-slate-50 rounded  border border-slate-100 space-y-3 shadow-inner">
                   {formData.vendorName ? (
                     <>
                       <div>
-                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Selected Supplier</p>
+                        <p className="text-[10px] text-slate-500 font-black  tracking-widest">Selected Supplier</p>
                         <p className="text-sm font-black text-slate-900 mt-0.5">{formData.vendorName}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Supplier ID</p>
+                        <p className="text-[10px] text-slate-500 font-black  tracking-widest">Supplier ID</p>
                         <p className="text-xs font-black text-blue-600 mt-0.5 tracking-tight">#{formData.vendorId || 'N/A'}</p>
                       </div>
                     </>
                   ) : (
                     <div className="text-center py-2">
                       <p className="text-sm font-black text-slate-400 italic">No Supplier Linked</p>
-                      <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-black">Link a PO above</p>
+                      <p className="text-[10px] text-slate-400 mt-1  tracking-widest font-black">Link a PO above</p>
                     </div>
                   )}
                 </div>
@@ -1021,29 +1034,29 @@ const POReceipts = () => {
             <div className="lg:col-span-3 space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
+                    <ClipboardCheck className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Receipt Items</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Verify received quantities against PO</p>
+                    <h3 className="text-sm font-black text-slate-800  tracking-tight">Receipt Items</h3>
+                    <p className="text-[10px] text-slate-400   tracking-widest">Verify received quantities against PO</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={handleAddLineItem}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-100 text-blue-600 rounded-xl text-[10px] font-black hover:bg-blue-50 transition-all shadow-sm active:scale-95"
+                  className="flex items-center gap-2  p-2  bg-white border border-blue-100 text-blue-600 rounded text-xs  font-black hover:bg-blue-50 transition-all  active:scale-95"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+                  <Plus className="w-4 h-4" />
                   Add Line Item
                 </button>
               </div>
 
-              <div className="bg-white border border-slate-100 rounded-[24px] overflow-hidden shadow-sm">
+              <div className="bg-white border border-slate-100 rounded-[24px] overflow-hidden ">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/80">
-                    <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200">
-                      <th className="px-6 py-4">Item Details</th>
+                    <tr className="text-[10px] font-black text-slate-500  tracking-[0.2em] border-b border-slate-200">
+                      <th className="p-2 ">Item Details</th>
                       <th className="px-4 py-4">Warehouse</th>
                       <th className="px-4 py-4 text-center">Design Qty</th>
                       <th className="px-4 py-4 text-center">Receiving Qty</th>
@@ -1055,12 +1068,12 @@ const POReceipts = () => {
                   <tbody className="divide-y divide-slate-50">
                     {formData.items.map((item, idx) => (
                       <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
-                        <td className="px-6 py-4">
+                        <td className="p-2 ">
                           <div className="flex flex-col">
                             {item.poId || formData.poId ? (
                               <div className="flex flex-col">
                                 <span className="font-black text-slate-900 text-xs">{item.material_name || item.item_code || 'Select Item.'}</span>
-                                <span className="text-[10px] text-slate-500 font-bold uppercase mt-0.5 tracking-tight">
+                                <span className="text-[10px] text-slate-500   mt-0.5 tracking-tight">
                                   {item.item_code ? `Code: ${item.item_code}` : 'Manual entry item'}
                                 </span>
                               </div>
@@ -1085,7 +1098,7 @@ const POReceipts = () => {
                                 ))}
                               </select>
                             )}
-                            <p className="text-[10px] text-slate-500 font-medium mt-0.5 truncate max-w-[150px] italic">
+                            <p className="text-[10px] text-slate-500  mt-0.5 truncate max-w-[150px] italic">
                               {item.description || (item.poId ? 'Fetched from PO' : 'Manual entry item')}
                             </p>
                           </div>
@@ -1094,7 +1107,7 @@ const POReceipts = () => {
                           <select
                             value={item.warehouse}
                             onChange={(e) => handleItemChange(idx, 'warehouse', e.target.value)}
-                            className="bg-white border border-slate-200 rounded-xl text-xs font-black py-2 px-3 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm min-w-[120px]"
+                            className="bg-white border border-slate-200 rounded  text-xs font-black py-2 px-3 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all  min-w-[120px]"
                           >
                             {warehouses.length > 0 ? (
                               warehouses.map(w => (
@@ -1114,7 +1127,7 @@ const POReceipts = () => {
                               type="number"
                               value={item.received_qty}
                               onChange={(e) => handleItemChange(idx, 'received_qty', e.target.value)}
-                              className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-black text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
+                              className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded  text-center text-xs font-black text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
                             />
                           </div>
                         </td>
@@ -1124,7 +1137,7 @@ const POReceipts = () => {
                               type="number"
                               value={item.rate}
                               onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
-                              className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-black text-emerald-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
+                              className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded  text-center text-xs font-black text-emerald-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
                             />
                           </div>
                         </td>
@@ -1135,9 +1148,9 @@ const POReceipts = () => {
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all opacity-0 group-hover:opacity-100"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </td>
                       </tr>
@@ -1146,10 +1159,10 @@ const POReceipts = () => {
                 </table>
                 {formData.items.length === 0 && (
                   <div className="p-12 text-center">
-                    <div className="w-16 h-16 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                    <div className="w-16 h-16 bg-slate-50 text-slate-200 rounded  flex items-center justify-center mx-auto mb-4">
+                      <Package className="w-8 h-8" />
                     </div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No items linked</p>
+                    <p className="text-xs  text-slate-400  tracking-widest">No items linked</p>
                     <p className="text-[10px] text-slate-300 mt-1">Select a PO or add manual items</p>
                   </div>
                 )}
@@ -1161,12 +1174,12 @@ const POReceipts = () => {
           <div className="border-t border-slate-200 p-6 flex items-center justify-between bg-slate-50 rounded-b-[24px]">
             <div className="flex items-center gap-12">
               <div>
-                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Total Quantity</p>
-                <p className="text-xl font-black text-slate-900">{formData.receivedQuantity || 0} <span className="text-xs text-slate-400 font-medium ml-1">Units</span></p>
+                <p className="text-[10px] text-slate-500 font-black  tracking-widest">Total Quantity</p>
+                <p className="text-xl font-black text-slate-900">{formData.receivedQuantity || 0} <span className="text-xs text-slate-400  ml-1">Units</span></p>
               </div>
               <div className="h-10 w-[1px] bg-slate-200"></div>
               <div>
-                <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Total Valuation</p>
+                <p className="text-[10px] text-emerald-600 font-black  tracking-widest">Total Valuation</p>
                 <p className="text-xl font-black text-emerald-600">{formatCurrency(formData.totalValuation || 0)}</p>
               </div>
             </div>
@@ -1175,14 +1188,14 @@ const POReceipts = () => {
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-black hover:bg-slate-50 transition-all active:scale-95"
+                className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-sm font-black hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={formData.items.length === 0}
-                className={`flex items-center gap-2 px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black transition-all shadow-lg shadow-blue-200 active:scale-95 ${formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'}`}
+                className={`flex items-center gap-2  px-8 py-2.5 bg-blue-600 text-white rounded  text-sm font-black transition-all shadow-lg shadow-blue-200 active:scale-95 ${formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'}`}
               >
                 Create GRN Request
               </button>
@@ -1191,7 +1204,7 @@ const POReceipts = () => {
         </form>
       </Modal>
 
-        <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit PO Receipt">
+        <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit PO Receipt" size="xl">
           <form onSubmit={handleUpdateReceipt} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormControl label="Receipt Date *">
@@ -1199,7 +1212,7 @@ const POReceipts = () => {
                   type="date"
                   value={editFormData.receiptDate}
                   onChange={(e) => setEditFormData({...editFormData, receiptDate: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                   required
                 />
               </FormControl>
@@ -1207,11 +1220,10 @@ const POReceipts = () => {
                 <select
                   value={editFormData.status}
                   onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                   required
                 >
                   <option value="DRAFT">Draft</option>
-                  <option value="SENT">Sent</option>
                   <option value="RECEIVED">Received</option>
                   <option value="ACKNOWLEDGED">Acknowledged</option>
                   <option value="CLOSED">Closed</option>
@@ -1224,7 +1236,7 @@ const POReceipts = () => {
                 type="number"
                 value={editFormData.receivedQuantity}
                 onChange={(e) => setEditFormData({...editFormData, receivedQuantity: e.target.value})}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm  text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-indigo-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
               />
             </FormControl>
 
@@ -1232,7 +1244,7 @@ const POReceipts = () => {
               <textarea
                 value={editFormData.notes}
                 onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-medium"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                 rows="3"
               />
             </FormControl>
@@ -1241,13 +1253,13 @@ const POReceipts = () => {
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="px-6 py-2.5 border border-slate-200 rounded-xl text-sm  text-slate-500 hover:bg-slate-50 transition-all"
+                className="p-2.5 border border-slate-200 rounded text-xs font-black text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                className="p-2.5 bg-blue-600 text-white rounded text-xs font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
               >
                 Update Receipt
               </button>

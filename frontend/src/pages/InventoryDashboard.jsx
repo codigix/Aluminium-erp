@@ -65,13 +65,13 @@ const InventoryDashboard = () => {
   };
 
   const StatCard = ({ title, count, color, icon }) => (
-    <div className={`${color} rounded-lg p-5 border border-slate-200 transition-all hover:shadow-sm`}>
+    <div className={`${color} rounded  p-5 border border-slate-200 transition-all hover:`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px] text-slate-500    mb-1">{title}</p>
           <p className="text-xl text-slate-900">{count}</p>
         </div>
-        <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
+        <div className="p-2 bg-white rounded   border border-slate-100">
           {icon}
         </div>
       </div>
@@ -82,8 +82,8 @@ const InventoryDashboard = () => {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center ">
-          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
-          <p className="text-xs text-slate-500 font-medium">Fetching inventory insights...</p>
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded  animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 ">Fetching inventory insights...</p>
         </div>
       </div>
     );
@@ -147,7 +147,7 @@ const InventoryDashboard = () => {
                   <th className="p-2 text-left ">Order Code</th>
                   <th className="p-2 text-left ">Customer</th>
                   <th className="p-2 text-left ">Project</th>
-                  <th className="px-4 py-3 text-right ">Amount</th>
+                  <th className="p-2  text-right ">Amount</th>
                   <th className="p-2 text-left ">Target Dispatch</th>
                   <th className="p-2 text-left ">Status</th>
                 </tr>
@@ -155,7 +155,7 @@ const InventoryDashboard = () => {
               <tbody>
                 {stats.incomingPos.map((order) => (
                   <tr key={order.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-4 font-medium text-slate-900">{order.order_code}</td>
+                    <td className="px-4 py-4  text-slate-900">{order.order_code}</td>
                     <td className="px-4 py-4 text-slate-600">{order.company_name}</td>
                     <td className="px-4 py-4 text-slate-600 text-xs max-w-xs truncate">{order.project_name || '—'}</td>
                     <td className="px-4 py-4 text-right text-slate-600">
@@ -165,7 +165,7 @@ const InventoryDashboard = () => {
                       {order.target_dispatch_date ? new Date(order.target_dispatch_date).toLocaleDateString() : '—'}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="px-2 py-1 rounded-full text-xs  bg-blue-100 text-blue-700">
+                      <span className="px-2 py-1 rounded  text-xs  bg-blue-100 text-blue-700">
                         {order.status?.replace(/_/g, ' ')}
                       </span>
                     </td>
@@ -190,7 +190,7 @@ const InventoryDashboard = () => {
                   <th className="p-2 text-left ">Request No</th>
                   <th className="p-2 text-left ">Department</th>
                   <th className="p-2 text-left ">Purpose</th>
-                  <th className="px-4 py-3 text-right ">Items</th>
+                  <th className="p-2  text-right ">Items</th>
                   <th className="p-2 text-left ">Req. Date</th>
                   <th className="p-2 text-left ">Status</th>
                 </tr>
@@ -198,7 +198,7 @@ const InventoryDashboard = () => {
               <tbody>
                 {stats.materialRequests.slice(0, 5).map((req) => (
                   <tr key={req.id} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => window.location.href='/po-material-request'}>
-                    <td className="px-4 py-4 font-medium text-slate-900">{req.request_no}</td>
+                    <td className="px-4 py-4  text-slate-900">{req.request_no}</td>
                     <td className="px-4 py-4 text-slate-600">{req.department}</td>
                     <td className="px-4 py-4 text-slate-600">{req.purpose}</td>
                     <td className="px-4 py-4 text-right text-slate-600">
@@ -208,9 +208,9 @@ const InventoryDashboard = () => {
                       {req.required_date ? new Date(req.required_date).toLocaleDateString() : '—'}
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold  tracking-wider ${
+                      <span className={`px-2 py-1 rounded text-xs     ${
                         req.status === 'DRAFT' ? 'bg-slate-100 text-slate-600' : 
-                        req.status === 'APPROVED' ? 'bg-blue-100 text-blue-600' : 
+                        req.status === 'Approved ' ? 'bg-blue-100 text-blue-600' : 
                         req.status === 'ORDERED' ? 'bg-emerald-100 text-emerald-600' :
                         'bg-orange-100 text-orange-600'
                       }`}>
@@ -237,7 +237,7 @@ const InventoryDashboard = () => {
                 <tr>
                   <th className="p-2 text-left ">GRN ID</th>
                   <th className="p-2 text-left ">PO Number</th>
-                  <th className="px-4 py-3 text-right ">Qty Received</th>
+                  <th className="p-2  text-right ">Qty Received</th>
                   <th className="p-2 text-left ">Date</th>
                   <th className="p-2 text-left ">Status</th>
                 </tr>
@@ -245,7 +245,7 @@ const InventoryDashboard = () => {
               <tbody>
                 {stats.pendingGRNs.map((grn) => (
                   <tr key={grn.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-4 font-medium text-slate-900">GRN-{String(grn.id).padStart(4, '0')}</td>
+                    <td className="px-4 py-4  text-slate-900">GRN-{String(grn.id).padStart(4, '0')}</td>
                     <td className="px-4 py-4 text-slate-600">{grn.po_number}</td>
                     <td className="px-4 py-4 text-right text-slate-600">
                       {parseFloat(grn.received_quantity || 0).toFixed(3)}
@@ -254,7 +254,7 @@ const InventoryDashboard = () => {
                       {new Date(grn.grn_date).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="px-2 py-1 rounded-full text-xs  bg-amber-100 text-amber-700">
+                      <span className="px-2 py-1 rounded  text-xs  bg-amber-100 text-amber-700">
                         {grn.status}
                       </span>
                     </td>
@@ -279,18 +279,18 @@ const InventoryDashboard = () => {
                   <th className="p-2 text-left ">Item Code</th>
                   <th className="p-2 text-left ">Description</th>
                   <th className="p-2 text-left ">Warehouse</th>
-                  <th className="px-4 py-3 text-right ">Balance</th>
+                  <th className="p-2  text-right ">Balance</th>
                   <th className="p-2 text-left ">Unit</th>
                 </tr>
               </thead>
               <tbody>
                 {stats.lowStockItems.map((item) => (
                   <tr key={`${item.item_code}-${item.warehouse}`} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-4 font-medium text-slate-900">{item.item_code}</td>
+                    <td className="px-4 py-4  text-slate-900">{item.item_code}</td>
                     <td className="px-4 py-4 text-slate-600 text-xs max-w-xs truncate">{item.item_description}</td>
                     <td className="px-4 py-4 text-slate-600">{item.warehouse || 'General'}</td>
                     <td className="px-4 py-4 text-right">
-                      <span className="px-2 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                      <span className="px-2 py-1 rounded  text-xs  bg-rose-50 text-rose-600 border border-rose-100">
                         {parseFloat(item.current_balance || 0).toFixed(3)}
                       </span>
                     </td>

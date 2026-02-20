@@ -45,8 +45,8 @@ const formatOrderCode = (id) => {
 const statusColors = {
   CREATED: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', label: 'Created' },
   DESIGN_IN_REVIEW: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', label: 'Design Review' },
-  DESIGN_APPROVED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', label: 'Design Approved' },
-  BOM_APPROVED: { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', label: 'BOM Approved' },
+  DESIGN_Approved : { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', label: 'Design Approved' },
+  BOM_Approved : { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', label: 'BOM Approved' },
   BOM_SUBMITTED: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'BOM Submitted' },
   DESIGN_QUERY: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'Design Query' },
   PROCUREMENT_IN_PROGRESS: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', label: 'Procurement' },
@@ -124,7 +124,7 @@ const ProjectRequests = () => {
         </div>
         <button 
           onClick={fetchRequests}
-          className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+          className="p-2 text-slate-500 hover:bg-slate-100 rounded  transition-colors"
           title="Refresh"
         >
           <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,12 +136,12 @@ const ProjectRequests = () => {
       <Card>
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded  animate-spin" />
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-medium tracking-wider border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-500   border-b border-slate-200">
                 <tr>
                   <th className="p-2 text-left">SO Code</th>
                   <th className="p-2 text-left">Project / Customer</th>
@@ -159,21 +159,21 @@ const ProjectRequests = () => {
                   const statusInfo = statusColors[req.status] || { label: req.status, bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
                   return (
                     <tr key={`${req.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-2 font-mono text-indigo-600 font-medium">
+                      <td className="p-2   text-indigo-600 ">
                         {formatOrderCode(req.id)}
                       </td>
                       <td className="p-2">
-                        <div className="font-medium text-slate-900">{req.project_name || '—'}</div>
+                        <div className=" text-slate-900">{req.project_name || '—'}</div>
                         <div className="text-xs text-slate-500 mt-0.5">{req.company_name}</div>
                       </td>
                       <td className="p-2">
                         <div className="text-slate-900">{req.item_description}</div>
                         <div className="text-xs text-slate-500 mt-0.5">
-                          Code: {req.item_code || '—'} | Qty: <span className="font-medium">{req.item_qty} {req.item_unit}</span>
+                          Code: {req.item_code || '—'} | Qty: <span className="">{req.item_qty} {req.item_unit}</span>
                         </div>
                       </td>
                       <td className="p-2">
-                        <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs font-mono">
+                        <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs  ">
                           {req.drawing_no || 'N/A'}
                         </span>
                       </td>
@@ -183,7 +183,7 @@ const ProjectRequests = () => {
                             href={getFileUrl(req.drawing_pdf)} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 font-medium"
+                            className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 "
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -196,7 +196,7 @@ const ProjectRequests = () => {
                         )}
                       </td>
                       <td className="p-2">
-                        <span className={`px-2 py-1 rounded-full text-[10px]  border ${statusInfo.bg} ${statusInfo.border} ${statusInfo.text} whitespace-nowrap`}>
+                        <span className={`px-2 py-1 rounded text-xs   border ${statusInfo.bg} ${statusInfo.border} ${statusInfo.text} whitespace-nowrap`}>
                           {statusInfo.label}
                         </span>
                       </td>
@@ -210,24 +210,24 @@ const ProjectRequests = () => {
                       </td>
                       <td className="p-2 text-right">
                         {!req.request_accepted ? (
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-center gap-2">
                             <button
                               onClick={() => handleAction(req.id, 'accept')}
                               disabled={actionLoading === req.id}
-                              className="px-3 py-1.5 bg-emerald-600 text-white text-xs  rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                              className="p-2 .5 bg-emerald-600 text-white text-xs  rounded  hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                             >
                               {actionLoading === req.id ? '...' : 'Accept'}
                             </button>
                             <button
                               onClick={() => handleAction(req.id, 'reject')}
                               disabled={actionLoading === req.id}
-                              className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs  rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                              className="p-2 .5 border border-slate-200 text-slate-600 text-xs  rounded  hover:bg-slate-50 disabled:opacity-50 transition-colors"
                             >
                               Reject
                             </button>
                           </div>
                         ) : (
-                          <span className="text-xs text-emerald-600 font-medium">Accepted</span>
+                          <span className="text-xs text-emerald-600 ">Accepted</span>
                         )}
                       </td>
                     </tr>

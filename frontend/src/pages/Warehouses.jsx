@@ -266,7 +266,7 @@ const Warehouses = () => {
       label: 'Code',
       key: 'warehouse_code',
       sortable: true,
-      render: (val) => <span className="font-bold text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     {
       label: 'Name',
@@ -295,7 +295,7 @@ const Warehouses = () => {
       render: (val) => {
         const config = warehouseStatusColors[val] || warehouseStatusColors.ACTIVE;
         return (
-          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${config.badge}`}>
+          <span className={`p-1  roundedtext-xs   ${config.badge}`}>
             {config.label}
           </span>
         );
@@ -309,13 +309,13 @@ const Warehouses = () => {
         <div className="flex items-center justify-end gap-2">
           <button 
             onClick={() => handleEdit(row)}
-            className="flex items-center gap-1 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-all"
+            className="flex items-center gap-1 p-2  bg-indigo-50 text-indigo-600 rounded  text-xs  hover:bg-indigo-100 transition-all"
           >
             Edit
           </button>
           <button 
             onClick={() => handleDelete(val, row.warehouse_code)}
-            className="flex items-center gap-1 px-3 py-1 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-all"
+            className="flex items-center gap-1 p-2  bg-red-50 text-red-600 rounded  text-xs  hover:bg-red-100 transition-all"
           >
             Delete
           </button>
@@ -328,20 +328,20 @@ const Warehouses = () => {
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-orange-50 rounded-xl">
+          <div className="p-3 bg-orange-50 rounded ">
             <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl text-slate-900 font-bold">Warehouses</h1>
+            <h1 className="text-2xl text-slate-900 ">Warehouses</h1>
             <p className="text-slate-500 mt-1">Manage storage locations and inventory warehouses</p>
           </div>
         </div>
         {activeTab === 'list' && (
           <button
             onClick={handleOpenCreateModal}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl text-sm font-bold hover:bg-orange-600 shadow-sm shadow-orange-200 transition-all active:scale-95"
+            className="flex items-center justify-center gap-2 p-2  bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600  shadow-orange-200 transition-all active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -351,19 +351,19 @@ const Warehouses = () => {
         )}
       </div>
 
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 bg-slate-100 p-1 rounded  w-fit">
         <button
           onClick={() => setActiveTab('list')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-            activeTab === 'list' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+          className={`p-2  rounded  text-sm  transition-all ${
+            activeTab === 'list' ? 'bg-white text-orange-600 ' : 'text-slate-500 hover:text-slate-700'
           }`}
         >
           Warehouse List
         </button>
         <button
           onClick={() => setActiveTab('allocation')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-            activeTab === 'allocation' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+          className={`p-2  rounded  text-sm  transition-all ${
+            activeTab === 'allocation' ? 'bg-white text-orange-600 ' : 'text-slate-500 hover:text-slate-700'
           }`}
         >
           Material Allocation
@@ -378,10 +378,10 @@ const Warehouses = () => {
           searchPlaceholder="Search by name, code, or location..."
         />
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded  border border-slate-200  overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-[10px]  ">
+              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em]text-xs   ">
                 <tr>
                   <th className="p-2 text-left">Source (GRN/PO)</th>
                   <th className="p-2 text-left">Item Details</th>
@@ -397,19 +397,19 @@ const Warehouses = () => {
                 {allocationLoading ? (
                   <tr>
                     <td colSpan="8" className="px-6 py-16 text-center">
-                      <div className="w-10 h-10 border-4 border-slate-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-4" />
-                      <p className="text-xs text-slate-500 font-medium">Loading pending allocations...</p>
+                      <div className="w-10 h-10 border-4 border-slate-200 border-t-orange-500 rounded  animate-spin mx-auto mb-4" />
+                      <p className="text-xs text-slate-500 ">Loading pending allocations...</p>
                     </td>
                   </tr>
                 ) : pendingItems.length === 0 ? (
                   <tr>
                     <td colSpan="8" className="px-6 py-16 text-center">
-                      <div className="p-3 bg-slate-50 rounded-full shadow-sm w-fit mx-auto mb-4">
+                      <div className="p-3 bg-slate-50 rounded   w-fit mx-auto mb-4">
                         <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                       </div>
-                      <p className="text-slate-500 font-medium">No items pending allocation</p>
+                      <p className="text-slate-500 ">No items pending allocation</p>
                       <p className="text-xs text-slate-400 mt-1">All received materials have been distributed</p>
                     </td>
                   </tr>
@@ -417,25 +417,25 @@ const Warehouses = () => {
                   pendingItems.map((item) => (
                     <tr key={item.grn_item_id} className="group hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-5">
-                        <div className=" text-orange-600 font-bold">#{item.grn_number}</div>
+                        <div className=" text-orange-600 ">#{item.grn_number}</div>
                         <div className="text-[10px] text-slate-400 tracking-tight mt-0.5">PO: {item.po_number}</div>
                       </td>
                       <td className="px-6 py-5">
-                        <div className=" text-slate-900 font-bold">{item.item_code}</div>
+                        <div className=" text-slate-900 ">{item.item_code}</div>
                         <div className="text-xs text-slate-500 max-w-[200px] truncate">{item.material_name}</div>
                       </td>
-                      <td className="px-6 py-5 text-right font-mono text-emerald-600 bg-emerald-50/30">
+                      <td className="px-6 py-5 text-right   text-emerald-600 bg-emerald-50/30">
                         {parseFloat(item.accepted_qty).toFixed(3)}
                       </td>
-                      <td className="px-6 py-5 text-right font-mono text-slate-400">
+                      <td className="px-6 py-5 text-right   text-slate-400">
                         {parseFloat(item.allocated_qty || 0).toFixed(3)}
                       </td>
-                      <td className="px-6 py-5 text-right font-mono text-rose-600 bg-rose-50/30">
+                      <td className="px-6 py-5 text-right   text-rose-600 bg-rose-50/30">
                         {parseFloat(item.pending_allocation_qty).toFixed(3)}
                       </td>
                       <td className="px-6 py-5">
                         <select
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-white transition-all"
+                          className="w-full px-3 py-2 border border-slate-200 rounded  text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-white transition-all"
                           value={allocationData[item.grn_item_id]?.target_warehouse || ''}
                           onChange={(e) => handleAllocationInputChange(item.grn_item_id, 'target_warehouse', e.target.value)}
                         >
@@ -448,7 +448,7 @@ const Warehouses = () => {
                       <td className="px-6 py-5">
                         <input
                           type="number"
-                          className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                          className="w-24 px-3 py-2 border border-slate-200 rounded  text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                           value={allocationData[item.grn_item_id]?.allocate_qty || ''}
                           onChange={(e) => handleAllocationInputChange(item.grn_item_id, 'allocate_qty', e.target.value)}
                           max={item.pending_allocation_qty}
@@ -460,15 +460,15 @@ const Warehouses = () => {
                         <button
                           onClick={() => handleAllocate(item)}
                           disabled={allocatingId === item.grn_item_id}
-                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-xs transition-all shadow-sm ${
+                          className={`inline-flex items-center gap-2  p-2  rounded  text-white text-xs transition-all  ${
                             allocatingId === item.grn_item_id 
                               ? 'bg-slate-300 cursor-not-allowed' 
-                              : 'bg-orange-600 hover:bg-orange-700 active:scale-95 shadow-orange-100 font-bold'
+                              : 'bg-orange-600 hover:bg-orange-700 active:scale-95 shadow-orange-100 '
                           }`}
                         >
                           {allocatingId === item.grn_item_id ? (
                             <>
-                              <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded  animate-spin" />
                               Wait...
                             </>
                           ) : (
@@ -502,7 +502,7 @@ const Warehouses = () => {
                 type="text"
                 value={formData.warehouseCode}
                 onChange={(e) => setFormData({...formData, warehouseCode: e.target.value})}
-                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
+                className="w-full p-2 .5 bg-slate-100 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
                 placeholder="e.g. WH-RM"
                 required
                 readOnly
@@ -513,7 +513,7 @@ const Warehouses = () => {
                 type="text"
                 value={formData.warehouseName}
                 onChange={(e) => setFormData({...formData, warehouseName: e.target.value})}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
+                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
                 placeholder="Enter warehouse name"
                 required
               />
@@ -525,7 +525,7 @@ const Warehouses = () => {
               <select
                 value={formData.warehouseType}
                 onChange={(e) => setFormData({...formData, warehouseType: e.target.value})}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
+                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
               >
                 <option value="">Select Type</option>
                 <option value="Stores">Stores</option>
@@ -540,7 +540,7 @@ const Warehouses = () => {
                 type="text"
                 value={formData.location}
                 onChange={(e) => setFormData({...formData, location: e.target.value})}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
+                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
                 placeholder="e.g. Main Factory"
               />
             </FormControl>
@@ -552,7 +552,7 @@ const Warehouses = () => {
                 type="number"
                 value={formData.capacity}
                 onChange={(e) => setFormData({...formData, capacity: e.target.value})}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
+                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
                 placeholder="Enter capacity"
               />
             </FormControl>
@@ -560,7 +560,7 @@ const Warehouses = () => {
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({...formData, status: e.target.value})}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
+                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
               >
                 <option value="ACTIVE">Active</option>
                 <option value="INACTIVE">Inactive</option>
@@ -572,13 +572,13 @@ const Warehouses = () => {
             <button
               type="button"
               onClick={resetForm}
-              className="px-6 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
+              className="p-2 border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-orange-500 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition-all active:scale-95 shadow-sm shadow-orange-200"
+              className="p-2 bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600 transition-all active:scale-95  shadow-orange-200"
             >
               {editingWarehouse ? 'Update Warehouse' : 'Create Warehouse'}
             </button>

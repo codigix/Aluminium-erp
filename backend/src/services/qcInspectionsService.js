@@ -401,7 +401,7 @@ const updateQC = async (qcId, updates) => {
 
       let grnStatus = 'PENDING';
       if (currentStatus === 'PASSED' || currentStatus === 'ACCEPTED') {
-        grnStatus = 'APPROVED';
+        grnStatus = 'Approved ';
       } else if (currentStatus === 'FAILED') {
         grnStatus = 'REJECTED';
       } else if (currentStatus === 'SHORTAGE') {
@@ -420,7 +420,7 @@ const updateQC = async (qcId, updates) => {
         for (const item of grnItems) {
           await connection.execute(
             'UPDATE grn_items SET status = ? WHERE id = ?',
-            ['APPROVED', item.id]
+            ['Approved ', item.id]
           );
         }
       } else if (currentStatus === 'FAILED' || currentStatus === 'REJECTED') {
@@ -663,7 +663,7 @@ const generateQCInspectionPDF = async (qcId) => {
     <html>
     <head>
       <style>
-        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
         .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
         .report-title { text-align: right; }
@@ -673,7 +673,7 @@ const generateQCInspectionPDF = async (qcId) => {
         table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
         th { background: #f8fafc; color: #64748b; text-align: left; padding: 12px 8px; font-size: 11px; border-bottom: 1px solid #e2e8f0; }
         td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
-        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 10px; font-weight: bold; text-transform: ; }
         .status-passed { background: #ecfdf5; color: #059669; border: 1px solid #10b981; }
         .status-failed { background: #fef2f2; color: #dc2626; border: 1px solid #ef4444; }
         .status-pending { background: #fffbeb; color: #d97706; border: 1px solid #f59e0b; }

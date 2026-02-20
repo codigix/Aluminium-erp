@@ -3,6 +3,7 @@ import { Card, Modal, FormControl, DataTable, Badge } from '../components/ui.jsx
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { Eye, Edit, Trash2, History, Search } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -92,13 +93,13 @@ const DrawingMaster = () => {
     { 
       label: 'Drawing No', 
       key: 'drawing_no',
-      render: (val) => <span className="font-medium text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     { 
       label: 'Latest Rev', 
       key: 'revision_no',
       render: (val) => (
-        <Badge variant="indigo" className="font-mono">
+        <Badge variant="indigo" className=" ">
           {val || '0'}
         </Badge>
       )
@@ -133,13 +134,10 @@ const DrawingMaster = () => {
       render: (val, row) => val ? (
         <button 
           onClick={() => handlePreview(row)}
-          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors mx-auto block"
+          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors mx-auto block"
           title="Preview Drawing"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
+          <Eye className="w-5 h-5" />
         </button>
       ) : <span className="text-slate-300">—</span>
     },
@@ -148,24 +146,20 @@ const DrawingMaster = () => {
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-center gap-2">
           <button 
             onClick={() => handleEdit(row)}
-            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
             title="Edit Drawing"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
+            <Edit className="w-4 h-4" />
           </button>
           <button 
             onClick={() => handleDelete(row)}
-            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded  transition-colors"
             title="Delete Drawing"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )
@@ -178,12 +172,10 @@ const DrawingMaster = () => {
     const isLoading = revisionsLoading[row.drawing_no];
 
     return (
-      <div className="bg-slate-50/50 p-4 rounded-lg border border-slate-100 m-2">
+      <div className="bg-slate-50/50 p-4 rounded  border border-slate-100 m-2">
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs  text-slate-700  tracking-wider flex items-center gap-2">
-            <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <h4 className="text-xs  text-slate-700   flex items-center gap-2 ">
+            <History className="w-4 h-4 text-indigo-500" />
             Revision History
           </h4>
         </div>
@@ -193,39 +185,36 @@ const DrawingMaster = () => {
         ) : revisions.length === 0 ? (
           <div className="py-4 text-left text-xs text-slate-400 italic">No previous revisions recorded</div>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded  border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-4 py-2 text-left text-[10px]  text-slate-500 ">Rev</th>
-                  <th className="px-4 py-2 text-left text-[10px]  text-slate-500 ">Date</th>
-                  <th className="px-4 py-2 text-left text-[10px]  text-slate-500 ">Description</th>
-                  <th className="px-4 py-2 text-right text-[10px]  text-slate-500 ">File</th>
+                  <th className="p-2  text-lefttext-xs   text-slate-500 ">Rev</th>
+                  <th className="p-2  text-lefttext-xs   text-slate-500 ">Date</th>
+                  <th className="p-2  text-lefttext-xs   text-slate-500 ">Description</th>
+                  <th className="p-2  text-righttext-xs   text-slate-500 ">File</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {revisions.map((rev, i) => (
                   <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-2 whitespace-nowrap text-xs font-mono font-medium text-indigo-600">
+                    <td className="p-2  whitespace-nowrap text-xs    text-indigo-600">
                       {rev.revision_no || '0'}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-600">
+                    <td className="p-2  whitespace-nowrap text-xs text-slate-600">
                       {new Date(rev.created_at).toLocaleDateString('en-IN')}
                     </td>
-                    <td className="px-4 py-2 text-xs text-slate-500 max-w-xs truncate">
+                    <td className="p-2  text-xs text-slate-500 max-w-xs truncate">
                       {rev.description}
                     </td>
-                    <td className="px-4 py-2 text-right">
+                    <td className="p-2  text-right">
                       {rev.drawing_pdf ? (
                         <button 
                           onClick={() => handlePreview({ ...rev, drawing_no: row.drawing_no })}
                           className="text-indigo-600 hover:text-indigo-900 transition-colors inline-block"
                           title="Preview Revision"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
+                          <Eye className="w-4 h-4" />
                         </button>
                       ) : <span className="text-slate-300">—</span>}
                     </td>
@@ -320,31 +309,29 @@ const DrawingMaster = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-xl text-slate-900">Drawing Master</h1>
-          <p className="text-xs text-slate-500 font-medium">Central repository for all engineering drawings and revisions</p>
+          <p className="text-xs text-slate-500 ">Central repository for all engineering drawings and revisions</p>
         </div>
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative">
             <input 
               type="text" 
               placeholder="Search Drawing No, PO or Desc..." 
-              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-72 transition-all shadow-sm"
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded  text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-72 transition-all "
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
           </div>
           <button 
             type="submit"
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 transition-all shadow-sm"
+            className="p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all "
           >
             Search
           </button>
           <button 
             type="button"
             onClick={() => { setSearchTerm(''); fetchDrawings(); }}
-            className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs  hover:bg-slate-200 transition-all"
+            className="p-2  bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all"
           >
             Reset
           </button>
@@ -368,7 +355,7 @@ const DrawingMaster = () => {
             <FormControl label="Revision No">
               <input 
                 type="text" 
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 value={editData.revision_no}
                 onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
               />
@@ -376,7 +363,7 @@ const DrawingMaster = () => {
           </div>
           <FormControl label="Description">
             <textarea 
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-h-[100px] transition-all"
+              className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-h-[100px] transition-all"
               value={editData.description}
               onChange={(e) => setEditData({...editData, description: e.target.value})}
             />
@@ -385,7 +372,7 @@ const DrawingMaster = () => {
             <input 
               type="file" 
               accept=".pdf"
-              className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file: file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all"
+              className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded  file:border-0 file:text-sm file: file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all"
               onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
             />
           </FormControl>
@@ -393,14 +380,14 @@ const DrawingMaster = () => {
             <button 
               type="button"
               onClick={() => setShowEditModal(false)}
-              className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs  hover:bg-slate-50 transition-all"
+              className="p-2.5 border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button 
               type="submit"
               disabled={saveLoading}
-              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50"
+              className="px-10 py-2.5 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50"
             >
               {saveLoading ? 'Saving...' : 'Save Changes'}
             </button>

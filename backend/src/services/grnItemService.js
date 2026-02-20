@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const stockService = require('./stockService');
 
 const GRN_ITEM_STATUS = {
-  APPROVED: 'APPROVED',
+  Approved : 'Approved ',
   SHORTAGE: 'SHORTAGE',
   OVERAGE: 'OVERAGE'
 };
@@ -28,7 +28,7 @@ const validateGRNItemInput = (poQty, acceptedQty) => {
 
 const determineGRNItemStatus = (poQty, acceptedQty) => {
   if (acceptedQty === poQty) {
-    return GRN_ITEM_STATUS.APPROVED;
+    return GRN_ITEM_STATUS.Approved ;
   }
 
   if (acceptedQty < poQty) {
@@ -39,7 +39,7 @@ const determineGRNItemStatus = (poQty, acceptedQty) => {
     return GRN_ITEM_STATUS.OVERAGE;
   }
 
-  return GRN_ITEM_STATUS.APPROVED;
+  return GRN_ITEM_STATUS.Approved ;
 };
 
 const calculatePOBalance = (poQty, totalAcceptedQty) => {
@@ -250,7 +250,7 @@ const approveExcessGRNItem = async (grnItemId, approvalNotes = null) => {
         status = ?, approval_notes = ?, approved_at = NOW()
        WHERE grn_item_id = ?`,
       [
-        'APPROVED',
+        'Approved ',
         approvalNotes,
         grnItemId
       ]
@@ -456,8 +456,8 @@ const calculateGRNStatus = (grnItems) => {
     return 'PARTIAL';
   }
   
-  if (statuses.every(s => s === 'APPROVED')) {
-    return 'APPROVED';
+  if (statuses.every(s => s === 'Approved ')) {
+    return 'Approved ';
   }
   
   return 'PENDING';

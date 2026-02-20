@@ -53,7 +53,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
       <meta charset="UTF-8">
       <title>Quotation - SP TECHPIONEER</title>
       <style>
-        body { font-family: Arial, sans-serif; font-size: 12px; color: #000; line-height: 1.4; padding: 20px; }
+        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; font-size: 12px; color: #000; line-height: 1.4; padding: 20px; }
         .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .header-table td { padding: 10px; border: 1px solid #000; }
         .title { font-size: 24px; font-weight: bold; color: #f26522; text-align: center; }
@@ -202,7 +202,7 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
       to: clientEmail,
       subject: `Quotation Request ${formattedQuoteNumber} from SP TECHPIONEER - ${clientName}`,
       html: `
-        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <div style="font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6;">
           <h2 style="color: #f26522;">Dear ${clientName},</h2>
           <p>Please find the attached quotation ${formattedQuoteNumber} for your approved drawings from <strong>SP TECHPIONEER PVT. LTD.</strong></p>
           <p><strong>Total Quotation Value (Incl. GST):</strong> ₹${(totalAmount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
@@ -241,7 +241,7 @@ const sendReplyEmail = async (to, subject, message, replyToId) => {
       to: to,
       subject: subject,
       html: `
-        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <div style="font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6;">
           <div style="white-space: pre-wrap;">${message}</div>
           <br/>
           <p>Best regards,</p>
