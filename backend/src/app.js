@@ -94,9 +94,15 @@ privateRouter.use('/dashboard', dashboardRoutes);
 
 const apiRouter = express.Router();
 
-// --- Fix: Serve uploads inside the /api router WITHOUT authentication ---
-apiRouter.use('/uploads', express.static(uploadsPath));
-apiRouter.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// --- Robust Static File Serving ---
+// This ensures that /api/uploads/... is handled before ANY authentication
+const serveStatic = express.static(uploadsPath);
+const serveStaticFallback = express.static(path.join(process.cwd(), 'uploads'));
+const serveStaticBackendFallback = express.static(path.join(process.cwd(), 'backend', 'uploads'));
+
+apiRouter.use('/uploads', serveStatic);
+apiRouter.use('/uploads', serveStaticFallback);
+apiRouter.use('/uploads', serveStaticBackendFallback);
 
 apiRouter.use(publicRouter);
 apiRouter.use(privateRouter);
