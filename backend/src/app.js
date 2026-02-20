@@ -44,6 +44,7 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { authenticate } = require('./middleware/authMiddleware');
 const { uploadsPath } = require('./config/uploadConfig');
 
+const { uploadsPath } = require('./config/uploadConfig');
 const app = express();
 
 app.use(cors());
@@ -100,9 +101,19 @@ const serveStatic = express.static(uploadsPath);
 const serveStaticFallback = express.static(path.join(process.cwd(), 'uploads'));
 const serveStaticBackendFallback = express.static(path.join(process.cwd(), 'backend', 'uploads'));
 
+// Handle cases where the path in DB is "uploads/filename.jpg"
+// If requested as /api/uploads/uploads/filename.jpg, we serve from the same folder
+apiRouter.use('/uploads/uploads', serveStatic);
+apiRouter.use('/uploads/uploads', serveStaticFallback);
+
 apiRouter.use('/uploads', serveStatic);
 apiRouter.use('/uploads', serveStaticFallback);
 apiRouter.use('/uploads', serveStaticBackendFallback);
+
+// Prevent image requests from falling through to the Auth middleware
+apiRouter.use('/uploads', (req, res) => {
+  res.status(404).json({ error: 'File not found on server disk', path: req.path });
+});
 
 apiRouter.use(publicRouter);
 apiRouter.use(privateRouter);

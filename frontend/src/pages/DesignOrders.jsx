@@ -2,34 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, StatusBadge, Modal } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { getFileUrl } from '../utils/url';
 import { Plus, Search, RefreshCw, Filter, FileText, Send, Eye, LayoutList, LayoutGrid } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
-
-// Robust URL construction
-const getFileUrl = (path) => {
-  if (!path) return '';
-  if (path.startsWith('http')) return path;
-  
-  // 1. Determine base URL (priority: VITE_UPLOAD_URL -> API_BASE)
-  let base = import.meta.env.VITE_UPLOAD_URL || API_BASE;
-  if (base.endsWith('/')) base = base.slice(0, -1);
-  
-  // 2. Clean the incoming path
-  let cleanPath = path.startsWith('/') ? path.slice(1) : path;
-  
-  // 3. Prevent double 'uploads/' if base already includes it
-  if (base.toLowerCase().endsWith('/uploads') && cleanPath.toLowerCase().startsWith('uploads/')) {
-    cleanPath = cleanPath.slice(8);
-  }
-  
-  const url = `${base}/${cleanPath}`;
-  
-  if (url.startsWith('http')) return url;
-  return window.location.origin + (url.startsWith('/') ? url : '/' + url);
-};
 
 const DesignOrders = () => {
   const navigate = useNavigate();
@@ -1120,9 +1098,9 @@ const DesignOrders = () => {
                           <div className="p-4 bg-slate-50/50">
                             {viewMode === 'grid' ? (
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {group.orders.map((order) => (
+                                {group.orders.map((order, index) => (
                                   <div 
-                                    key={order.item_id} 
+                                    key={`${order.item_id}-${index}`} 
                                     className={`bg-white rounded-xl border-2 transition-all group relative ${
                                       selectedIncomingOrders.has(order.item_id) ? 'border-blue-500 shadow-md ring-4 ring-blue-50' : 'border-slate-100 hover:border-slate-300'
                                     } ${order.item_status === 'REJECTED' ? 'bg-red-50/30' : ''}`}
@@ -1249,8 +1227,8 @@ const DesignOrders = () => {
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-100">
-                                    {group.orders.map((order) => (
-                                      <tr key={order.item_id} className={`hover:bg-slate-50 transition-colors ${selectedIncomingOrders.has(order.item_id) ? 'bg-blue-50/30' : ''}`}>
+                                    {group.orders.map((order, index) => (
+                                      <tr key={`${order.item_id}-${index}`} className={`hover:bg-slate-50 transition-colors ${selectedIncomingOrders.has(order.item_id) ? 'bg-blue-50/30' : ''}`}>
                                         <td className="px-4 py-3">
                                           <input
                                             type="checkbox"
@@ -1478,8 +1456,8 @@ const DesignOrders = () => {
                       <div className="p-5 bg-slate-50/50">
                         {viewMode === 'grid' ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                            {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order) => (
-                              <div key={`${order.id}-${order.item_id}`} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col h-full">
+                            {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order, index) => (
+                              <div key={`${order.id}-${order.item_id}-${index}`} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col h-full">
                                 {/* Card Header */}
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-start gap-3 bg-slate-50/30">
                                   <div className="flex-1 min-w-0">
@@ -1588,8 +1566,8 @@ const DesignOrders = () => {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
-                                {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order) => (
-                                  <tr key={`${order.id}-${order.item_id}`} className="hover:bg-slate-50 transition-colors">
+                                {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order, index) => (
+                                  <tr key={`${order.id}-${order.item_id}-${index}`} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-4 py-3">
                                       <div className="flex flex-col">
                                         <span className="text-xs font-medium text-slate-900">{order.drawing_no || 'Pending Drawing'}</span>
@@ -1710,8 +1688,8 @@ const DesignOrders = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
-                        {orderDetails.map((item) => (
-                          <tr key={item.id} className="hover:bg-slate-50 transition-colors text-xs">
+                        {orderDetails.map((item, index) => (
+                          <tr key={`${item.id}-${index}`} className="hover:bg-slate-50 transition-colors text-xs">
                             <td className="px-4 py-3 whitespace-nowrap text-slate-600">{item.item_code}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               {editingItem?.id === item.id ? (
@@ -1858,8 +1836,8 @@ const DesignOrders = () => {
                   </div>
                 ) : reviewDetails.length > 0 ? (
                   <div className="space-y-3">
-                    {reviewDetails.map(item => (
-                      <div key={item.id} className="p-3 bg-slate-50 rounded border border-slate-200">
+                    {reviewDetails.map((item, index) => (
+                      <div key={`${item.id}-${index}`} className="p-3 bg-slate-50 rounded border border-slate-200">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-3 flex-1">
                             {item.drawing_pdf && (
@@ -2366,10 +2344,10 @@ const DesignOrders = () => {
                                 );
                               })
                               .sort((a, b) => b.id - a.id)
-                              .map((item) => {
+                              .map((item, index) => {
                                 const isCurrentDrawing = materialFormData.drawingNo && item.drawing_no === materialFormData.drawingNo;
                                 return (
-                                  <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
+                                  <tr key={`${item.id}-${index}`} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
                                     <td className="px-4 py-3 text-xs font-medium text-slate-700">
                                       {item.item_code}
                                       {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px]  ">Current Drg</span>}

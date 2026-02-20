@@ -1,37 +1,11 @@
 import React from 'react';
 import { Modal } from './ui.jsx';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
-const UPLOAD_BASE = import.meta.env.VITE_UPLOAD_URL;
+import { getFileUrl } from '../utils/url';
 
 const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
   if (!drawing) return null;
 
   const filePath = drawing.file_path || drawing.drawing_pdf || '';
-  
-  // Robust URL construction
-  const getFileUrl = (path) => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    
-    // 1. Determine base URL (priority: VITE_UPLOAD_URL -> API_BASE)
-    let base = UPLOAD_BASE || API_BASE;
-    if (base.endsWith('/')) base = base.slice(0, -1);
-    
-    // 2. Clean the incoming path
-    let cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    
-    // 3. Prevent double 'uploads/' if base already includes it
-    if (base.toLowerCase().endsWith('/uploads') && cleanPath.toLowerCase().startsWith('uploads/')) {
-      cleanPath = cleanPath.slice(8);
-    }
-    
-    const url = `${base}/${cleanPath}`;
-    
-    if (url.startsWith('http')) return url;
-    return window.location.origin + (url.startsWith('/') ? url : '/' + url);
-  };
-
   const fileUrl = getFileUrl(filePath);
   const extension = filePath.toLowerCase().split('.').pop();
   
