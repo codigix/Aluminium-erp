@@ -50,14 +50,6 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// --- Move static file serving here to bypass any authentication for images ---
-console.log(`[App] Serving static files from: ${uploadsPath}`);
-app.use('/uploads', express.static(uploadsPath));
-app.use('/api/uploads', express.static(uploadsPath));
-// Fallback for different working directories
-app.use('/api/uploads', express.static(path.join(process.cwd(), 'uploads')));
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
 // --- Route Grouping ---
 const publicRouter = express.Router();
 publicRouter.use('/auth', authRoutes);
@@ -101,12 +93,21 @@ privateRouter.use('/material-requests', materialRequestRoutes);
 privateRouter.use('/dashboard', dashboardRoutes);
 
 const apiRouter = express.Router();
+
+// --- Fix: Serve uploads inside the /api router WITHOUT authentication ---
+apiRouter.use('/uploads', express.static(uploadsPath));
+apiRouter.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 apiRouter.use(publicRouter);
 apiRouter.use(privateRouter);
 
 // Mount with and without /api prefix for compatibility
 app.use('/api', apiRouter);
 app.use('/', apiRouter);
+
+// Also serve at the root level just in case
+app.use('/uploads', express.static(uploadsPath));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use(notFound);
 app.use(errorHandler);
