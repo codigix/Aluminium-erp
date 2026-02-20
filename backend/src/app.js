@@ -49,22 +49,30 @@ const app = express();
 
 app.use(cors());
 
-// Debug logging for uploads in production
-app.use('/api/uploads', (req, res, next) => {
-  console.log(`[Uploads Debug] Request for: ${req.url} (Original: ${req.originalUrl})`);
-  console.log(`[Uploads Debug] Target Path: ${path.join(uploadsPath, req.url)}`);
+// GLOBAL CATCH-ALL FOR UPLOADS (No Authentication can ever touch this)
+// This handles /api/uploads, /uploads, and nested /uploads/uploads
+app.use((req, res, next) => {
+  if (req.url.toLowerCase().includes('/uploads/')) {
+    const parts = req.url.split('/uploads/');
+    const fileName = parts[parts.length - 1];
+    
+    const tryPaths = [
+      path.join(uploadsPath, fileName),
+      path.join(process.cwd(), 'uploads', fileName),
+      path.join(process.cwd(), 'backend', 'uploads', fileName)
+    ];
+
+    const tryServe = (index) => {
+      if (index >= tryPaths.length) return next();
+      res.sendFile(tryPaths[index], (err) => {
+        if (err) tryServe(index + 1);
+      });
+    };
+    
+    return tryServe(0);
+  }
   next();
 });
-
-// Robust static file serving BEFORE any other complex logic
-// Handle redundant "uploads/uploads" paths from database
-app.use('/api/uploads/uploads', express.static(uploadsPath));
-app.use('/api/uploads/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
-// Standard uploads serving
-app.use('/api/uploads', express.static(uploadsPath));
-app.use('/api/uploads', express.static(path.join(process.cwd(), 'uploads')));
-app.use('/api/uploads', express.static(path.join(process.cwd(), 'backend', 'uploads')));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
