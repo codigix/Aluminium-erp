@@ -1901,7 +1901,7 @@ const DesignOrders = () => {
                             {['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(item.drawing_pdf.toLowerCase().split('.').pop()) ? (
                               <div className="relative group">
                                 <img 
-                                  src={`${API_BASE.replace('/api', '')}/${item.drawing_pdf}`} 
+                                  src={`${API_BASE}/${item.drawing_pdf}`} 
                                   alt="Drawing" 
                                   className="max-w-full h-auto object-contain mx-auto max-h-[400px] cursor-pointer"
                                   onClick={() => handlePreview(item)}
