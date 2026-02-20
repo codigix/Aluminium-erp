@@ -43,8 +43,6 @@ const qcService = require('./services/qcInspectionsService');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { authenticate } = require('./middleware/authMiddleware');
 const { uploadsPath } = require('./config/uploadConfig');
-
-const { uploadsPath } = require('./config/uploadConfig');
 const app = express();
 
 app.use(cors());
@@ -52,9 +50,15 @@ app.use(cors());
 // GLOBAL CATCH-ALL FOR UPLOADS (No Authentication can ever touch this)
 // This handles /api/uploads, /uploads, and nested /uploads/uploads
 app.use((req, res, next) => {
-  if (req.url.toLowerCase().includes('/uploads/')) {
-    const parts = req.url.split('/uploads/');
-    const fileName = parts[parts.length - 1];
+  // Use originalUrl as well for cases where req.url is modified by previous middleware or proxy
+  const url = (req.originalUrl || req.url).toLowerCase();
+  
+  if (url.includes('/uploads/')) {
+    const parts = url.split('/uploads/');
+    let fileName = parts[parts.length - 1];
+    
+    // Remove query strings if any
+    fileName = fileName.split('?')[0];
     
     const tryPaths = [
       path.join(uploadsPath, fileName),
