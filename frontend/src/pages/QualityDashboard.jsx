@@ -55,13 +55,13 @@ const QualityDashboard = () => {
   };
 
   const StatCard = ({ title, count, icon: Icon, colorClass }) => (
-    <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+    <div className="bg-white rounded  p-6 border border-slate-100  hover:shadow-md transition-all group">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px]  text-slate-400   mb-1">{title}</p>
           <p className="text-2xl  text-slate-900">{count}</p>
         </div>
-        <div className={`p-4 rounded-xl transition-colors ${colorClass}`}>
+        <div className={`p-4 rounded  transition-colors ${colorClass}`}>
           <Icon className="w-6 h-6" />
         </div>
       </div>
@@ -79,19 +79,19 @@ const QualityDashboard = () => {
       label: 'Item Code', 
       key: 'item_code', 
       sortable: true,
-      render: (val) => <span className="font-medium text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     { 
       label: 'Quantity Pending', 
       key: 'quantity', 
       className: 'text-right',
-      render: (val) => <span className="font-mono  text-slate-700">{parseFloat(val || 0).toFixed(3)}</span>
+      render: (val) => <span className="   text-slate-700">{parseFloat(val || 0).toFixed(3)}</span>
     },
     { 
       label: 'Current Status', 
       key: 'status',
       render: (val) => (
-        <Badge variant="purple" className=" tracking-wider  text-[10px]">
+        <Badge variant="purple" className="  text-xs ">
           {val}
         </Badge>
       )
@@ -100,9 +100,9 @@ const QualityDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl border border-slate-100 shadow-sm">
+      <div className="flex flex-col items-center justify-center py-24 bg-white rounded  border border-slate-100 ">
         <div className="relative">
-          <div className="w-16 h-16 border-4 border-indigo-50 border-t-indigo-600 rounded-full animate-spin" />
+          <div className="w-16 h-16 border-4 border-indigo-50 border-t-indigo-600 rounded  animate-spin" />
           <Beaker className="w-8 h-8 text-indigo-600 absolute inset-0 m-auto animate-pulse" />
         </div>
         <p className="mt-6 text-sm  text-slate-500 tracking-wide">Gathering Quality Insights...</p>
@@ -119,7 +119,7 @@ const QualityDashboard = () => {
         </div>
         <button 
           onClick={fetchDashboardData}
-          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
           title="Refresh Dashboard"
         >
           <RotateCcw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -160,8 +160,8 @@ const QualityDashboard = () => {
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="w-1 h-6 bg-indigo-600 rounded-full"></div>
+        <div className="flex items-center gap-2 ">
+          <div className="w-1 h-6 bg-indigo-600 rounded "></div>
           <h2 className="text-lg  text-slate-900">Items Awaiting Inspection</h2>
         </div>
         <DataTable

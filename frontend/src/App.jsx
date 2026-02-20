@@ -775,8 +775,8 @@ function App() {
       showCancelButton: true,
       buttonsStyling: false,
       customClass: {
-        confirmButton: 'px-5 py-2 rounded-xl bg-rose-500 text-white  ml-3',
-        cancelButton: 'px-5 py-2 rounded-xl border border-slate-200 text-slate-600 '
+        confirmButton: 'px-5 py-2 rounded  bg-rose-500 text-white  ml-3',
+        cancelButton: 'px-5 py-2 rounded  border border-slate-200 text-slate-600 '
       }
     })
     if (!result.isConfirmed) return
@@ -849,8 +849,8 @@ function App() {
       showCancelButton: true,
       buttonsStyling: false,
       customClass: {
-        confirmButton: 'px-5 py-2 rounded-xl bg-rose-500 text-white  ml-3',
-        cancelButton: 'px-5 py-2 rounded-xl border border-slate-200 text-slate-600 '
+        confirmButton: 'px-5 py-2 rounded  bg-rose-500 text-white  ml-3',
+        cancelButton: 'px-5 py-2 rounded  border border-slate-200 text-slate-600 '
       }
     })
     if (!result.isConfirmed) return
@@ -929,7 +929,7 @@ function App() {
 
   const contactFormDisabled = !contactCompany || !isCompanyActive(contactCompany)
 
-  const fieldInputClass = 'w-full rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 outline-none transition disabled:bg-slate-100 disabled:text-slate-400'
+  const fieldInputClass = 'w-full rounded  border border-slate-200/80 bg-white p-2  text-sm text-slate-900  focus:border-slate-900 focus:ring-2 focus:ring-slate-200 outline-none transition disabled:bg-slate-100 disabled:text-slate-400'
 
   const formatCurrency = value => currencyFormatter.format(Number(value) || 0)
 
@@ -1022,9 +1022,9 @@ function App() {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-2xl p-2 space-y-2">
+          <div className="bg-white rounded  shadow-2xl p-2 space-y-2">
             <div className="text-center space-y-2">
-              <div className="h-16 w-16 rounded-2xl bg-slate-900 flex items-center justify-center mx-auto p-2">
+              <div className="h-16 w-16 rounded  bg-slate-900 flex items-center justify-center mx-auto p-2">
                 <Building2 className="h-8 w-8 text-white" />
               </div>
               <h1 className="text-xl text-slate-900">SPTECHPIONEER</h1>
@@ -1065,7 +1065,7 @@ function App() {
                     value={loginEmail}
                     onChange={e => setLoginEmail(e.target.value)}
                     placeholder="your.email@company.com"
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full p-2  rounded  border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                     disabled={loginLoading}
                   />
                 </div>
@@ -1076,14 +1076,14 @@ function App() {
                     value={loginPassword}
                     onChange={e => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full p-2  rounded  border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                     disabled={loginLoading}
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition"
+                  className="w-full px-5 py-2.5 rounded  bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition"
                 >
                   {loginLoading ? 'Signing in...' : 'Sign In'}
                 </button>
@@ -1098,7 +1098,7 @@ function App() {
                       value={signupForm.first_name}
                       onChange={e => setSignupForm({ ...signupForm, first_name: e.target.value })}
                       placeholder="John"
-                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                       disabled={signupLoading}
                     />
                   </div>
@@ -1109,7 +1109,7 @@ function App() {
                       value={signupForm.last_name}
                       onChange={e => setSignupForm({ ...signupForm, last_name: e.target.value })}
                       placeholder="Doe"
-                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                       disabled={signupLoading}
                     />
                   </div>
@@ -1121,7 +1121,7 @@ function App() {
                     value={signupForm.email}
                     onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
                     placeholder="john@company.com"
-                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                     disabled={signupLoading}
                   />
                 </div>
@@ -1141,7 +1141,7 @@ function App() {
                         setRoles([])
                       }
                     }}
-                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                     disabled={signupLoading}
                   >
                     <option value="">Select Department</option>
@@ -1155,7 +1155,7 @@ function App() {
                   <select
                     value={signupForm.role_id}
                     onChange={e => setSignupForm({ ...signupForm, role_id: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                     disabled={signupLoading || !signupForm.department_id}
                   >
                     <option value="">Select Role</option>
@@ -1172,7 +1172,7 @@ function App() {
                       value={signupForm.password}
                       onChange={e => setSignupForm({ ...signupForm, password: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                       disabled={signupLoading}
                     />
                   </div>
@@ -1183,7 +1183,7 @@ function App() {
                       value={signupForm.confirmPassword}
                       onChange={e => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                       disabled={signupLoading}
                     />
                   </div>
@@ -1191,7 +1191,7 @@ function App() {
                 <button
                   type="submit"
                   disabled={signupLoading}
-                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition text-sm"
+                  className="w-full px-5 py-2.5 rounded  bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition text-sm"
                 >
                   {signupLoading ? 'Creating account...' : 'Sign Up'}
                 </button>
@@ -1199,7 +1199,7 @@ function App() {
             )}
 
             {toast && (
-              <div className={`p-3 rounded-xl border text-sm ${
+              <div className={`p-3 rounded  border text-sm ${
                 toast.includes('success') || toast.includes('Welcome')
                   ? 'bg-green-50 border-green-200 text-green-700'
                   : 'bg-red-50 border-red-200 text-red-700'
@@ -1211,7 +1211,7 @@ function App() {
             {authMode === 'login' && (
               <div className="text-left text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
                 <p className="">Demo Credentials:</p>
-                <div className="grid grid-cols-2 gap-2 text-left bg-slate-50 p-3 rounded-lg overflow-y-auto max-h-64">
+                <div className="grid grid-cols-2 gap-2 text-left bg-slate-50 p-3 rounded  overflow-y-auto max-h-64">
                   <button 
                     onClick={() => performLogin('admin@company.com', 'Admin@123')}
                     className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left col-span-2"
@@ -1293,7 +1293,7 @@ function App() {
         } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-2 border-b flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1">
-                <div className="h-8 w-8 rounded-lg bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
+                <div className="h-8 w-8 rounded  bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
                   <Building2 className="h-4 w-4 text-slate-900" />
                 </div>
                 <div className="min-w-0">
@@ -1320,7 +1320,7 @@ function App() {
                   return (
                     <div key={item.label} className="pt-1">
                       <div
-                        className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500  tracking-wider hover:text-slate-700 transition-colors"
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500   hover:text-slate-700 transition-colors"
                       >
                         <span>{item.label}</span>
                       </div>
@@ -1338,7 +1338,7 @@ function App() {
                         setMobileMenuOpen(false)
                       }
                     }}
-                    className={`flex items-center gap-3 w-full p-2  text-sm font-medium transition-all duration-150 group ${item.indent ? 'ml-2' : ''} ${
+                    className={`flex items-center gap-3 w-full p-2  text-sm  transition-all duration-150 group ${item.indent ? 'ml-2' : ''} ${
                       isActive 
                         ? 'bg-indigo-50 text-indigo-700 ' 
                         : isDisabled 
@@ -1361,7 +1361,7 @@ function App() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
+                className="w-full px-3 py-2 rounded  border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
               >
                 Logout
               </button>
@@ -1376,7 +1376,7 @@ function App() {
         )}
 
         <div className={`flex-1 lg:ml-64 flex flex-col bg-slate-50`}>
-          <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+          <div className="sticky top-0 z-10 bg-white border-b border-slate-200 ">
               <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
                 
                 <div className="flex items-center gap-3">
@@ -1384,7 +1384,7 @@ function App() {
                     <p className="text-sm text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
                     <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
                   </div>
-                  <div className="h-5 w-5 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white  text-lg">
+                  <div className="h-5 w-5 rounded  bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white  text-lg">
                     {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
                   </div>
                 </div>
@@ -1403,7 +1403,7 @@ function App() {
             ) : (
               <>
                 {toast && (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-2xl text-sm shadow-sm">
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-2  rounded  text-sm ">
                     {toast}
                   </div>
                 )}
@@ -1619,7 +1619,7 @@ function App() {
                 <p className="text-xs  text-slate-400 ">{drawerMode === 'view' ? 'Overview' : 'Workflow'}</p>
                 <h3 className="text-xl text-slate-900 text-xs">{drawerTitle}</h3>
               </div>
-              <button type="button" onClick={closeDrawer} className="h-10 w-10 rounded-full border border-slate-200 text-slate-500 hover:text-slate-900">
+              <button type="button" onClick={closeDrawer} className="h-10 w-10 rounded  border border-slate-200 text-slate-500 hover:text-slate-900">
                 ✕
               </button>
             </div>
@@ -1705,14 +1705,14 @@ function App() {
                   <button
                     type="button"
                     onClick={closeDrawer}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-sm  text-slate-600 hover:border-slate-300"
+                    className="p-2  rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300"
                   >
                     {drawerMode === 'view' ? 'Close' : 'Cancel'}
                   </button>
                   {drawerMode !== 'view' && (
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded-xl bg-indigo-500 text-white text-sm  shadow-sm hover:bg-indigo-600 disabled:opacity-60"
+                      className="px-5 py-2 rounded  bg-indigo-500 text-white text-sm   hover:bg-indigo-600 disabled:opacity-60"
                       disabled={loading}
                     >
                       {loading ? 'Saving...' : primaryButtonLabel}
@@ -1740,7 +1740,7 @@ function App() {
                 <button
                   type="button"
                   onClick={closeContactDrawer}
-                  className="h-10 w-10 rounded-full border border-slate-200 text-slate-500 hover:text-slate-900"
+                  className="h-10 w-10 rounded  border border-slate-200 text-slate-500 hover:text-slate-900"
                 >
                   ✕
                 </button>
@@ -1756,18 +1756,18 @@ function App() {
                   <button
                     type="button"
                     onClick={resetContactForm}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-sm  text-slate-600 hover:border-slate-300 disabled:opacity-50"
+                    className="p-2  rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300 disabled:opacity-50"
                     disabled={contactFormDisabled}
                   >
                     New Contact
                   </button>
                 </div>
                 {contactListLoading ? (
-                  <div className="p-6 text-left text-xs text-slate-500 border border-dashed border-slate-200 rounded-2xl">Loading contacts...</div>
+                  <div className="p-6 text-left text-xs text-slate-500 border border-dashed border-slate-200 rounded ">Loading contacts...</div>
                 ) : contactList.length ? (
                   <div className="space-y-3">
                     {contactList.map(contact => (
-                      <div key={contact.id} className="border border-slate-200 rounded-2xl bg-white p-4 space-y-3">
+                      <div key={contact.id} className="border border-slate-200 rounded  bg-white p-4 space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-base text-slate-900 text-xs">{contact.name || 'Untitled Contact'}</p>
@@ -1785,7 +1785,7 @@ function App() {
                         <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
                           <button
                             type="button"
-                            className="px-3 py-1.5 rounded-lg border border-indigo-200 text-xs  text-indigo-600 hover:border-indigo-300 disabled:opacity-50"
+                            className="p-2 .5 rounded  border border-indigo-200 text-xs  text-indigo-600 hover:border-indigo-300 disabled:opacity-50"
                             onClick={() => handleEditContact(contact)}
                             disabled={contactFormDisabled}
                           >
@@ -1793,7 +1793,7 @@ function App() {
                           </button>
                           <button
                             type="button"
-                            className="px-3 py-1.5 rounded-lg border border-amber-200 text-xs  text-amber-600 hover:border-amber-300 disabled:opacity-50"
+                            className="p-2 .5 rounded  border border-amber-200 text-xs  text-amber-600 hover:border-amber-300 disabled:opacity-50"
                             onClick={() => handleContactStatusToggle(contact)}
                             disabled={!isCompanyActive(contactCompany)}
                           >
@@ -1801,7 +1801,7 @@ function App() {
                           </button>
                           <button
                             type="button"
-                            className="px-3 py-1.5 rounded-lg border border-rose-200 text-xs  text-rose-600 hover:border-rose-300 disabled:opacity-50"
+                            className="p-2 .5 rounded  border border-rose-200 text-xs  text-rose-600 hover:border-rose-300 disabled:opacity-50"
                             onClick={() => handleDeleteContact(contact)}
                             disabled={!isCompanyActive(contactCompany)}
                           >
@@ -1812,7 +1812,7 @@ function App() {
                     ))}
                   </div>
                 ) : (
-                  <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl text-xs text-slate-500">
+                  <div className="p-8 text-center border border-dashed border-slate-200 rounded  text-xs text-slate-500">
                     No contacts found. Use the form to create one.
                   </div>
                 )}
@@ -1823,7 +1823,7 @@ function App() {
                   <h4 className="text-xl text-slate-900 text-xs">{editingContactId ? 'Edit Existing Contact' : 'Create New Contact'}</h4>
                 </div>
                 {!isCompanyActive(contactCompany) && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-2xl text-sm">
+                  <div className="bg-amber-50 border border-amber-200 text-amber-700 p-2  rounded  text-sm">
                     Activate this company to manage contacts.
                   </div>
                 )}
@@ -1892,7 +1892,7 @@ function App() {
                   <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded-xl bg-indigo-500 text-white text-sm  shadow-sm hover:bg-indigo-600 disabled:opacity-60"
+                      className="px-5 py-2 rounded  bg-indigo-500 text-white text-sm   hover:bg-indigo-600 disabled:opacity-60"
                       disabled={contactFormDisabled || contactSaving}
                     >
                       {contactSaving ? 'Saving...' : editingContactId ? 'Update Contact' : 'Add Contact'}
@@ -1900,7 +1900,7 @@ function App() {
                     {editingContactId && (
                       <button
                         type="button"
-                        className="px-4 py-2 rounded-xl border border-slate-200 text-sm  text-slate-600 hover:border-slate-300"
+                        className="p-2  rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300"
                         onClick={resetContactForm}
                         disabled={contactFormDisabled}
                       >
@@ -1927,11 +1927,11 @@ function App() {
                 </div>
                 <div className="flex items-center gap-3">
                   {poDetailPdfUrl && (
-                    <a href={poDetailPdfUrl} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-indigo-100 text-sm  text-indigo-700 hover:bg-indigo-200">
+                    <a href={poDetailPdfUrl} target="_blank" rel="noreferrer" className="p-2  rounded  bg-indigo-100 text-sm  text-indigo-700 hover:bg-indigo-200">
                       Download PDF
                     </a>
                   )}
-                  <button type="button" onClick={closePoDetailDrawer} className="h-10 w-10 rounded-full border border-slate-200 text-slate-500 hover:text-slate-900">✕</button>
+                  <button type="button" onClick={closePoDetailDrawer} className="h-10 w-10 rounded  border border-slate-200 text-slate-500 hover:text-slate-900">✕</button>
                 </div>
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded-md p-2">
@@ -1943,20 +1943,20 @@ function App() {
             <div className="flex-1 overflow-y-auto">
               {poDetailLoading && <p className="p-8 text-xs text-slate-500">Loading PO details…</p>}
               {!poDetailLoading && poDetailError && (
-                <div className="m-6 bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm">{poDetailError}</div>
+                <div className="m-6 bg-rose-50 border border-rose-200 text-rose-600 p-2  rounded  text-sm">{poDetailError}</div>
               )}
               {!poDetailLoading && !poDetailError && poDetail && (
                 <div className="p-8 space-y-8">
                   <div className="grid md:grid-cols-3 gap-6">
-                    <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="rounded  border border-slate-200 p-4">
                       <p className="text-xs text-slate-500  mb-2">PO Date</p>
                       <p className="text-md text-slate-900 text-xs">{formatDisplayDate(poDetail.po_date)}</p>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="rounded  border border-slate-200 p-4">
                       <p className="text-xs text-slate-500  mb-2">Status</p>
                       <p className="text-md text-slate-900 text-xs">{(poDetail.status || 'DRAFT').split('_').map(chunk => chunk.charAt(0) + chunk.slice(1).toLowerCase()).join(' ')}</p>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="rounded  border border-slate-200 p-4">
                       <p className="text-xs text-slate-500  mb-2">Currency</p>
                       <p className="text-md text-slate-900 text-xs">{poDetail.currency || 'INR'}</p>
                     </div>
@@ -1967,17 +1967,17 @@ function App() {
                       <div>
                         <p className="text-[0.65rem]  tracking-[0.35em] text-slate-500  mb-3">Terms & Conditions</p>
                         <div className="space-y-2">
-                          <div><span className="text-slate-600">Payment Terms:</span><p className="font-medium text-slate-900 mt-1">{poDetail.payment_terms || '—'}</p></div>
-                          <div><span className="text-slate-600">Credit Days:</span><p className="font-medium text-slate-900 mt-1">{poDetail.credit_days ?? '—'}</p></div>
-                          <div><span className="text-slate-600">Delivery Terms:</span><p className="font-medium text-slate-900 mt-1">{poDetail.delivery_terms || '—'}</p></div>
+                          <div><span className="text-slate-600">Payment Terms:</span><p className=" text-slate-900 mt-1">{poDetail.payment_terms || '—'}</p></div>
+                          <div><span className="text-slate-600">Credit Days:</span><p className=" text-slate-900 mt-1">{poDetail.credit_days ?? '—'}</p></div>
+                          <div><span className="text-slate-600">Delivery Terms:</span><p className=" text-slate-900 mt-1">{poDetail.delivery_terms || '—'}</p></div>
                         </div>
                       </div>
                       <div>
                         <p className="text-[0.65rem]  tracking-[0.35em] text-slate-500  mb-3">Shipping & Charges</p>
                         <div className="space-y-2">
-                          <div><span className="text-slate-600">Freight Terms:</span><p className="font-medium text-slate-900 mt-1">{poDetail.freight_terms || '—'}</p></div>
-                          <div><span className="text-slate-600">Packing & Fwd:</span><p className="font-medium text-slate-900 mt-1">{poDetail.packing_forwarding || '—'}</p></div>
-                          <div><span className="text-slate-600">Insurance:</span><p className="font-medium text-slate-900 mt-1">{poDetail.insurance_terms || '—'}</p></div>
+                          <div><span className="text-slate-600">Freight Terms:</span><p className=" text-slate-900 mt-1">{poDetail.freight_terms || '—'}</p></div>
+                          <div><span className="text-slate-600">Packing & Fwd:</span><p className=" text-slate-900 mt-1">{poDetail.packing_forwarding || '—'}</p></div>
+                          <div><span className="text-slate-600">Insurance:</span><p className=" text-slate-900 mt-1">{poDetail.insurance_terms || '—'}</p></div>
                         </div>
                       </div>
                     </div>
@@ -1991,11 +1991,11 @@ function App() {
                           <tr>
                             <th className="p-2 text-left  text-slate-700">#</th>
                             <th className="p-2 text-left  text-slate-700">Description</th>
-                            <th className="px-4 py-3 text-right  text-slate-700">Qty</th>
+                            <th className="p-2  text-right  text-slate-700">Qty</th>
                             <th className="p-2 text-left  text-slate-700">Unit</th>
-                            <th className="px-4 py-3 text-right  text-slate-700">Rate</th>
-                            <th className="px-4 py-3 text-right  text-slate-700">Amount</th>
-                            <th className="px-4 py-3 text-right  text-slate-700">Tax %</th>
+                            <th className="p-2  text-right  text-slate-700">Rate</th>
+                            <th className="p-2  text-right  text-slate-700">Amount</th>
+                            <th className="p-2  text-right  text-slate-700">Tax %</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2004,13 +2004,13 @@ function App() {
                           ) : (
                             poDetailItems.map((item, index) => (
                               <tr key={`po-detail-item-${item.id ?? index}`} className="border-b border-slate-100 hover:bg-slate-50">
-                                <td className="px-4 py-3 text-slate-900 text-xs">{index + 1}</td>
-                                <td className="px-4 py-3"><div className="text-slate-900 text-xs">{item.description}</div><div className="text-xs text-slate-500">Drw No: {item.drawing_no || item.item_code || 'N/A'}</div></td>
-                                <td className="px-4 py-3 text-right font-medium text-slate-900">{item.quantity ?? '—'}</td>
-                                <td className="px-4 py-3 text-slate-600">{item.unit || '—'}</td>
-                                <td className="px-4 py-3 text-right text-slate-600">{formatCurrencyByCode(item.rate, poDetail.currency)}</td>
-                                <td className="px-4 py-3 text-right text-slate-900 text-xs">{formatCurrencyByCode(item.basic_amount, poDetail.currency)}</td>
-                                <td className="px-4 py-3 text-right text-slate-600">{formatPercent(item.cgst_percent || item.sgst_percent || item.igst_percent)}</td>
+                                <td className="p-2  text-slate-900 text-xs">{index + 1}</td>
+                                <td className="p-2 "><div className="text-slate-900 text-xs">{item.description}</div><div className="text-xs text-slate-500">Drw No: {item.drawing_no || item.item_code || 'N/A'}</div></td>
+                                <td className="p-2  text-right  text-slate-900">{item.quantity ?? '—'}</td>
+                                <td className="p-2  text-slate-600">{item.unit || '—'}</td>
+                                <td className="p-2  text-right text-slate-600">{formatCurrencyByCode(item.rate, poDetail.currency)}</td>
+                                <td className="p-2  text-right text-slate-900 text-xs">{formatCurrencyByCode(item.basic_amount, poDetail.currency)}</td>
+                                <td className="p-2  text-right text-slate-600">{formatPercent(item.cgst_percent || item.sgst_percent || item.igst_percent)}</td>
                               </tr>
                             ))
                           )}
@@ -2022,9 +2022,9 @@ function App() {
                   <div className="border-t border-slate-200 pt-8">
                     <div className="flex justify-end">
                       <div className="w-full md:w-80 space-y-3">
-                        <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal:</span><span className="font-medium text-slate-900">{formatCurrencyByCode(poDetail.subtotal, poDetail.currency)}</span></div>
-                        <div className="flex justify-between text-sm border-t border-slate-200 pt-3"><span className="text-slate-600">Taxes:</span><span className="font-medium text-slate-900">{formatCurrencyByCode(poDetail.tax_total, poDetail.currency)}</span></div>
-                        <div className="flex justify-between bg-slate-900 text-white rounded-2xl p-2 "><span>Total Amount:</span><span className="text-xl">{formatCurrencyByCode(poDetail.net_total, poDetail.currency)}</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal:</span><span className=" text-slate-900">{formatCurrencyByCode(poDetail.subtotal, poDetail.currency)}</span></div>
+                        <div className="flex justify-between text-sm border-t border-slate-200 pt-3"><span className="text-slate-600">Taxes:</span><span className=" text-slate-900">{formatCurrencyByCode(poDetail.tax_total, poDetail.currency)}</span></div>
+                        <div className="flex justify-between bg-slate-900 text-white rounded  p-2 "><span>Total Amount:</span><span className="text-xl">{formatCurrencyByCode(poDetail.net_total, poDetail.currency)}</span></div>
                       </div>
                     </div>
                   </div>

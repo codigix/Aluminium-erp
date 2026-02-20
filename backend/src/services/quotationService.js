@@ -236,7 +236,7 @@ const getQuotationById = async (quotationId) => {
 };
 
 const updateQuotationStatus = async (quotationId, status) => {
-  const validStatuses = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'RECEIVED', 'REVIEWED', 'CLOSED', 'PENDING'];
+  const validStatuses = ['DRAFT', 'Sent ', 'EMAIL_RECEIVED', 'RECEIVED', 'REVIEWED', 'CLOSED', 'PENDING'];
   if (!validStatuses.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
@@ -411,7 +411,7 @@ const getQuotationStats = async () => {
   const [stats] = await pool.query(`
     SELECT 
       COUNT(*) as total_quotations,
-      SUM(CASE WHEN status = 'SENT' THEN 1 ELSE 0 END) as sent_quotations,
+      SUM(CASE WHEN status = 'Sent ' THEN 1 ELSE 0 END) as sent_quotations,
       SUM(CASE WHEN status = 'EMAIL_RECEIVED' THEN 1 ELSE 0 END) as email_received_quotations,
       SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pending_quotations,
       SUM(CASE WHEN status = 'REVIEWED' THEN 1 ELSE 0 END) as approved_quotations,
@@ -470,7 +470,7 @@ const sendQuotationEmail = async (quotationId, emailData) => {
     
     await pool.execute(
       'UPDATE quotations SET status = ? WHERE id = ?',
-      ['SENT', quotationId]
+      ['Sent ', quotationId]
     );
 
     return {
@@ -496,7 +496,7 @@ const generateQuotationPDF = async (quotationId) => {
     <html>
     <head>
       <style>
-        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
         .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
         .quote-title { text-align: right; }

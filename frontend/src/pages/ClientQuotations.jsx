@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText } from 'lucide-react';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2 } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -262,7 +262,7 @@ const ClientQuotations = () => {
             company_name: quote.company_name,
             company_id: quote.company_id,
             created_at: quote.created_at,
-            status: 'SENT', // Default status for group
+            status: 'Sent ', // Default status for group
             reply_pdf: quote.reply_pdf,
             total_amount: 0,
             received_amount: 0,
@@ -295,10 +295,10 @@ const ClientQuotations = () => {
           group.status = 'PARTIAL';
         } else if (hasRejected && !hasAccepted) {
           group.status = 'REJECTED';
-        } else if (group.quotes.every(q => q.status === 'APPROVED')) {
-          group.status = 'APPROVED';
+        } else if (group.quotes.every(q => q.status === 'Approved ')) {
+          group.status = 'Approved ';
         } else {
-          group.status = 'SENT';
+          group.status = 'Sent ';
         }
       });
       
@@ -326,7 +326,7 @@ const ClientQuotations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests?status=APPROVED,REJECTED,ACCEPTED,APPROVAL,COMPLETED`, {
+      const response = await fetch(`${API_BASE}/quotation-requests?status=Approved,Rejected,Accepted,Approval,Completed`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch received quotations');
@@ -357,7 +357,7 @@ const ClientQuotations = () => {
             grouped[key].id = quote.id;
           }
           // If any quote in group is approved, prefer that status for the group view
-          if (quote.status === 'APPROVED' || quote.status === 'APPROVAL') {
+          if (quote.status === 'Approved' || quote.status === 'Approval') {
             grouped[key].status = quote.status;
             if (quote.reply_pdf) grouped[key].reply_pdf = quote.reply_pdf;
           }
@@ -727,52 +727,46 @@ const ClientQuotations = () => {
           <div className="flex bg-slate-200 p-1 rounded-xl">
             <button
               onClick={() => setActiveTab('pending')}
-              className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'pending' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'pending' ? 'bg-white text-emerald-600  ' : 'text-slate-600 hover:text-slate-900'}`}
             >
               Pending Approval
             </button>
             <button
               onClick={() => setActiveTab('sent')}
-              className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'sent' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'sent' ? 'bg-white text-blue-600  ' : 'text-slate-600 hover:text-slate-900'}`}
             >
               Sent Quotations
             </button>
             <button
               onClick={() => setActiveTab('received')}
-              className={`px-4 py-1.5 rounded-lg text-xs  transition-all ${activeTab === 'received' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'received' ? 'bg-white text-purple-600  ' : 'text-slate-600 hover:text-slate-900'}`}
             >
               Received Quotes
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded    border border-slate-200 overflow-hidden">
           <div className={`bg-gradient-to-r ${
             activeTab === 'pending' ? 'from-emerald-600 to-teal-600' : 
             activeTab === 'sent' ? 'from-blue-600 to-indigo-600' :
             'from-purple-600 to-indigo-600'
           } p-2`}>
             <div className="flex justify-between items-center">
-              <h2 className="text-xs  text-white flex items-center gap-2">
+              <h2 className="text-xs  text-white flex items-center gap-2 ">
                 {activeTab === 'pending' ? (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    <CheckCircle className="w-5 h-5" />
                     BOM-Approved Orders
                   </>
                 ) : activeTab === 'sent' ? (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                    </svg>
+                    <Mail className="w-5 h-5" />
                     Sent Quotations History
                   </>
                 ) : (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
+                    <ClipboardList className="w-5 h-5" />
                     Received Quotations (Client Approved)
                   </>
                 )}
@@ -780,7 +774,7 @@ const ClientQuotations = () => {
               <button
                 onClick={activeTab === 'pending' ? fetchApprovedOrders : activeTab === 'sent' ? fetchSentQuotations : fetchReceivedQuotations}
                 disabled={loading}
-                className="px-3 py-1.5 bg-white rounded text-xs  shadow-sm transition-colors disabled:opacity-50"
+                className="p-2 .5 bg-white rounded text-xs    transition-colors disabled:opacity-50"
                 style={{ color: activeTab === 'pending' ? '#059669' : activeTab === 'sent' ? '#4f46e5' : '#7c3aed' }}
               >
                 ↻ Refresh
@@ -791,16 +785,14 @@ const ClientQuotations = () => {
           {loading ? (
             <div className="py-12 text-center">
               <div className="flex justify-center mb-3">
-                <div className={`w-6 h-6 border-2 ${activeTab === 'pending' ? 'border-emerald-600' : 'border-indigo-600'} border-t-transparent rounded-full animate-spin`}></div>
+                <Loader2 className={`w-6 h-6 ${activeTab === 'pending' ? 'text-emerald-600' : 'text-indigo-600'} animate-spin`} />
               </div>
               <p className="text-slate-600  text-sm">Loading data...</p>
             </div>
           ) : activeTab === 'pending' ? (
             Object.keys(groupedByClient).length === 0 ? (
               <div className="py-12 text-center">
-                <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-slate-500 ">No BOM-approved orders found</p>
                 <p className="text-slate-400 text-sm mt-1">Orders must have an approved BOM before quotation</p>
               </div>
@@ -843,7 +835,7 @@ const ClientQuotations = () => {
                               </div>
                             </td>
                             <td className="p-2 text-left">
-                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs ">
+                              <span className="p-2  bg-emerald-100 text-emerald-700 rounded  text-xs ">
                                 {totalItems}
                               </span>
                             </td>
@@ -914,7 +906,7 @@ const ClientQuotations = () => {
                                                 </div>
                                               </td>
                                               <td className="p-2 text-xs text-slate-600">{item.description || '—'}</td>
-                                              <td className="p-2 text-left text-sm text-slate-900 text-xs">{item.design_qty || <span className="text-red-500 font-bold">MISSING QTY</span>}</td>
+                                              <td className="p-2 text-left text-sm text-slate-900 text-xs">{item.design_qty || <span className="text-red-500 ">MISSING QTY</span>}</td>
                                               <td className="p-2 text-xs text-slate-600">{item.unit || 'Pcs'}</td>
                                               <td className="p-2 text-xs text-slate-600">
                                                 {item.bom_cost ? `₹${Number(item.bom_cost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
@@ -938,7 +930,7 @@ const ClientQuotations = () => {
                                                   />
                                                 )}
                                               </td>
-                                              <td className="p-2 text-right text-xs font-bold text-slate-900 pr-4">
+                                              <td className="p-2 text-right text-xs  text-slate-900 pr-4">
                                                 ₹{((parseFloat(quotePricesMap[clientName]?.[item.id]) || 0) * (parseFloat(item.design_qty) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                               </td>
                                             </tr>
@@ -956,7 +948,7 @@ const ClientQuotations = () => {
                                       <button
                                         onClick={() => handleSendQuote(clientName)}
                                         disabled={sendingClientName === clientName || calculateClientTotal(clientName) === 0}
-                                        className="px-6 py-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2 text-sm"
+                                        className="p-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2  text-sm"
                                       >
                                         {sendingClientName === clientName ? 'Sending...' : 'Send Quote to Client'}
                                       </button>
@@ -976,9 +968,7 @@ const ClientQuotations = () => {
           ) : (
             (activeTab === 'sent' ? sentQuotations : receivedQuotations).length === 0 ? (
               <div className="py-12 text-center">
-                <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                </svg>
+                <Mail className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-slate-500 ">No {activeTab} quotations found</p>
                 <p className="text-slate-400 text-sm mt-1">Quotations will appear here</p>
               </div>
@@ -1038,7 +1028,7 @@ const ClientQuotations = () => {
                                           title="Save Amount"
                                         >
                                           {savingSentAmount === key ? (
-                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded  animate-spin" />
                                           ) : (
                                             <Save className="w-3 h-3" />
                                           )}
@@ -1046,7 +1036,7 @@ const ClientQuotations = () => {
                                       )}
                                     </>
                                   ) : (
-                                    <div className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-bold border border-emerald-100">
+                                    <div className="p-2  bg-emerald-50 text-emerald-700 rounded  text-[11px]  border border-emerald-100">
                                       ₹{(group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </div>
                                   )}
@@ -1055,15 +1045,15 @@ const ClientQuotations = () => {
                             </td>
                             <td className="p-2 text-xs text-slate-500">{new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                             <td className="p-2">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px]  ${
-                                group.status === 'SENT' ? 'bg-blue-100 text-blue-700' : 
-                                group.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 
-                                group.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
-                                (group.status === 'APPROVED' || group.status === 'APPROVAL') ? 'bg-emerald-100 text-emerald-700' : 
-                                group.status === 'COMPLETED' ? 'bg-indigo-100 text-indigo-700' :
+                              <span className={`p-1 rounded  text-xs  ${
+                                group.status === 'Sent' ? 'bg-blue-100 text-blue-700' : 
+                                group.status === 'Partial' ? 'bg-amber-100 text-amber-700' : 
+                                group.status === 'Rejected' ? 'bg-red-100 text-red-700' :
+                                (group.status === 'Approved' || group.status === 'Approval') ? 'bg-emerald-100 text-emerald-700' : 
+                                group.status === 'Completed' ? 'bg-indigo-100 text-indigo-700' :
                                 'bg-slate-100 text-slate-700'
                               }`}>
-                                {group.status === 'APPROVAL' ? 'APPROVED' : group.status}
+                                {group.status === 'Approval' ? 'Approved' : group.status}
                               </span>
                             </td>
                             <td className="p-2">
@@ -1073,16 +1063,16 @@ const ClientQuotations = () => {
                                     href={getFileUrl(group.reply_pdf)}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded  transition-all"
                                     title="View Reply PDF"
                                   >
                                     <FileText className="w-4 h-4" />
                                   </a>
                                 )}
-                                {(activeTab === 'received' || activeTab === 'sent') && !['APPROVED', 'APPROVAL', 'COMPLETED'].includes(group.status) && !group.reply_pdf && (
+                                {(activeTab === 'received' || activeTab === 'sent') && !['Approved ', 'APPROVAL', 'COMPLETED'].includes(group.status) && !group.reply_pdf && (
                                   <button
                                     onClick={() => handleApproveQuote(group)}
-                                    className="px-3 py-1 bg-emerald-600 text-white rounded text-[10px]  hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                                    className="p-2  bg-emerald-600 text-white rounded text-[10px]  hover:bg-emerald-700 transition-colors flex items-center gap-1"
                                     title="Approve for PO"
                                   >
                                     <ShieldCheck className="w-3 h-3" />
@@ -1091,18 +1081,18 @@ const ClientQuotations = () => {
                                 )}
                                 <button
                                   onClick={() => setExpandedSentKey(expandedSentKey === key ? null : key)}
-                                  className="px-3 py-1 bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors"
+                                  className="p-2  bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors"
                                 >
                                   {expandedSentKey === key ? 'Hide' : 'View'}
                                 </button>
                                 <button
                                   onClick={() => openCommDrawer(group)}
-                                  className="relative p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                  className="relative p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all"
                                   title="Communication"
                                 >
                                   <MessageSquare className="w-4 h-4" />
                                   {unreadCounts[group.id] > 0 && (
-                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded  border border-white"></span>
                                   )}
                                 </button>
                               </div>
@@ -1112,8 +1102,8 @@ const ClientQuotations = () => {
                             <tr>
                               <td colSpan="7" className="px-0 py-0">
                                 <div className="bg-slate-50 p-3 border-t border-b border-slate-200">
-                                  <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-                                    <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                                  <div className="bg-white border border-slate-200 rounded  overflow-hidden  ">
+                                    <div className="bg-slate-100 p-2 .5 border-b border-slate-200">
                                       <h4 className="text-[10px]  text-slate-700 ">Quotation Breakdown</h4>
                                     </div>
                                     <table className="w-full divide-y divide-slate-100">
@@ -1201,11 +1191,11 @@ const ClientQuotations = () => {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
             onClick={() => setShowCommDrawer(false)}
           />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[600px] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="relative bg-white rounded  shadow-2xl w-full max-w-2xl h-[600px] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
             {/* Header */}
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <h3 className="text-sm  text-slate-900 flex items-center gap-2 ">
                   <MessageSquare className="w-4 h-4 text-blue-600" />
                   Communication History
                 </h3>
@@ -1213,17 +1203,17 @@ const ClientQuotations = () => {
                   {selectedQuoteForComm?.company_name} (QRT-{String(selectedQuoteForComm?.id).padStart(4, '0')})
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ">
                 <button 
                   onClick={handleRefreshMessages}
-                  className="p-1.5 hover:bg-slate-200 rounded-full transition-colors text-slate-500 hover:text-blue-600"
+                  className="p-1.5 hover:bg-slate-200 rounded  transition-colors text-slate-500 hover:text-blue-600"
                   title="Refresh messages"
                 >
                   <RotateCw className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => setShowCommDrawer(false)}
-                  className="p-1.5 hover:bg-slate-200 rounded-full transition-colors hover:bg-red-50 hover:text-red-500"
+                  className="p-1.5 hover:bg-slate-200 rounded  transition-colors hover:bg-red-50 hover:text-red-500"
                 >
                   <X className="w-5 h-5 text-slate-500" />
                 </button>
@@ -1231,10 +1221,10 @@ const ClientQuotations = () => {
             </div>
 
             {/* Messages Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 bg-slate-50/50">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3">
-                  <div className="p-4 bg-white rounded-full shadow-sm border border-slate-100">
+                  <div className="p-4 bg-white rounded    border border-slate-100">
                     <MessageSquare className="w-8 h-8 opacity-20" />
                   </div>
                   <p className="text-xs font-medium">No messages found for this quotation</p>
@@ -1242,7 +1232,7 @@ const ClientQuotations = () => {
               ) : (
                 messages.map((msg) => (
                   <div key={msg.id} className={`flex flex-col ${msg.sender_type === 'SYSTEM' ? 'items-end' : 'items-start'}`}>
-                    <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs shadow-sm ${
+                    <div className={`max-w-[85%] rounded  p-2  text-xs   ${
                       msg.sender_type === 'SYSTEM' 
                         ? 'bg-blue-600 text-white rounded-tr-none' 
                         : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
@@ -1252,7 +1242,7 @@ const ClientQuotations = () => {
                         {msg.sender_type === 'SYSTEM' ? <ShieldCheck className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
                         {new Date(msg.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                         {msg.sender_type === 'SYSTEM' && msg.email_message_id && (
-                          <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded-full">✓ Sent via Email</span>
+                          <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded ">✓ Sent via Email</span>
                         )}
                       </div>
                     </div>
@@ -1286,7 +1276,7 @@ const ClientQuotations = () => {
                   className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-200 flex-shrink-0"
                 >
                   {sendingMsg ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <Send className="w-5 h-5" />
                   )}
@@ -1294,7 +1284,7 @@ const ClientQuotations = () => {
               </form>
               <div className="mt-3 flex items-center justify-center gap-2">
                 <div className="h-px w-8 bg-slate-100" />
-                <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">
+                <p className="text-[9px] text-slate-400 font-medium  ">
                   Email will be sent to {selectedQuoteForComm?.clientEmail}
                 </p>
                 <div className="h-px w-8 bg-slate-100" />

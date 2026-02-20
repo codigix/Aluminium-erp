@@ -13,7 +13,7 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
                 <th className="p-2 text-left ">Primary Contact</th>
                 <th className="p-2 text-left ">Contact No</th>
                 <th className="p-2 text-left ">Status</th>
-                <th className="px-4 py-3 text-right ">Actions</th>
+                <th className="p-2  text-right ">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -28,7 +28,7 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
                       <p className="text-slate-900 text-xs">{company.company_name}</p>
                       <p className="text-xs text-slate-400">{company.company_code}</p>
                     </td>
-                    <td className="px-4 py-4 text-slate-900 font-medium">
+                    <td className="px-4 py-4 text-slate-900 ">
                       {primaryContact?.name || '—'}
                     </td>
                     <td className="px-4 py-4 text-slate-600">
@@ -41,7 +41,7 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
                       <div className="flex justify-end">
                       <button
                         type="button"
-                        className="px-4 py-2 rounded-xl border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
+                        className="p-2  rounded  border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
                         onClick={() => onOpenContactDrawer(company)}
                       >
                         Manage Contacts

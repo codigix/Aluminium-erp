@@ -239,7 +239,7 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_APPROVED', 'BOM_APPROVED') AND so.is_sales_order = 0`;
+     WHERE so.status IN ('DESIGN_Approved ', 'BOM_Approved ') AND so.is_sales_order = 0`;
   
   const params = [];
   if (companyId) {

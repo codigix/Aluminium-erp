@@ -533,7 +533,7 @@ const getPurchaseOrderById = async (poId) => {
 const updatePurchaseOrder = async (poId, payload) => {
   const { status, poNumber, expectedDeliveryDate, notes, items, vendorId } = payload;
   
-  const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'COMPLETED', 'CLOSED', 'FULFILLED'];
+  const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'Sent ', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'COMPLETED', 'CLOSED', 'FULFILLED'];
   if (status && !validStatuses.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
@@ -650,7 +650,7 @@ const getPurchaseOrderStats = async () => {
       COUNT(*) as total_pos,
       SUM(CASE WHEN status = 'DRAFT' THEN 1 ELSE 0 END) as draft_pos,
       SUM(CASE WHEN status = 'ORDERED' THEN 1 ELSE 0 END) as submitted_pos,
-      SUM(CASE WHEN status IN ('ORDERED', 'SENT', 'ACKNOWLEDGED') THEN 1 ELSE 0 END) as to_receive_pos,
+      SUM(CASE WHEN status IN ('ORDERED', 'Sent ', 'ACKNOWLEDGED') THEN 1 ELSE 0 END) as to_receive_pos,
       SUM(CASE WHEN status = 'PARTIALLY_RECEIVED' THEN 1 ELSE 0 END) as partial_pos,
       SUM(CASE WHEN status IN ('RECEIVED', 'COMPLETED', 'FULFILLED') THEN 1 ELSE 0 END) as fulfilled_pos,
       SUM(total_amount) as total_value
@@ -807,7 +807,7 @@ const generatePurchaseOrderPDF = async (poId) => {
     <html>
     <head>
       <style>
-        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
         .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
         .quote-title { text-align: right; }
@@ -986,7 +986,7 @@ const sendPurchaseOrderEmail = async (poId, emailData) => {
     
     await pool.execute(
       'UPDATE purchase_orders SET status = ? WHERE id = ?',
-      ['SENT', poId]
+      ['Sent ', poId]
     );
 
     return {

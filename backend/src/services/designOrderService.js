@@ -94,7 +94,7 @@ const updateDesignOrderStatus = async (designOrderId, status) => {
         const salesOrderId = doRows[0].sales_order_id;
         /*
         await connection.execute(
-          "UPDATE sales_orders SET status = 'DESIGN_APPROVED', current_department = 'PROCUREMENT', updated_at = NOW() WHERE id = ?",
+          "UPDATE sales_orders SET status = 'DESIGN_Approved ', current_department = 'PROCUREMENT', updated_at = NOW() WHERE id = ?",
           [salesOrderId]
         );
         */

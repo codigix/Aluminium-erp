@@ -210,7 +210,7 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
   }
 
   if (status !== undefined) {
-    const validStatuses = ['DRAFT', 'SENT', 'RECEIVED', 'ACKNOWLEDGED', 'CLOSED'];
+    const validStatuses = ['DRAFT', 'Sent ', 'RECEIVED', 'ACKNOWLEDGED', 'CLOSED'];
     if (!validStatuses.includes(status)) {
       const error = new Error('Invalid status');
       error.statusCode = 400;
@@ -244,7 +244,7 @@ const getPOReceiptStats = async () => {
     SELECT 
       COUNT(*) as total_receipts,
       SUM(CASE WHEN status = 'DRAFT' THEN 1 ELSE 0 END) as draft_receipts,
-      SUM(CASE WHEN status = 'SENT' THEN 1 ELSE 0 END) as sent_receipts,
+      SUM(CASE WHEN status = 'Sent ' THEN 1 ELSE 0 END) as sent_receipts,
       SUM(CASE WHEN status = 'RECEIVED' THEN 1 ELSE 0 END) as received_receipts,
       SUM(CASE WHEN status = 'ACKNOWLEDGED' THEN 1 ELSE 0 END) as acknowledged_receipts,
       SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as closed_receipts

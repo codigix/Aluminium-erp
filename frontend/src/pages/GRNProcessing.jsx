@@ -25,7 +25,7 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const itemStatusColors = {
-  APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  Approved : 'bg-emerald-50 text-emerald-700 border-emerald-200',
   SHORTAGE: 'bg-amber-50 text-amber-700 border-amber-200',
   OVERAGE: 'bg-orange-50 text-orange-700 border-orange-200',
   PENDING: 'bg-slate-50 text-slate-700 border-slate-200',
@@ -35,12 +35,12 @@ const itemStatusColors = {
 };
 
 const StatCard = ({ label, value, icon: Icon, colorClass, iconBg }) => (
-  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3 min-w-[140px]">
-    <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center ${colorClass}`}>
+  <div className="bg-white p-4 rounded  border border-slate-200  flex flex-col gap-3 min-w-[140px]">
+    <div className={`w-10 h-10 rounded  ${iconBg} flex items-center justify-center ${colorClass}`}>
       <Icon className="w-5 h-5" />
     </div>
     <div>
-      <p className="text-[10px]  text-slate-500  tracking-wider uppercase">{label}</p>
+      <p className="text-[10px]  text-slate-500   ">{label}</p>
       <p className="text-xl text-slate-900 leading-tight">{value}</p>
     </div>
   </div>
@@ -246,7 +246,7 @@ const GRNProcessing = () => {
   const getItemStatus = (poQty, acceptedQty) => {
     const po = Number(poQty);
     const accepted = Number(acceptedQty);
-    if (accepted === po) return 'APPROVED';
+    if (accepted === po) return 'Approved ';
     if (accepted < po) return 'SHORTAGE';
     if (accepted > po) return 'OVERAGE';
     return 'PENDING';
@@ -475,7 +475,7 @@ const GRNProcessing = () => {
       label: 'GRN Number', 
       key: 'id', 
       sortable: true, 
-      render: (val) => <span className="font-mono font-medium text-slate-900">GRN-{String(val).padStart(4, '0')}</span> 
+      render: (val) => <span className="   text-slate-900">GRN-{String(val).padStart(4, '0')}</span> 
     },
     { 
       label: 'PO Number', 
@@ -488,11 +488,11 @@ const GRNProcessing = () => {
       key: 'vendorName', 
       sortable: true,
       render: (val) => (
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-medium">
+        <div className="flex items-center gap-2 ">
+          <div className="w-7 h-7 rounded  bg-slate-100 flex items-center justify-centertext-xs  text-slate-500 ">
             {val ? val.charAt(0).toUpperCase() : '?'}
           </div>
-          <span className="text-slate-700 font-medium">{val || '—'}</span>
+          <span className="text-slate-700 ">{val || '—'}</span>
         </div>
       )
     },
@@ -503,12 +503,12 @@ const GRNProcessing = () => {
         const statusMap = {
           'PENDING': 'pending',
           'RECEIVED': 'qc review',
-          'APPROVED': 'completed',
+          'Approved ': 'completed',
           'REJECTED': 'rejected'
         };
         const displayStatus = statusMap[val] || (val ? val.toLowerCase() : 'pending');
         return (
-          <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium tracking-wider border ${itemStatusColors[val] || itemStatusColors.PENDING}`}>
+          <div className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs    border ${itemStatusColors[val] || itemStatusColors.PENDING}`}>
             {displayStatus}
           </div>
         );
@@ -518,7 +518,7 @@ const GRNProcessing = () => {
       label: 'Items', 
       key: 'items_count',
       render: (_, row) => (
-        <span className="font-medium text-slate-700">
+        <span className=" text-slate-700">
           {row.items_count || 0} items
         </span>
       )
@@ -539,13 +539,13 @@ const GRNProcessing = () => {
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-center gap-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
               handlePrintGRN(row.id);
             }}
-            className="p-1.5 border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-600 hover:border-indigo-100 transition-colors flex items-center gap-1.5 text-[10px] font-medium"
+            className="p-1.5 border border-slate-200 rounded  text-slate-400 hover:text-indigo-600 hover:border-indigo-100 transition-colors flex items-center gap-1.5text-xs  "
             title="Print GRN"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -556,7 +556,7 @@ const GRNProcessing = () => {
               e.stopPropagation();
               handleViewGRN(row.id);
             }}
-            className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors shadow-sm"
+            className="p-1.5 bg-emerald-500 text-white rounded  hover:bg-emerald-600 transition-colors "
             title="View Details"
           >
             <Eye className="w-4 h-4" />
@@ -566,7 +566,7 @@ const GRNProcessing = () => {
               e.stopPropagation();
               handleDeleteGRN(row.id);
             }}
-            className="p-1.5 bg-rose-50 border border-rose-100 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors shadow-sm"
+            className="p-1.5 bg-rose-50 border border-rose-100 text-rose-500 rounded  hover:bg-rose-100 transition-colors "
             title="Delete GRN"
           >
             <XCircle className="w-4 h-4" />
@@ -583,17 +583,17 @@ const GRNProcessing = () => {
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100 shadow-sm">
+          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100 ">
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 leading-tight">Quality Control</h1>
+            <h1 className="text-xl  text-slate-900 leading-tight">Quality Control</h1>
             <p className="text-slate-500 text-sm">Manage Goods Received Notes & Inspections</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
-          <div className="flex bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+        <div className="flex items-center gap-2 ">
+          <div className="flex bg-white border border-slate-200 rounded  p-0.5 ">
             <button 
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
@@ -610,7 +610,7 @@ const GRNProcessing = () => {
           
           <button 
             onClick={() => { fetchGRNs(); fetchStats(); }}
-            className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2 text-sm font-medium"
+            className="p-2 bg-white border border-slate-200 text-slate-600 rounded  hover:bg-slate-50 transition-all  flex items-center gap-2  text-sm "
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
@@ -665,7 +665,7 @@ const GRNProcessing = () => {
       </div>
 
       {/* Filter/Actions bar */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+      <div className="bg-white p-3 rounded  border border-slate-200  flex flex-col md:flex-row gap-4 justify-between items-center">
         <div className="relative w-full md:w-96">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -673,12 +673,12 @@ const GRNProcessing = () => {
             placeholder="Search GRN, PO, or Supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all"
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all"
           />
         </div>
         
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 flex-1 md:flex-none">
+        <div className="flex items-center gap-2  w-full md:w-auto">
+          <div className="flex items-center gap-2  bg-slate-50 border border-slate-200 rounded  p-2 .5 flex-1 md:flex-none">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select 
               value={statusFilter}
@@ -688,24 +688,24 @@ const GRNProcessing = () => {
               <option value="all">All Statuses</option>
               <option value="PENDING">Pending</option>
               <option value="RECEIVED">QC Review</option>
-              <option value="APPROVED">Completed</option>
+              <option value="Approved ">Completed</option>
               <option value="REJECTED">Rejected</option>
             </select>
           </div>
           
-          <button className="p-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium shadow-sm transition-all">
+          <button className="p-2 border border-slate-200 rounded  text-slate-600 hover:bg-slate-50 flex items-center gap-2  text-sm   transition-all">
             <Columns className="w-4 h-4" />
             <span className="hidden md:inline">Columns</span>
           </button>
           
-          <button className="p-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium shadow-sm transition-all">
+          <button className="p-2 border border-slate-200 rounded  text-slate-600 hover:bg-slate-50 flex items-center gap-2  text-sm   transition-all">
             <Download className="w-4 h-4" />
             <span className="hidden md:inline">Export</span>
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded  border border-slate-200  overflow-hidden">
         <DataTable
           columns={columns}
           data={filteredGrns}
@@ -719,7 +719,7 @@ const GRNProcessing = () => {
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded  max-w-5xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
               <div>
                 <h2 className="text-xl text-slate-900">Create GRN</h2>
@@ -727,11 +727,9 @@ const GRNProcessing = () => {
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XCircle size={24} />
               </button>
             </div>
 
@@ -743,7 +741,7 @@ const GRNProcessing = () => {
                     value={formData.poId}
                     onChange={(e) => handlePOSelect(e.target.value)}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   >
                     <option value="">Select PO...</option>
                     {purchaseOrders.map((po) => (
@@ -758,7 +756,7 @@ const GRNProcessing = () => {
                     value={selectedReceiptId}
                     onChange={(e) => handleReceiptSelect(e.target.value)}
                     disabled={!formData.poId}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none disabled:opacity-50"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none disabled:opacity-50"
                   >
                     <option value="">Select Receipt...</option>
                     {poReceipts
@@ -778,7 +776,7 @@ const GRNProcessing = () => {
                     value={formData.grnDate}
                     onChange={(e) => setFormData({ ...formData, grnDate: e.target.value })}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </div>
 
@@ -789,33 +787,33 @@ const GRNProcessing = () => {
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     placeholder="Reference notes..."
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </div>
               </div>
 
               {formData.poId && (
-                <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+                <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-indigo-50/50 rounded  border border-indigo-100">
                   <div>
-                    <div className="text-[10px]  tracking-wider  text-indigo-400">Vendor</div>
+                    <div className="text-[10px]    text-indigo-400">Vendor</div>
                     <div className="text-sm  text-slate-900">
                       {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.vendor_name || 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]  tracking-wider  text-indigo-400">PO Total</div>
+                    <div className="text-[10px]    text-indigo-400">PO Total</div>
                     <div className="text-sm  text-slate-900">
                       ₹{purchaseOrders.find(p => String(p.id) === String(formData.poId))?.total_amount?.toLocaleString('en-IN') || '0'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]  tracking-wider  text-indigo-400">Delivery Date</div>
+                    <div className="text-[10px]    text-indigo-400">Delivery Date</div>
                     <div className="text-sm  text-slate-900">
                       {new Date(purchaseOrders.find(p => String(p.id) === String(formData.poId))?.expected_delivery_date).toLocaleDateString('en-IN') || 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]  tracking-wider  text-indigo-400">PO Status</div>
+                    <div className="text-[10px]    text-indigo-400">PO Status</div>
                     <div className="text-sm">
                       <Badge variant="success">
                         {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.status || 'N/A'}
@@ -826,14 +824,14 @@ const GRNProcessing = () => {
               )}
 
               {poItems.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="rounded  border border-slate-200 overflow-hidden">
                   <div className="p-2 bg-slate-50 border-b border-slate-200">
                     <h3 className=" text-slate-900">PO Items</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Enter actual accepted quantities to track shortages</p>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="bg-slate-50/50 text-slate-500 text-[10px]   ">
+                      <thead className="bg-slate-50/50 text-slate-500 text-xs  ">
                         <tr>
                           <th className="px-6 py-3 text-left">Material Details</th>
                           <th className="px-6 py-3 text-center">PO Qty</th>
@@ -846,7 +844,7 @@ const GRNProcessing = () => {
                         {poItems.map((item) => {
                           const data = itemData[item.id] || {};
                           const accepted = parseInt(data.acceptedQty) || 0;
-                          const { status } = calculateMetrics(item.quantity, accepted);
+                          const status = getItemStatus(item.quantity, accepted);
                           const itemError = validationErrors[item.id];
 
                           return (
@@ -855,14 +853,14 @@ const GRNProcessing = () => {
                                 <div className=" text-slate-900">{item.material_name}</div>
                                 <div className="text-xs text-slate-500">{item.material_type} • {item.drawing_no || 'No Drawing'}</div>
                               </td>
-                              <td className="p-2 text-center font-medium text-slate-700">{item.quantity}</td>
+                              <td className="p-2 text-center  text-slate-700">{item.quantity}</td>
                               <td className="p-2">
                                 <input
                                   type="number"
                                   min="0"
                                   value={data.acceptedQty}
                                   onChange={(e) => handleItemChange(item.id, 'acceptedQty', e.target.value)}
-                                  className={`w-full px-3 py-1.5 bg-white border ${itemError ? 'border-red-300' : 'border-slate-200'} rounded-lg text-center  text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-none`}
+                                  className={`w-full p-2 .5 bg-white border ${itemError ? 'border-red-300' : 'border-slate-200'} rounded  text-center  text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-none`}
                                 />
                               </td>
                               <td className="p-2 text-center">
@@ -876,7 +874,7 @@ const GRNProcessing = () => {
                                   value={data.remarks || ''}
                                   onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
                                   placeholder="Notes..."
-                                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                  className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none"
                                 />
                               </td>
                             </tr>
@@ -893,14 +891,14 @@ const GRNProcessing = () => {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-700  hover:bg-white transition-all"
+                className="p-2.5 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateGRN}
                 disabled={submitting || poItems.length === 0}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 active:scale-95"
+                className="p-2.5 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 active:scale-95"
               >
                 {submitting ? 'Processing...' : 'Create GRN'}
               </button>
@@ -911,68 +909,68 @@ const GRNProcessing = () => {
 
       {showViewModal && selectedGRNForView && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded  max-w-4xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">GRN Details: GRN-{String(selectedGRNForView.id).padStart(4, '0')}</h2>
+                <h2 className="text-xl  text-slate-900">GRN Details: GRN-{String(selectedGRNForView.id).padStart(4, '0')}</h2>
                 <p className="text-sm text-slate-500">View recorded material receipt and verify quantities</p>
               </div>
               <button
                 onClick={() => setShowViewModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded  transition-colors"
               >
                 <XCircle className="w-6 h-6" />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded  border border-slate-200">
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">PO Number</div>
-                  <div className="text-sm font-bold text-slate-900">{selectedGRNForView.poNumber}</div>
+                  <div className="text-[10px]    text-slate-400">PO Number</div>
+                  <div className="text-sm  text-slate-900">{selectedGRNForView.poNumber}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">GRN Date</div>
-                  <div className="text-sm font-bold text-slate-900">{new Date(selectedGRNForView.grnDate).toLocaleDateString('en-IN')}</div>
+                  <div className="text-[10px]    text-slate-400">GRN Date</div>
+                  <div className="text-sm  text-slate-900">{new Date(selectedGRNForView.grnDate).toLocaleDateString('en-IN')}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Supplier</div>
-                  <div className="text-sm font-bold text-slate-900">{selectedGRNForView.vendorName}</div>
+                  <div className="text-[10px]    text-slate-400">Supplier</div>
+                  <div className="text-sm  text-slate-900">{selectedGRNForView.vendorName}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Status</div>
-                  <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${itemStatusColors[selectedGRNForView.status] || itemStatusColors.PENDING}`}>
+                  <div className="text-[10px]    text-slate-400">Status</div>
+                  <div className={`inline-flex items-center p-1  rounded text-xs     border ${itemStatusColors[selectedGRNForView.status] || itemStatusColors.PENDING}`}>
                     {selectedGRNForView.status?.toLowerCase()}
                   </div>
                 </div>
               </div>
 
               {selectedGRNForView.notes && (
-                <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-amber-500 mb-1">Notes</div>
+                <div className="p-4 bg-amber-50 rounded  border border-amber-100">
+                  <div className="text-[10px]    text-amber-500 mb-1">Notes</div>
                   <div className="text-sm text-amber-800">{selectedGRNForView.notes}</div>
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="rounded  border border-slate-200 overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Item Details</th>
-                      <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">PO Qty</th>
-                      <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Accepted Qty</th>
-                      <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Remarks</th>
+                      <th className="p-3text-xs   text-slate-500  ">Item Details</th>
+                      <th className="p-3text-xs   text-slate-500   text-center">PO Qty</th>
+                      <th className="p-3text-xs   text-slate-500   text-center">Accepted Qty</th>
+                      <th className="p-3text-xs   text-slate-500  ">Remarks</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(selectedGRNForView.items || []).map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-3">
-                          <div className="text-sm font-bold text-slate-900">{item.material_name}</div>
+                          <div className="text-sm  text-slate-900">{item.material_name}</div>
                           <div className="text-[10px] text-slate-500">{item.item_code} • {item.material_type}</div>
                         </td>
-                        <td className="p-3 text-center text-sm font-medium text-slate-600">{item.po_qty}</td>
-                        <td className="p-3 text-center text-sm font-bold text-indigo-600">{item.accepted_qty}</td>
+                        <td className="p-3 text-center text-sm  text-slate-600">{item.po_qty}</td>
+                        <td className="p-3 text-center text-sm  text-indigo-600">{item.accepted_qty}</td>
                         <td className="p-3 text-xs text-slate-500">{item.remarks || '—'}</td>
                       </tr>
                     ))}
@@ -984,14 +982,14 @@ const GRNProcessing = () => {
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button
                 onClick={() => handlePrintGRN(selectedGRNForView.id)}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                className="flex items-center gap-2  p-2.5 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
               >
                 <Printer className="w-4 h-4" />
                 Print GRN
               </button>
               <button
                 onClick={() => setShowViewModal(false)}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-white transition-all"
+                className="p-2.5 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Close
               </button>

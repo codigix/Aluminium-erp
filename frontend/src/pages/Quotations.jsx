@@ -2,7 +2,25 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, DataTable, Modal, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Eye } from 'lucide-react';
+import { 
+  Eye, 
+  Mail, 
+  FileText, 
+  FilePlus, 
+  Pencil, 
+  Check, 
+  Trash2, 
+  Plus, 
+  ChevronRight, 
+  RefreshCw, 
+  Filter, 
+  Download, 
+  Search,
+  Loader2,
+  Activity,
+  Clock,
+  CheckCircle2
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -10,7 +28,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const rfqStatusColors = {
   DRAFT: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'Draft' },
-  SENT: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Sent' },
+  Sent : { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Sent' },
   EMAIL_RECEIVED: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-600', badge: 'bg-sky-100 text-sky-700', label: 'Email Received' },
   RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
   REVIEWED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Reviewed' },
@@ -224,7 +242,7 @@ const Quotations = () => {
 
       if (response.ok) {
         const data = await response.json();
-        // Filter to show relevant MRs for procurement (e.g., DRAFT, APPROVED)
+        // Filter to show relevant MRs for procurement (e.g., DRAFT, Approved )
         setMaterialRequests(Array.isArray(data) ? data : []);
       }
     } catch (error) {
@@ -387,7 +405,7 @@ const Quotations = () => {
     // Find the quotation for this project/MR and vendor
     const quotation = quotations.find(q => {
       const isVendorMatch = String(q.vendor_id) === String(vendorId);
-      const isStatusMatch = ['SENT', 'DRAFT'].includes(q.status);
+      const isStatusMatch = ['Sent ', 'DRAFT'].includes(q.status);
       
       let isProjectMatch = false;
       if (recordData.projectId.startsWith('MR-')) {
@@ -972,7 +990,7 @@ const Quotations = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'SENT' })
+        body: JSON.stringify({ status: 'Sent ' })
       });
 
       successToast('Email sent to vendor successfully');
@@ -1056,7 +1074,7 @@ const Quotations = () => {
         label: 'Quote No.',
         sortable: true,
         render: (val, q) => (
-          <div className="font-medium text-slate-900">
+          <div className=" text-slate-900">
             <div className="text-sm  tracking-tight">{val}</div>
             {q.sales_order_id && (
               <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
@@ -1074,7 +1092,7 @@ const Quotations = () => {
         render: (val) => (
           <div className="flex flex-col">
             <span className="text-slate-900 ">{getVendorName(val)}</span>
-            <span className="text-[10px] text-slate-400  tracking-wider font-medium">Vendor ID: #{val}</span>
+            <span className="text-[10px] text-slate-400   ">Vendor ID: #{val}</span>
           </div>
         )
       },
@@ -1084,14 +1102,14 @@ const Quotations = () => {
         sortable: true,
         render: (val, _) => activeTab === 'sent' ? (
           <div className="flex flex-col gap-1">
-            <span className="font-medium text-slate-700">{formatDate(val)}</span>
+            <span className=" text-slate-700">{formatDate(val)}</span>
             {val && daysValid(val) > 0 && (
-              <span className="text-[9px]  px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 w-fit">
+              <span className="text-[9px]  p-1  rounded  bg-emerald-50 text-emerald-600 border border-emerald-100 w-fit">
                 {daysValid(val)} days left
               </span>
             )}
             {val && daysValid(val) <= 0 && (
-              <span className="text-[9px]  px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 w-fit">
+              <span className="text-[9px]  p-1  rounded  bg-rose-50 text-rose-600 border border-rose-100 w-fit">
                 Expired
               </span>
             )}
@@ -1105,7 +1123,7 @@ const Quotations = () => {
         label: 'Status',
         sortable: true,
         render: (val) => (
-          <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px]  tracking-wider border ${rfqStatusColors[val]?.badge}`}>
+          <span className={`inline-flex px-2.5 py-1 rounded text-xs    border ${rfqStatusColors[val]?.badge}`}>
             {rfqStatusColors[val]?.label?.toUpperCase() || val}
           </span>
         )
@@ -1118,58 +1136,47 @@ const Quotations = () => {
           <div className="flex justify-end gap-1.5">
             <button
               onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
-              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100"
+              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
               title="View RFQ PDF"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
+              <Eye className="w-4 h-4" />
             </button>
             {q.received_pdf_path && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleViewReceivedPDF(q.id); }}
-                className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-transparent hover:border-cyan-100"
+                className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded  transition-all border border-transparent hover:border-cyan-100"
                 title="View Vendor PDF"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <FileText className="w-4 h-4" />
               </button>
             )}
             {activeTab === 'sent' && (
               <>
-                {['DRAFT', 'SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
+                {['DRAFT', 'Sent ', 'EMAIL_RECEIVED'].includes(q.status) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); openEmailModal(q); }}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100"
-                    title={q.status === 'SENT' ? 'Resend RFQ' : 'Send RFQ'}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all border border-transparent hover:border-blue-100"
+                    title={q.status === 'Sent ' ? 'Resend RFQ' : 'Send RFQ'}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+                    <Mail className="w-4 h-4" />
                   </button>
                 )}
-                {['SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
+                {['Sent ', 'EMAIL_RECEIVED'].includes(q.status) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); openRecordModal(q); }}
-                    className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-transparent hover:border-cyan-100"
+                    className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded  transition-all border border-transparent hover:border-cyan-100"
                     title="Record Vendor Response"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                    </svg>
+                    <FilePlus className="w-4 h-4" />
                   </button>
                 )}
                 {q.status !== 'RECEIVED' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
-                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-transparent hover:border-amber-100"
+                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
                     title="Edit RFQ"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
+                    <Pencil className="w-4 h-4" />
                   </button>
                 )}
               </>
@@ -1177,22 +1184,18 @@ const Quotations = () => {
             {activeTab === 'received' && q.status === 'RECEIVED' && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleApproveQuote(q.id); }}
-                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-transparent hover:border-emerald-100"
+                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded  transition-all border border-transparent hover:border-emerald-100"
                 title="Approve Quote"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                </svg>
+                <Check className="w-4 h-4" />
               </button>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); handleDeleteQuotation(q.id); }}
-              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
+              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
               title="Delete"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         )
@@ -1243,49 +1246,45 @@ const Quotations = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded  border border-slate-200 ">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-200">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
+          <div className="p-3 bg-blue-600 rounded  shadow-lg shadow-blue-200">
+            <FileText className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+            <div className="flex items-center gap-2 text-xs  font-black text-slate-400  tracking-widest mb-1">
               <span>Buying</span>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
+              <ChevronRight className="w-3 h-3" />
               <span>Procurement</span>
             </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Vendor Quotations</h1>
-            <p className="text-xs text-slate-500 font-medium">Manage and compare vendor quotes</p>
+            <p className="text-xs text-slate-500 ">Manage and compare vendor quotes</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => fetchQuotations()}
-            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded-xl transition-all border border-slate-200 shadow-sm active:scale-95 bg-white"
+            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+            className="flex items-center gap-2  px-5 py-2.5 bg-blue-600 text-white rounded  text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="w-5 h-5" />
             {activeTab === 'sent' ? 'Request Quote' : 'Record Quote'}
           </button>
         </div>
       </div>
 
-      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-        <div className="flex gap-2 p-1 bg-slate-50 rounded-xl w-fit border border-slate-100">
+      <div className="bg-white p-2 rounded  border border-slate-200  flex items-center justify-between">
+        <div className="flex gap-2 p-1 bg-slate-50 rounded  w-fit border border-slate-100">
           <button
             onClick={() => setActiveTab('sent')}
-            className={`px-6 py-2 rounded-lg text-sm  transition ${
+            className={`p-2 rounded  text-sm  transition ${
               activeTab === 'sent'
-                ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
+                ? 'bg-white text-blue-600  border border-slate-100'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -1294,9 +1293,9 @@ const Quotations = () => {
           
           <button
             onClick={() => setActiveTab('received')}
-            className={`px-6 py-2 rounded-lg text-sm  transition-all ${
+            className={`p-2 rounded  text-sm  transition-all ${
               activeTab === 'received'
-                ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
+                ? 'bg-white text-blue-600  border border-slate-100'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -1333,15 +1332,13 @@ const Quotations = () => {
             <button
               onClick={handleCompare}
               disabled={selectedQuotes.length < 2}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all ${
+              className={`flex items-center gap-2  px-5 py-2 rounded  text-sm  transition-all ${
                 selectedQuotes.length >= 2
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed'
               }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
+              <Activity className="w-4 h-4" />
               Compare Quotes {selectedQuotes.length > 0 && `(${selectedQuotes.length})`}
             </button>
           </div>
@@ -1358,20 +1355,18 @@ const Quotations = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm  focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+              className="p-2  bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
             >
               <option value="All Quotations">All Statuses</option>
               <option value="DRAFT">Draft</option>
-              <option value="SENT">Sent</option>
+              <option value="Sent ">Sent</option>
               <option value="RECEIVED">Received</option>
               <option value="REVIEWED">Reviewed</option>
               <option value="PENDING">Pending</option>
               <option value="CLOSED">Closed</option>
             </select>
-            <button className="p-2 text-slate-400 hover:text-slate-600 bg-white border border-slate-200 rounded-xl transition-all">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
+            <button className="p-2 text-slate-400 hover:text-slate-600 bg-white border border-slate-200 rounded  transition-all">
+              <Download className="w-5 h-5" />
             </button>
           </div>
         }
@@ -1380,22 +1375,22 @@ const Quotations = () => {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Quotations', value: stats.total_quotations, sub: `Total: ${formatCurrency(stats.total_value)}`, icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
-            { label: 'Pending Quotes', value: stats.pending_quotations, sub: 'Awaiting response', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-amber-50', iconColor: 'text-amber-500' },
-            { label: 'Approved Quotes', value: stats.approved_quotations, sub: 'Ready for PO', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
-            { label: 'Received', value: stats.received_quotations || (stats.total_quotations - stats.pending_quotations), sub: 'Vendor responses', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-blue-50', iconColor: 'text-blue-500' },
+            { label: 'Total Quotations', value: stats.total_quotations, sub: `Total: ${formatCurrency(stats.total_value)}`, icon: FileText, bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
+            { label: 'Pending Quotes', value: stats.pending_quotations, sub: 'Awaiting response', icon: Clock, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-amber-50', iconColor: 'text-amber-500' },
+            { label: 'Approved Quotes', value: stats.approved_quotations, sub: 'Ready for PO', icon: CheckCircle2, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
+            { label: 'Received', value: stats.received_quotations || (stats.total_quotations - stats.pending_quotations), sub: 'Vendor responses', icon: Mail, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-blue-50', iconColor: 'text-blue-500' },
           ].map((stat, idx) => (
-            <div key={idx} className={`${stat.bg} border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group`}>
-              {stat.bg !== 'bg-white' && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110"></div>}
+            <div key={idx} className={`${stat.bg} border border-slate-200 rounded  p-4  hover:shadow-md transition-all relative overflow-hidden group`}>
+              {stat.bg !== 'bg-white' && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded  -mr-12 -mt-12 transition-transform group-hover:scale-110"></div>}
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2">
-                  <p className={`text-[10px] font-bold ${stat.bg === 'bg-white' ? 'text-slate-400' : 'text-blue-100'} uppercase tracking-wider`}>{stat.label}</p>
-                  <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded-xl shadow-sm`}>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} /></svg>
+                  <p className={`text-[10px]  ${stat.bg === 'bg-white' ? 'text-slate-400' : 'text-blue-100'}  `}>{stat.label}</p>
+                  <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded  `}>
+                    <stat.icon className="w-4 h-4" />
                   </div>
                 </div>
                 <p className={`text-2xl font-black ${stat.text} tracking-tight`}>{stat.value || 0}</p>
-                <p className={`text-[10px] ${stat.subText} mt-1 font-medium`}>{stat.sub}</p>
+                <p className={`text-[10px] ${stat.subText} mt-1 `}>{stat.sub}</p>
               </div>
             </div>
           ))}
@@ -1404,7 +1399,7 @@ const Quotations = () => {
 
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded  p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-6">
               <div>
                <h3 className="text-md text-slate-900 text-xs">
@@ -1422,7 +1417,7 @@ const Quotations = () => {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Select Project (Optional)</label>
+                      <label className="block text-sm  text-slate-700 mb-1">Select Project (Optional)</label>
                       <select
                         value={formData.salesOrderId}
                         onChange={handleSalesOrderChange}
@@ -1451,7 +1446,7 @@ const Quotations = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Vendor *</label>
+                      <label className="block text-sm  text-slate-700 mb-1">Vendor *</label>
                       <select
                         value={formData.vendorId}
                         onChange={(e) => setFormData({...formData, vendorId: e.target.value})}
@@ -1467,7 +1462,7 @@ const Quotations = () => {
                   </div>
 
                   <div className="w-1/2">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
+                    <label className="block text-sm  text-slate-700 mb-1">Valid Until</label>
                     <input
                       type="date"
                       value={formData.validUntil}
@@ -1478,11 +1473,11 @@ const Quotations = () => {
 
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="block text-sm font-medium text-slate-700">Line Items</label>
+                      <label className="block text-sm  text-slate-700">Line Items</label>
                       <button
                         type="button"
                         onClick={handleAddItem}
-                        className="px-3 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700"
+                        className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
                       >
                         + Add Item
                       </button>
@@ -1494,7 +1489,7 @@ const Quotations = () => {
                       </p>
                     ) : (
                       <div className="space-y-2">
-                          <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wider">
+                          <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100text-xs   text-slate-500  ">
                             <div className="col-span-2">Drawing No</div>
                             <div className="col-span-3">Material Name</div>
                             <div className="col-span-2">Type</div>
@@ -1552,7 +1547,7 @@ const Quotations = () => {
                                 onChange={(e) => handleItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
                                 className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                            <div className="col-span-1 text-right text-xs font-medium text-slate-700">
+                            <div className="col-span-1 text-right text-xs  text-slate-700">
                               {formatCurrency((item.design_qty || 0) * (item.unit_rate || 0))}
                             </div>
                             <div className="col-span-1 flex justify-center">
@@ -1572,7 +1567,7 @@ const Quotations = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Optional)</label>
+                    <label className="block text-sm  text-slate-700 mb-1">Notes (Optional)</label>
                     <textarea
                       value={formData.notes}
                       onChange={(e) => setFormData({...formData, notes: e.target.value})}
@@ -1583,7 +1578,7 @@ const Quotations = () => {
                   </div>
 
                   {/* Summary Section for Request Quote */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <div className="bg-slate-50 p-4 rounded  border border-slate-200">
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs text-slate-500">
                         <span>Subtotal:</span>
@@ -1604,7 +1599,7 @@ const Quotations = () => {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                     <label className="block text-sm font-medium text-slate-700 mb-1">Select Project/MR</label>
+                     <label className="block text-sm  text-slate-700 mb-1">Select Project/MR</label>
                       <select
                         value={recordData.projectId}
                         onChange={(e) => handleRecordProjectChange(e.target.value)}
@@ -1633,7 +1628,7 @@ const Quotations = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Vendor *</label>
+                      <label className="block text-sm  text-slate-700 mb-1">Vendor *</label>
                       <select
                         value={recordData.vendorId}
                         onChange={(e) => handleRecordVendorChange(e.target.value)}
@@ -1650,22 +1645,22 @@ const Quotations = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                        <label className="block text-[9px]  text-slate-500  tracking-wider mb-1 uppercase font-bold">Subtotal</label>
-                        <div className="text-sm font-bold text-slate-700">{formatCurrency(recordData.amount)}</div>
+                        <div className="bg-slate-50 p-2 rounded  border border-slate-200">
+                        <label className="block text-[9px]  text-slate-500   mb-1  ">Subtotal</label>
+                        <div className="text-sm  text-slate-700">{formatCurrency(recordData.amount)}</div>
                         </div>
-                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                        <label className="block text-[9px]  text-slate-500  tracking-wider mb-1 uppercase font-bold">GST (18%)</label>
-                        <div className="text-sm font-bold text-slate-700">{formatCurrency(recordData.amount * 0.18)}</div>
+                        <div className="bg-slate-50 p-2 rounded  border border-slate-200">
+                        <label className="block text-[9px]  text-slate-500   mb-1  ">GST (18%)</label>
+                        <div className="text-sm  text-slate-700">{formatCurrency(recordData.amount * 0.18)}</div>
                         </div>
-                        <div className="bg-blue-50 p-2 rounded-lg border border-blue-200">
-                        <label className="block text-[9px]  text-blue-500  tracking-wider mb-1 uppercase font-bold">Total</label>
+                        <div className="bg-blue-50 p-2 rounded  border border-blue-200">
+                        <label className="block text-[9px]  text-blue-500   mb-1  ">Total</label>
                         <div className="text-base font-black text-blue-900">{formatCurrency(recordData.amount * 1.18)}</div>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                         <div>
-                        <label className="block text-[10px] font-medium text-slate-700 mb-1">Valid Until</label>
+                        <label className="blocktext-xs   text-slate-700 mb-1">Valid Until</label>
                         <input
                             type="date"
                             value={recordData.validUntil}
@@ -1674,12 +1669,12 @@ const Quotations = () => {
                         />
                         </div>
                         <div>
-                        <label className="block text-[10px] font-medium text-slate-700 mb-1">Attach Vendor PDF</label>
+                        <label className="blocktext-xs   text-slate-700 mb-1">Attach Vendor PDF</label>
                         <input
                             type="file"
                             accept="application/pdf"
                             onChange={handleRecordFileChange}
-                            className="w-full px-2 py-1 border border-slate-200 rounded text-[10px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-2 py-1 border border-slate-200 roundedtext-xs  focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         </div>
                     </div>
@@ -1688,17 +1683,15 @@ const Quotations = () => {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex items-center gap-4">
-                        <label className="block text-sm font-medium text-slate-700">Line Items</label>
+                        <label className="block text-sm  text-slate-700">Line Items</label>
                         {recordData.received_pdf_path && (
                           <button
                             type="button"
                             onClick={handleParseReceivedPDF}
-                            className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-all"
+                            className="flex items-center gap-1.5 p-2  bg-emerald-50 text-emerald-700text-xs   rounded  border border-emerald-200 hover:bg-emerald-100 transition-all"
                             title="Extract rates and quantities from the PDF received via email"
                           >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                            <FileText className="w-3 h-3" />
                             Auto-fill from Email PDF
                           </button>
                         )}
@@ -1706,13 +1699,13 @@ const Quotations = () => {
                       <button
                         type="button"
                         onClick={handleRecordAddEmptyItem}
-                        className="px-3 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700"
+                        className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
                       >
                         + Add Item
                       </button>
                     </div>
 
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className="border rounded  overflow-hidden">
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
@@ -1765,7 +1758,7 @@ const Quotations = () => {
                                     placeholder="Material..."
                                   />
                                   {item.item_code && item.item_code !== item.drawing_no && (
-                                    <div className="px-2 text-[9px] text-slate-400 font-bold uppercase truncate max-w-[150px]">
+                                    <div className="px-2 text-[9px] text-slate-400   truncate max-w-[150px]">
                                       Code: {item.item_code}
                                     </div>
                                   )}
@@ -1797,7 +1790,7 @@ const Quotations = () => {
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="px-3 py-2 text-right font-medium text-slate-700">
+                                <td className="px-3 py-2 text-right  text-slate-700">
                                   {formatCurrency((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0))}
                                 </td>
                                 <td className="px-3 py-2 text-center">
@@ -1806,7 +1799,7 @@ const Quotations = () => {
                                     onClick={() => handleRecordRemoveItem(idx)}
                                     className="text-red-400 hover:text-red-600 transition-colors"
                                   >
-                                    ✕
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </td>
                              </tr>
@@ -1817,17 +1810,17 @@ const Quotations = () => {
                     </div>
 
                     {recordData.items.length > 0 && (
-                      <div className="mt-4 p-4 bg-blue-50 rounded-lg flex flex-col gap-2 border border-blue-100">
+                      <div className="mt-4 p-4 bg-blue-50 rounded  flex flex-col gap-2 border border-blue-100">
                         <div className="flex justify-between items-center text-xs text-blue-600">
                           <span>Subtotal</span>
                           <span>{formatCurrency(recordData.amount)}</span>
                         </div>
-                        <div className="flex justify-between items-center text-xs text-emerald-600 font-bold border-t border-blue-100 pt-2">
+                        <div className="flex justify-between items-center text-xs text-emerald-600  border-t border-blue-100 pt-2">
                           <span>GST (18%)</span>
                           <span>+ {formatCurrency(recordData.amount * 0.18)}</span>
                         </div>
                         <div className="flex justify-between items-center border-t-2 border-blue-200 pt-2">
-                          <span className="text-sm font-black text-blue-800 uppercase tracking-wider">Grand Total</span>
+                          <span className="text-sm font-black text-blue-800  ">Grand Total</span>
                           <span className="text-2xl font-black text-blue-900">{formatCurrency(recordData.amount * 1.18)}</span>
                         </div>
                       </div>
@@ -1835,7 +1828,7 @@ const Quotations = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Optional)</label>
+                    <label className="block text-sm  text-slate-700 mb-1">Notes (Optional)</label>
                     <textarea
                       value={recordData.notes}
                       onChange={(e) => setRecordData({...recordData, notes: e.target.value})}
@@ -1851,13 +1844,13 @@ const Quotations = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="p-2  border border-slate-200 rounded text-sm  hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
+                  className="p-2  bg-green-600 text-white rounded text-sm  hover:bg-green-700"
                 >
                   Create Quotation
                 </button>
@@ -1869,7 +1862,7 @@ const Quotations = () => {
 
       {showEmailModal && selectedQuotation && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+          <div className="bg-white rounded  p-6 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-md text-slate-900 text-xs">Send Quotation via Email</h3>
               <button 
@@ -1886,7 +1879,7 @@ const Quotations = () => {
 
             <form onSubmit={handleSendEmail} className="">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">To</label>
+                <label className="block text-sm  text-slate-700 mb-1">To</label>
                 <input
                   type="email"
                   value={emailData.to}
@@ -1897,7 +1890,7 @@ const Quotations = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+                <label className="block text-sm  text-slate-700 mb-1">Subject</label>
                 <input
                   type="text"
                   value={emailData.subject}
@@ -1908,7 +1901,7 @@ const Quotations = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
+                <label className="block text-sm  text-slate-700 mb-1">Message</label>
                 <textarea
                   value={emailData.message}
                   onChange={(e) => setEmailData({...emailData, message: e.target.value})}
@@ -1917,7 +1910,7 @@ const Quotations = () => {
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ">
                 <input
                   type="checkbox"
                   id="attachPDF"
@@ -1935,13 +1928,13 @@ const Quotations = () => {
                     fetchQuotations();
                     fetchStats();
                   }}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="p-2  border border-slate-200 rounded text-sm  hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                  className="p-2  bg-blue-600 text-white rounded text-sm  hover:bg-blue-700"
                 >
                   Send Email
                 </button>
@@ -1953,7 +1946,7 @@ const Quotations = () => {
 
       {showEditModal && selectedQuotation && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded  p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-md text-slate-900 text-xs">Edit Quotation</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
@@ -1962,7 +1955,7 @@ const Quotations = () => {
             <form onSubmit={handleEditQuotation} className="">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                 <label className="block text-sm font-medium text-slate-700 mb-1">Vendor</label>
+                 <label className="block text-sm  text-slate-700 mb-1">Vendor</label>
                   <select
                     value={editFormData.vendorId}
                     onChange={(e) => setEditFormData({...editFormData, vendorId: e.target.value})}
@@ -1975,7 +1968,7 @@ const Quotations = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
+                  <label className="block text-sm  text-slate-700 mb-1">Valid Until</label>
                   <input
                     type="date"
                     value={editFormData.validUntil}
@@ -1987,7 +1980,7 @@ const Quotations = () => {
 
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-medium text-slate-700">Line Items</label>
+                  <label className="block text-sm  text-slate-700">Line Items</label>
                   <button
                     type="button"
                     onClick={() => {
@@ -1996,7 +1989,7 @@ const Quotations = () => {
                         items: [...editFormData.items, { drawing_no: '', material_name: '', material_type: '', design_qty: 0, quantity: 0, uom: 'NOS', unit_rate: 0 }]
                       });
                     }}
-                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700"
+                    className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
                   >
                     + Add Item
                   </button>
@@ -2007,7 +2000,7 @@ const Quotations = () => {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-[10px]  text-slate-500  tracking-wide">
+                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100text-xs   text-slate-500  tracking-wide">
                       <div className="col-span-2">Drawing No</div>
                       <div className="col-span-3">Material Name</div>
                       <div className="col-span-2">Type</div>
@@ -2075,7 +2068,7 @@ const Quotations = () => {
                           }}
                           className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
-                        <div className="col-span-1 text-right text-xs font-medium text-slate-700">
+                        <div className="col-span-1 text-right text-xs  text-slate-700">
                           {formatCurrency((item.design_qty || item.quantity || 0) * (item.unit_rate || 0))}
                         </div>
                         <div className="col-span-1 flex justify-center">
@@ -2100,13 +2093,13 @@ const Quotations = () => {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded text-sm font-medium hover:bg-slate-50"
+                  className="p-2  border border-slate-200 rounded text-sm  hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                  className="p-2  bg-blue-600 text-white rounded text-sm  hover:bg-blue-700"
                 >
                   Update Quotation
                 </button>
@@ -2126,9 +2119,9 @@ const Quotations = () => {
             <table className="w-full border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-slate-50">
-                  <th className="p-3 border text-left text-xs font-bold text-slate-600 sticky left-0 bg-slate-50 z-10">Item / Drawing No.</th>
+                  <th className="p-3 border text-left text-xs  text-slate-600 sticky left-0 bg-slate-50 z-10">Item / Drawing No.</th>
                   {compareData.map((q, idx) => (
-                    <th key={idx} className="p-3 border text-center text-xs font-bold text-slate-800 bg-indigo-50/50" colSpan="2">
+                    <th key={idx} className="p-3 border text-center text-xs  text-slate-800 bg-indigo-50/50" colSpan="2">
                       <div className="flex flex-col gap-1">
                         <span className="text-indigo-600">{getVendorName(q.vendor_id)}</span>
                         <span className="text-[10px] text-slate-500 font-normal">{q.quote_number}</span>
@@ -2136,7 +2129,7 @@ const Quotations = () => {
                     </th>
                   ))}
                 </tr>
-                <tr className="bg-slate-50/50 text-[10px] uppercase tracking-wider text-slate-400">
+                <tr className="bg-slate-50/50text-xs    text-slate-400">
                   <th className="p-2 border sticky left-0 bg-slate-50/50 z-10"></th>
                   {compareData.map((_, idx) => (
                     <React.Fragment key={idx}>
@@ -2152,7 +2145,7 @@ const Quotations = () => {
                   const firstItem = compareData.flatMap(q => q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
                   return (
                     <tr key={itemIdx} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3 border font-medium text-slate-900 sticky left-0 bg-white z-10">
+                      <td className="p-3 border  text-slate-900 sticky left-0 bg-white z-10">
                         <div className="flex flex-col">
                           <span>{itemCode}</span>
                           <span className="text-[10px] text-slate-400 font-normal">{firstItem?.material_name}</span>
@@ -2162,10 +2155,10 @@ const Quotations = () => {
                         const item = (q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
                         return (
                           <React.Fragment key={qIdx}>
-                            <td className="p-3 border text-right text-slate-600 font-mono">
+                            <td className="p-3 border text-right text-slate-600  ">
                               {item ? formatCurrency(item.unit_rate) : '—'}
                             </td>
-                            <td className={`p-3 border text-right font-mono ${item ? 'text-indigo-600 font-bold' : 'text-slate-300'}`}>
+                            <td className={`p-3 border text-right   ${item ? 'text-indigo-600 ' : 'text-slate-300'}`}>
                               {item ? formatCurrency(item.amount || (item.unit_rate * (item.design_qty || item.quantity))) : '—'}
                             </td>
                           </React.Fragment>
@@ -2176,7 +2169,7 @@ const Quotations = () => {
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-50 font-bold">
+                <tr className="bg-slate-50 ">
                   <td className="p-4 border text-right sticky left-0 bg-slate-50 z-10">GRAND TOTAL</td>
                   {compareData.map((q, idx) => (
                     <td key={idx} className="p-4 border text-right text-indigo-700 text-sm" colSpan="2">
@@ -2193,7 +2186,7 @@ const Quotations = () => {
                           handleApproveQuote(q.id);
                           setShowCompareModal(false);
                         }}
-                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 transition-all shadow-sm"
+                        className="p-2  bg-emerald-600 text-white rounded  text-xs hover:bg-emerald-700 transition-all "
                       >
                         Approve this Quote
                       </button>

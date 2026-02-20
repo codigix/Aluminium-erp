@@ -57,7 +57,7 @@ const approveQuotationRequest = async (req, res, next) => {
     
     await pool.execute(
       'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-      ['APPROVED', id]
+      ['Approved ', id]
     );
 
     res.json({ message: 'Quotation request approved' });
@@ -91,12 +91,12 @@ const batchApproveQuotationRequests = async (req, res, next) => {
       if (replyPdfPath) {
         await connection.execute(
           'UPDATE quotation_requests SET status = ?, reply_pdf = ?, updated_at = NOW() WHERE id = ?',
-          ['APPROVED', replyPdfPath, id]
+          ['Approved ', replyPdfPath, id]
         );
       } else {
         await connection.execute(
           'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-          ['APPROVED', id]
+          ['Approved ', id]
         );
       }
     }
@@ -214,7 +214,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
       await connection.execute(
         `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() 
          WHERE id IN (${uniqueOrderIds.map(() => '?').join(',')})`,
-        ['QUOTATION_SENT', 'SALES', ...uniqueOrderIds]
+        ['QUOTATION_Sent ', 'SALES', ...uniqueOrderIds]
       );
     }
 

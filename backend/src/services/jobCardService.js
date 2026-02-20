@@ -189,11 +189,11 @@ const addQualityLog = async (data) => {
   );
 
   // Update accepted and rejected qty in job card if approved
-  if (status === 'APPROVED') {
+  if (status === 'Approved ') {
     await pool.execute(
       `UPDATE job_cards jc 
-       SET accepted_qty = (SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'),
-           rejected_qty = (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED')
+       SET accepted_qty = (SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'Approved '),
+           rejected_qty = (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'Approved ')
        WHERE id = ?`,
       [jobCardId, jobCardId, jobCardId]
     );

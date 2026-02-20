@@ -241,14 +241,14 @@ const BOMCreation = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl  text-slate-900 tracking-tight flex items-center gap-3">
-              <div className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-lg shadow-indigo-200">
+              <div className="p-2.5 bg-indigo-600 rounded  text-white shadow-lg shadow-indigo-200">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
               </div>
               BOM Creation Center
             </h1>
-            <p className="text-sm text-slate-500 mt-1 font-medium">Manage and define Bill of Materials for client production orders</p>
+            <p className="text-sm text-slate-500 mt-1 ">Manage and define Bill of Materials for client production orders</p>
           </div>
           
           <div className="flex items-center gap-3">
@@ -256,7 +256,7 @@ const BOMCreation = () => {
               <input 
                 type="text"
                 placeholder="Search Client..."
-                className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none w-64 transition-all shadow-sm"
+                className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none w-64 transition-all "
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -266,7 +266,7 @@ const BOMCreation = () => {
             </div>
             <button 
               onClick={fetchOrders}
-              className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm group"
+              className="p-2.5 bg-white border border-slate-200 rounded  text-slate-600 hover:bg-slate-50 transition-all  group"
               title="Refresh Data"
             >
               <svg className={`w-5 h-5 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -275,7 +275,7 @@ const BOMCreation = () => {
             </button>
             <Link 
               to="/bom-form"
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm  shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all"
+              className="flex items-center gap-2  px-5 py-2.5 bg-indigo-600 text-white rounded  text-sm  shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -293,14 +293,14 @@ const BOMCreation = () => {
             { label: 'Completion Rate', value: `${stats.completionRate}%`, sub: 'BOMs Finalized', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'emerald', progress: stats.completionRate },
             { label: 'Est. BOM Value', value: `₹${stats.totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, sub: 'Production Costing', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', color: 'amber' }
           ].map((stat, i) => (
-            <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div key={i} className="bg-white p-4 rounded  border border-slate-200 ">
               <div className='flex justify-between items-start'>
                 <div>
                   <div className="text-1xl  text-slate-900 leading-none">{stat.value}</div>
                   <div className="text-xs  text-slate-500 mt-1">{stat.label}</div>
                   <div className="text-[10px] text-slate-400 mt-1">{stat.sub}</div>
                 </div>
-                <div className={`p-2 rounded-xl bg-${stat.color}-50 text-${stat.color}-600`}>
+                <div className={`p-2 rounded  bg-${stat.color}-50 text-${stat.color}-600`}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} />
                   </svg>
@@ -308,8 +308,8 @@ const BOMCreation = () => {
               </div>
               {stat.progress !== undefined && (
                 <div className="mt-4">
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${stat.progress}%` }}></div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded  overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded " style={{ width: `${stat.progress}%` }}></div>
                   </div>
                 </div>
               )}
@@ -318,7 +318,7 @@ const BOMCreation = () => {
         </div>
 
         {/* Main Table Content */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded  border border-slate-200  overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50/80 backdrop-blur-sm sticky top-0 z-10">
@@ -335,7 +335,7 @@ const BOMCreation = () => {
                   <tr>
                     <td colSpan="5" className="py-24 text-center">
                       <div className="flex flex-col items-center">
-                        <div className="p-4 bg-slate-50 rounded-full mb-4">
+                        <div className="p-4 bg-slate-50 rounded  mb-4">
                           <svg className="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                           </svg>
@@ -389,12 +389,12 @@ const BOMCreation = () => {
                                 </svg>
                               </button>
                               <div className="flex flex-col">
-                                <span className="text-sm  text-slate-900 group-hover:text-indigo-600 transition-colors">{client.client_name}</span>
+                                <span className="text-xs text-slate-900 group-hover:text-indigo-600 transition-colors">{client.client_name}</span>
                               </div>
                             </div>
                           </td>
                           <td className="p-2 text-left">
-                            <span className="text-sm text-slate-900 font-medium">{totalDrawingsCount}</span>
+                            <span className="text-sm text-slate-900 ">{totalDrawingsCount}</span>
                           </td>
                           <td className="p-2 text-left">
                             <span className="text-sm text-slate-600">
@@ -407,16 +407,16 @@ const BOMCreation = () => {
                             <StatusBadge status={allBOMsCompleted ? 'COMPLETED' : 'IN_PROGRESS'} />
                           </td>
                           <td className="p-2 text-left">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 ">
                               <button 
                                 onClick={(e) => { e.stopPropagation(); toggleClient(client.id); }}
-                                className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all"
+                                className="p-2 .5 text-xs  text-indigo-600 bg-indigo-50 border border-indigo-100 rounded  hover:bg-indigo-100 transition-all"
                               >
                                 {isExpanded ? 'Hide Drawings' : 'View Drawings'}
                               </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleSendForApproval(client); }}
-                                className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-all"
+                                className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 rounded  hover:bg-emerald-100 transition-all"
                                 title="Send to BOM Approval"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -432,10 +432,10 @@ const BOMCreation = () => {
                             <td colSpan="5" className="p-2 bg-slate-50/50">
                               <div className="space-y-4">
                                 {clientLoading ? (
-                                  <div className="py-8 text-center text-slate-400 animate-pulse font-medium">Loading drawings...</div>
+                                  <div className="py-8 text-center text-slate-400 animate-pulse ">Loading drawings...</div>
                                 ) : items.length === 0 ? (
-                                  <div className="py-10 text-center bg-white rounded-xl border border-dashed border-slate-200">
-                                    <p className="text-sm text-slate-500 font-medium">No drawings found for this client.</p>
+                                  <div className="py-10 text-center bg-white rounded  border border-dashed border-slate-200">
+                                    <p className="text-sm text-slate-500 ">No drawings found for this client.</p>
                                   </div>
                                 ) : (
                                   <div className="grid grid-cols-1 gap-4">
@@ -460,36 +460,36 @@ const BOMCreation = () => {
                                       const drawingName = cleanText(dwgItems[0].drawing_name || dwgItems[0].description || dwgItems[0].material_name || '');
 
                                       return (
-                                        <div key={dwgKey} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-all hover:border-indigo-200">
+                                        <div key={dwgKey} className="bg-white rounded  border border-slate-200  overflow-hidden transition-all hover:border-indigo-200">
                                           {/* Drawing Header */}
                                           <div 
                                             onClick={() => toggleDrawing(dwgKey)}
                                             className="p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
                                           >
                                             <div className="flex items-center gap-4">
-                                              <div className={`p-2 rounded-lg ${isDwgExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                                              <div className={`p-2 rounded  ${isDwgExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
                                                 <svg className={`w-5 h-5 transition-transform duration-300 ${isDwgExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                                                 </svg>
                                               </div>
                                               <div>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 ">
                                                   <span className="text-sm  text-slate-900">{dwgNo}</span>
                                                   <StatusBadge status={dwgStatus} />
                                                 </div>
-                                                <p className="text-xs text-slate-500 font-medium mt-0.5">{drawingName}</p>
+                                                <p className="text-xs text-slate-500  mt-0.5">{drawingName}</p>
                                               </div>
                                             </div>
                                             
                                             <div className="flex items-center gap-3">
                                               <div className="text-right mr-4 hidden sm:block">
-                                                <p className="text-[10px] text-slate-400   tracking-wider">BOMs</p>
+                                                <p className="text-[10px] text-slate-400   ">BOMs</p>
                                                 <p className="text-sm  text-slate-700">{itemsWithBOM.length}</p>
                                               </div>
                                               <Link 
                                                 to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}`}
                                                 onClick={(e) => e.stopPropagation()}
-                                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs  shadow-sm hover:bg-indigo-700 transition-all  tracking-wider whitespace-nowrap"
+                                                className="p-2  bg-indigo-600 text-white rounded  text-xs   hover:bg-indigo-700 transition-all   whitespace-nowrap"
                                               >
                                                 Create BOM
                                               </Link>
@@ -504,59 +504,59 @@ const BOMCreation = () => {
                                                   <table className="min-w-full divide-y divide-slate-100">
                                                     <thead className="bg-slate-50/50">
                                                       <tr>
-                                                        <th className="pl-6 py-3 text-left text-[10px]  text-slate-400  tracking-wider">Item Details</th>
-                                                        <th className="px-4 py-3 text-center text-[10px]  text-slate-400  tracking-wider">Group</th>
-                                                        <th className="px-4 py-3 text-center text-[10px]  text-slate-400  tracking-wider">Qty</th>
-                                                        <th className="px-4 py-3 text-center text-[10px]  text-slate-400  tracking-wider">Est. Cost</th>
-                                                        <th className="px-4 py-3 text-center text-[10px]  text-slate-400  tracking-wider">Status</th>
-                                                        <th className="pr-6 py-3 text-right text-[10px]  text-slate-400  tracking-wider">Actions</th>
+                                                        <th className="p-2 text-left text-xs   text-slate-400  ">Item Details</th>
+                                                        <th className="p-2 text-center text-xs   text-slate-400  ">Group</th>
+                                                        <th className="p-2 text-center text-xs   text-slate-400  ">Qty</th>
+                                                        <th className="p-2 text-center text-xs   text-slate-400  ">Est. Cost</th>
+                                                        <th className="p-2 text-center text-xs   text-slate-400  ">Status</th>
+                                                        <th className="p-2 text-right text-xs   text-slate-400  ">Actions</th>
                                                       </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100 bg-white">
                                                       {dwgItems.filter(item => item.has_bom).map((item, idx) => (
                                                         <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                                          <td className="pl-6 py-4">
+                                                          <td className="p-2 ">
                                                             <div className="flex flex-col">
                                                               <span className="text-xs  text-slate-700">{cleanText(item.description || item.material_name || `Item ${idx + 1}`)}</span>
-                                                              <span className="text-[10px] text-slate-400 font-medium">{item.item_code}</span>
+                                                              <span className="text-[10px] text-slate-400 ">{item.item_code}</span>
                                                             </div>
                                                           </td>
-                                                          <td className="px-4 py-4 text-center">
-                                                            <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full font-medium">
+                                                          <td className="p-2 text-center">
+                                                            <span className="text-[10px] p-1  bg-slate-100 text-slate-600 rounded  ">
                                                               {item.item_group || '—'}
                                                             </span>
                                                           </td>
-                                                          <td className="px-4 py-4 text-center">
+                                                          <td className="p-2 text-center">
                                                             <span className="text-xs  text-slate-700">
                                                               {item.total_quantity || item.quantity} <span className="text-[10px] text-slate-400 font-normal">{item.unit || 'NOS'}</span>
                                                             </span>
                                                           </td>
-                                                          <td className="px-4 py-4 text-center">
+                                                          <td className="p-2 text-center">
                                                             <span className="text-xs  text-slate-900">
                                                               ₹{parseFloat(item.bom_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                             </span>
                                                           </td>
-                                                          <td className="px-4 py-4 text-center">
+                                                          <td className="p-2 text-center">
                                                             <StatusBadge status={item.has_bom ? "FINALIZED" : "PENDING"} />
                                                           </td>
-                                                          <td className="pr-6 py-4">
-                                                            <div className="flex justify-end gap-2">
+                                                          <td className="p-2 ">
+                                                            <div className="flex justify-center gap-2">
                                                               {item.has_bom ? (
                                                                 <>
-                                                                  <Link to={`/bom-form/${item.id}?view=true`} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="View BOM">
+                                                                  <Link to={`/bom-form/${item.id}?view=true`} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="View BOM">
                                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                                                     </svg>
                                                                   </Link>
-                                                                  <Link to={`/bom-form/${item.id}`} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Edit BOM">
+                                                                  <Link to={`/bom-form/${item.id}`} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all" title="Edit BOM">
                                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                     </svg>
                                                                   </Link>
                                                                   <button 
                                                                     onClick={() => handleDeleteBOM(item.id)}
-                                                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded  transition-all"
                                                                     title="Delete BOM"
                                                                   >
                                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -567,7 +567,7 @@ const BOMCreation = () => {
                                                               ) : (
                                                                 <Link 
                                                                   to={`/bom-form?item_id=${item.id}&drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}`}
-                                                                  className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" 
+                                                                  className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
                                                                   title="Create BOM for this Item"
                                                                 >
                                                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -584,7 +584,7 @@ const BOMCreation = () => {
                                                 </div>
                                               ) : (
                                                 <div className="py-6 text-center">
-                                                  <p className="text-xs text-slate-400 font-medium">No items available for this drawing.</p>
+                                                  <p className="text-xs text-slate-400 ">No items available for this drawing.</p>
                                                 </div>
                                               )}
                                             </div>

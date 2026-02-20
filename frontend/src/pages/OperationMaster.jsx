@@ -225,13 +225,13 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       label: 'Operation Code', 
       key: 'operation_code', 
       sortable: true,
-      render: (val) => <span className=" text-indigo-600 font-mono">{val}</span>
+      render: (val) => <span className=" text-indigo-600  ">{val}</span>
     },
     { 
       label: 'Operation Name', 
       key: 'operation_name', 
       sortable: true,
-      render: (val) => <span className="font-medium text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     { 
       label: 'Workstation', 
@@ -239,8 +239,8 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       sortable: true,
       render: (val, row) => (
         <div>
-          <div className="text-slate-900 font-medium">{val}</div>
-          <div className="text-[10px] text-slate-400 font-mono">{row.workstation_code}</div>
+          <div className="text-slate-900 ">{val}</div>
+          <div className="text-[10px] text-slate-400  ">{row.workstation_code}</div>
         </div>
       )
     },
@@ -248,7 +248,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       label: 'Std Time', 
       key: 'std_time',
       render: (val, row) => (
-        <span className="text-slate-600 font-medium">
+        <span className="text-slate-600 ">
           {val} {row.time_uom}
         </span>
       )
@@ -276,10 +276,10 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-center gap-2">
           <button 
             onClick={() => handleEdit(row)}
-            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
             title="Edit Operation"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -288,7 +288,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
           </button>
           <button 
             onClick={() => handleToggleStatus(row)}
-            className={`p-1.5 rounded-lg transition-colors ${row.is_active ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
+            className={`p-1.5 rounded  transition-colors ${row.is_active ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
             title={row.is_active ? 'Disable Operation' : 'Enable Operation'}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,7 +297,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
           </button>
           <button 
             onClick={() => handleDelete(row)}
-            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded  transition-colors"
             title="Delete Operation"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,12 +314,12 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-xl text-slate-900">Operation Master</h1>
-          <p className="text-xs text-slate-500 font-medium">Define and manage manufacturing operations and standard times</p>
+          <p className="text-xs text-slate-500 ">Define and manage manufacturing operations and standard times</p>
         </div>
         <div className="flex gap-2">
           <button 
             onClick={fetchOperations}
-            className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all"
+            className="p-2 bg-slate-100 text-slate-600 rounded  hover:bg-slate-200 transition-all"
             title="Refresh Data"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -328,7 +328,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
           </button>
           <button 
             onClick={() => { resetForm(); setShowForm(true); }}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all active:scale-95"
+            className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700  shadow-indigo-200 transition-all active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -353,7 +353,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Operation Code *</label>
+              <label className="text-xs  text-slate-500">Operation Code *</label>
               <input 
                 type="text" 
                 name="operation_code"
@@ -365,7 +365,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Operation Name *</label>
+              <label className="text-xs  text-slate-500">Operation Name *</label>
               <SearchableSelect 
                 placeholder="e.g., VMC Machining"
                 options={Array.from(new Set(operations.map(op => op.operation_name))).map(name => ({
@@ -380,7 +380,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Workstation *</label>
+              <label className="text-xs  text-slate-500">Workstation *</label>
               <SearchableSelect 
                 placeholder="Select Workstation"
                 options={workstations.map(ws => ({
@@ -396,7 +396,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-500">Std Time *</label>
+                <label className="text-xs  text-slate-500">Std Time *</label>
                 <input 
                   type="number" 
                   name="std_time"
@@ -408,7 +408,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-500">UOM</label>
+                <label className="text-xs  text-slate-500">UOM</label>
                 <select 
                   name="time_uom"
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
@@ -420,21 +420,21 @@ const OperationMaster = ({ showForm, setShowForm }) => {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Hourly Rate (Override)</label>
+              <label className="text-xs  text-slate-500">Hourly Rate (Override)</label>
               <div className="relative">
                 <span className="absolute left-4 top-2.5 text-slate-400 text-sm">₹</span>
                 <input 
                   type="number" 
                   name="hourly_rate"
                   step="0.01"
-                  className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
                   placeholder="Leave 0 to use workstation rate"
                   value={formData.hourly_rate}
                   onChange={handleInputChange}
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2 pt-6">
+            <div className="flex items-center gap-2  pt-6">
               <input 
                 type="checkbox" 
                 name="is_active"
@@ -443,7 +443,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
                 checked={formData.is_active === 1}
                 onChange={handleInputChange}
               />
-              <label htmlFor="is_active" className="text-sm font-medium text-slate-700">Active</label>
+              <label htmlFor="is_active" className="text-sm  text-slate-700">Active</label>
             </div>
           </div>
 
@@ -451,13 +451,13 @@ const OperationMaster = ({ showForm, setShowForm }) => {
             <button 
               type="button" 
               onClick={() => { setShowForm(false); resetForm(); }}
-              className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs  hover:bg-slate-50 transition-all"
+              className="p-2.5 border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+              className="px-10 py-2.5 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
             >
               {isEditing ? 'Update Operation' : 'Save Operation'}
             </button>

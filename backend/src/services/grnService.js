@@ -159,7 +159,7 @@ const getGRNStats = async () => {
       COUNT(*) as totalGrns,
       SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pendingGrns,
       SUM(CASE WHEN status = 'RECEIVED' THEN 1 ELSE 0 END) as receivedGrns,
-      SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as approvedGrns,
+      SUM(CASE WHEN status = 'Approved ' THEN 1 ELSE 0 END) as approvedGrns,
       SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejectedGrns
     FROM grns`
   );

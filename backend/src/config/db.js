@@ -72,7 +72,7 @@ const ensureJobCardColumns = async () => {
         rejected_qty DECIMAL(12, 3) DEFAULT 0,
         scrap_qty DECIMAL(12, 3) DEFAULT 0,
         rejection_reason TEXT,
-        status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'Approved ', 'REJECTED') DEFAULT 'PENDING',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
@@ -423,7 +423,7 @@ const ensureMaterialRequestColumns = async () => {
     // Update status enum if needed
     const statusCol = columns.find(c => c.Field === 'status');
     if (statusCol && (!statusCol.Type.includes('ORDERED') || !statusCol.Type.includes('COMPLETED') || !statusCol.Type.includes('PO_CREATED'))) {
-      await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'APPROVED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT'`);
+      await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'Approved ', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT'`);
       console.log('Material Request status enum updated');
     }
 
@@ -744,7 +744,7 @@ const ensureQuotationRequestTables = async () => {
         sales_order_id INT NOT NULL,
         sales_order_item_id INT NULL,
         company_id INT NOT NULL,
-        status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'APPROVAL', 'Approved ', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING',
         total_amount DECIMAL(14, 2) DEFAULT 0,
         received_amount DECIMAL(14, 2) DEFAULT 0,
         notes TEXT NULL,
@@ -804,7 +804,7 @@ const ensureQuotationRequestStatus = async () => {
       if (!type.includes('APPROVAL') || !type.includes('ACCEPTED')) {
         await connection.query(`
           ALTER TABLE quotation_requests 
-          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING'
+          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'Approved ', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING'
         `);
         console.log('Quotation Request status updated with APPROVAL and ACCEPTED');
       }
@@ -878,17 +878,17 @@ const ensureSalesOrderStatuses = async () => {
     const [columns] = await connection.query("SHOW COLUMNS FROM sales_orders LIKE 'status'");
     if (columns.length > 0) {
       const type = columns[0].Type;
-      if (!type.includes('QUOTATION_SENT') || !type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED')) {
+      if (!type.includes('QUOTATION_Sent ') || !type.includes('BOM_SUBMITTED') || !type.includes('BOM_Approved ')) {
         await connection.query(`
           ALTER TABLE sales_orders 
           MODIFY COLUMN status ENUM(
-            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY', 'QUOTATION_SENT',
-            'BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 
+            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'DESIGN_QUERY', 'QUOTATION_Sent ',
+            'BOM_SUBMITTED', 'BOM_Approved ', 'PROCUREMENT_IN_PROGRESS', 
             'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 
             'PRODUCTION_COMPLETED', 'CLOSED'
           ) DEFAULT 'CREATED'
         `);
-        console.log('Sales order statuses updated with QUOTATION_SENT');
+        console.log('Sales order statuses updated with QUOTATION_Sent ');
       }
     }
   } catch (error) {
@@ -1476,7 +1476,7 @@ const ensureMaterialRequestTables = async () => {
         requested_by INT,
         required_by DATE,
         purpose ENUM('Purchase Request', 'Internal Transfer', 'Material Issue') NOT NULL,
-        status ENUM('DRAFT', 'APPROVED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT',
+        status ENUM('DRAFT', 'Approved ', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1740,7 +1740,7 @@ const ensurePurchaseOrderVendorNullable = async () => {
     const statusCol = columns.find(c => c.Field === 'status');
     if (statusCol && !statusCol.Type.includes('PO_REQUEST')) {
       console.log('[ensurePurchaseOrderVendorNullable] Adding PO_REQUEST to purchase_orders status enum...');
-      await connection.query(`ALTER TABLE purchase_orders MODIFY status ENUM('DRAFT', 'PO_REQUEST', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'CLOSED', 'COMPLETED') DEFAULT 'ORDERED'`);
+      await connection.query(`ALTER TABLE purchase_orders MODIFY status ENUM('DRAFT', 'PO_REQUEST', 'ORDERED', 'Sent ', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'CLOSED', 'COMPLETED') DEFAULT 'ORDERED'`);
     }
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {

@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
 const listSalesOrders = async (includeWithoutPo = true) => {
-  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_APPROVED'))";
+  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved '))";
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
@@ -70,9 +70,9 @@ const getIncomingOrders = async (departmentCode) => {
   if (departmentCode === 'DESIGN_ENG') {
     whereClause = `so.status IN ('CREATED', 'DESIGN_QUERY')`;
   } else if (departmentCode === 'PROCUREMENT') {
-    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS')`;
+    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS')`;
   } else if (departmentCode === 'INVENTORY') {
-    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION')`;
+    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION')`;
   } else if (departmentCode === 'PRODUCTION') {
     whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'MATERIAL_READY', 'IN_PRODUCTION')`;
   } else {
@@ -421,7 +421,7 @@ const updateSalesOrder = async (id, orderData) => {
 
 const updateSalesOrderStatus = async (salesOrderId, status) => {
   let department = null;
-  if (status === 'BOM_APPROVED') {
+  if (status === 'BOM_Approved ') {
     department = 'PROCUREMENT';
   } else if (status === 'BOM_SUBMITTED') {
     department = 'DESIGN_ENG'; // Stay in design for approval
@@ -452,7 +452,7 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
     } else if (departmentCode === 'DESIGN_ENG' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW')) {
       newStatus = 'DESIGN_IN_REVIEW';
       nextDepartment = 'DESIGN_ENG';
-    } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_APPROVED' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
+    } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_Approved ' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
       if (currentOrder.material_available) {
         newStatus = 'MATERIAL_READY';
         nextDepartment = 'PRODUCTION';
@@ -690,7 +690,7 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_APPROVED', 'BOM_APPROVED')`;
+     WHERE so.status IN ('DESIGN_Approved ', 'BOM_Approved ')`;
   
   const params = [];
   if (companyId) {
@@ -908,7 +908,7 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     <html>
     <head>
       <style>
-        body { font-family: sans-serif; padding: 20px; color: #333; }
+        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; padding: 20px; color: #333; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
         .company-info h1 { margin: 0; color: #1e293b; font-size: 24px; }
         .order-meta { text-align: right; }
@@ -1073,7 +1073,7 @@ const bulkUpdateStatus = async (orderIds, status) => {
     const placeholders = orderIds.map(() => '?').join(',');
     
     let department = null;
-    if (status === 'BOM_APPROVED') {
+    if (status === 'BOM_Approved ') {
       department = 'PROCUREMENT';
     } else if (status === 'BOM_SUBMITTED') {
       department = 'DESIGN_ENG';

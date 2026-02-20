@@ -239,7 +239,7 @@ const DOCUMENT_WORKFLOW = {
   ],
   'customer_pos': [
     { status: 'DRAFT', department: 'SALES', description: 'PO received and processing' },
-    { status: 'APPROVED', department: 'SALES', description: 'PO approved' }
+    { status: 'Approved ', department: 'SALES', description: 'PO approved' }
   ]
 };
 

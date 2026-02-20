@@ -39,7 +39,7 @@ This document describes the comprehensive GRN (Goods Receipt Note) item-wise pro
 - id: Primary key
 - grn_item_id: Foreign key to grn_items
 - excess_qty: Amount exceeding PO
-- status: PENDING, APPROVED, REJECTED
+- status: PENDING, Approved , REJECTED
 - approval_notes: Manager notes for approval
 - rejection_reason: Reason for rejection
 ```

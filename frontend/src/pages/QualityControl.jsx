@@ -29,7 +29,7 @@ const grnStatusColors = {
   PENDING: { badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Pending' },
   RECEIVED: { badge: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Received' },
   INSPECTED: { badge: 'bg-indigo-100 text-indigo-700 border-indigo-200', label: 'Inspected' },
-  APPROVED: { badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Approved' },
+  Approved : { badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Approved' },
   REJECTED: { badge: 'bg-red-100 text-red-700 border-red-200', label: 'Rejected' }
 };
 
@@ -257,12 +257,12 @@ const QualityControl = () => {
   };
 
   const StatMiniCard = ({ label, value, icon: Icon, colorClass }) => (
-    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-      <div className={`p-2 rounded-lg ${colorClass}`}>
+    <div className="bg-white p-4 rounded  border border-slate-200  flex items-center gap-4">
+      <div className={`p-2 rounded  ${colorClass}`}>
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px]  text-slate-500  tracking-wider">{label}</p>
+        <p className="text-[10px]  text-slate-500  ">{label}</p>
         <p className="text-sm text-slate-900 leading-tight">{value}</p>
       </div>
     </div>
@@ -271,12 +271,12 @@ const QualityControl = () => {
   return (
     <div className="space-y-3">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
+        <div className="flex bg-slate-100 p-1 rounded  w-fit border border-slate-200">
           <button
             onClick={() => setActiveTab('grn')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm  transition-all ${
+            className={`flex items-center gap-2  px-5 py-2 rounded  text-sm  transition-all ${
               activeTab === 'grn'
-                ? 'bg-white text-indigo-600 shadow-sm'
+                ? 'bg-white text-indigo-600 '
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -285,9 +285,9 @@ const QualityControl = () => {
           </button>
           <button
             onClick={() => setActiveTab('qc')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm  transition-all ${
+            className={`flex items-center gap-2  px-5 py-2 rounded  text-sm  transition-all ${
               activeTab === 'qc'
-                ? 'bg-white text-indigo-600 shadow-sm'
+                ? 'bg-white text-indigo-600 '
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -298,7 +298,7 @@ const QualityControl = () => {
 
         <button
           onClick={() => activeTab === 'grn' ? setShowGRNModal(true) : setShowQCModal(true)}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm  shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded  text-sm  shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
         >
           <Plus className="w-5 h-5" />
           {activeTab === 'grn' ? 'Create GRN' : 'New Inspection'}
@@ -313,19 +313,19 @@ const QualityControl = () => {
               <input
                 type="text"
                 placeholder={activeTab === 'grn' ? "Search PO number or vendor..." : "Search by GRN number..."}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
               />
             </div>
           </div>
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24">
-              <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4" />
-              <p className="text-sm font-medium text-slate-500">Retrieving quality data...</p>
+              <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded  animate-spin mb-4" />
+              <p className="text-sm  text-slate-500">Retrieving quality data...</p>
             </div>
           ) : (activeTab === 'grn' ? grns : qcInspections).length === 0 ? (
-            <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm text-slate-300 mb-4">
+            <div className="text-center py-16 bg-slate-50 rounded  border border-dashed border-slate-200">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded  bg-white  text-slate-300 mb-4">
                 <Inbox className="w-8 h-8" />
               </div>
               <p className="text-slate-900 ">No records found</p>
@@ -336,27 +336,27 @@ const QualityControl = () => {
               </p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200">
+            <div className="overflow-hidden rounded  border border-slate-200">
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   {activeTab === 'grn' ? (
                     <tr>
-                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">GRN #</th>
-                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">PO Number</th>
-                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">GRN Date</th>
-                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Received Qty</th>
-                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">Status</th>
-                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Actions</th>
+                      <th className="p-2  text-slate-600  text-xs ">GRN #</th>
+                      <th className="p-2  text-slate-600  text-xs ">PO Number</th>
+                      <th className="p-2  text-slate-600  text-xs ">GRN Date</th>
+                      <th className="p-2 text-right  text-slate-600  text-xs ">Received Qty</th>
+                      <th className="p-2  text-slate-600  text-xs ">Status</th>
+                      <th className="p-2 text-right  text-slate-600  text-xs ">Actions</th>
                     </tr>
                   ) : (
                     <tr>
-                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">Inspection #</th>
-                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">GRN #</th>
-                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">Inspection Date</th>
-                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Pass Qty</th>
-                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Fail Qty</th>
-                      <th className="p-2  text-slate-600  tracking-wider text-[10px]">Status</th>
-                      <th className="p-2 text-right  text-slate-600  tracking-wider text-[10px]">Actions</th>
+                      <th className="p-2  text-slate-600  text-xs ">Inspection #</th>
+                      <th className="p-2  text-slate-600  text-xs ">GRN #</th>
+                      <th className="p-2  text-slate-600  text-xs ">Inspection Date</th>
+                      <th className="p-2 text-right  text-slate-600  text-xs ">Pass Qty</th>
+                      <th className="p-2 text-right  text-slate-600  text-xs ">Fail Qty</th>
+                      <th className="p-2  text-slate-600  text-xs ">Status</th>
+                      <th className="p-2 text-right  text-slate-600  text-xs ">Actions</th>
                     </tr>
                   )}
                 </thead>
@@ -364,27 +364,27 @@ const QualityControl = () => {
                   {activeTab === 'grn' ? (
                     grns.map((grn) => (
                       <tr key={`grn-${grn.id}`} className="hover:bg-indigo-50/30 transition-colors group">
-                        <td className="p-2 font-mono  text-indigo-600">
+                        <td className="p-2    text-indigo-600">
                           GRN-{String(grn.id).padStart(4, '0')}
                         </td>
-                        <td className="p-2 font-medium text-slate-700">{grn.poNumber}</td>
+                        <td className="p-2  text-slate-700">{grn.poNumber}</td>
                         <td className="p-2 text-slate-500">{formatDate(grn.grnDate)}</td>
-                        <td className="p-2 text-right font-mono  text-slate-900">{grn.receivedQuantity}</td>
+                        <td className="p-2 text-right    text-slate-900">{grn.receivedQuantity}</td>
                         <td className="p-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px]   tracking-wider border ${grnStatusColors[grn.status]?.badge}`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs     border ${grnStatusColors[grn.status]?.badge}`}>
                             {grnStatusColors[grn.status]?.label || grn.status}
                           </span>
                         </td>
                         <td className="p-2 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={() => handleViewDetails(grn.id, 'grn', grn.status)}
-                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
                               title="View Details"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                            <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-colors">
                               <Edit className="w-4 h-4" />
                             </button>
                           </div>
@@ -394,30 +394,30 @@ const QualityControl = () => {
                   ) : (
                     qcInspections.map((qc) => (
                       <tr key={`qc-${qc.id}`} className="hover:bg-indigo-50/30 transition-colors group">
-                        <td className="p-2 font-mono  text-indigo-600">
+                        <td className="p-2    text-indigo-600">
                           QC-{String(qc.id).padStart(4, '0')}
                         </td>
-                        <td className="p-2 font-mono text-slate-500">
+                        <td className="p-2   text-slate-500">
                           GRN-{String(qc.grnId).padStart(4, '0')}
                         </td>
                         <td className="p-2 text-slate-500">{formatDate(qc.inspectionDate)}</td>
-                        <td className="p-2 text-right font-mono  text-emerald-600">{qc.status === 'PENDING' ? 'Pending' : (qc.passQuantity || 0)}</td>
-                        <td className="p-2 text-right font-mono  text-red-600">{qc.status === 'PENDING' ? 'Pending' : (qc.failQuantity || 0)}</td>
+                        <td className="p-2 text-right    text-emerald-600">{qc.status === 'PENDING' ? 'Pending' : (qc.passQuantity || 0)}</td>
+                        <td className="p-2 text-right    text-red-600">{qc.status === 'PENDING' ? 'Pending' : (qc.failQuantity || 0)}</td>
                         <td className="p-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px]   tracking-wider border ${qcStatusColors[qc.status]?.badge}`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs     border ${qcStatusColors[qc.status]?.badge}`}>
                             {qcStatusColors[qc.status]?.label || qc.status}
                           </span>
                         </td>
                         <td className="p-2 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={() => handleViewDetails(qc.id, 'qc', qc.status)}
-                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
                               title="View Details"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                            <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-colors">
                               <Edit className="w-4 h-4" />
                             </button>
                           </div>
@@ -464,20 +464,20 @@ const QualityControl = () => {
       {/* GRN Modal */}
       {showGRNModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded  shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <div className="flex items-center gap-2 ">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
                   <Archive className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-sm  text-slate-900">Create Goods Received Note</h3>
-                  <p className="text-[10px] text-slate-500 font-medium  tracking-wider">Inventory Inward</p>
+                  <p className="text-[10px] text-slate-500   ">Inventory Inward</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowGRNModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -486,7 +486,7 @@ const QualityControl = () => {
             <form onSubmit={handleCreateGRN} className="p-6 ">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 tracking-wider ml-1">PO Number *</label>
+                  <label className="text-xs text-slate-500  ml-1">PO Number *</label>
                   <div className="relative">
                     <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -494,28 +494,28 @@ const QualityControl = () => {
                       value={grnFormData.poNumber}
                       onChange={(e) => setGrnFormData({...grnFormData, poNumber: e.target.value})}
                       placeholder="PO-2024-XXXX"
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 tracking-wider ml-1">GRN Date *</label>
+                  <label className="text-xs text-slate-500  ml-1">GRN Date *</label>
                   <div className="relative">
                     <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="date"
                       value={grnFormData.grnDate}
                       onChange={(e) => setGrnFormData({...grnFormData, grnDate: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 tracking-wider ml-1">Received Quantity *</label>
+                  <label className="text-xs text-slate-500  ml-1">Received Quantity *</label>
                   <div className="relative">
                     <ArchiveBoxIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -523,7 +523,7 @@ const QualityControl = () => {
                       value={grnFormData.receivedQuantity}
                       onChange={(e) => setGrnFormData({...grnFormData, receivedQuantity: e.target.value})}
                       placeholder="0.00"
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                       required
                       min="1"
                     />
@@ -531,14 +531,14 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 tracking-wider ml-1">Notes (Optional)</label>
+                  <label className="text-xs text-slate-500  ml-1">Notes (Optional)</label>
                   <div className="relative">
                     <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                     <textarea
                       value={grnFormData.notes}
                       onChange={(e) => setGrnFormData({...grnFormData, notes: e.target.value})}
                       placeholder="Material condition, vehicle number, etc."
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[80px]"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[80px]"
                     />
                   </div>
                 </div>
@@ -548,13 +548,13 @@ const QualityControl = () => {
                 <button
                   type="button"
                   onClick={() => setShowGRNModal(false)}
-                  className="px-6 py-2 text-sm  text-slate-600 hover:text-slate-900 transition-colors"
+                  className="p-2 text-sm  text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm  shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                  className="p-2 bg-indigo-600 text-white rounded  text-sm  shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
                 >
                   Complete Receipt
                 </button>
@@ -567,20 +567,20 @@ const QualityControl = () => {
       {/* QC Modal */}
       {showQCModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded  shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <div className="flex items-center gap-2 ">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded ">
                   <CheckBadgeIcon className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-sm  text-slate-900">Create QC Inspection</h3>
-                  <p className="text-[10px] text-slate-500 font-medium  tracking-wider">Quality Verification</p>
+                  <p className="text-[10px] text-slate-500   ">Quality Verification</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowQCModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -589,13 +589,13 @@ const QualityControl = () => {
             <form onSubmit={handleCreateQC} className="p-6 ">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 tracking-wider ml-1">Select GRN *</label>
+                  <label className="text-xs text-slate-500  ml-1">Select GRN *</label>
                   <div className="relative">
                     <Inbox className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <select
                       value={qcFormData.grnId}
                       onChange={(e) => setQcFormData({...qcFormData, grnId: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
                       required
                     >
                       <option value="">-- Choose a pending GRN --</option>
@@ -609,14 +609,14 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 tracking-wider ml-1">Inspection Date *</label>
+                  <label className="text-xs text-slate-500  ml-1">Inspection Date *</label>
                   <div className="relative">
                     <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="date"
                       value={qcFormData.inspectionDate}
                       onChange={(e) => setQcFormData({...qcFormData, inspectionDate: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                       required
                     />
                   </div>
@@ -624,7 +624,7 @@ const QualityControl = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs text-slate-500 tracking-wider ml-1">Pass Quantity *</label>
+                    <label className="text-xs text-slate-500  ml-1">Pass Quantity *</label>
                     <div className="relative">
                       <CheckCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" />
                       <input
@@ -632,7 +632,7 @@ const QualityControl = () => {
                         value={qcFormData.passQuantity}
                         onChange={(e) => setQcFormData({...qcFormData, passQuantity: e.target.value})}
                         placeholder="0.00"
-                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                         required
                         min="0"
                       />
@@ -640,7 +640,7 @@ const QualityControl = () => {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs text-slate-500 tracking-wider ml-1">Fail Quantity</label>
+                    <label className="text-xs text-slate-500  ml-1">Fail Quantity</label>
                     <div className="relative">
                       <XCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-red-500" />
                       <input
@@ -648,7 +648,7 @@ const QualityControl = () => {
                         value={qcFormData.failQuantity}
                         onChange={(e) => setQcFormData({...qcFormData, failQuantity: e.target.value})}
                         placeholder="0.00"
-                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                         min="0"
                       />
                     </div>
@@ -656,27 +656,27 @@ const QualityControl = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 tracking-wider ml-1">Defects & Issues</label>
+                  <label className="text-xs text-slate-500  ml-1">Defects & Issues</label>
                   <div className="relative">
                     <ArrowUpRight className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                     <textarea
                       value={qcFormData.defects}
                       onChange={(e) => setQcFormData({...qcFormData, defects: e.target.value})}
                       placeholder="Specify visual defects, dimensional errors..."
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all min-h-[60px]"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all min-h-[60px]"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 tracking-wider ml-1">Remarks</label>
+                  <label className="text-xs text-slate-500  ml-1">Remarks</label>
                   <div className="relative">
                     <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                     <textarea
                       value={qcFormData.remarks}
                       onChange={(e) => setQcFormData({...qcFormData, remarks: e.target.value})}
                       placeholder="Final decision notes..."
-                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all min-h-[60px]"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all min-h-[60px]"
                     />
                   </div>
                 </div>
@@ -686,13 +686,13 @@ const QualityControl = () => {
                 <button
                   type="button"
                   onClick={() => setShowQCModal(false)}
-                  className="px-6 py-2 text-sm  text-slate-600 hover:text-slate-900 transition-colors"
+                  className="p-2 text-sm  text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm  shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all"
+                  className="p-2 bg-blue-600 text-white rounded  text-sm  shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all"
                 >
                   Submit Inspection
                 </button>
@@ -705,10 +705,10 @@ const QualityControl = () => {
       {/* Detail Modal */}
       {detailModal.open && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded  shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <div className="flex items-center gap-2 ">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
                   <Archive className="w-5 h-5" />
                 </div>
                 <div>
@@ -719,7 +719,7 @@ const QualityControl = () => {
               </div>
               <button 
                 onClick={() => setDetailModal({ ...detailModal, open: false })}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -734,22 +734,22 @@ const QualityControl = () => {
               ) : !detailModal.data || detailModal.data.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">No items found.</div>
               ) : (
-                <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="overflow-hidden rounded  border border-slate-200">
                   <table className="w-full text-xs text-left">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th className="p-2 font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Item Code</th>
-                        <th className="p-2 font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Description</th>
-                        <th className="p-2 text-right font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Ordered</th>
-                        <th className="p-2 text-right font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Received</th>
-                        <th className="p-2 text-right font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Accepted</th>
-                        <th className="p-2 text-center font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Drawing</th>
+                        <th className="p-2 font-semibold text-slate-600  text-xs ">Item Code</th>
+                        <th className="p-2 font-semibold text-slate-600  text-xs ">Description</th>
+                        <th className="p-2 text-right font-semibold text-slate-600  text-xs ">Ordered</th>
+                        <th className="p-2 text-right font-semibold text-slate-600  text-xs ">Received</th>
+                        <th className="p-2 text-right font-semibold text-slate-600  text-xs ">Accepted</th>
+                        <th className="p-2 text-center font-semibold text-slate-600  text-xs ">Drawing</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {detailModal.data.map((item, idx) => (
                         <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
-                          <td className="p-2 font-mono text-indigo-600">{item.item_code}</td>
+                          <td className="p-2   text-indigo-600">{item.item_code}</td>
                           <td className="p-2 text-slate-600">{item.description || item.item_description || 'N/A'}</td>
                           <td className="p-2 text-right">{item.po_qty || item.ordered_qty || 0}</td>
                           <td className="p-2 text-right">{item.received_qty || 0}</td>
@@ -762,7 +762,7 @@ const QualityControl = () => {
                                 item_code: item.item_code,
                                 description: item.description || item.item_description
                               })}
-                              className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors inline-flex items-center gap-1"
+                              className="p-1.5 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors inline-flex items-center gap-1"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span className="text-[10px]">Preview</span>

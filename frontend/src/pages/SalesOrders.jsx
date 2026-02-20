@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { 
+  Eye, 
+  Pencil, 
+  Trash2, 
+  Plus, 
+  Package, 
+  ChevronRight, 
+  ArrowLeft, 
+  Save, 
+  Loader2,
+  FileText
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -125,7 +137,7 @@ const SalesOrders = () => {
     try {
       const token = localStorage.getItem('authToken');
       const [quotesRes, approvedRes] = await Promise.all([
-        fetch(`${API_BASE}/quotation-requests?status=APPROVED,COMPLETED,ACCEPTED&company_id=${companyId}`, {
+        fetch(`${API_BASE}/quotation-requests?status=Approved ,COMPLETED,ACCEPTED&company_id=${companyId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
         fetch(`${API_BASE}/order/approved-drawings?company_id=${companyId}`, {
@@ -170,14 +182,14 @@ const SalesOrders = () => {
         companyApproved.forEach(order => {
           const fgItems = (order.items || []).filter(item => item.item_group === 'FG');
           if (fgItems.length > 0) {
-            const key = `APPROVED_${order.id}`;
+            const key = `Approved _${order.id}`;
             allOptions.push({
               id: order.id,
               dbId: order.id,
               uniqueKey: key,
               company_id: order.company_id,
               created_at: order.created_at,
-              status: 'APPROVED_DRAWING',
+              status: 'Approved _DRAWING',
               po_number: order.po_number,
               isApprovedDrawing: true,
               items: fgItems.map(item => ({
@@ -270,7 +282,7 @@ const SalesOrders = () => {
 
         let mappedPoId = data.customer_po_id || data.quotation_id || '';
         if (data.source_type === 'DRAWING' && data.quotation_id) {
-          mappedPoId = `APPROVED_${data.quotation_id}`;
+          mappedPoId = `Approved _${data.quotation_id}`;
         }
 
         setFormData({
@@ -471,7 +483,7 @@ const SalesOrders = () => {
       label: 'Order No',
       key: 'order_no',
       sortable: true,
-      render: (val, row) => <span className="font-mono text-indigo-600">{val || `ORD-${String(row.id).padStart(4, '0')}`}</span>
+      render: (val, row) => <span className="  text-indigo-600">{val || `ORD-${String(row.id).padStart(4, '0')}`}</span>
     },
     {
       label: 'Customer',
@@ -495,7 +507,7 @@ const SalesOrders = () => {
       label: 'Grand Total',
       key: 'grand_total',
       sortable: true,
-      render: (val) => <span className="font-medium text-slate-900">₹{Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+      render: (val) => <span className=" text-slate-900">₹{Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
     },
     {
       label: 'Status',
@@ -508,15 +520,15 @@ const SalesOrders = () => {
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-          <button onClick={() => handleViewOrder(row)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors" title="View">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        <div className="flex justify-center gap-2" onClick={e => e.stopPropagation()}>
+          <button onClick={() => handleViewOrder(row)} className="p-1.5 hover:bg-slate-100 rounded  text-slate-400 hover:text-indigo-600 transition-colors" title="View">
+            <Eye className="w-4 h-4" />
           </button>
-          <button onClick={() => handleEditOrder(row)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-amber-600 transition-colors" title="Edit">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          <button onClick={() => handleEditOrder(row)} className="p-1.5 hover:bg-slate-100 rounded  text-slate-400 hover:text-amber-600 transition-colors" title="Edit">
+            <Pencil className="w-4 h-4" />
           </button>
-          <button onClick={() => handleDeleteOrder(row.id)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-600 transition-colors" title="Delete">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          <button onClick={() => handleDeleteOrder(row.id)} className="p-1.5 hover:bg-slate-100 rounded  text-slate-400 hover:text-rose-600 transition-colors" title="Delete">
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )
@@ -533,11 +545,9 @@ const SalesOrders = () => {
           </div>
           <button 
             onClick={handleAddOrder}
-            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 "
+            className="flex items-center gap-2  p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all shadow-lg text-xs "
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="w-5 h-5" />
             Add Sales Order
           </button>
         </div>
@@ -563,22 +573,18 @@ const SalesOrders = () => {
   const totalAmount = costWithProfit + gstAmount;
 
   return (
-    <div className="space-y-6 pb-20">
-      <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm sticky top-0 z-10">
+    <div className="space-y-2 pb-20">
+      <div className="flex items-center gap-4 bg-white p-2 rounded  border border-slate-200  sticky top-0 z-10">
         <button 
           onClick={() => setViewMode('list')}
-          className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500"
+          className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-500"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
+          <ArrowLeft className="w-6 h-6" />
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-50 rounded-lg">
-                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+            <div className="p-2 bg-indigo-50 rounded ">
+                <FileText className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <h1 className="text-xl text-slate-900">{formMode === 'create' ? 'New Sales Order' : formMode === 'edit' ? 'Edit Sales Order' : 'View Sales Order'}</h1>
@@ -589,14 +595,14 @@ const SalesOrders = () => {
         <div className="flex items-center gap-3">
            <button 
               onClick={() => setViewMode('list')}
-              className="px-6 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors "
+              className="p-2 bg-slate-100 text-slate-600 text-xs rounded  hover:bg-slate-200 transition-colors "
             >
               Cancel
             </button>
             {formMode !== 'view' && (
               <button 
                 onClick={handleSaveOrder}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors  shadow-lg shadow-indigo-200"
+                className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-colors  shadow-lg text-xs text-xs"
               >
                 {formMode === 'create' ? 'Save Sales Order' : 'Update Sales Order'}
               </button>
@@ -607,11 +613,11 @@ const SalesOrders = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Order Information */}
-          <Card title="Order Information" subtitle="Basic details about the order">
+          <Card title="Order Information" className='bg-white' subtitle="Basic details about the order">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
               <FormControl label="Series">
                 <input 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-500" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs bg-slate-50 text-slate-500" 
                   value={formData.series} 
                   disabled 
                 />
@@ -619,7 +625,7 @@ const SalesOrders = () => {
               <FormControl label="Order Date *">
                 <input 
                   type="date" 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                   value={formData.orderDate}
                   onChange={(e) => setFormData({...formData, orderDate: e.target.value})}
                   disabled={formMode === 'view'}
@@ -628,7 +634,7 @@ const SalesOrders = () => {
               <FormControl label="Delivery Date">
                 <input 
                   type="date" 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                   value={formData.deliveryDate}
                   onChange={(e) => setFormData({...formData, deliveryDate: e.target.value})}
                   disabled={formMode === 'view'}
@@ -636,7 +642,7 @@ const SalesOrders = () => {
               </FormControl>
               <FormControl label="Order Type">
                 <select 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                   value={formData.orderType}
                   onChange={(e) => setFormData({...formData, orderType: e.target.value})}
                   disabled={formMode === 'view'}
@@ -649,7 +655,7 @@ const SalesOrders = () => {
           </Card>
 
           {/* Customer Details */}
-          <Card title="Customer Details" subtitle="Customer contact information">
+          <Card title="Customer Details" className='bg-white' subtitle="Customer contact information">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
               <FormControl label="Customer *">
                 <SearchableSelect 
@@ -675,7 +681,7 @@ const SalesOrders = () => {
               </FormControl>
               <FormControl label="Email">
                 <input 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                   value={formData.customerEmail}
                   onChange={(e) => setFormData({...formData, customerEmail: e.target.value})}
                   disabled={formMode === 'view'}
@@ -683,7 +689,7 @@ const SalesOrders = () => {
               </FormControl>
               <FormControl label="Phone">
                 <input 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                   value={formData.customerPhone}
                   onChange={(e) => setFormData({...formData, customerPhone: e.target.value})}
                   disabled={formMode === 'view'}
@@ -693,7 +699,7 @@ const SalesOrders = () => {
           </Card>
 
           {/* Customer Purchase Order and storage */}
-          <Card title="Customer Purchase Order and storage" subtitle="PO & Inventory">
+          <Card title="Customer Purchase Order and storage" className='bg-white' subtitle="PO & Inventory">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
               <FormControl label="Select Customer PO *">
                 <div className="flex gap-2">
@@ -712,19 +718,17 @@ const SalesOrders = () => {
                   {formData.customerPoId && (
                     <button
                       type="button"
-                      className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100"
+                      className="p-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors border border-indigo-100"
                       title="View Details"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+                      <FileText className="w-5 h-5" />
                     </button>
                   )}
                 </div>
               </FormControl>
               <FormControl label="Warehouse">
                 <select 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                   value={formData.warehouse}
                   onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
                   disabled={formMode === 'view'}
@@ -740,41 +744,41 @@ const SalesOrders = () => {
 
           {/* Items included in selected PO */}
           {formData.items.length > 0 && (
-            <Card title="Items included in selected PO" subtitle="Order Items">
-              <div className="p-4 bg-blue-50/50 rounded-xl mb-4 border border-blue-100 flex items-center gap-4">
-                <div className="p-3 bg-white rounded-xl shadow-sm border border-blue-100">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+            <Card title="Items included in selected PO" className='bg-white' subtitle="Order Items">
+              <div className="p-2 bg-blue-50/50 rounded  mb-4 border border-blue-100 flex items-center gap-4">
+                <div className="p-2 bg-white rounded   border border-blue-100">
+                    <Package className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-sm  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>
-                  <p className="text-[10px] text-indigo-600 font-mono">PO Number: {formData.customerPoId ? (String(formData.customerPoId).includes('_') ? formData.customerPoId.split('_')[1] : formData.customerPoId) : 'N/A'}</p>
+                  <p className="text-[10px] text-indigo-600  ">PO Number: {formData.customerPoId ? (String(formData.customerPoId).includes('_') ? formData.customerPoId.split('_')[1] : formData.customerPoId) : 'N/A'}</p>
                 </div>
               </div>
 
-              <div className="overflow-x-auto border border-slate-100 rounded-xl">
+              <div className="overflow-x-auto border border-slate-100 rounded ">
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 text-slate-500 ">
                     <tr>
-                      <th className="px-4 py-3 text-left">Item Code</th>
-                      <th className="px-4 py-3 text-left">Type</th>
-                      <th className="px-4 py-3 text-center w-24">Qty</th>
-                      <th className="px-4 py-3 text-right">Rate</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
+                      <th className="p-2  text-left">Item Code</th>
+                      <th className="p-2  text-left">Type</th>
+                      <th className="p-2  text-center w-24">Qty</th>
+                      <th className="p-2  text-right">Rate</th>
+                      <th className="p-2  text-right">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {formData.items.map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-3 font-mono text-indigo-600">
+                        <td className="p-2    text-indigo-600">
                           {item.drawing_no || item.item_code}
                           <div className="text-[10px] text-slate-400 font-sans mt-0.5">{item.description}</div>
                         </td>
-                        <td className="px-4 py-3 text-slate-500">{item.type || 'Standard'}</td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="p-2  text-slate-500">{item.type || 'Standard'}</td>
+                        <td className="p-2  text-center">
                           {item.quantity}
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-600">₹ {(Number(item.rate) || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right  text-emerald-600">₹ {(Number(item.amount) || 0).toFixed(2)}</td>
+                        <td className="p-2  text-right text-slate-600">₹ {(Number(item.rate) || 0).toFixed(2)}</td>
+                        <td className="p-2  text-right  text-emerald-600">₹ {(Number(item.amount) || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -786,11 +790,11 @@ const SalesOrders = () => {
 
         <div className="space-y-6">
           {/* Order Status & Taxes */}
-          <Card title="Order Status & Taxes">
+          <Card title="Order Status & Taxes" className='bg-white'>
             <div className="space-y-4 p-4">
               <FormControl label="Status">
                 <select 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                   value={formData.status}
                   onChange={(e) => setFormData({...formData, status: e.target.value})}
                   disabled={formMode === 'view'}
@@ -805,7 +809,7 @@ const SalesOrders = () => {
                 <FormControl label="CGST Rate (%)">
                   <input 
                     type="number"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                    className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                     value={formData.cgstRate}
                     onChange={(e) => setFormData({...formData, cgstRate: Number(e.target.value)})}
                     disabled={formMode === 'view'}
@@ -814,7 +818,7 @@ const SalesOrders = () => {
                 <FormControl label="SGST Rate (%)">
                   <input 
                     type="number"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                    className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                     value={formData.sgstRate}
                     onChange={(e) => setFormData({...formData, sgstRate: Number(e.target.value)})}
                     disabled={formMode === 'view'}
@@ -824,7 +828,7 @@ const SalesOrders = () => {
               <FormControl label="Profit Margin (%)">
                 <input 
                   type="number"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" 
+                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
                   value={formData.profitMargin}
                   onChange={(e) => setFormData({...formData, profitMargin: Number(e.target.value)})}
                   disabled={formMode === 'view'}
@@ -834,7 +838,7 @@ const SalesOrders = () => {
           </Card>
 
           {/* Price Summary */}
-          <Card title="Order Summary">
+          <Card title="Order Summary" className='bg-white'>
             <div className="space-y-3 p-4">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Items Subtotal:</span>
@@ -853,7 +857,7 @@ const SalesOrders = () => {
                    <p className="text-sm  text-slate-900">Total Order Value:</p>
                 </div>
                 <div className="text-right">
-                   <p className="text-2xl  text-emerald-600 font-bold">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                   <p className="text-xl  text-emerald-600 ">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
@@ -865,17 +869,17 @@ const SalesOrders = () => {
       <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">
         <button 
           onClick={() => setViewMode('list')}
-          className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors  flex items-center gap-2"
+          className="p-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-colors  flex items-center gap-2 "
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+          <ArrowLeft className="w-4 h-4" />
           Back
         </button>
         {formMode !== 'view' && (
           <button 
             onClick={handleSaveOrder}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors  shadow-lg shadow-indigo-200 flex items-center gap-2"
+            className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-colors  shadow-lg text-xs text-xs flex items-center gap-2 "
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+            <Save className="w-4 h-4" />
             Save Sales Order
           </button>
         )}
