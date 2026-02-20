@@ -5,7 +5,7 @@ import { Plus, Search, RefreshCw, Filter, FileText, Send } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast, infoToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : '');
 
 const CustomerDrawing = () => {
   const [drawings, setDrawings] = useState([]);

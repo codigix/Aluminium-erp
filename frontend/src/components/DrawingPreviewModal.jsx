@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal } from './ui.jsx';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : '');
 const UPLOAD_BASE = import.meta.env.VITE_UPLOAD_URL;
 
 const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
