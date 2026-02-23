@@ -50,12 +50,14 @@ import StockEntries from "./pages/StockEntries";
 import VendorInvoices from "./pages/InvoiceReceived";
 import PaymentProcessing from "./pages/PaymentProcessing";
 import PaymentHistory from "./pages/PaymentHistory";
+import PaymentReceived from "./pages/PaymentReceived";
+import CustomerPaymentHistory from "./pages/CustomerPaymentHistory";
 import { FormControl, StatusBadge } from "./components/ui.jsx";
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000')
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'invoice-received', 'payment-processing', 'payment-history']
+const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -152,7 +154,7 @@ const DEPARTMENT_MODULES = {
   PRODUCTION: ['project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'routing-operations', 'process-sheet', 'dashboard'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
   SHIPMENT: ['incoming-orders', 'dashboard'],
-  ACCOUNTS: ['invoice-received', 'payment-processing', 'payment-history', 'dashboard'],
+  ACCOUNTS: ['invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
   PROCUREMENT: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
   ADMIN: [
@@ -161,7 +163,7 @@ const DEPARTMENT_MODULES = {
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
     'quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
     'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses',
-    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'invoice-received', 'payment-processing', 'payment-history', 'dashboard'
+    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'
   ]
 }
 
@@ -1000,10 +1002,13 @@ function App() {
     { label: 'Quality Control', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
     { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
     { label: 'Quality Reports', moduleId: 'quality-reports', icon: 'files', indent: true },
-    { label: 'Accounts', isGroup: true, groupId: 'accounts-group' },
+    { label: 'Accounts Payable (Vendor)', isGroup: true, groupId: 'accounts-payable-group' },
     { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'files', indent: true },
     { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'cart', indent: true },
-    { label: 'Payment History', moduleId: 'payment-history', icon: 'book', indent: true }
+    { label: 'Payment History', moduleId: 'payment-history', icon: 'book', indent: true },
+    { label: 'Accounts Receivable (Customer)', isGroup: true, groupId: 'accounts-receivable-group' },
+    { label: 'Payment Received', moduleId: 'payment-received', icon: 'check', indent: true },
+    { label: 'Payment History', moduleId: 'customer-payment-history', icon: 'book', indent: true }
   ]
 
   const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
@@ -1501,8 +1506,16 @@ function App() {
                   <PaymentProcessing />
                 )}
 
+                {activeModule === 'payment-received' && (
+                  <PaymentReceived />
+                )}
+
                 {activeModule === 'payment-history' && (
                   <PaymentHistory />
+                )}
+
+                {activeModule === 'customer-payment-history' && (
+                  <CustomerPaymentHistory />
                 )}
 
                 {activeModule === 'po-material-request' && (

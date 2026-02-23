@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DataTable } from '../components/ui.jsx';
-import { errorToast } from '../utils/toast';
+import { errorToast, successToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -20,9 +21,11 @@ const formatDate = (date) => {
 };
 
 const VendorInvoices = () => {
+  const navigate = useNavigate();
   const [pos, setPos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [processingInvoiceId, setProcessingInvoiceId] = useState(null);
 
   useEffect(() => {
     fetchPOs();
@@ -48,6 +51,45 @@ const VendorInvoices = () => {
       errorToast('Failed to fetch invoices');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendToPayment = async (invoice) => {
+    try {
+      setProcessingInvoiceId(invoice.id);
+      const token = localStorage.getItem('authToken');
+
+      const response = await fetch(`${API_BASE}/purchase-orders/${invoice.id}/send-to-payment`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to update invoice status');
+
+      successToast('Invoice sent to payment processing');
+      
+      navigate('/payment-processing', {
+        state: {
+          selectedInvoice: {
+            id: invoice.id,
+            po_number: invoice.po_number,
+            vendor_name: invoice.vendor_name,
+            vendor_id: invoice.vendor_id,
+            total_amount: invoice.total_amount,
+            outstanding: invoice.total_amount,
+            already_paid: 0,
+            created_at: invoice.created_at
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error sending to payment:', error);
+      errorToast('Failed to send invoice to payment processing');
+    } finally {
+      setProcessingInvoiceId(null);
     }
   };
 
@@ -98,8 +140,24 @@ const VendorInvoices = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
-            View Invoice
+            View
           </button>
+          {row.status === 'APPROVED' || row.status === 'FULFILLED' ? (
+            <button
+              onClick={() => sendToPayment(row)}
+              disabled={processingInvoiceId === row.id}
+              className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {processingInvoiceId === row.id ? (
+                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8m0 8l-4-2m4 2l4-2" />
+                </svg>
+              )}
+              Send to Payment
+            </button>
+          ) : null}
         </div>
       )
     }

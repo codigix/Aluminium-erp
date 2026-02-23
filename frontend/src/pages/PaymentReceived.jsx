@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { DataTable } from '../components/ui.jsx';
-import ProcessPaymentModal from '../components/ProcessPaymentModal.jsx';
+import PaymentReceivedModal from '../components/PaymentReceivedModal.jsx';
 import { errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -21,7 +21,7 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const PaymentProcessing = () => {
+const PaymentReceived = () => {
   const location = useLocation();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -30,7 +30,7 @@ const PaymentProcessing = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   useEffect(() => {
-    fetchPendingPayments();
+    fetchOutstandingInvoices();
     
     if (location.state?.selectedInvoice) {
       setSelectedInvoice(location.state.selectedInvoice);
@@ -38,26 +38,24 @@ const PaymentProcessing = () => {
     }
   }, [location.state]);
 
-  const fetchPendingPayments = async () => {
+  const fetchOutstandingInvoices = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      // For now, fetching POs with invoices that might need payment
-      const response = await fetch(`${API_BASE}/purchase-orders`, {
+      const response = await fetch(`${API_BASE}/sales-orders`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
-      if (!response.ok) throw new Error('Failed to fetch payments');
+      if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json();
-      // Filter for POs with invoices that are SENT or SUBMITTED (placeholder logic)
-      const pendingPayments = Array.isArray(data) ? data.filter(po => po.invoice_url && po.status !== 'PAID') : [];
-      setPayments(pendingPayments);
+      const outstanding = Array.isArray(data) ? data.filter(so => so.status !== 'PAID' && so.status !== 'CANCELLED') : [];
+      setPayments(outstanding);
     } catch (error) {
-      console.error('Error fetching payments:', error);
-      errorToast('Failed to fetch payment data');
+      console.error('Error fetching invoices:', error);
+      errorToast('Failed to fetch invoice data');
     } finally {
       setLoading(false);
     }
@@ -65,14 +63,14 @@ const PaymentProcessing = () => {
 
   const columns = [
     {
-      label: 'PO Number',
-      key: 'po_number',
+      label: 'Sales Order',
+      key: 'so_number',
       sortable: true,
-      className: 'font-bold text-blue-600'
+      className: 'font-bold text-emerald-600'
     },
     {
-      label: 'Supplier',
-      key: 'vendor_name',
+      label: 'Customer',
+      key: 'company_name',
       sortable: true
     },
     {
@@ -83,7 +81,7 @@ const PaymentProcessing = () => {
     },
     {
       label: 'Amount Due',
-      key: 'total_amount',
+      key: 'net_total',
       sortable: true,
       render: (val) => formatCurrency(val)
     },
@@ -92,7 +90,7 @@ const PaymentProcessing = () => {
       key: 'status',
       render: (val) => (
         <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 uppercase">
-          {val === 'SENT' ? 'PENDING PAYMENT' : val}
+          {val === 'COMPLETED' ? 'AWAITING PAYMENT' : val}
         </span>
       )
     },
@@ -103,50 +101,53 @@ const PaymentProcessing = () => {
       render: (_, row) => (
         <div className="flex justify-end gap-2">
           <button
-            onClick={() => window.open(`${API_BASE}/${row.invoice_url}`, '_blank')}
-            className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-100 transition-all border border-slate-100"
-          >
-            Review
-          </button>
-          <button
             onClick={() => {
-              setSelectedInvoice(row);
+              setSelectedInvoice({
+                ...row,
+                customer_id: row.company_id,
+                customer_name: row.company_name,
+                sales_order_id: row.id,
+                po_number: row.so_number,
+                outstanding: row.net_total,
+                already_paid: 0,
+                total_amount: row.net_total
+              });
               setIsPaymentModalOpen(true);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all shadow-sm"
+            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all shadow-sm"
           >
-            Process Payment
+            Record Payment
           </button>
         </div>
       )
     }
   ];
 
-  const filteredData = payments.filter(po => 
-    po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    po.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredData = payments.filter(so => 
+    so.so_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    so.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handlePaymentSuccess = async (result) => {
-    fetchPendingPayments();
+    fetchOutstandingInvoices();
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payment Processing</h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">Process pending vendor payments</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payment Received</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">Record customer payments and monitor receivables</p>
         </div>
         
         <div className="flex items-center gap-3">
           <div className="relative">
             <input 
               type="text" 
-              placeholder="Search payments..."
+              placeholder="Search invoices..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all w-64 shadow-sm"
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all w-64 shadow-sm"
             />
             <svg className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -154,8 +155,8 @@ const PaymentProcessing = () => {
           </div>
           
           <button 
-            onClick={fetchPendingPayments}
-            className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
+            onClick={fetchOutstandingInvoices}
+            className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-emerald-600 hover:border-emerald-100 transition-all shadow-sm"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -170,11 +171,11 @@ const PaymentProcessing = () => {
           data={filteredData}
           loading={loading}
           hideHeader={true}
-          emptyMessage="No pending payments found."
+          emptyMessage="No outstanding invoices found."
         />
       </div>
 
-      <ProcessPaymentModal
+      <PaymentReceivedModal
         isOpen={isPaymentModalOpen}
         onClose={() => {
           setIsPaymentModalOpen(false);
@@ -187,4 +188,4 @@ const PaymentProcessing = () => {
   );
 };
 
-export default PaymentProcessing;
+export default PaymentReceived;

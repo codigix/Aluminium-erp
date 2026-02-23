@@ -157,7 +157,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.CLOSED],
-    allowedModules: ['dashboard', 'invoice-received', 'payment-processing', 'payment-history'],
+    allowedModules: ['dashboard', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
@@ -165,7 +165,10 @@ const DEPARTMENT_ACCESS_RULES = {
       'PURCHASE_ORDER_VIEW',
       'DASHBOARD_VIEW',
       'STATUS_CHANGE',
-      'DATA_EXPORT'
+      'DATA_EXPORT',
+      'PAYMENT_VIEW',
+      'PAYMENT_PROCESS',
+      'PAYMENT_EDIT'
     ]
   },
 
@@ -206,7 +209,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
-    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'invoice-received', 'payment-processing', 'payment-history'],
+    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
@@ -223,7 +226,11 @@ const DEPARTMENT_ACCESS_RULES = {
       'GRN_EDIT',
       'GRN_DELETE',
       'STOCK_VIEW',
-      'STOCK_MANAGE'
+      'STOCK_MANAGE',
+      'PAYMENT_VIEW',
+      'PAYMENT_PROCESS',
+      'PAYMENT_EDIT',
+      'PAYMENT_SETUP'
     ]
   }
 };
