@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { DataTable } from '../components/ui.jsx';
+import { errorToast, successToast } from '../utils/toast';
 import ProcessPaymentModal from '../components/ProcessPaymentModal.jsx';
-import { errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -63,6 +63,30 @@ const PaymentProcessing = () => {
     }
   };
 
+  const sendInvoiceEmail = async (poId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      // Using a generic PO email endpoint if exists, or adding it to backend later
+      // For now we will use the logic to send the vendor invoice
+      const response = await fetch(`${API_BASE}/purchase-orders/${poId}/send-invoice`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to send email');
+      }
+
+      successToast('Vendor invoice sent successfully');
+    } catch (error) {
+      console.error('Error sending email:', error);
+      errorToast(error.message || 'Failed to send email');
+    }
+  };
+
   const columns = [
     {
       label: 'PO Number',
@@ -101,7 +125,16 @@ const PaymentProcessing = () => {
       key: 'id',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 text-right">
+          <button
+            onClick={() => sendInvoiceEmail(row.id)}
+            className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
+            title="Send Email"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </button>
           <button
             onClick={() => window.open(`${API_BASE}/${row.invoice_url}`, '_blank')}
             className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-100 transition-all border border-slate-100"

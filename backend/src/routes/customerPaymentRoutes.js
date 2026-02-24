@@ -7,6 +7,8 @@ router.post('/', authorize(['PAYMENT_PROCESS']), customerPaymentController.recor
 router.get('/', authorize(['PAYMENT_VIEW']), customerPaymentController.getPaymentsReceived);
 router.get('/outstanding', authorize(['PAYMENT_VIEW']), customerPaymentController.getAllOutstandingInvoices);
 router.get('/:paymentId', authorize(['PAYMENT_VIEW']), customerPaymentController.getPaymentReceivedById);
+router.get('/:paymentId/pdf', authorize(['PAYMENT_VIEW']), customerPaymentController.getCustomerPaymentReceiptPDF);
+router.post('/:paymentId/send-email', authorize(['PAYMENT_PROCESS']), customerPaymentController.sendCustomerPaymentReceiptEmail);
 router.get('/customer/:customerId/balance', authorize(['PAYMENT_VIEW']), customerPaymentController.getCustomerBalance);
 router.get('/customer/:customerId/outstanding', authorize(['PAYMENT_VIEW']), customerPaymentController.getOutstandingInvoices);
 router.patch('/:paymentId/status', authorize(['PAYMENT_EDIT']), customerPaymentController.updatePaymentStatus);

@@ -1,8 +1,9 @@
 CREATE TABLE IF NOT EXISTS customer_payments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   payment_receipt_no VARCHAR(100) UNIQUE,
-  invoice_id INT NOT NULL,
+  invoice_id INT NULL,
   sales_order_id INT,
+  sales_order_source ENUM('SALES_ORDER', 'DIRECT_ORDER') DEFAULT 'SALES_ORDER',
   customer_id INT NOT NULL,
   payment_amount DECIMAL(14, 2) NOT NULL,
   payment_date DATE NOT NULL,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataTable } from '../components/ui.jsx';
-import { errorToast } from '../utils/toast';
+import { errorToast, successToast } from '../utils/toast';
+import SendEmailModal from '../components/SendEmailModal.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -23,6 +24,9 @@ const CustomerPaymentHistory = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
+  const [emailData, setEmailData] = useState({ to: '', subject: '', message: '' });
 
   useEffect(() => {
     fetchPaymentHistory();
@@ -32,7 +36,7 @@ const CustomerPaymentHistory = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/customer-payments`, {
+      const response = await fetch(`${API_BASE}/customer-payments?status=CONFIRMED`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -47,6 +51,79 @@ const CustomerPaymentHistory = () => {
       errorToast('Failed to fetch payment history');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const downloadReceipt = async (paymentId, receiptNo) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/customer-payments/${paymentId}/pdf`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to download receipt');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Receipt-${receiptNo}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading receipt:', error);
+      errorToast('Failed to download receipt');
+    }
+  };
+
+  const openEmailModal = async (payment) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/companies/${payment.company_id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const company = response.ok ? await response.json() : null;
+      
+      setSelectedPayment(payment);
+      setEmailData({
+        to: company?.email || '',
+        subject: `Payment Receipt: ${payment.payment_receipt_no}`,
+        message: `Dear ${company?.company_name || 'Customer'},\n\nThank you for your payment. Please find attached the payment receipt ${payment.payment_receipt_no} for the amount received on ${new Date(payment.payment_date).toLocaleDateString()}.\n\nAmount Received: INR ${parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\nRegards,\nAccounts Department\nSPTECHPIONEER PVT LTD`,
+        attachPDF: true
+      });
+      setShowEmailModal(true);
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast('Failed to load customer details');
+    }
+  };
+
+  const handleSendEmail = async (data) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/customer-payments/${selectedPayment.id}/send-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || 'Failed to send email');
+      }
+
+      successToast('Payment receipt sent to customer email');
+      setShowEmailModal(false);
+    } catch (error) {
+      console.error('Error sending email:', error);
+      errorToast(error.message || 'Failed to send email');
+      throw error;
     }
   };
 
@@ -117,9 +194,19 @@ const CustomerPaymentHistory = () => {
       key: 'id',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 text-right">
           <button
-            className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-100 transition-all border border-slate-100"
+            onClick={() => openEmailModal(row)}
+            className="p-1.5 text-slate-400 hover:text-emerald-600 transition-colors"
+            title="Send Email"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => downloadReceipt(row.id, row.payment_receipt_no)}
+            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all border border-emerald-100"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -179,6 +266,14 @@ const CustomerPaymentHistory = () => {
           emptyMessage="No customer payment history found."
         />
       </div>
+
+      <SendEmailModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        onSend={handleSendEmail}
+        initialData={emailData}
+        title="Send Payment Receipt"
+      />
     </div>
   );
 };

@@ -95,13 +95,43 @@ const deletePayment = async (req, res, next) => {
   }
 };
 
+const getCustomerPaymentReceiptPDF = async (req, res, next) => {
+  try {
+    const pdfBuffer = await customerPaymentService.generateCustomerPaymentReceiptPDF(req.params.paymentId);
+    const payment = await customerPaymentService.getPaymentReceivedById(req.params.paymentId);
+    
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=Receipt-${payment.payment_receipt_no}.pdf`,
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const sendCustomerPaymentReceiptEmail = async (req, res, next) => {
+  try {
+    const result = await customerPaymentService.sendCustomerPaymentReceiptEmail(req.params.paymentId, req.body);
+    res.json({
+      message: 'Email sent successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   recordPaymentReceived,
   getPaymentsReceived,
   getPaymentReceivedById,
   getCustomerBalance,
   getOutstandingInvoices,
-  getAllOutstandingInvoices, // Added
+  getAllOutstandingInvoices,
   updatePaymentStatus,
-  deletePayment
+  deletePayment,
+  getCustomerPaymentReceiptPDF,
+  sendCustomerPaymentReceiptEmail
 };

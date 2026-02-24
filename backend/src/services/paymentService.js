@@ -1,4 +1,7 @@
 const pool = require('../config/db');
+const puppeteer = require('puppeteer');
+const mustache = require('mustache');
+const emailService = require('./emailService');
 
 const generatePaymentVoucherNo = async () => {
   const [rows] = await pool.query(
@@ -287,6 +290,198 @@ const deletePayment = async (paymentId) => {
   return { id: paymentId, message: 'Payment deleted successfully' };
 };
 
+const generatePaymentVoucherPDF = async (paymentId) => {
+  const payment = await getPaymentById(paymentId);
+  
+  const [vendorRows] = await pool.query(
+    'SELECT * FROM companies WHERE id = ?',
+    [payment.vendor_id]
+  );
+  const vendor = vendorRows[0];
+
+  const htmlTemplate = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #10b981; padding-bottom: 20px; margin-bottom: 30px; }
+        .company-info h1 { color: #059669; margin: 0; font-size: 24px; }
+        .voucher-title { text-align: right; }
+        .voucher-title h2 { margin: 0; color: #64748b; font-size: 18px; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+        .section-label { font-weight: bold; color: #64748b; font-size: 12px; margin-bottom: 8px; text-transform: uppercase; }
+        .payment-info { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 30px; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #e2e8f0; }
+        .info-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .info-label { color: #64748b; font-size: 12px; }
+        .info-value { font-weight: 600; color: #1e293b; font-size: 13px; }
+        .amount-section { text-align: right; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; }
+        .amount-label { font-size: 14px; color: #64748b; }
+        .amount-value { font-size: 24px; font-weight: 800; color: #059669; }
+        .footer { margin-top: 60px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+        .signature-area { display: flex; justify-content: space-between; margin-top: 80px; }
+        .sig-box { border-top: 1px solid #cbd5e1; width: 200px; text-align: center; padding-top: 8px; font-size: 12px; color: #64748b; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="company-info">
+          <h1>SPTECHPIONEER PVT LTD</h1>
+          <p>Industrial Area, Sector 5<br>Pune, Maharashtra - 411026</p>
+        </div>
+        <div class="voucher-title">
+          <h2>Payment Voucher</h2>
+          <p><strong>Voucher No:</strong> {{payment_voucher_no}}<br>
+          <strong>Date:</strong> {{formatted_date}}</p>
+        </div>
+      </div>
+
+      <div class="details-grid">
+        <div>
+          <div class="section-label">Pay To</div>
+          <p><strong>{{vendor_name}}</strong><br>
+          {{location}}<br>
+          {{email}}<br>
+          {{phone}}</p>
+        </div>
+        <div style="text-align: right;">
+          <div class="section-label">Reference</div>
+          <p><strong>PO Number:</strong> {{po_number}}<br>
+          <strong>Status:</strong> {{status}}</p>
+        </div>
+      </div>
+
+      <div class="payment-info">
+        <div class="section-label" style="margin-bottom: 15px;">Payment Details</div>
+        
+        <div class="info-row">
+          <span class="info-label">Payment Mode</span>
+          <span class="info-value">{{payment_mode}}</span>
+        </div>
+
+        {{#cheque_number}}
+        <div class="info-row">
+          <span class="info-label">Cheque Number</span>
+          <span class="info-value">{{cheque_number}}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Bank Name</span>
+          <span class="info-value">{{cheque_bank_name}}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Cheque Date</span>
+          <span class="info-value">{{formatted_cheque_date}}</span>
+        </div>
+        {{/cheque_number}}
+
+        {{#transaction_ref_no}}
+        <div class="info-row">
+          <span class="info-label">Transaction Ref</span>
+          <span class="info-value">{{transaction_ref_no}}</span>
+        </div>
+        {{/transaction_ref_no}}
+
+        {{#upi_transaction_id}}
+        <div class="info-row">
+          <span class="info-label">UPI ID / App</span>
+          <span class="info-value">{{upi_transaction_id}} ({{upi_app}})</span>
+        </div>
+        {{/upi_transaction_id}}
+
+        <div class="info-row">
+          <span class="info-label">Remarks</span>
+          <span class="info-value">{{remarks}}</span>
+        </div>
+      </div>
+
+      <div class="amount-section">
+        <div class="amount-label">Total Amount Paid</div>
+        <div class="amount-value">₹{{formatted_amount}}</div>
+      </div>
+
+      <div class="signature-area">
+        <div class="sig-box">Receiver's Signature</div>
+        <div class="sig-box">Authorized Signatory</div>
+      </div>
+
+      <div class="footer">
+        <p>This is a computer-generated payment voucher.<br>
+        SPTECHPIONEER PVT LTD | Confidential</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const viewData = {
+    ...payment,
+    vendor_name: vendor?.company_name || vendor?.vendor_name || 'N/A',
+    email: vendor?.email || 'N/A',
+    location: vendor?.address || vendor?.location || 'N/A',
+    phone: vendor?.phone || 'N/A',
+    formatted_date: formatDate(payment.payment_date),
+    formatted_cheque_date: formatDate(payment.cheque_date),
+    formatted_amount: parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    remarks: payment.remarks || '—'
+  };
+
+  const html = mustache.render(htmlTemplate, viewData);
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({ 
+    format: 'A4', 
+    printBackground: true,
+    margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+  });
+  await browser.close();
+
+  return pdf;
+};
+
+const sendPaymentVoucherEmail = async (paymentId, emailData = {}) => {
+  const payment = await getPaymentById(paymentId);
+  
+  const [vendorRows] = await pool.query(
+    'SELECT company_name, email FROM companies WHERE id = ?',
+    [payment.vendor_id]
+  );
+  const vendor = vendorRows[0];
+
+  const recipientEmail = emailData.to || vendor?.email;
+  if (!recipientEmail) {
+    throw new Error('Vendor email address not found');
+  }
+
+  const subject = emailData.subject || `Payment Voucher - ${payment.payment_voucher_no}`;
+  const message = emailData.message || `Dear ${vendor?.company_name || 'Vendor'},
+
+Please find attached the payment voucher ${payment.payment_voucher_no} for the payment made on ${new Date(payment.payment_date).toLocaleDateString()}.
+
+Amount Paid: INR ${parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+
+Best Regards,
+Accounts Department
+SPTECHPIONEER PVT LTD`;
+
+  const attachments = [];
+  if (emailData.attachPDF !== false) {
+    const pdfBuffer = await generatePaymentVoucherPDF(paymentId);
+    attachments.push({
+      filename: `Voucher-${payment.payment_voucher_no}.pdf`,
+      content: pdfBuffer
+    });
+  }
+
+  return await emailService.sendEmail(recipientEmail, subject, message, attachments);
+};
+
 module.exports = {
   processPayment,
   getPayments,
@@ -294,5 +489,7 @@ module.exports = {
   getVendorBalance,
   getPendingPayments,
   updatePaymentStatus,
-  deletePayment
+  deletePayment,
+  generatePaymentVoucherPDF,
+  sendPaymentVoucherEmail
 };

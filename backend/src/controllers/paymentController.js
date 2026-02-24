@@ -77,11 +77,41 @@ const deletePayment = async (req, res, next) => {
   }
 };
 
+const getPaymentVoucherPDF = async (req, res, next) => {
+  try {
+    const pdfBuffer = await paymentService.generatePaymentVoucherPDF(req.params.paymentId);
+    const payment = await paymentService.getPaymentById(req.params.paymentId);
+    
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=Voucher-${payment.payment_voucher_no}.pdf`,
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const sendPaymentVoucherEmail = async (req, res, next) => {
+  try {
+    const result = await paymentService.sendPaymentVoucherEmail(req.params.paymentId, req.body);
+    res.json({
+      message: 'Email sent successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   processPayment,
   getPayments,
   getPendingPayments,
   getPaymentById,
   updatePaymentStatus,
-  deletePayment
+  deletePayment,
+  getPaymentVoucherPDF,
+  sendPaymentVoucherEmail
 };

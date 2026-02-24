@@ -60,12 +60,16 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   useEffect(() => {
     if (isOpen) {
       if (invoice) {
+        const custId = invoice.customer_id || invoice.company_id || invoice.client_id || '';
+        const soId = invoice.sales_order_id || invoice.id || '';
+        const source = invoice.sales_order_source || invoice.source || 'SALES_ORDER';
+        
         setFormData({
-          customerId: invoice.customer_id || invoice.company_id || '',
-          salesOrderId: invoice.sales_order_id || invoice.id || '',
-          soId: `${invoice.sales_order_source || 'SALES_ORDER'}_${invoice.sales_order_id || invoice.id}`,
-          salesOrderSource: invoice.sales_order_source || 'SALES_ORDER',
-          paymentAmount: invoice.outstanding || invoice.total_amount || '',
+          customerId: custId,
+          salesOrderId: soId,
+          soId: invoice.soId || (source && soId ? `${source}_${soId}` : ''),
+          salesOrderSource: source,
+          paymentAmount: invoice.outstanding ? parseFloat(invoice.outstanding).toFixed(2) : (invoice.total_amount ? parseFloat(invoice.total_amount).toFixed(2) : ''),
           paymentDate: new Date().toISOString().split('T')[0],
           paymentMode: '',
           bankAccount: '',
@@ -193,7 +197,6 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   ];
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -207,11 +210,13 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       if (selectedInv) {
         setFormData(prev => ({ 
           ...prev, 
-          salesOrderId: value,
+          [field]: value,
           soId: `${selectedInv.source}_${selectedInv.id}`,
           salesOrderSource: selectedInv.source,
-          paymentAmount: selectedInv.outstanding 
+          paymentAmount: selectedInv.outstanding ? parseFloat(selectedInv.outstanding).toFixed(2) : ''
         }));
+      } else {
+        setFormData(prev => ({ ...prev, [field]: value }));
       }
     } else if (field === 'soId' && value) {
       const [source, id] = value.split('_');
@@ -219,16 +224,18 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       if (selectedSO) {
         setFormData(prev => ({ 
           ...prev, 
-          soId: value,
+          [field]: value,
           salesOrderId: id,
           salesOrderSource: source,
-          paymentAmount: selectedSO.outstanding || selectedSO.total_amount 
+          paymentAmount: selectedSO.outstanding ? parseFloat(selectedSO.outstanding).toFixed(2) : (selectedSO.total_amount ? parseFloat(selectedSO.total_amount).toFixed(2) : '')
         }));
+      } else {
+        setFormData(prev => ({ ...prev, [field]: value }));
       }
     } else if (field === 'customerId') {
       setFormData(prev => ({
         ...prev,
-        customerId: value,
+        [field]: value,
         salesOrderId: '',
         soId: '',
         salesOrderSource: 'SALES_ORDER',
@@ -246,8 +253,9 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       newErrors.customerId = 'Customer is required';
     }
 
-    if (!formData.paymentAmount || parseFloat(formData.paymentAmount) <= 0) {
-      newErrors.paymentAmount = 'Payment amount is required and must be greater than 0';
+    const amount = parseFloat(formData.paymentAmount);
+    if (!formData.paymentAmount || isNaN(amount) || amount <= 0) {
+      newErrors.paymentAmount = 'Valid payment amount is required';
     }
 
     if (!formData.paymentDate) {
@@ -287,9 +295,20 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      errorToast('Please fix the errors in the form');
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const isValid = validateForm();
+    if (!isValid) {
+      // Re-run validation logic locally to get immediate errors object
+      const currentErrors = {};
+      if (!formData.customerId) currentErrors.customerId = 'Customer is required';
+      const amount = parseFloat(formData.paymentAmount);
+      if (!formData.paymentAmount || isNaN(amount) || amount <= 0) currentErrors.paymentAmount = 'Valid payment amount is required';
+      if (!formData.paymentDate) currentErrors.paymentDate = 'Payment date is required';
+      if (!formData.paymentMode) currentErrors.paymentMode = 'Payment mode is required';
+      
+      const firstError = Object.values(currentErrors)[0] || 'Please fix the errors in the form';
+      errorToast(firstError);
       return;
     }
 
