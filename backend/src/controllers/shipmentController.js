@@ -32,3 +32,13 @@ exports.updateShipmentStatus = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.updateShipmentPlanning = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await shipmentService.updateShipmentPlanning(id, req.body);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};

@@ -47,6 +47,7 @@ import WorkOrder from './pages/WorkOrder'
 import WorkOrderForm from './pages/WorkOrderForm'
 import JobCard from "./pages/JobCard";
 import ShipmentOrders from "./pages/ShipmentOrders";
+import ShipmentPlanning from "./pages/ShipmentPlanning";
 import StockEntries from "./pages/StockEntries";
 import VendorInvoices from "./pages/InvoiceReceived";
 import PaymentProcessing from "./pages/PaymentProcessing";
@@ -1641,10 +1642,7 @@ function App() {
                 )}
 
                 {activeModule === 'shipment-planning' && (
-                  <div className="p-6">
-                    <h2 className="text-2xl font-bold mb-4">Shipment Planning</h2>
-                    <p className="text-slate-600">Plan upcoming shipments and logistics.</p>
-                  </div>
+                  <ShipmentPlanning />
                 )}
 
                 {activeModule === 'dispatch-management' && (

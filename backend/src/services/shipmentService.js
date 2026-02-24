@@ -11,7 +11,14 @@ const getShipmentOrders = async () => {
       s.status as shipment_status,
       s.dispatch_target_date,
       s.priority,
-      s.sales_order_id
+      s.sales_order_id,
+      s.planned_dispatch_date,
+      s.transporter,
+      s.vehicle_number,
+      s.driver_name,
+      s.driver_contact,
+      s.estimated_delivery_date,
+      s.packing_status
     FROM shipment_orders s
     LEFT JOIN sales_orders so ON s.sales_order_id = so.id
     LEFT JOIN companies c ON s.customer_id = c.id
@@ -76,8 +83,8 @@ const getShipmentOrderById = async (id) => {
       // Fetch items from QC Inspection Items
       const [qcItems] = await pool.query(`
         SELECT 
-          qci.item_code,
-          poi.material_name as description,
+          COALESCE(NULLIF(TRIM(qci.item_code), ''), NULLIF(TRIM(poi.item_code), ''), poi.drawing_no) as item_code,
+          COALESCE(NULLIF(TRIM(poi.material_name), ''), poi.description) as description,
           qci.po_qty as quantity,
           poi.unit as unit,
           COALESCE(w.warehouse_name, 'MAIN STORE') as warehouse
@@ -158,8 +165,49 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
   }
 };
 
+const updateShipmentPlanning = async (id, planningData) => {
+  const {
+    planned_dispatch_date,
+    transporter,
+    vehicle_number,
+    driver_name,
+    driver_contact,
+    estimated_delivery_date,
+    packing_status,
+    status
+  } = planningData;
+
+  const [result] = await pool.execute(
+    `UPDATE shipment_orders SET 
+      planned_dispatch_date = ?,
+      transporter = ?,
+      vehicle_number = ?,
+      driver_name = ?,
+      driver_contact = ?,
+      estimated_delivery_date = ?,
+      packing_status = ?,
+      status = COALESCE(?, status),
+      updated_at = NOW()
+     WHERE id = ?`,
+    [
+      planned_dispatch_date || null,
+      transporter || null,
+      vehicle_number || null,
+      driver_name || null,
+      driver_contact || null,
+      estimated_delivery_date || null,
+      packing_status || 'PENDING',
+      status || null,
+      id
+    ]
+  );
+
+  return { success: result.affectedRows > 0 };
+};
+
 module.exports = {
   getShipmentOrders,
   getShipmentOrderById,
-  updateShipmentStatus
+  updateShipmentStatus,
+  updateShipmentPlanning
 };
