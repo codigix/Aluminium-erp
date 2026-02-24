@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { DataTable } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import ProcessPaymentModal from '../components/ProcessPaymentModal.jsx';
+import SendEmailModal from '../components/SendEmailModal.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -27,7 +28,9 @@ const PaymentProcessing = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [emailModalData, setEmailModalData] = useState(null);
 
   useEffect(() => {
     fetchPendingPayments();
@@ -63,16 +66,33 @@ const PaymentProcessing = () => {
     }
   };
 
-  const sendInvoiceEmail = async (poId) => {
+  const handleSendEmailClick = (row) => {
+    setEmailModalData({
+      to: row.vendor_email || '',
+      subject: `Payment Receipt: ${row.po_number}`,
+      message: `Dear ${row.vendor_name},\n\nPlease find attached the payment receipt for ${row.po_number}.\n\nRegards,\nSPTECHPIONEER Accounts Team`,
+      po_id: row.id,
+      po_number: row.po_number,
+      vendor_name: row.vendor_name
+    });
+    setIsEmailModalOpen(true);
+  };
+
+  const handleSendEmail = async (emailData) => {
     try {
       const token = localStorage.getItem('authToken');
-      // Using a generic PO email endpoint if exists, or adding it to backend later
-      // For now we will use the logic to send the vendor invoice
-      const response = await fetch(`${API_BASE}/purchase-orders/${poId}/send-invoice`, {
+      const response = await fetch(`${API_BASE}/purchase-orders/${emailModalData.po_id}/send-email`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: emailData.to,
+          subject: emailData.subject,
+          message: emailData.message,
+          attachPDF: emailData.attachPDF
+        })
       });
 
       if (!response.ok) {
@@ -127,12 +147,12 @@ const PaymentProcessing = () => {
       render: (_, row) => (
         <div className="flex justify-end gap-2 text-right">
           <button
-            onClick={() => sendInvoiceEmail(row.id)}
-            className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
-            title="Send Email"
+            onClick={() => handleSendEmailClick(row)}
+            className="p-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-all active:scale-90"
+            title="Send PO Email"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z" />
             </svg>
           </button>
           <button
@@ -215,6 +235,19 @@ const PaymentProcessing = () => {
         }}
         invoice={selectedInvoice}
         onSuccess={handlePaymentSuccess}
+      />
+
+      <SendEmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setEmailModalData(null);
+        }}
+        data={emailModalData}
+        onSend={handleSendEmail}
+        title="Send Receipt to Vendor"
+        subTitle={`${emailModalData?.po_number} • ${emailModalData?.vendor_name}`}
+        attachmentName={`Receipt-${emailModalData?.po_number}.pdf`}
       />
     </div>
   );
