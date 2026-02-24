@@ -31,7 +31,7 @@ const processPayment = async (payload) => {
     createdBy
   } = payload;
 
-  if (!invoiceId || !poId || !vendorId || !paymentAmount || !paymentDate || !paymentMode) {
+  if (!poId || !vendorId || !paymentAmount || !paymentDate || !paymentMode) {
     const error = new Error('Missing required payment fields');
     error.statusCode = 400;
     throw error;
@@ -40,6 +40,15 @@ const processPayment = async (payload) => {
   const voucherNo = await generatePaymentVoucherNo();
 
   try {
+    // Get PO Number for reference if invoiceId is null
+    let referenceNo = invoiceId || '';
+    if (!invoiceId && poId) {
+      const [poRows] = await pool.query('SELECT po_number FROM purchase_orders WHERE id = ?', [poId]);
+      if (poRows.length > 0) {
+        referenceNo = poRows[0].po_number;
+      }
+    }
+
     const [result] = await pool.execute(
       `INSERT INTO payments (
         payment_voucher_no,
@@ -65,7 +74,7 @@ const processPayment = async (payload) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         voucherNo,
-        invoiceId,
+        invoiceId || null,
         poId,
         vendorId,
         parseFloat(paymentAmount),
@@ -104,7 +113,7 @@ const processPayment = async (payload) => {
         paymentId,
         vendorId,
         parseFloat(paymentAmount),
-        `Payment for Invoice ${invoiceId}: ${remarks || ''}`
+        `Payment for ${invoiceId ? 'Invoice ' + invoiceId : 'PO ' + referenceNo}: ${remarks || ''}`
       ]
     );
 
@@ -124,10 +133,20 @@ const processPayment = async (payload) => {
         'PAYMENT',
         'CREDIT',
         parseFloat(paymentAmount),
-        `Payment against Invoice ${invoiceId}`,
+        `Payment against ${invoiceId ? 'Invoice ' + invoiceId : 'PO ' + referenceNo}`,
         paymentDate
       ]
     );
+
+    // Check if fully paid and update PO status
+    if (poId) {
+      const [poRows] = await pool.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [poId]);
+      const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE po_id = ? AND status = ?', [poId, 'CONFIRMED']);
+      
+      if (poRows.length > 0 && paymentRows[0].total_paid >= poRows[0].total_amount) {
+        await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', poId]);
+      }
+    }
 
     return {
       id: paymentId,

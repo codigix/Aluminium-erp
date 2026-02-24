@@ -32,8 +32,7 @@ const PaymentHistory = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      // Placeholder: currently fetching all POs, ideally would be a separate endpoint
-      const response = await fetch(`${API_BASE}/purchase-orders`, {
+      const response = await fetch(`${API_BASE}/payments`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -42,9 +41,7 @@ const PaymentHistory = () => {
 
       if (!response.ok) throw new Error('Failed to fetch payment history');
       const data = await response.json();
-      // Placeholder logic: show "PAID" POs or just all POs for now
-      const historyData = Array.isArray(data) ? data.filter(po => po.invoice_url) : [];
-      setHistory(historyData);
+      setHistory(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching history:', error);
       errorToast('Failed to fetch payment history');
@@ -56,9 +53,9 @@ const PaymentHistory = () => {
   const columns = [
     {
       label: 'Payment Ref',
-      key: 'po_number',
+      key: 'payment_voucher_no',
       sortable: true,
-      render: (val) => <span className="font-mono text-slate-600">PAY-{val?.split('-')[2] || '0001'}</span>
+      className: 'font-mono text-slate-600'
     },
     {
       label: 'PO Number',
@@ -73,22 +70,26 @@ const PaymentHistory = () => {
     },
     {
       label: 'Payment Date',
-      key: 'updated_at',
+      key: 'payment_date',
       sortable: true,
       render: (val) => formatDate(val)
     },
     {
       label: 'Amount Paid',
-      key: 'total_amount',
+      key: 'payment_amount',
       sortable: true,
       render: (val) => formatCurrency(val)
     },
     {
       label: 'Status',
       key: 'status',
-      render: () => (
-        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase">
-          COMPLETED
+      render: (val) => (
+        <span className={`px-2 py-1 rounded-full text-[10px] font-bold border uppercase ${
+          val === 'CONFIRMED' || val === 'SUCCESS' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+          val === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+          'bg-rose-50 text-rose-700 border-rose-100'
+        }`}>
+          {val || 'COMPLETED'}
         </span>
       )
     },
@@ -111,9 +112,10 @@ const PaymentHistory = () => {
     }
   ];
 
-  const filteredData = history.filter(po => 
-    po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    po.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredData = history.filter(item => 
+    item.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.payment_voucher_no?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (

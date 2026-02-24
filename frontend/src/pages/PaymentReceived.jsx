@@ -42,7 +42,7 @@ const PaymentReceived = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders`, {
+      const response = await fetch(`${API_BASE}/customer-payments/outstanding`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -51,8 +51,7 @@ const PaymentReceived = () => {
 
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json();
-      const outstanding = Array.isArray(data) ? data.filter(so => so.status !== 'PAID' && so.status !== 'CANCELLED') : [];
-      setPayments(outstanding);
+      setPayments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching invoices:', error);
       errorToast('Failed to fetch invoice data');
@@ -81,16 +80,16 @@ const PaymentReceived = () => {
     },
     {
       label: 'Amount Due',
-      key: 'net_total',
+      key: 'outstanding',
       sortable: true,
       render: (val) => formatCurrency(val)
     },
     {
       label: 'Status',
-      key: 'status',
+      key: 'source',
       render: (val) => (
         <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 uppercase">
-          {val === 'COMPLETED' ? 'AWAITING PAYMENT' : val}
+          {val === 'SALES_ORDER' ? 'DESIGN BASED' : 'DIRECT ORDER'}
         </span>
       )
     },
@@ -107,10 +106,11 @@ const PaymentReceived = () => {
                 customer_id: row.company_id,
                 customer_name: row.company_name,
                 sales_order_id: row.id,
+                sales_order_source: row.source,
                 po_number: row.so_number,
-                outstanding: row.net_total,
-                already_paid: 0,
-                total_amount: row.net_total
+                outstanding: row.outstanding,
+                already_paid: row.paid_amount,
+                total_amount: row.total_amount
               });
               setIsPaymentModalOpen(true);
             }}
@@ -161,6 +161,19 @@ const PaymentReceived = () => {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
+          </button>
+
+          <button 
+            onClick={() => {
+              setSelectedInvoice(null);
+              setIsPaymentModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-md"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Payment Received
           </button>
         </div>
       </div>

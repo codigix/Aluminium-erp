@@ -21,6 +21,10 @@ const formatDate = (date) => {
 
 const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   const [formData, setFormData] = useState({
+    customerId: '',
+    salesOrderId: '',
+    soId: '',
+    salesOrderSource: 'SALES_ORDER',
     paymentAmount: '',
     paymentDate: '',
     paymentMode: '',
@@ -40,27 +44,79 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [bankAccounts, setBankAccounts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [customerInvoices, setCustomerInvoices] = useState([]);
+  const [customerSalesOrders, setCustomerSalesOrders] = useState([]);
 
   useEffect(() => {
-    if (invoice && isOpen) {
-      setFormData(prev => ({
-        ...prev,
-        paymentAmount: invoice.outstanding || invoice.total_amount || '',
-        paymentDate: new Date().toISOString().split('T')[0]
-      }));
+    if (isOpen) {
       fetchBankAccounts();
+      if (!invoice) {
+        fetchCustomers();
+      }
+    }
+  }, [isOpen, invoice]);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (invoice) {
+        setFormData({
+          customerId: invoice.customer_id || invoice.company_id || '',
+          salesOrderId: invoice.sales_order_id || invoice.id || '',
+          soId: `${invoice.sales_order_source || 'SALES_ORDER'}_${invoice.sales_order_id || invoice.id}`,
+          salesOrderSource: invoice.sales_order_source || 'SALES_ORDER',
+          paymentAmount: invoice.outstanding || invoice.total_amount || '',
+          paymentDate: new Date().toISOString().split('T')[0],
+          paymentMode: '',
+          bankAccount: '',
+          transactionRefNo: '',
+          remarks: '',
+          upiApp: '',
+          upiTransactionId: '',
+          chequeNumber: '',
+          bankName: '',
+          chequeDate: '',
+          cardType: '',
+          last4Digits: '',
+          authorizationCode: '',
+        });
+      } else {
+        setFormData({
+          customerId: '',
+          salesOrderId: '',
+          soId: '',
+          paymentAmount: '',
+          paymentDate: new Date().toISOString().split('T')[0],
+          paymentMode: '',
+          bankAccount: '',
+          transactionRefNo: '',
+          remarks: '',
+          upiApp: '',
+          upiTransactionId: '',
+          chequeNumber: '',
+          bankName: '',
+          chequeDate: '',
+          cardType: '',
+          last4Digits: '',
+          authorizationCode: '',
+        });
+      }
       setErrors({});
     }
   }, [invoice, isOpen]);
+
+  useEffect(() => {
+    if (formData.customerId && !invoice && isOpen) {
+      fetchCustomerInvoices(formData.customerId);
+      fetchCustomerSalesOrders(formData.customerId);
+    }
+  }, [formData.customerId, invoice, isOpen]);
 
   const fetchBankAccounts = async () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/bank-accounts`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
@@ -68,6 +124,51 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       }
     } catch (error) {
       console.error('Error fetching bank accounts:', error);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/companies`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCustomers(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    }
+  };
+
+  const fetchCustomerInvoices = async (customerId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/customer-payments/customer/${customerId}/outstanding`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCustomerInvoices(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching customer invoices:', error);
+    }
+  };
+
+  const fetchCustomerSalesOrders = async (customerId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/customer-payments/customer/${customerId}/outstanding`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCustomerSalesOrders(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching customer sales orders:', error);
     }
   };
 
@@ -92,10 +193,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   ];
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -103,17 +201,53 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         return newErrors;
       });
     }
+
+    if (field === 'salesOrderId' && value) {
+      const selectedInv = customerInvoices.find(inv => inv.id.toString() === value.toString());
+      if (selectedInv) {
+        setFormData(prev => ({ 
+          ...prev, 
+          salesOrderId: value,
+          soId: `${selectedInv.source}_${selectedInv.id}`,
+          salesOrderSource: selectedInv.source,
+          paymentAmount: selectedInv.outstanding 
+        }));
+      }
+    } else if (field === 'soId' && value) {
+      const [source, id] = value.split('_');
+      const selectedSO = customerSalesOrders.find(so => so.id.toString() === id && so.source === source);
+      if (selectedSO) {
+        setFormData(prev => ({ 
+          ...prev, 
+          soId: value,
+          salesOrderId: id,
+          salesOrderSource: source,
+          paymentAmount: selectedSO.outstanding || selectedSO.total_amount 
+        }));
+      }
+    } else if (field === 'customerId') {
+      setFormData(prev => ({
+        ...prev,
+        customerId: value,
+        salesOrderId: '',
+        soId: '',
+        salesOrderSource: 'SALES_ORDER',
+        paymentAmount: ''
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.paymentAmount || parseFloat(formData.paymentAmount) <= 0) {
-      newErrors.paymentAmount = 'Payment amount is required and must be greater than 0';
+    if (!formData.customerId) {
+      newErrors.customerId = 'Customer is required';
     }
 
-    if (parseFloat(formData.paymentAmount) > parseFloat(invoice.outstanding || invoice.total_amount || 0)) {
-      newErrors.paymentAmount = `Payment amount cannot exceed outstanding balance of ${formatCurrency(invoice.outstanding || invoice.total_amount)}`;
+    if (!formData.paymentAmount || parseFloat(formData.paymentAmount) <= 0) {
+      newErrors.paymentAmount = 'Payment amount is required and must be greater than 0';
     }
 
     if (!formData.paymentDate) {
@@ -125,46 +259,28 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     }
 
     if ((formData.paymentMode === 'BANK_TRANSFER' || formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD') && !formData.transactionRefNo) {
-      newErrors.transactionRefNo = 'Transaction reference number is required for this payment mode';
+      newErrors.transactionRefNo = 'Transaction reference number is required';
     }
 
-    if (formData.paymentMode === 'BANK_TRANSFER') {
-      if (!formData.bankAccount) {
-        newErrors.bankAccount = 'Bank account is required for bank transfers';
-      }
+    if (formData.paymentMode === 'BANK_TRANSFER' && !formData.bankAccount) {
+      newErrors.bankAccount = 'Bank account is required';
     }
 
     if (formData.paymentMode === 'UPI') {
-      if (!formData.upiApp) {
-        newErrors.upiApp = 'UPI app is required';
-      }
-      if (!formData.upiTransactionId) {
-        newErrors.upiTransactionId = 'UPI transaction ID is required';
-      }
+      if (!formData.upiApp) newErrors.upiApp = 'UPI app is required';
+      if (!formData.upiTransactionId) newErrors.upiTransactionId = 'UPI transaction ID is required';
     }
 
     if (formData.paymentMode === 'CHEQUE') {
-      if (!formData.chequeNumber) {
-        newErrors.chequeNumber = 'Cheque number is required';
-      }
-      if (!formData.bankName) {
-        newErrors.bankName = 'Bank name is required';
-      }
-      if (!formData.chequeDate) {
-        newErrors.chequeDate = 'Cheque date is required';
-      }
+      if (!formData.chequeNumber) newErrors.chequeNumber = 'Cheque number is required';
+      if (!formData.bankName) newErrors.bankName = 'Bank name is required';
+      if (!formData.chequeDate) newErrors.chequeDate = 'Cheque date is required';
     }
 
-    if (formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD') {
-      if (!formData.cardType) {
-        newErrors.cardType = 'Card type is required';
-      }
-      if (!formData.last4Digits) {
-        newErrors.last4Digits = 'Last 4 digits are required';
-      }
-      if (!formData.authorizationCode) {
-        newErrors.authorizationCode = 'Authorization code is required';
-      }
+    if ((formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD')) {
+      if (!formData.cardType) newErrors.cardType = 'Card type is required';
+      if (!formData.last4Digits) newErrors.last4Digits = 'Last 4 digits are required';
+      if (!formData.authorizationCode) newErrors.authorizationCode = 'Authorization code is required';
     }
 
     setErrors(newErrors);
@@ -182,9 +298,10 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       const token = localStorage.getItem('authToken');
 
       const paymentPayload = {
-        invoiceId: invoice.id,
-        salesOrderId: invoice.sales_order_id,
-        customerId: invoice.customer_id,
+        invoiceId: formData.salesOrderId || null,
+        salesOrderId: formData.salesOrderId || null,
+        salesOrderSource: formData.salesOrderSource,
+        customerId: formData.customerId,
         paymentAmount: parseFloat(formData.paymentAmount),
         paymentDate: formData.paymentDate,
         paymentMode: formData.paymentMode,
@@ -227,272 +344,228 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     }
   };
 
-  if (!invoice) return null;
-
-  const outstanding = parseFloat(invoice.outstanding || invoice.total_amount || 0);
-  const alreadyPaid = parseFloat(invoice.already_paid || 0);
+  const currentOutstanding = invoice ? parseFloat(invoice.outstanding || invoice.total_amount || 0) : 
+    (formData.salesOrderId ? parseFloat(customerInvoices.find(inv => inv.id.toString() === formData.salesOrderId.toString())?.outstanding || 0) : null);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Record Payment Received" size="2xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={invoice ? "Record Payment Received" : "Add Payment Received"} size="2xl">
       <div className="space-y-6">
-        {/* Invoice Summary Section */}
-        <div className="bg-gradient-to-br from-emerald-50 to-slate-50 border border-emerald-100 rounded-xl p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">Invoice Summary</h3>
-            <span className="text-xs font-semibold text-emerald-600 bg-emerald-100 px-2.5 py-1 rounded-md">READ ONLY</span>
-          </div>
-          <div className="border-t border-emerald-100 pt-3"></div>
-          <div className="grid grid-cols-2 gap-5 text-xs">
-            <div>
-              <span className="text-slate-500 text-xs font-medium">Invoice No</span>
-              <p className="font-bold text-slate-900 mt-2 text-sm">{invoice.po_number || 'N/A'}</p>
+        
+        {/* Selection Section (Only if no invoice passed) */}
+        {!invoice && (
+          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="col-span-2">
+              <FormControl label="Customer *">
+                <select
+                  value={formData.customerId}
+                  onChange={(e) => handleInputChange('customerId', e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white ${errors.customerId ? 'border-rose-500' : 'border-slate-300'}`}
+                >
+                  <option value="">Select Customer</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                </select>
+                {errors.customerId && <span className="text-xs text-rose-600 mt-1 block">{errors.customerId}</span>}
+              </FormControl>
             </div>
-            <div>
-              <span className="text-slate-500 text-xs font-medium">Customer</span>
-              <p className="font-bold text-slate-900 mt-2 text-sm">{invoice.customer_name || 'N/A'}</p>
-            </div>
-            <div>
-              <span className="text-slate-500 text-xs font-medium">Invoice Date</span>
-              <p className="font-bold text-slate-900 mt-2 text-sm">{formatDate(invoice.created_at)}</p>
-            </div>
-            <div>
-              <span className="text-slate-500 text-xs font-medium">Invoice Amount</span>
-              <p className="font-bold text-slate-900 mt-2 text-sm">{formatCurrency(invoice.total_amount)}</p>
-            </div>
-            <div>
-              <span className="text-slate-500 text-xs font-medium">Already Received</span>
-              <p className="font-bold text-emerald-600 mt-2 text-sm">{formatCurrency(alreadyPaid)}</p>
-            </div>
-            <div>
-              <span className="text-slate-500 text-xs font-medium">Outstanding</span>
-              <p className="font-bold text-rose-600 mt-2 text-sm">{formatCurrency(outstanding)}</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Payment Entry Form */}
+            <FormControl label="Invoice (Optional)">
+              <select
+                value={formData.salesOrderId}
+                onChange={(e) => handleInputChange('salesOrderId', e.target.value)}
+                disabled={!formData.customerId}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-100"
+              >
+                <option value="">Advance Payment / On Account</option>
+                {customerInvoices.map(inv => (
+                  <option key={inv.id} value={inv.id}>{inv.so_number} - {formatCurrency(inv.outstanding)} due</option>
+                ))}
+              </select>
+            </FormControl>
+
+            <FormControl label="Sales Order (Optional)">
+              <select
+                value={formData.soId}
+                onChange={(e) => handleInputChange('soId', e.target.value)}
+                disabled={!formData.customerId}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-100"
+              >
+                <option value="">Select Sales Order</option>
+                {customerSalesOrders.map(so => (
+                  <option key={`${so.source}_${so.id}`} value={`${so.source}_${so.id}`}>
+                    {so.so_number} - {formatCurrency(so.outstanding || so.total_amount)}
+                  </option>
+                ))}
+              </select>
+            </FormControl>
+          </div>
+        )}
+
+        {/* Invoice Summary (If invoice passed) */}
+        {invoice && (
+          <div className="bg-gradient-to-br from-emerald-50 to-slate-50 border border-emerald-100 rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">Invoice Summary</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-5 text-xs">
+              <div>
+                <span className="text-slate-500 font-medium">Invoice No</span>
+                <p className="font-bold text-slate-900 mt-1">{invoice.po_number || invoice.so_number || 'N/A'}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium">Customer</span>
+                <p className="font-bold text-slate-900 mt-1">{invoice.customer_name || 'N/A'}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium">Invoice Amount</span>
+                <p className="font-bold text-slate-900 mt-1">{formatCurrency(invoice.total_amount || invoice.net_total)}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium">Outstanding</span>
+                <p className="font-bold text-rose-600 mt-1">{formatCurrency(currentOutstanding)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Details */}
         <div className="space-y-4">
           <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">Payment Details</h3>
-          <div className="border-b border-slate-200"></div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormControl label="Payment Amount *">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.paymentAmount}
+                  onChange={(e) => handleInputChange('paymentAmount', e.target.value)}
+                  className={`w-full pl-7 pr-3 py-2 border rounded-lg text-sm focus:ring-2 ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-200' : 'border-slate-300 focus:ring-emerald-200'}`}
+                  placeholder="0.00"
+                />
+              </div>
+              {errors.paymentAmount && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentAmount}</span>}
+            </FormControl>
 
-          {/* Payment Amount */}
-          <FormControl label="Payment Amount *">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+            <FormControl label="Payment Date *">
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.paymentAmount}
-                onChange={(e) => handleInputChange('paymentAmount', e.target.value)}
-                className={`w-full pl-7 pr-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                placeholder={`Max: ${formatCurrency(outstanding)}`}
+                type="date"
+                value={formData.paymentDate}
+                onChange={(e) => handleInputChange('paymentDate', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.paymentDate ? 'border-rose-500' : 'border-slate-300'}`}
               />
-            </div>
-            {errors.paymentAmount && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.paymentAmount}</span>}
-          </FormControl>
+              {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentDate}</span>}
+            </FormControl>
 
-          {/* Payment Date */}
-          <FormControl label="Payment Date *">
-            <input
-              type="date"
-              value={formData.paymentDate}
-              onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-              className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-            />
-            {errors.paymentDate && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.paymentDate}</span>}
-          </FormControl>
+            <FormControl label="Payment Mode *">
+              <select
+                value={formData.paymentMode}
+                onChange={(e) => handleInputChange('paymentMode', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.paymentMode ? 'border-rose-500' : 'border-slate-300'}`}
+              >
+                <option value="">Select Mode</option>
+                {paymentModes.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+              {errors.paymentMode && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentMode}</span>}
+            </FormControl>
 
-          {/* Payment Mode */}
-          <FormControl label="Payment Mode *">
-            <select
-              value={formData.paymentMode}
-              onChange={(e) => handleInputChange('paymentMode', e.target.value)}
-              className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.paymentMode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-              style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
-            >
-              <option value="">Select Payment Mode</option>
-              {paymentModes.map(mode => (
-                <option key={mode.value} value={mode.value}>{mode.label}</option>
-              ))}
-            </select>
-            {errors.paymentMode && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.paymentMode}</span>}
-          </FormControl>
-
-          {/* Bank Transfer Fields */}
-          {formData.paymentMode === 'BANK_TRANSFER' && (
-            <>
+            {formData.paymentMode === 'BANK_TRANSFER' && (
               <FormControl label="Bank Account *">
                 <select
                   value={formData.bankAccount}
                   onChange={(e) => handleInputChange('bankAccount', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.bankAccount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                  style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.bankAccount ? 'border-rose-500' : 'border-slate-300'}`}
                 >
-                  <option value="">Select Bank Account</option>
-                  {bankAccounts.map(account => (
-                    <option key={account.id} value={account.id}>{account.bank_name} - {account.account_number}</option>
-                  ))}
+                  <option value="">Select Account</option>
+                  {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.bank_name} - {a.account_number}</option>)}
                 </select>
-                {errors.bankAccount && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.bankAccount}</span>}
+                {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block">{errors.bankAccount}</span>}
               </FormControl>
-            </>
-          )}
+            )}
 
-          {/* UPI Fields */}
-          {formData.paymentMode === 'UPI' && (
-            <>
-              <FormControl label="UPI App *">
-                <select
-                  value={formData.upiApp}
-                  onChange={(e) => handleInputChange('upiApp', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.upiApp ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                  style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
-                >
-                  <option value="">Select UPI App</option>
-                  {upiApps.map(app => (
-                    <option key={app.value} value={app.value}>{app.label}</option>
-                  ))}
-                </select>
-                {errors.upiApp && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.upiApp}</span>}
-              </FormControl>
-              <FormControl label="UPI Transaction ID *">
+            {formData.paymentMode === 'UPI' && (
+              <>
+                <FormControl label="UPI App *">
+                  <select
+                    value={formData.upiApp}
+                    onChange={(e) => handleInputChange('upiApp', e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  >
+                    <option value="">Select App</option>
+                    {upiApps.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                  </select>
+                </FormControl>
+                <FormControl label="UPI Transaction ID *">
+                  <input
+                    type="text"
+                    value={formData.upiTransactionId}
+                    onChange={(e) => handleInputChange('upiTransactionId', e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    placeholder="ID"
+                  />
+                </FormControl>
+              </>
+            )}
+
+            {formData.paymentMode === 'CHEQUE' && (
+              <>
+                <FormControl label="Cheque No *">
+                  <input
+                    type="text"
+                    value={formData.chequeNumber}
+                    onChange={(e) => handleInputChange('chequeNumber', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.chequeNumber ? 'border-rose-500' : 'border-slate-300'}`}
+                  />
+                  {errors.chequeNumber && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeNumber}</span>}
+                </FormControl>
+                <FormControl label="Bank Name *">
+                  <input
+                    type="text"
+                    value={formData.bankName}
+                    onChange={(e) => handleInputChange('bankName', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.bankName ? 'border-rose-500' : 'border-slate-300'}`}
+                    placeholder="e.g. HDFC Bank"
+                  />
+                  {errors.bankName && <span className="text-xs text-rose-600 mt-1 block">{errors.bankName}</span>}
+                </FormControl>
+                <FormControl label="Cheque Date *">
+                  <input
+                    type="date"
+                    value={formData.chequeDate}
+                    onChange={(e) => handleInputChange('chequeDate', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.chequeDate ? 'border-rose-500' : 'border-slate-300'}`}
+                  />
+                  {errors.chequeDate && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeDate}</span>}
+                </FormControl>
+              </>
+            )}
+
+            {(formData.paymentMode === 'BANK_TRANSFER' || formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD') && (
+              <FormControl label="Ref No *">
                 <input
                   type="text"
-                  value={formData.upiTransactionId}
-                  onChange={(e) => handleInputChange('upiTransactionId', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.upiTransactionId ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                  placeholder="Enter UPI transaction ID"
+                  value={formData.transactionRefNo}
+                  onChange={(e) => handleInputChange('transactionRefNo', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  placeholder="Reference #"
                 />
-                {errors.upiTransactionId && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.upiTransactionId}</span>}
               </FormControl>
-            </>
-          )}
+            )}
+          </div>
 
-          {/* Cheque Fields */}
-          {formData.paymentMode === 'CHEQUE' && (
-            <>
-              <FormControl label="Cheque Number *">
-                <input
-                  type="text"
-                  value={formData.chequeNumber}
-                  onChange={(e) => handleInputChange('chequeNumber', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeNumber ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                  placeholder="Enter cheque number"
-                />
-                {errors.chequeNumber && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.chequeNumber}</span>}
-              </FormControl>
-              <FormControl label="Bank Name *">
-                <input
-                  type="text"
-                  value={formData.bankName}
-                  onChange={(e) => handleInputChange('bankName', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.bankName ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                  placeholder="Enter bank name"
-                />
-                {errors.bankName && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.bankName}</span>}
-              </FormControl>
-              <FormControl label="Cheque Date *">
-                <input
-                  type="date"
-                  value={formData.chequeDate}
-                  onChange={(e) => handleInputChange('chequeDate', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                />
-                {errors.chequeDate && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.chequeDate}</span>}
-              </FormControl>
-            </>
-          )}
-
-          {/* Card Fields */}
-          {(formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD') && (
-            <>
-              <FormControl label="Card Type *">
-                <select
-                  value={formData.cardType}
-                  onChange={(e) => handleInputChange('cardType', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.cardType ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                  style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
-                >
-                  <option value="">Select Card Type</option>
-                  {cardTypes.map(type => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
-                {errors.cardType && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.cardType}</span>}
-              </FormControl>
-              <FormControl label="Last 4 Digits *">
-                <input
-                  type="text"
-                  maxLength="4"
-                  value={formData.last4Digits}
-                  onChange={(e) => handleInputChange('last4Digits', e.target.value.replace(/\D/g, ''))}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.last4Digits ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                  placeholder="XXXX"
-                />
-                {errors.last4Digits && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.last4Digits}</span>}
-              </FormControl>
-              <FormControl label="Authorization Code *">
-                <input
-                  type="text"
-                  value={formData.authorizationCode}
-                  onChange={(e) => handleInputChange('authorizationCode', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.authorizationCode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                  placeholder="Enter authorization code"
-                />
-                {errors.authorizationCode && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.authorizationCode}</span>}
-              </FormControl>
-            </>
-          )}
-
-          {/* Transaction Reference */}
-          {(formData.paymentMode === 'BANK_TRANSFER' || formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD') && (
-            <FormControl label="Transaction Ref No *">
-              <input
-                type="text"
-                value={formData.transactionRefNo}
-                onChange={(e) => handleInputChange('transactionRefNo', e.target.value)}
-                className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.transactionRefNo ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
-                placeholder="Enter transaction reference number"
-              />
-              {errors.transactionRefNo && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.transactionRefNo}</span>}
-            </FormControl>
-          )}
-
-          {/* Remarks */}
-          <FormControl label="Remarks (Optional)">
+          <FormControl label="Remarks">
             <textarea
               value={formData.remarks}
               onChange={(e) => handleInputChange('remarks', e.target.value)}
-              rows="3"
-              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 resize-none"
-              placeholder="Enter any additional remarks"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              rows="2"
             />
           </FormControl>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-3 pt-4 border-t border-slate-200">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                Processing...
-              </>
-            ) : (
-              'Record Payment'
-            )}
+        <div className="flex gap-3 pt-4 border-t">
+          <button onClick={onClose} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700">Cancel</button>
+          <button onClick={handleSubmit} disabled={loading} className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700">
+            {loading ? 'Processing...' : 'Record Payment'}
           </button>
         </div>
       </div>

@@ -182,8 +182,8 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       const token = localStorage.getItem('authToken');
 
       const paymentPayload = {
-        invoiceId: invoice.id,
-        poId: invoice.po_id,
+        invoiceId: invoice.id, // Keeping this for backward compatibility if needed
+        poId: invoice.id,      // The purchase_orders table ID is poId
         vendorId: invoice.vendor_id,
         paymentAmount: parseFloat(formData.paymentAmount),
         paymentDate: formData.paymentDate,

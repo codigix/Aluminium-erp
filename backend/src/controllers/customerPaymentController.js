@@ -59,6 +59,15 @@ const getOutstandingInvoices = async (req, res, next) => {
   }
 };
 
+const getAllOutstandingInvoices = async (req, res, next) => {
+  try {
+    const invoices = await customerPaymentService.getAllOutstandingInvoices();
+    res.json(invoices);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const updatePaymentStatus = async (req, res, next) => {
   try {
     const result = await customerPaymentService.updatePaymentStatus(
@@ -92,6 +101,7 @@ module.exports = {
   getPaymentReceivedById,
   getCustomerBalance,
   getOutstandingInvoices,
+  getAllOutstandingInvoices, // Added
   updatePaymentStatus,
   deletePayment
 };
