@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, DataTable, Modal, FormControl } from '../components/ui.jsx';
-import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database, ShoppingCart } from 'lucide-react';
+import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database, ShoppingCart, Truck } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import FinalQC from './FinalQC';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -429,6 +430,45 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     }
   };
 
+  const handleCreateShipment = async (qc) => {
+    const result = await Swal.fire({
+      title: 'Create Shipment Order?',
+      text: `This will generate a shipment order for GRN-${String(qc.grn_id).padStart(4, '0')}.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Create',
+      cancelButtonColor: '#4f46e5',
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        // Note: This endpoint might need to be adjusted based on backend capabilities for Incoming QC
+        const response = await fetch(`${API_BASE}/qc-inspections/${qc.id}/create-shipment`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          successToast(`Shipment Order ${data.shipmentCode || ''} created successfully`);
+          fetchQCInspections();
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create shipment');
+        }
+      } catch (error) {
+        errorToast(error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const columns = [
     {
       label: 'GRN #',
@@ -527,13 +567,24 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             </>
           )}
           {['PASSED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab !== 'in-process' && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
-              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors bg-white border border-slate-100"
-              title="Create Stock Entry"
-            >
-              <Database className="w-3.5 h-3.5" />
-            </button>
+            <>
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
+                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors bg-white border border-slate-100"
+                title="Create Stock Entry"
+              >
+                <Database className="w-3.5 h-3.5" />
+              </button>
+              {activeTab === 'final' && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleCreateShipment(row); }} 
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors bg-white border border-slate-100"
+                  title="Create Shipment"
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </>
           )}
           <button onClick={(e) => { e.stopPropagation(); handleDeleteQC(row.id); }} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors bg-white border border-slate-100" title="Delete">
             <Trash2 className="w-3.5 h-3.5" />
@@ -620,23 +671,21 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         );
       case 'final':
         return (
-          <div className="space-y-4">
-            <Card title="Final Quality Control" subtitle="Post-production quality clearance and certification">
-              <div className="flex justify-end mb-4">
-                <button 
-                  onClick={() => { fetchQCInspections(); }}
-                  className="p-2 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-50 transition-all"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-              <DataTable
-                columns={columns}
-                data={finalInspections}
-                loading={loading}
-                searchPlaceholder="Search by GRN or PO..."
-              />
-            </Card>
+          <div className="space-y-6">
+            {finalInspections.length > 0 && (
+              <Card 
+                title="Completed Incoming Inspections" 
+                subtitle="Recent raw material and component inspection results"
+              >
+                <DataTable
+                  columns={columns}
+                  data={finalInspections}
+                  loading={loading}
+                  searchPlaceholder="Search by GRN or PO..."
+                />
+              </Card>
+            )}
+            <FinalQC />
           </div>
         );
       default:

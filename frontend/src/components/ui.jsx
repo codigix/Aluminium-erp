@@ -138,9 +138,14 @@ export const StatusBadge = ({ status }) => {
       case 'COMPLETED':
       case 'PRODUCTION_COMPLETED':
         return 'bg-emerald-50 border-emerald-200 text-emerald-600'
+      case 'READY_FOR_SHIPMENT':
+      case 'QC_APPROVED':
+      case 'READY_TO_DISPATCH':
+        return 'bg-emerald-50 border-emerald-200 text-emerald-600'
       case 'DESIGN_QUERY':
       case 'INACTIVE':
       case 'REJECTED':
+      case 'QC_REJECTED':
       case 'BLOCKED':
       case 'CANCELLED':
         return 'bg-rose-50 border-rose-200 text-rose-600'

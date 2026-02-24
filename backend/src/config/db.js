@@ -878,21 +878,48 @@ const ensureSalesOrderStatuses = async () => {
     const [columns] = await connection.query("SHOW COLUMNS FROM sales_orders LIKE 'status'");
     if (columns.length > 0) {
       const type = columns[0].Type;
-      if (!type.includes('QUOTATION_SENT') || !type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED')) {
+      if (!type.includes('QUOTATION_SENT') || !type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED') || !type.includes('READY_FOR_SHIPMENT')) {
         await connection.query(`
           ALTER TABLE sales_orders 
           MODIFY COLUMN status ENUM(
             'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY', 'QUOTATION_SENT',
             'BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 
             'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 
-            'PRODUCTION_COMPLETED', 'CLOSED'
+            'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'
           ) DEFAULT 'CREATED'
         `);
-        console.log('Sales order statuses updated with QUOTATION_SENT');
+        console.log('Sales order statuses updated');
       }
     }
   } catch (error) {
     console.error('Sales order status sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureShipmentOrdersTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS shipment_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        shipment_code VARCHAR(50) UNIQUE NOT NULL,
+        sales_order_id INT NULL,
+        customer_id INT,
+        dispatch_target_date DATE,
+        priority VARCHAR(50),
+        status ENUM('PENDING_ACCEPTANCE', 'ACCEPTED', 'READY_TO_DISPATCH', 'DISPATCHED', 'CANCELLED') DEFAULT 'PENDING_ACCEPTANCE',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (customer_id) REFERENCES companies(id) ON DELETE SET NULL
+      )
+    `);
+    console.log('Shipment orders table synchronized');
+  } catch (error) {
+    console.error('Shipment orders table sync failed', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -1986,6 +2013,7 @@ const bootstrapDatabase = async () => {
   await ensureSalesOrderItemColumns();
   await ensureSalesOrderStatuses();
   await ensureCustomerDrawingTable();
+  await ensureShipmentOrdersTable();
   await ensureSalesOrderItemMaterialsTable();
   await ensureBOMAdditionalTables();
   await ensureBOMMaterialsColumns();

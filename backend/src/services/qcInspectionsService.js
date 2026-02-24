@@ -877,6 +877,98 @@ const getRejectedItems = async () => {
   }));
 };
 
+const createShipmentFromQC = async (qcId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Check if shipment order already exists for this QC
+    // We'll check by qc_id if we add that column, or just by linking via grn
+    const [existingShipment] = await connection.query(
+      `SELECT s.id FROM shipment_orders s
+       JOIN sales_orders so ON s.sales_order_id = so.id
+       JOIN purchase_orders po ON so.id = po.sales_order_id
+       JOIN grns g ON po.po_number = g.po_number
+       JOIN qc_inspections qc ON g.id = qc.grn_id
+       WHERE qc.id = ?`,
+      [qcId]
+    );
+
+    if (existingShipment.length > 0) {
+      throw new Error('Shipment order already exists for the associated sales order');
+    }
+
+    // 2. Fetch QC details with linked PO and potentially SO
+    const [qcRows] = await connection.query(
+      `SELECT 
+        qc.id, 
+        qc.grn_id,
+        g.po_number,
+        po.sales_order_id,
+        po.vendor_id,
+        so.company_id as so_customer_id,
+        so.target_dispatch_date,
+        so.production_priority,
+        so.status as so_status
+       FROM qc_inspections qc
+       JOIN grns g ON qc.grn_id = g.id
+       JOIN purchase_orders po ON g.po_number = po.po_number
+       LEFT JOIN sales_orders so ON po.sales_order_id = so.id
+       WHERE qc.id = ?`,
+      [qcId]
+    );
+
+    if (qcRows.length === 0) {
+      throw new Error('QC Inspection or associated Purchase Order not found');
+    }
+
+    const qcData = qcRows[0];
+    
+    // Determine customer_id and sales_order_id
+    // If it's linked to an SO, use SO's customer and priority
+    // If not, it's a standalone stock/vendor shipment (maybe return or internal)
+    const salesOrderId = qcData.sales_order_id || null;
+    const customerId = qcData.so_customer_id || null; // Could also use vendor_id if needed, but schema says customer_id
+    const targetDate = qcData.target_dispatch_date || new Date();
+    const priority = qcData.production_priority || 'NORMAL';
+
+    // 3. Generate Shipment Code
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const shipmentCode = `SHP-${year}${month}-QC${String(qcId).padStart(4, '0')}`;
+
+    // 4. Create Shipment Order
+    let result;
+    try {
+      [result] = await connection.execute(
+        `INSERT INTO shipment_orders (shipment_code, sales_order_id, customer_id, dispatch_target_date, priority, status)
+         VALUES (?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
+        [shipmentCode, salesOrderId, customerId, targetDate, priority]
+      );
+    } catch (insertErr) {
+      console.error('INSERT FAILED in createShipmentFromQC:', insertErr);
+      throw insertErr;
+    }
+
+    // 5. Update Sales Order Status if linked
+    if (salesOrderId && ['PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED'].includes(qcData.so_status)) {
+      await connection.execute(
+        'UPDATE sales_orders SET status = ?, current_department = ?, updated_at = NOW() WHERE id = ?',
+        ['READY_FOR_SHIPMENT', 'SHIPMENT', salesOrderId]
+      );
+    }
+
+    await connection.commit();
+    return { success: true, shipmentCode, shipmentId: result.insertId };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getQCWithDetails,
   getAllQCs,
@@ -888,5 +980,6 @@ module.exports = {
   getQCStats,
   sendQCAlertEmail,
   updateQCInvoice,
-  getRejectedItems
+  getRejectedItems,
+  createShipmentFromQC
 };

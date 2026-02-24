@@ -75,6 +75,10 @@ const getIncomingOrders = async (departmentCode) => {
     whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION')`;
   } else if (departmentCode === 'PRODUCTION') {
     whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'MATERIAL_READY', 'IN_PRODUCTION')`;
+  } else if (departmentCode === 'QUALITY' || departmentCode === 'QC') {
+    whereClause = `so.status IN ('PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_REJECTED') OR so.current_department IN ('QUALITY', 'QC')`;
+  } else if (departmentCode === 'SHIPMENT') {
+    whereClause = `so.status IN ('READY_FOR_SHIPMENT', 'QC_APPROVED', 'READY_FOR_DISPATCH') OR so.current_department = 'SHIPMENT'`;
   } else {
     whereClause = `so.current_department = '${departmentCode}'`;
   }
@@ -462,7 +466,13 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
       }
     } else if (departmentCode === 'PRODUCTION' && (currentOrder.status === 'MATERIAL_READY' || currentOrder.status === 'IN_PRODUCTION')) {
       newStatus = 'PRODUCTION_COMPLETED';
-      nextDepartment = 'QC';
+      nextDepartment = 'QUALITY';
+    } else if ((departmentCode === 'QUALITY' || departmentCode === 'QC') && (currentOrder.status === 'PRODUCTION_COMPLETED' || currentOrder.status === 'QC_IN_PROGRESS' || currentOrder.status === 'QC_REJECTED')) {
+      newStatus = 'QC_IN_PROGRESS';
+      nextDepartment = 'QUALITY';
+    } else if (departmentCode === 'SHIPMENT' && (currentOrder.status === 'READY_FOR_SHIPMENT' || currentOrder.status === 'QC_APPROVED' || currentOrder.status === 'READY_FOR_DISPATCH')) {
+      newStatus = 'READY_FOR_SHIPMENT';
+      nextDepartment = 'SHIPMENT';
     }
 
     await connection.execute(
