@@ -398,6 +398,7 @@ const getPurchaseOrders = async (filters = {}) => {
     SELECT 
       po.*,
       v.vendor_name,
+      v.email as vendor_email,
       mr.mr_number,
       COUNT(poi.id) as items_count,
       IFNULL(SUM(poi.quantity), 0) as total_quantity,
@@ -533,7 +534,7 @@ const getPurchaseOrderById = async (poId) => {
 const updatePurchaseOrder = async (poId, payload) => {
   const { status, poNumber, expectedDeliveryDate, notes, items, vendorId } = payload;
   
-  const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'Sent ', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'COMPLETED', 'CLOSED', 'FULFILLED'];
+  const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'PENDING_PAYMENT', 'PAID', 'COMPLETED', 'CLOSED', 'FULFILLED'];
   if (status && !validStatuses.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
@@ -975,11 +976,32 @@ const sendPurchaseOrderEmail = async (poId, emailData) => {
   try {
     let attachments = [];
     if (attachPDF) {
-      const pdfBuffer = await generatePurchaseOrderPDF(poId);
-      attachments.push({
-        filename: `PurchaseOrder_${po.po_number}.pdf`,
-        content: pdfBuffer
-      });
+      if (po.invoice_url) {
+        // Use the existing invoice as the receipt/attachment
+        const path = require('path');
+        const fs = require('fs');
+        const absolutePath = path.resolve(process.cwd(), po.invoice_url);
+        
+        if (fs.existsSync(absolutePath)) {
+          attachments.push({
+            filename: `Receipt-${po.po_number}.pdf`,
+            path: absolutePath
+          });
+        } else {
+          // Fallback to generating PO PDF if invoice file doesn't exist
+          const pdfBuffer = await generatePurchaseOrderPDF(poId);
+          attachments.push({
+            filename: `Receipt-${po.po_number}.pdf`,
+            content: pdfBuffer
+          });
+        }
+      } else {
+        const pdfBuffer = await generatePurchaseOrderPDF(poId);
+        attachments.push({
+          filename: `Receipt-${po.po_number}.pdf`,
+          content: pdfBuffer
+        });
+      }
     }
 
     const emailResult = await emailService.sendEmail(to, subject, message, attachments);

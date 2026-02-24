@@ -20,13 +20,13 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const PaymentHistory = () => {
+const CustomerPaymentHistory = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
-  const [emailData, setEmailData] = useState(null);
+  const [emailData, setEmailData] = useState({ to: '', subject: '', message: '' });
 
   useEffect(() => {
     fetchPaymentHistory();
@@ -36,7 +36,7 @@ const PaymentHistory = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/payments?status=CONFIRMED`, {
+      const response = await fetch(`${API_BASE}/customer-payments?status=CONFIRMED`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -54,10 +54,10 @@ const PaymentHistory = () => {
     }
   };
 
-  const downloadReceipt = async (paymentId, voucherNo) => {
+  const downloadReceipt = async (paymentId, receiptNo) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/payments/${paymentId}/pdf`, {
+      const response = await fetch(`${API_BASE}/customer-payments/${paymentId}/pdf`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -69,7 +69,7 @@ const PaymentHistory = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Voucher-${voucherNo}.pdf`;
+      a.download = `Receipt-${receiptNo}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -82,9 +82,9 @@ const PaymentHistory = () => {
   const openEmailModal = (payment) => {
     setSelectedPayment(payment);
     setEmailData({
-      to: payment.vendor_email || '',
-      subject: `Payment Receipt: ${payment.payment_voucher_no}`,
-      message: `Dear ${payment.vendor_name || 'Vendor'},\n\nPlease find attached the payment receipt ${payment.payment_voucher_no} for the payment made on ${new Date(payment.payment_date).toLocaleDateString()}.\n\nAmount Paid: INR ${parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\nRegards,\nAccounts Department\nSPTECHPIONEER PVT LTD`,
+      to: payment.customer_email || '',
+      subject: `Payment Receipt: ${payment.payment_receipt_no}`,
+      message: `Dear ${payment.customer_name || 'Customer'},\n\nThank you for your payment. Please find attached the payment receipt ${payment.payment_receipt_no} for the amount received on ${new Date(payment.payment_date).toLocaleDateString()}.\n\nAmount Received: INR ${parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\nRegards,\nAccounts Department\nSPTECHPIONEER PVT LTD`,
       attachPDF: true
     });
     setShowEmailModal(true);
@@ -93,7 +93,7 @@ const PaymentHistory = () => {
   const handleSendEmail = async (data) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/payments/${selectedPayment.id}/send-email`, {
+      const response = await fetch(`${API_BASE}/customer-payments/${selectedPayment.id}/send-email`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -107,7 +107,7 @@ const PaymentHistory = () => {
         throw new Error(result.message || 'Failed to send email');
       }
 
-      successToast('Payment voucher sent to vendor email');
+      successToast('Payment receipt sent to customer email');
       setShowEmailModal(false);
     } catch (error) {
       console.error('Error sending email:', error);
@@ -118,20 +118,20 @@ const PaymentHistory = () => {
 
   const columns = [
     {
-      label: 'Payment Ref',
-      key: 'payment_voucher_no',
+      label: 'Payment Receipt',
+      key: 'payment_receipt_no',
       sortable: true,
       className: 'font-mono text-slate-600'
     },
     {
-      label: 'PO Number',
-      key: 'po_number',
+      label: 'Sales Order',
+      key: 'so_number',
       sortable: true,
-      className: ' text-blue-600'
+      className: 'font-bold text-emerald-600'
     },
     {
-      label: 'Supplier',
-      key: 'vendor_name',
+      label: 'Customer',
+      key: 'customer_name',
       sortable: true
     },
     {
@@ -141,23 +141,42 @@ const PaymentHistory = () => {
       render: (val) => formatDate(val)
     },
     {
-      label: 'Amount Paid',
+      label: 'Amount Received',
       key: 'payment_amount',
       sortable: true,
       render: (val) => formatCurrency(val)
     },
     {
+      label: 'Payment Mode',
+      key: 'payment_mode',
+      render: (val) => {
+        const modeLabels = {
+          'BANK_TRANSFER': 'Bank Transfer',
+          'UPI': 'UPI',
+          'CHEQUE': 'Cheque',
+          'CREDIT_CARD': 'Credit Card',
+          'DEBIT_CARD': 'Debit Card',
+          'CASH': 'Cash'
+        };
+        return <span className="text-xs font-medium text-slate-600">{modeLabels[val] || val}</span>;
+      }
+    },
+    {
       label: 'Status',
       key: 'status',
-      render: (val) => (
-        <span className={`px-2 py-1 rounded-full text-[10px] font-bold border uppercase ${
-          val === 'CONFIRMED' || val === 'SUCCESS' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-          val === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-          'bg-rose-50 text-rose-700 border-rose-100'
-        }`}>
-          {val || 'COMPLETED'}
-        </span>
-      )
+      render: (val) => {
+        const statusColors = {
+          'PENDING': 'bg-amber-50 text-amber-700 border-amber-100',
+          'CONFIRMED': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+          'FAILED': 'bg-red-50 text-red-700 border-red-100'
+        };
+        const colors = statusColors[val] || 'bg-slate-50 text-slate-700 border-slate-100';
+        return (
+          <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${colors} uppercase`}>
+            {val}
+          </span>
+        );
+      }
     },
     {
       label: 'Actions',
@@ -175,7 +194,7 @@ const PaymentHistory = () => {
             </svg>
           </button>
           <button
-            onClick={() => downloadReceipt(row.id, row.payment_voucher_no)}
+            onClick={() => downloadReceipt(row.id, row.payment_receipt_no)}
             className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all border border-emerald-100"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -188,18 +207,18 @@ const PaymentHistory = () => {
     }
   ];
 
-  const filteredData = history.filter(item => 
-    item.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.payment_voucher_no?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredData = history.filter(payment => 
+    payment.payment_receipt_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    payment.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    payment.so_number?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payment History</h1>
-          <p className="text-xs text-slate-500  mt-1">View past vendor payments and receipts</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Customer Payment History</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">View past customer payments and receipts</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -209,7 +228,7 @@ const PaymentHistory = () => {
               placeholder="Search history..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded  text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all w-64 "
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all w-64 shadow-sm"
             />
             <svg className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -218,7 +237,7 @@ const PaymentHistory = () => {
           
           <button 
             onClick={fetchPaymentHistory}
-            className="p-2 bg-white border border-slate-200 rounded  text-slate-500 hover:text-blue-600 hover:border-blue-100 transition-all "
+            className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-emerald-600 hover:border-emerald-100 transition-all shadow-sm"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -227,13 +246,13 @@ const PaymentHistory = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded  border border-slate-200  overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <DataTable
           columns={columns}
           data={filteredData}
           loading={loading}
           hideHeader={true}
-          emptyMessage="No payment history found."
+          emptyMessage="No customer payment history found."
         />
       </div>
 
@@ -242,12 +261,12 @@ const PaymentHistory = () => {
         onClose={() => setShowEmailModal(false)}
         onSend={handleSendEmail}
         data={emailData}
-        title="Send Receipt to Vendor"
-        subTitle={`${selectedPayment?.payment_voucher_no} • ${selectedPayment?.vendor_name}`}
-        attachmentName={`Voucher-${selectedPayment?.payment_voucher_no}.pdf`}
+        title="Send Receipt to Customer"
+        subTitle={`${selectedPayment?.payment_receipt_no} • ${selectedPayment?.customer_name}`}
+        attachmentName={`Receipt-${selectedPayment?.payment_receipt_no}.pdf`}
       />
     </div>
   );
 };
 
-export default PaymentHistory;
+export default CustomerPaymentHistory;

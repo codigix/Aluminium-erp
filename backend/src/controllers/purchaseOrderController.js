@@ -132,6 +132,49 @@ const uploadInvoice = async (req, res, next) => {
   }
 };
 
+const sendToPendingPayment = async (req, res, next) => {
+  try {
+    const pool = require('../config/db');
+    const poId = parseInt(req.params.poId);
+    
+    console.log(`[DEBUG] sendToPendingPayment called for PO ID: ${poId}`);
+    
+    const [existing] = await pool.query(
+      'SELECT id, po_number, status FROM purchase_orders WHERE id = ?',
+      [poId]
+    );
+
+    if (!existing.length) {
+      const error = new Error('Purchase Order not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    console.log(`[DEBUG] Current PO status: ${existing[0].status}`);
+    console.log(`[DEBUG] Updating to: PENDING_PAYMENT`);
+
+    // Use query() instead of execute() to avoid mysql2 parameter binding issues
+    const [result] = await pool.query(
+      'UPDATE purchase_orders SET status = "PENDING_PAYMENT" WHERE id = ?',
+      [poId]
+    );
+
+    console.log(`[DEBUG] Update successful`);
+
+    res.json({
+      message: 'Invoice sent to payment processing',
+      data: {
+        id: poId,
+        poNumber: existing[0].po_number,
+        status: 'PENDING_PAYMENT'
+      }
+    });
+  } catch (error) {
+    console.error(`[ERROR] sendToPendingPayment error:`, error);
+    next(error);
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -145,5 +188,6 @@ module.exports = {
   approvePurchaseOrder,
   getPurchaseOrderPDF,
   sendPurchaseOrderEmail,
-  uploadInvoice
+  uploadInvoice,
+  sendToPendingPayment
 };
