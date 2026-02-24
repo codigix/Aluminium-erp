@@ -169,11 +169,13 @@ const getPayments = async (filters = {}) => {
       p.*,
       po.po_number,
       c.company_name as vendor_name,
+      con.email as vendor_email,
       ba.bank_name,
       ba.account_number
     FROM payments p
     LEFT JOIN purchase_orders po ON p.po_id = po.id
     LEFT JOIN companies c ON p.vendor_id = c.id
+    LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
     LEFT JOIN bank_accounts ba ON p.bank_account_id = ba.id
     WHERE 1=1
   `;
@@ -449,7 +451,10 @@ const sendPaymentVoucherEmail = async (paymentId, emailData = {}) => {
   const payment = await getPaymentById(paymentId);
   
   const [vendorRows] = await pool.query(
-    'SELECT company_name, email FROM companies WHERE id = ?',
+    `SELECT c.company_name, con.email 
+     FROM companies c 
+     LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
+     WHERE c.id = ?`,
     [payment.vendor_id]
   );
   const vendor = vendorRows[0];

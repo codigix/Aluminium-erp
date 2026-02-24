@@ -169,11 +169,13 @@ const getPaymentsReceived = async (filters = {}) => {
       cp.*,
       so.so_number,
       c.company_name as customer_name,
+      con.email as customer_email,
       ba.bank_name,
       ba.account_number
     FROM customer_payments cp
     LEFT JOIN sales_orders so ON cp.sales_order_id = so.id
     LEFT JOIN companies c ON cp.customer_id = c.id
+    LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
     LEFT JOIN bank_accounts ba ON cp.bank_account_id = ba.id
     WHERE 1=1
   `;
@@ -518,7 +520,10 @@ const sendCustomerPaymentReceiptEmail = async (paymentId, emailData = {}) => {
   const payment = await getPaymentReceivedById(paymentId);
   
   const [customerRows] = await pool.query(
-    'SELECT company_name, email FROM companies WHERE id = ?',
+    `SELECT c.company_name, con.email 
+     FROM companies c 
+     LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
+     WHERE c.id = ?`,
     [payment.customer_id]
   );
   const customer = customerRows[0];

@@ -79,26 +79,15 @@ const PaymentHistory = () => {
     }
   };
 
-  const openEmailModal = async (payment) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/vendors/${payment.vendor_id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const vendor = response.ok ? await response.json() : null;
-      
-      setSelectedPayment(payment);
-      setEmailData({
-        to: vendor?.email || '',
-        subject: `Payment Voucher: ${payment.payment_voucher_no}`,
-        message: `Dear ${vendor?.vendor_name || 'Vendor'},\n\nPlease find attached the payment voucher ${payment.payment_voucher_no} for the payment made on ${new Date(payment.payment_date).toLocaleDateString()}.\n\nAmount Paid: INR ${parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\nRegards,\nAccounts Department\nSPTECHPIONEER PVT LTD`,
-        attachPDF: true
-      });
-      setShowEmailModal(true);
-    } catch (error) {
-      console.error('Error:', error);
-      errorToast('Failed to load vendor details');
-    }
+  const openEmailModal = (payment) => {
+    setSelectedPayment(payment);
+    setEmailData({
+      to: payment.vendor_email || '',
+      subject: `Payment Receipt: ${payment.payment_voucher_no}`,
+      message: `Dear ${payment.vendor_name || 'Vendor'},\n\nPlease find attached the payment receipt ${payment.payment_voucher_no} for the payment made on ${new Date(payment.payment_date).toLocaleDateString()}.\n\nAmount Paid: INR ${parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\nRegards,\nAccounts Department\nSPTECHPIONEER PVT LTD`,
+      attachPDF: true
+    });
+    setShowEmailModal(true);
   };
 
   const handleSendEmail = async (data) => {
@@ -178,11 +167,11 @@ const PaymentHistory = () => {
         <div className="flex justify-end gap-2 text-right">
           <button
             onClick={() => openEmailModal(row)}
-            className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
+            className="p-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-all active:scale-90"
             title="Send Email"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z" />
             </svg>
           </button>
           <button
@@ -252,8 +241,10 @@ const PaymentHistory = () => {
         isOpen={showEmailModal}
         onClose={() => setShowEmailModal(false)}
         onSend={handleSendEmail}
-        initialData={emailData}
-        title="Send Payment Voucher"
+        data={emailData}
+        title="Send Receipt to Vendor"
+        subTitle={`${selectedPayment?.payment_voucher_no} • ${selectedPayment?.vendor_name}`}
+        attachmentName={`Voucher-${selectedPayment?.payment_voucher_no}.pdf`}
       />
     </div>
   );
