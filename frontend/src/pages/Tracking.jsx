@@ -51,11 +51,13 @@ const destinationIcon = L.icon({
     iconAnchor: [17, 35],
 });
 
-const MapRecenter = ({ center, zoom }) => {
+const MapRecenter = ({ center, zoom, shipmentId }) => {
   const map = useMap();
   useEffect(() => {
-    map.setView(center, zoom);
-  }, [center, zoom, map]);
+    if (center && center[0] && center[1]) {
+      map.setView(center, zoom);
+    }
+  }, [shipmentId, map]); // Only recenter when the selected shipment ID changes
   return null;
 };
 
@@ -84,6 +86,7 @@ const Tracking = ({ apiRequest }) => {
       }
       const mapped = data.activeShipments.map(s => ({
         ...s,
+        id: s.id,
         code: s.shipment_code,
         customer: s.snapshot_customer_name || s.customer_name || s.shipment_code,
         driver: s.driver_name || 'NOT ASSIGNED',
@@ -102,18 +105,22 @@ const Tracking = ({ apiRequest }) => {
       setShipments(mapped);
       setStats(data.stats);
       
-      if (mapped.length > 0 && !selectedShipment) {
-        setSelectedShipment(mapped[0]);
-      } else if (selectedShipment) {
-        const updated = mapped.find(m => m.id === selectedShipment.id);
-        if (updated) setSelectedShipment(updated);
-      }
+      // Update selected shipment details without triggering the fetchData dependency loop
+      setSelectedShipment(prev => {
+        if (!prev && mapped.length > 0) return mapped[0];
+        if (prev) {
+          const updated = mapped.find(m => m.id === prev.id);
+          // Only update if we found it and it's actually different (optional optimization)
+          return updated || prev;
+        }
+        return prev;
+      });
     } catch (error) {
       console.error("Dashboard error:", error);
     } finally {
       setLoading(false);
     }
-  }, [apiRequest, selectedShipment]);
+  }, [apiRequest]); // Removed selectedShipment from dependencies
 
   const fetchRoute = useCallback(async (shipment) => {
     if (!orsKey || !shipment) return;
@@ -179,7 +186,7 @@ const Tracking = ({ apiRequest }) => {
   }, [fetchData]);
 
   useEffect(() => {
-    if (selectedShipment) fetchRoute(selectedShipment);
+    if (selectedShipment?.id) fetchRoute(selectedShipment);
   }, [selectedShipment?.id, fetchRoute]);
 
   const kpis = [
@@ -289,7 +296,11 @@ const Tracking = ({ apiRequest }) => {
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {selectedShipment && (
               <>
-                <MapRecenter center={selectedShipment.current} zoom={12} />
+                <MapRecenter 
+                  center={selectedShipment.current} 
+                  zoom={12} 
+                  shipmentId={selectedShipment.id} 
+                />
                 <Marker position={[selectedShipment.origin[1], selectedShipment.origin[0]]} icon={warehouseIcon} />
                 <Marker position={[selectedShipment.destination[1], selectedShipment.destination[0]]} icon={destinationIcon} />
                 <Marker position={selectedShipment.current} icon={truckIcon} />
