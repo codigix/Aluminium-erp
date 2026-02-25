@@ -60,12 +60,13 @@ import PaymentProcessing from "./pages/PaymentProcessing";
 import PaymentHistory from "./pages/PaymentHistory";
 import PaymentReceived from "./pages/PaymentReceived";
 import CustomerPaymentHistory from "./pages/CustomerPaymentHistory";
+import AccountsDashboard from "./pages/AccountsDashboard";
 import { FormControl, StatusBadge } from "./components/ui.jsx";
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
+const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -162,7 +163,7 @@ const DEPARTMENT_MODULES = {
   PRODUCTION: ['project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'routing-operations', 'process-sheet', 'dashboard'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
   SHIPMENT: ['shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'dashboard'],
-  ACCOUNTS: ['invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'],
+  ACCOUNTS: ['accounts-dashboard', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
   PROCUREMENT: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
   ADMIN: [
@@ -171,7 +172,7 @@ const DEPARTMENT_MODULES = {
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
     'quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
     'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses',
-    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard',
+    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'accounts-dashboard', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard',
     'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'
   ]
 }
@@ -229,7 +230,7 @@ function App() {
 
   useEffect(() => {
     if (token && user && activeModule === 'dashboard') {
-      const firstFunctionalModule = allowedModules.find(m => m !== 'dashboard')
+      const firstFunctionalModule = allowedModules.find(m => m !== 'dashboard' && m !== 'accounts-dashboard' && !m.includes('dashboard'))
       if (firstFunctionalModule) {
         navigate(`/${firstFunctionalModule}`, { replace: true })
       }
@@ -371,7 +372,8 @@ function App() {
       // Redirect to first allowed module based on department
       const userAllowed = DEPARTMENT_MODULES[data.user.department_code] || []
       if (userAllowed.length > 0) {
-        navigate(`/${userAllowed[0]}`)
+        const redirectModule = data.user.department_code === 'ACCOUNTS' ? 'accounts-dashboard' : userAllowed[0]
+        navigate(`/${redirectModule}`)
       }
     } catch (error) {
       showToast(error.message)
@@ -1011,6 +1013,8 @@ function App() {
     { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
     { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
     { label: 'Quality Reports', moduleId: 'quality-reports', icon: 'files', indent: true },
+    { label: 'ACCOUNTS', isGroup: true, groupId: 'accounts-main-group' },
+    { label: 'Dashboard', moduleId: 'accounts-dashboard', icon: 'chart', indent: true },
     { label: 'Accounts Payable (Vendor)', isGroup: true, groupId: 'accounts-payable-group' },
     { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'files', indent: true },
     { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'cart', indent: true },
@@ -1335,13 +1339,13 @@ function App() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-2">
-              {navigationItems.map((item) => {
+              {navigationItems.map((item, index) => {
                 const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
                 const isDisabled = item.isGroup || !item.moduleId
                 
                 if (item.isGroup) {
                   return (
-                    <div key={item.label} className="pt-1">
+                    <div key={`group-${item.groupId || item.label}-${index}`} className="pt-1">
                       <div
                         className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500   hover:text-slate-700 transition-colors"
                       >
@@ -1353,7 +1357,7 @@ function App() {
                 
                 return (
                   <button
-                    key={item.label}
+                    key={`${item.moduleId || 'item'}-${item.label}-${index}`}
                     type="button"
                     onClick={() => {
                       if (item.moduleId) {
@@ -1514,6 +1518,10 @@ function App() {
 
                 {activeModule === 'quality-reports' && (
                   <QualityReports />
+                )}
+
+                {activeModule === 'accounts-dashboard' && (
+                  <AccountsDashboard />
                 )}
 
                 {activeModule === 'invoice-received' && (
