@@ -910,13 +910,47 @@ const ensureShipmentOrdersTable = async () => {
         customer_id INT,
         dispatch_target_date DATE,
         priority VARCHAR(50),
-        status ENUM('PENDING_ACCEPTANCE', 'ACCEPTED', 'READY_TO_DISPATCH', 'DISPATCHED', 'CANCELLED') DEFAULT 'PENDING_ACCEPTANCE',
+        status ENUM('PENDING_ACCEPTANCE', 'ACCEPTED', 'REJECTED', 'PLANNING', 'PLANNED', 'READY_TO_DISPATCH', 'DISPATCHED', 'CANCELLED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'DELAYED', 'CLOSED', 'RETURN_INITIATED', 'RETURN_PICKUP_ASSIGNED', 'RETURN_IN_TRANSIT', 'RETURN_RECEIVED', 'RETURN_COMPLETED') DEFAULT 'PENDING_ACCEPTANCE',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
         FOREIGN KEY (customer_id) REFERENCES companies(id) ON DELETE SET NULL
       )
     `);
+    
+    // Ensure status column is updated for existing table
+    const [cols] = await connection.query("SHOW COLUMNS FROM shipment_orders LIKE 'status'");
+    if (cols.length > 0 && (!cols[0].Type.includes('RETURN_INITIATED') || !cols[0].Type.includes('REJECTED'))) {
+      console.log('Updating shipment_orders status enum...');
+      await connection.query(`ALTER TABLE shipment_orders MODIFY COLUMN status ENUM('PENDING_ACCEPTANCE', 'ACCEPTED', 'REJECTED', 'PLANNING', 'PLANNED', 'READY_TO_DISPATCH', 'DISPATCHED', 'CANCELLED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'DELAYED', 'CLOSED', 'RETURN_INITIATED', 'RETURN_PICKUP_ASSIGNED', 'RETURN_IN_TRANSIT', 'RETURN_RECEIVED', 'RETURN_COMPLETED') DEFAULT 'PENDING_ACCEPTANCE'`);
+    }
+
+    // Ensure planning and tracking columns exist
+    const [allCols] = await connection.query("SHOW COLUMNS FROM shipment_orders");
+    const existingCols = new Set(allCols.map(c => c.Field));
+    const columnsToAdd = [
+      { name: 'planned_dispatch_date', definition: 'DATE NULL' },
+      { name: 'actual_delivery_date', definition: 'DATETIME NULL' },
+      { name: 'estimated_delivery_date', definition: 'DATETIME NULL' },
+      { name: 'transporter', definition: 'VARCHAR(255) NULL' },
+      { name: 'vehicle_number', definition: 'VARCHAR(50) NULL' },
+      { name: 'driver_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'driver_contact', definition: 'VARCHAR(20) NULL' },
+      { name: 'packing_status', definition: "ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED') DEFAULT 'PENDING'" },
+      { name: 'shipping_address', definition: 'TEXT NULL' },
+      { name: 'billing_address', definition: 'TEXT NULL' },
+      { name: 'customer_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'customer_phone', definition: 'VARCHAR(20) NULL' },
+      { name: 'customer_email', definition: 'VARCHAR(255) NULL' }
+    ];
+
+    for (const col of columnsToAdd) {
+      if (!existingCols.has(col.name)) {
+        await connection.query(`ALTER TABLE shipment_orders ADD COLUMN \`${col.name}\` ${col.definition}`);
+        console.log(`Added column ${col.name} to shipment_orders`);
+      }
+    }
+
     console.log('Shipment orders table synchronized');
   } catch (error) {
     console.error('Shipment orders table sync failed', error.message);
@@ -1664,6 +1698,54 @@ const ensureOrdersTable = async () => {
   }
 };
 
+const ensureDeliveryChallansTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // 1. Create delivery_challans table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS delivery_challans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        challan_number VARCHAR(50) UNIQUE NOT NULL,
+        shipment_id INT NOT NULL,
+        customer_id INT NOT NULL,
+        delivery_status ENUM('DRAFT', 'COMPLETED') DEFAULT 'DRAFT',
+        dispatch_time TIMESTAMP NULL,
+        delivery_time TIMESTAMP NULL,
+        receiver_name VARCHAR(120),
+        receiver_mobile VARCHAR(30),
+        signature_file VARCHAR(500),
+        photo_proof VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (shipment_id) REFERENCES shipment_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (customer_id) REFERENCES companies(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 2. Create delivery_challan_items table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS delivery_challan_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        challan_id INT NOT NULL,
+        item_code VARCHAR(120),
+        description TEXT,
+        quantity DECIMAL(12, 3) NOT NULL,
+        unit VARCHAR(20),
+        weight DECIMAL(12, 3),
+        FOREIGN KEY (challan_id) REFERENCES delivery_challans(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('Delivery Challan tables synchronized');
+  } catch (error) {
+    console.error('Delivery Challan table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureSalesOrderColumns = async () => {
   let connection;
   try {
@@ -1985,6 +2067,47 @@ const ensureQCInspectionsTable = async () => {
   }
 };
 
+const ensureReturnsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS shipment_returns (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        return_code VARCHAR(50) NOT NULL UNIQUE,
+        shipment_id INT NOT NULL,
+        order_id INT NULL,
+        customer_id INT NULL,
+        reason TEXT NOT NULL,
+        status ENUM('RETURN_INITIATED', 'RETURN_PICKUP_ASSIGNED', 'RETURN_IN_TRANSIT', 'RETURN_RECEIVED', 'RETURN_COMPLETED') DEFAULT 'RETURN_INITIATED',
+        pickup_date DATE NULL,
+        received_date DATE NULL,
+        condition_status ENUM('GOOD', 'DAMAGED', 'WRONG_ITEM', 'CANCELLED') NULL,
+        refund_amount DECIMAL(15, 2) DEFAULT 0.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (shipment_id) REFERENCES shipment_orders(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS shipment_return_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        return_id INT NOT NULL,
+        item_code VARCHAR(100) NOT NULL,
+        quantity DECIMAL(15, 3) NOT NULL,
+        condition_note TEXT,
+        FOREIGN KEY (return_id) REFERENCES shipment_returns(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Shipment Returns tables synchronized');
+  } catch (error) {
+    console.error('Shipment Returns table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -2028,6 +2151,8 @@ const bootstrapDatabase = async () => {
   await ensureMaterialRequestColumns();
   await ensureQuotationCommunicationTable();
   await ensureOrdersTable();
+  await ensureDeliveryChallansTable();
+  await ensureReturnsTable();
 };
 
 bootstrapDatabase();

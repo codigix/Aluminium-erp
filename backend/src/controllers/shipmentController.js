@@ -56,3 +56,51 @@ exports.updateShipmentPlanning = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getTrackingDashboard = async (req, res, next) => {
+  try {
+    const data = await shipmentService.getTrackingDashboard();
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getTrackingHistory = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const history = await shipmentService.getTrackingHistory(id);
+    res.json(history);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateTracking = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { lat, lng } = req.body;
+    const result = await shipmentService.updateTracking(id, { lat, lng });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getShipmentDashboard = async (req, res, next) => {
+  try {
+    const data = await shipmentService.getShipmentDashboard();
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getShipmentReports = async (req, res, next) => {
+  try {
+    const data = await shipmentService.getShipmentReports();
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};

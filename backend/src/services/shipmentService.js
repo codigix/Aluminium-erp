@@ -5,6 +5,7 @@ const { addStockLedgerEntry } = require('./stockService');
 const getShipmentOrders = async () => {
   const [rows] = await pool.query(`
     SELECT 
+      s.id,
       so.id as so_id,
       c.company_name as customer_name, 
       cp.po_number as customer_po_number, 
@@ -26,7 +27,10 @@ const getShipmentOrders = async () => {
       s.customer_phone as snapshot_customer_phone,
       s.customer_email as snapshot_customer_email,
       s.shipping_address as snapshot_shipping_address,
-      s.billing_address as snapshot_billing_address
+      s.billing_address as snapshot_billing_address,
+      s.current_lat,
+      s.current_lng,
+      s.last_location_update
     FROM shipment_orders s
     LEFT JOIN sales_orders so ON s.sales_order_id = so.id
     LEFT JOIN companies c ON s.customer_id = c.id
@@ -55,8 +59,10 @@ const getShipmentOrders = async () => {
     } else {
       row.so_number = row.customer_po_number || (row.so_id ? `SO-${String(row.so_id).padStart(4, '0')}` : null);
       row.company_name = row.snapshot_customer_name || row.customer_name;
-      row.id = row.so_id;
     }
+    // Always ensure ID properties are set
+    row.id = row.id || row.shipment_order_id;
+    row.shipment_order_id = row.id;
   }
   return rows;
 };
@@ -139,11 +145,13 @@ const getShipmentOrderById = async (id) => {
     shipment.company_name = shipment.customer_name;
   }
 
+  shipment.shipment_order_id = shipment.id;
   shipment.items = items;
   return shipment;
 };
 
 const updateShipmentStatus = async (shipmentOrderId, status) => {
+  console.log(`Updating shipment status. ID: ${shipmentOrderId}, Status: ${status}`);
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -151,7 +159,8 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
     // 1. Get current shipment data
     const [currentRows] = await connection.query('SELECT * FROM shipment_orders WHERE id = ?', [shipmentOrderId]);
     if (currentRows.length === 0) {
-      throw new Error('Shipment order not found');
+      console.error(`Shipment not found for ID: ${shipmentOrderId}`);
+      throw new Error(`Shipment order not found (ID: ${shipmentOrderId})`);
     }
     const shipment = currentRows[0];
 
@@ -178,8 +187,15 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
         if (match) {
           const qcId = parseInt(match[1], 10);
           const [qcItems] = await connection.query(`
-            SELECT qci.item_code, qci.po_qty as quantity, qci.warehouse_id
+            SELECT 
+              COALESCE(NULLIF(TRIM(qci.item_code), ''), qci.drawing_no) as item_code,
+              COALESCE(NULLIF(TRIM(poi.material_name), ''), poi.description) as description,
+              qci.po_qty as quantity, 
+              poi.unit as unit,
+              qci.warehouse_id
             FROM qc_inspection_items qci
+            LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
+            LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
             LEFT JOIN stock_balance sb ON sb.item_code = qci.item_code
             WHERE qci.qc_inspection_id = ?
             AND (sb.material_type = 'FG' OR qci.item_code LIKE '%FG%')
@@ -188,7 +204,11 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
         }
       } else {
         const [soItems] = await connection.query(`
-          SELECT soi.item_code, soi.quantity
+          SELECT 
+            COALESCE(NULLIF(TRIM(soi.item_code), ''), soi.drawing_no) as item_code,
+            soi.description,
+            soi.quantity,
+            soi.unit
           FROM sales_order_items soi
           LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
           WHERE soi.sales_order_id = ?
@@ -199,38 +219,46 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
 
       if (items.length > 0) {
         for (const item of items) {
-          // 1. Update inventory master table
-          await connection.execute(
-            `UPDATE inventory SET stock_on_hand = stock_on_hand - ?, updated_at = NOW() WHERE item_code = ?`,
-            [item.quantity, item.item_code]
-          );
-
-          // 2. Create entry in inventory_postings
-          const [invRows] = await connection.query('SELECT id FROM inventory WHERE item_code = ?', [item.item_code]);
-          if (invRows.length > 0) {
-            await connection.execute(
-              `INSERT INTO inventory_postings (inventory_id, posting_type, quantity, reference_type, reference_id, remarks) 
-               VALUES (?, 'OUTWARD', ?, 'DISPATCH', ?, ?)`,
-              [invRows[0].id, item.quantity, shipmentOrderId, `Dispatched for shipment ${shipment.shipment_code}`]
+          const itemCode = item.item_code || item.drawing_no || 'UNKNOWN';
+          if (itemCode === 'UNKNOWN') {
+            console.warn(`Skipping stock ledger entry for item with no code/drawing for shipment ${shipment.shipment_code}`);
+          } else {
+            // Update stock_ledger and stock_balance using addStockLedgerEntry
+            // This ensures warehouse-specific tracking is updated correctly
+            await addStockLedgerEntry(
+              itemCode,
+              'OUT',
+              item.quantity,
+              'DISPATCH',
+              shipmentOrderId,
+              shipment.shipment_code,
+              {
+                connection,
+                remarks: `Dispatched for shipment ${shipment.shipment_code}`,
+                warehouse: item.warehouse_id || item.warehouse || 'MAIN STORE'
+              }
             );
           }
-
-          // 3. Update stock_ledger and stock_balance using addStockLedgerEntry
-          // This ensures warehouse-specific tracking is updated correctly
-          await addStockLedgerEntry(
-            item.item_code,
-            'OUT',
-            item.quantity,
-            'DISPATCH',
-            shipmentOrderId,
-            shipment.shipment_code,
-            {
-              connection,
-              remarks: `Dispatched for shipment ${shipment.shipment_code}`,
-              warehouse: item.warehouse_id || item.warehouse || 'MAIN STORE'
-            }
-          );
         }
+      }
+
+      // 4. Auto-create Delivery Challan
+      const [maxChallanRows] = await connection.query('SELECT MAX(id) as max_id FROM delivery_challans');
+      const nextId = (maxChallanRows[0].max_id || 0) + 1;
+      const challanNumber = `DC-${new Date().getFullYear()}-${String(nextId).padStart(5, '0')}`;
+      
+      const [challanResult] = await connection.execute(
+        'INSERT INTO delivery_challans (challan_number, shipment_id, customer_id, delivery_status, dispatch_time) VALUES (?, ?, ?, ?, NOW())',
+        [challanNumber, shipmentOrderId, shipment.customer_id, 'DRAFT']
+      );
+      const challanId = challanResult.insertId;
+
+      // Insert items into delivery_challan_items
+      for (const item of items) {
+        await connection.execute(
+          'INSERT INTO delivery_challan_items (challan_id, item_code, description, quantity, unit) VALUES (?, ?, ?, ?, ?)',
+          [challanId, item.item_code || item.drawing_no || 'UNKNOWN', item.description || '', item.quantity, item.unit || 'NOS']
+        );
       }
     } else if (status === 'DELIVERED') {
        // Logic for auto-creating Delivery Challan could go here
@@ -306,9 +334,225 @@ const updateShipmentPlanning = async (id, planningData) => {
   return { success: result.affectedRows > 0 };
 };
 
+const updateTracking = async (shipmentId, { lat, lng }) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Update shipment_orders
+    await connection.execute(
+      'UPDATE shipment_orders SET current_lat = ?, current_lng = ?, last_location_update = NOW() WHERE id = ?',
+      [lat, lng, shipmentId]
+    );
+
+    // 2. Add log entry
+    await connection.execute(
+      'INSERT INTO shipment_tracking_logs (shipment_id, lat, lng) VALUES (?, ?, ?)',
+      [shipmentId, lat, lng]
+    );
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const getTrackingHistory = async (shipmentId) => {
+  const [rows] = await pool.query(
+    'SELECT * FROM shipment_tracking_logs WHERE shipment_id = ? ORDER BY timestamp ASC',
+    [shipmentId]
+  );
+  return rows;
+};
+
+const getTrackingDashboard = async () => {
+  const [counts] = await pool.query(`
+    SELECT 
+      COUNT(*) as total,
+      COUNT(CASE WHEN status = 'READY_TO_DISPATCH' THEN 1 END) as ready,
+      COUNT(CASE WHEN status = 'DISPATCHED' THEN 1 END) as dispatched,
+      COUNT(CASE WHEN status = 'IN_TRANSIT' THEN 1 END) as in_transit,
+      COUNT(CASE WHEN status = 'OUT_FOR_DELIVERY' THEN 1 END) as out_for_delivery,
+      COUNT(CASE WHEN status = 'DELIVERED' AND DATE(actual_delivery_date) = CURDATE() THEN 1 END) as delivered_today,
+      COUNT(CASE WHEN status != 'DELIVERED' AND estimated_delivery_date < NOW() THEN 1 END) as "delayed"
+    FROM shipment_orders
+    WHERE status IN ('READY_TO_DISPATCH', 'DISPATCHED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED')
+  `);
+
+  const [activeShipments] = await pool.query(`
+    SELECT 
+      s.id, s.shipment_code, s.status, s.driver_name, s.driver_contact, s.vehicle_number, s.estimated_delivery_date,
+      s.current_lat, s.current_lng, s.customer_name as snapshot_customer_name,
+      c.company_name as customer_name
+    FROM shipment_orders s
+    LEFT JOIN companies c ON s.customer_id = c.id
+    WHERE s.status IN ('READY_TO_DISPATCH', 'DISPATCHED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY')
+    ORDER BY s.updated_at DESC
+  `);
+
+  return {
+    stats: counts[0],
+    activeShipments: activeShipments.map(s => ({
+      ...s,
+      customer: s.snapshot_customer_name || s.customer_name
+    }))
+  };
+};
+
+const getShipmentDashboard = async () => {
+  // 1. KPI Stats
+  const [counts] = await pool.query(`
+    SELECT 
+      COUNT(*) as total,
+      COUNT(CASE WHEN status IN ('READY_TO_DISPATCH', 'DISPATCHED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY') THEN 1 END) as active,
+      COUNT(CASE WHEN status = 'IN_TRANSIT' THEN 1 END) as in_transit,
+      COUNT(CASE WHEN status = 'DELIVERED' THEN 1 END) as delivered,
+      COUNT(CASE WHEN status != 'DELIVERED' AND estimated_delivery_date < NOW() THEN 1 END) as \`delayed\`,
+      (SELECT COUNT(*) FROM shipment_returns) as returns,
+      COUNT(CASE WHEN status = 'DISPATCHED' THEN 1 END) as dispatched
+    FROM shipment_orders
+  `);
+
+  // 2. Monthly Trend (Last 6 months)
+  const [monthlyData] = await pool.query(`
+    SELECT 
+      DATE_FORMAT(created_at, '%b') as month,
+      COUNT(*) as ordered,
+      COUNT(CASE WHEN status IN ('DISPATCHED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED') THEN 1 END) as dispatched,
+      COUNT(CASE WHEN status = 'DELIVERED' THEN 1 END) as delivered,
+      COUNT(CASE WHEN status LIKE 'RETURN_%' THEN 1 END) as returned,
+      COUNT(CASE WHEN status != 'DELIVERED' AND estimated_delivery_date < created_at THEN 1 END) as \`delayed\`
+    FROM shipment_orders
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m'), month
+    ORDER BY DATE_FORMAT(created_at, '%Y-%m') ASC
+  `);
+
+  // 3. Recent Shipments
+  const [recentShipments] = await pool.query(`
+    SELECT 
+      s.id, s.shipment_code, s.status, s.updated_at as date,
+      COALESCE(s.customer_name, c.company_name) as customer
+    FROM shipment_orders s
+    LEFT JOIN companies c ON s.customer_id = c.id
+    ORDER BY s.updated_at DESC
+    LIMIT 10
+  `);
+
+  return {
+    stats: counts[0],
+    monthlyData,
+    recentShipments: recentShipments.map(s => ({
+      ...s,
+      date: s.date ? new Date(s.date).toLocaleDateString() : 'N/A'
+    }))
+  };
+};
+
+const getShipmentReports = async () => {
+  // 1. Overall Stats with growth (mock growth for now)
+  const [counts] = await pool.query(`
+    SELECT 
+      COUNT(*) as total_shipments,
+      COUNT(CASE WHEN status != 'DELIVERED' AND estimated_delivery_date < NOW() THEN 1 END) as total_delayed,
+      (SELECT COUNT(*) FROM shipment_returns) as total_returns,
+      (SELECT COUNT(DISTINCT customer_id) FROM shipment_orders) as total_customers,
+      (SELECT COALESCE(SUM(soi.quantity * soi.rate), 0) FROM sales_order_items soi JOIN shipment_orders s ON s.sales_order_id = soi.sales_order_id) as total_revenue
+    FROM shipment_orders
+  `);
+
+  // 2. Shipments by Status (Monthly)
+  const [statusTrends] = await pool.query(`
+    SELECT 
+      DATE_FORMAT(created_at, '%b') as month,
+      COUNT(CASE WHEN status = 'READY_TO_DISPATCH' THEN 1 END) as ordered,
+      COUNT(CASE WHEN status = 'DISPATCHED' THEN 1 END) as dispatched,
+      COUNT(CASE WHEN status = 'DELIVERED' THEN 1 END) as delivered,
+      COUNT(CASE WHEN status LIKE 'RETURN_%' THEN 1 END) as returned,
+      COUNT(CASE WHEN status != 'DELIVERED' AND estimated_delivery_date < created_at THEN 1 END) as \`delayed\`
+    FROM shipment_orders
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m'), month
+    ORDER BY DATE_FORMAT(created_at, '%Y-%m') ASC
+  `);
+
+  // 3. Shipments by Region (Top Drivers as proxy for regions if no region field)
+  const [byRegion] = await pool.query(`
+    SELECT 
+      driver_name as name,
+      status,
+      COUNT(*) as count
+    FROM shipment_orders
+    WHERE driver_name IS NOT NULL
+    GROUP BY driver_name, status
+    LIMIT 10
+  `);
+
+  // 4. Shipments by Destination (Top Cities/Companies)
+  const [byDestination] = await pool.query(`
+    SELECT 
+      COALESCE(s.customer_name, c.company_name) as destination,
+      COUNT(*) as count,
+      COUNT(CASE WHEN s.status = 'DELIVERED' THEN 1 END) as delivered,
+      COUNT(CASE WHEN s.status != 'DELIVERED' AND s.estimated_delivery_date < NOW() THEN 1 END) as \`delayed\`
+    FROM shipment_orders s
+    LEFT JOIN companies c ON s.customer_id = c.id
+    GROUP BY destination
+    ORDER BY count DESC
+    LIMIT 5
+  `);
+
+  // 5. Detailed Shipment Report (Daily for last 30 days)
+  const [detailedTrend] = await pool.query(`
+    SELECT 
+      DATE_FORMAT(created_at, '%d %b') as date,
+      COUNT(CASE WHEN status = 'DELIVERED' THEN 1 END) as delivered,
+      COUNT(CASE WHEN status != 'DELIVERED' AND estimated_delivery_date < created_at THEN 1 END) as \`delayed\`
+    FROM shipment_orders
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    GROUP BY DATE(created_at), date
+    ORDER BY DATE(created_at) ASC
+  `);
+
+  // 6. Recent Deliveries
+  const [recentDeliveries] = await pool.query(`
+    SELECT 
+      s.id, s.shipment_code, s.status, s.updated_at as date,
+      COALESCE(s.customer_name, c.company_name) as customer
+    FROM shipment_orders s
+    LEFT JOIN companies c ON s.customer_id = c.id
+    ORDER BY s.updated_at DESC
+    LIMIT 10
+  `);
+
+  return {
+    stats: {
+      ...counts[0],
+      shipmentsGrowth: '+34%',
+      delayedGrowth: '-9%',
+      returnsGrowth: '+20%',
+      customersGrowth: '+14%'
+    },
+    statusTrends,
+    byRegion,
+    byDestination,
+    detailedTrend,
+    recentDeliveries
+  };
+};
+
 module.exports = {
   getShipmentOrders,
   getShipmentOrderById,
   updateShipmentStatus,
-  updateShipmentPlanning
+  updateShipmentPlanning,
+  updateTracking,
+  getTrackingHistory,
+  getTrackingDashboard,
+  getShipmentDashboard,
+  getShipmentReports
 };

@@ -40,6 +40,7 @@ const materialRequestRoutes = require('./routes/materialRequestRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const finalQCRoutes = require('./routes/finalQCRoutes');
 const shipmentRoutes = require('./routes/shipmentRoutes');
+const deliveryChallanRoutes = require('./routes/deliveryChallanRoutes');
 const customerPaymentRoutes = require('./routes/customerPaymentRoutes');
 const bankAccountRoutes = require('./routes/bankAccountRoutes');
 const emailReceiver = require('./utils/realEmailReceiver');
@@ -104,6 +105,7 @@ privateRouter.use('/customer-payments', customerPaymentRoutes);
 privateRouter.use('/bank-accounts', bankAccountRoutes);
 privateRouter.use('/final-qc', finalQCRoutes);
 privateRouter.use('/shipments', shipmentRoutes);
+privateRouter.use('/delivery-challans', deliveryChallanRoutes);
 privateRouter.use('/dashboard', dashboardRoutes);
 
 const apiRouter = express.Router();

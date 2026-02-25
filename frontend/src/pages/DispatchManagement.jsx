@@ -24,7 +24,7 @@ import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const DispatchManagement = () => {
+const DispatchManagement = ({ apiRequest }) => {
   const [dispatches, setDispatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,12 +35,7 @@ const DispatchManagement = () => {
   const fetchDispatches = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/shipments/orders`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error('Failed to fetch shipments');
-      const data = await response.json();
+      const data = await apiRequest('/shipments/orders');
       
       // Filter for dispatch management: READY_TO_DISPATCH, DISPATCHED, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, CLOSED
       const dispatchData = data.filter(s => 
@@ -52,52 +47,51 @@ const DispatchManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiRequest]);
 
-  const handleStatusUpdate = async (shipmentId, nextStatus, label) => {
+  const handleStatusUpdate = async (id, nextStatus, label) => {
+    if (!id) {
+      Swal.fire('Error', 'Invalid Shipment ID', 'error');
+      return;
+    }
+
     const result = await Swal.fire({
       title: `${label}?`,
       text: `Are you sure you want to mark this shipment as ${nextStatus.replace(/_/g, ' ')}?`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Yes, Proceed',
-      confirmButtonColor: '#4f46e5'
+      confirmButtonColor: '#4f46e5',
+      cancelButtonColor: '#64748b'
     });
 
     if (result.isConfirmed) {
       try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/shipments/orders/${shipmentId}/status`, {
+        await apiRequest(`/shipments/orders/${id}/status`, {
           method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ status: nextStatus })
+          body: { status: nextStatus }
         });
 
-        if (response.ok) {
-          Swal.fire('Updated', `Shipment status updated to ${nextStatus.replace(/_/g, ' ')}`, 'success');
-          fetchDispatches();
-        } else {
-          throw new Error('Failed to update status');
-        }
+        Swal.fire({
+          title: 'Updated',
+          text: `Shipment status updated to ${nextStatus.replace(/_/g, ' ')}`,
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false
+        });
+        fetchDispatches();
       } catch (error) {
         Swal.fire('Error', error.message, 'error');
       }
     }
   };
 
-  const handleView = async (shipmentId) => {
+  const handleView = async (id) => {
+    if (!id) return;
     try {
       setViewLoading(true);
       setShowViewModal(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/shipments/orders/${shipmentId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error('Failed to fetch details');
-      const data = await response.json();
+      const data = await apiRequest(`/shipments/orders/${id}`);
       setSelectedItem(data);
     } catch (error) {
       console.error('Error fetching details:', error);
@@ -110,7 +104,7 @@ const DispatchManagement = () => {
 
   const getStatusCounts = () => {
     return {
-      dispatched: dispatches.filter(d => ['READY_TO_DISPATCH', 'DISPATCHED'].includes(d.shipment_status)).length,
+      dispatched: dispatches.filter(d => d.shipment_status === 'DISPATCHED').length,
       inTransit: dispatches.filter(d => d.shipment_status === 'IN_TRANSIT').length,
       outForDelivery: dispatches.filter(d => d.shipment_status === 'OUT_FOR_DELIVERY').length,
       delivered: dispatches.filter(d => d.shipment_status === 'DELIVERED').length,
@@ -184,11 +178,42 @@ const DispatchManagement = () => {
   );
 
   const getActionButton = (item) => {
+    const shipmentId = item.id || item.shipment_order_id;
+    
+    const handleInitiateReturn = async () => {
+      const { value: reason } = await Swal.fire({
+        title: 'Initiate Return',
+        input: 'textarea',
+        inputLabel: 'Reason for Return',
+        inputPlaceholder: 'Type reason...',
+        showCancelButton: true,
+        confirmButtonText: 'Initiate',
+        confirmButtonColor: '#ef4444'
+      });
+
+      if (reason) {
+        try {
+          await apiRequest('/shipments/returns', {
+            method: 'POST',
+            body: {
+              shipment_id: shipmentId,
+              reason: reason
+            }
+          });
+
+          Swal.fire('Success', 'Return initiated', 'success');
+          fetchDispatches();
+        } catch (error) {
+          Swal.fire('Error', error.message, 'error');
+        }
+      }
+    };
+
     switch (item.shipment_status) {
       case 'READY_TO_DISPATCH':
         return (
           <button 
-            onClick={() => handleStatusUpdate(item.shipment_order_id, 'DISPATCHED', 'Start Dispatch')}
+            onClick={() => handleStatusUpdate(shipmentId, 'DISPATCHED', 'Start Dispatch')}
             className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 transition-all"
           >
             Start Dispatch
@@ -197,7 +222,7 @@ const DispatchManagement = () => {
       case 'DISPATCHED':
         return (
           <button 
-            onClick={() => handleStatusUpdate(item.shipment_order_id, 'IN_TRANSIT', 'Move to In Transit')}
+            onClick={() => handleStatusUpdate(shipmentId, 'IN_TRANSIT', 'Move to In Transit')}
             className="px-3 py-1.5 bg-purple-600 text-white text-[10px] font-bold rounded-lg hover:bg-purple-700 transition-all"
           >
             In Transit
@@ -206,7 +231,7 @@ const DispatchManagement = () => {
       case 'IN_TRANSIT':
         return (
           <button 
-            onClick={() => handleStatusUpdate(item.shipment_order_id, 'OUT_FOR_DELIVERY', 'Mark Out for Delivery')}
+            onClick={() => handleStatusUpdate(shipmentId, 'OUT_FOR_DELIVERY', 'Mark Out for Delivery')}
             className="px-3 py-1.5 bg-orange-600 text-white text-[10px] font-bold rounded-lg hover:bg-orange-700 transition-all"
           >
             Out for Delivery
@@ -214,21 +239,37 @@ const DispatchManagement = () => {
         );
       case 'OUT_FOR_DELIVERY':
         return (
-          <button 
-            onClick={() => handleStatusUpdate(item.shipment_order_id, 'DELIVERED', 'Mark Delivered')}
-            className="px-3 py-1.5 bg-emerald-600 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition-all"
-          >
-            Mark Delivered
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => handleStatusUpdate(shipmentId, 'DELIVERED', 'Mark Delivered')}
+              className="px-3 py-1.5 bg-emerald-600 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition-all"
+            >
+              Mark Delivered
+            </button>
+            <button 
+              onClick={handleInitiateReturn}
+              className="px-3 py-1.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-lg hover:bg-rose-100 transition-all border border-rose-100"
+            >
+              Return
+            </button>
+          </div>
         );
       case 'DELIVERED':
         return (
-          <button 
-            onClick={() => handleStatusUpdate(item.shipment_order_id, 'CLOSED', 'Close Shipment')}
-            className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-bold rounded-lg hover:bg-slate-800 transition-all"
-          >
-            Close
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => handleStatusUpdate(shipmentId, 'CLOSED', 'Close Shipment')}
+              className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-bold rounded-lg hover:bg-slate-800 transition-all"
+            >
+              Close
+            </button>
+            <button 
+              onClick={handleInitiateReturn}
+              className="px-3 py-1.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-lg hover:bg-rose-100 transition-all border border-rose-100"
+            >
+              Return
+            </button>
+          </div>
         );
       default:
         return null;
@@ -337,7 +378,7 @@ const DispatchManagement = () => {
                       </tr>
                     ) : (
                       filteredDispatches.map((item) => (
-                        <tr key={item.shipment_order_id} className="hover:bg-slate-50/80 transition-all duration-200 group">
+                        <tr key={item.id || item.shipment_order_id} className="hover:bg-slate-50/80 transition-all duration-200 group">
                           <td className="px-6 py-4">
                             <span className="text-xs font-bold text-indigo-600 group-hover:underline cursor-pointer">{item.shipment_code}</span>
                           </td>
@@ -367,7 +408,7 @@ const DispatchManagement = () => {
                             <div className="flex items-center justify-end gap-2">
                               {getActionButton(item)}
                               <button 
-                                onClick={() => handleView(item.shipment_order_id)}
+                                onClick={() => handleView(item.id || item.shipment_order_id)}
                                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                               >
                                 <Eye className="w-4 h-4" />

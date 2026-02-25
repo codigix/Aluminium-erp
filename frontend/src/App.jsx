@@ -49,6 +49,11 @@ import JobCard from "./pages/JobCard";
 import ShipmentOrders from "./pages/ShipmentOrders";
 import ShipmentPlanning from "./pages/ShipmentPlanning";
 import DispatchManagement from "./pages/DispatchManagement";
+import DeliveryChallan from "./pages/DeliveryChallan";
+import Tracking from "./pages/Tracking";
+import ShipmentReturns from "./pages/ShipmentReturns";
+import ShipmentDashboard from "./pages/ShipmentDashboard";
+import ShipmentReports from "./pages/ShipmentReports";
 import StockEntries from "./pages/StockEntries";
 import VendorInvoices from "./pages/InvoiceReceived";
 import PaymentProcessing from "./pages/PaymentProcessing";
@@ -1632,50 +1637,35 @@ function App() {
                 )}
 
                 {activeModule === 'shipment-dashboard' && (
-                  <div className="p-6">
-                    <h2 className="text-2xl font-bold mb-4">Shipment Dashboard</h2>
-                    <p className="text-slate-600">Overview of shipment operations.</p>
-                  </div>
+                  <ShipmentDashboard apiRequest={apiRequest} />
                 )}
 
                 {activeModule === 'shipment-orders' && (
-                  <ShipmentOrders />
+                  <ShipmentOrders apiRequest={apiRequest} />
                 )}
 
                 {activeModule === 'shipment-planning' && (
-                  <ShipmentPlanning />
+                  <ShipmentPlanning apiRequest={apiRequest} />
                 )}
 
                 {activeModule === 'dispatch-management' && (
-                  <DispatchManagement />
+                  <DispatchManagement apiRequest={apiRequest} />
                 )}
 
                 {activeModule === 'delivery-challan' && (
-                  <div className="p-6">
-                    <h2 className="text-2xl font-bold mb-4">Delivery Challan</h2>
-                    <p className="text-slate-600">Generate and manage delivery challans.</p>
-                  </div>
+                  <DeliveryChallan />
                 )}
 
                 {activeModule === 'shipment-tracking' && (
-                  <div className="p-6">
-                    <h2 className="text-2xl font-bold mb-4">Shipment Tracking</h2>
-                    <p className="text-slate-600">Real-time tracking of dispatched goods.</p>
-                  </div>
+                  <Tracking apiRequest={apiRequest} />
                 )}
 
                 {activeModule === 'shipment-returns' && (
-                  <div className="p-6">
-                    <h2 className="text-2xl font-bold mb-4">Shipment Returns</h2>
-                    <p className="text-slate-600">Manage sales returns and RTOs.</p>
-                  </div>
+                  <ShipmentReturns apiRequest={apiRequest} />
                 )}
 
                 {activeModule === 'shipment-reports' && (
-                  <div className="p-6">
-                    <h2 className="text-2xl font-bold mb-4">Shipment Reports</h2>
-                    <p className="text-slate-600">Analytics and reporting for shipments.</p>
-                  </div>
+                  <ShipmentReports apiRequest={apiRequest} />
                 )}
               </>
             )}
