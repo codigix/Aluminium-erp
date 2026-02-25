@@ -3,7 +3,6 @@ import { Card, DataTable, Modal, FormControl } from '../components/ui.jsx';
 import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database, ShoppingCart, Truck } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
-import FinalQC from './FinalQC';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -685,7 +684,6 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 />
               </Card>
             )}
-            <FinalQC />
           </div>
         );
       default:
