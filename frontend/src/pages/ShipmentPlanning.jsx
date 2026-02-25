@@ -114,7 +114,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
       const shipmentId = selectedShipment.id || selectedShipment.shipment_order_id;
       await apiRequest(`/shipments/orders/${shipmentId}/planning`, {
         method: 'PATCH',
-        body: JSON.stringify(payload)
+        body: payload
       });
 
       Swal.fire('Success', 'Shipment plan saved successfully', 'success');
@@ -141,7 +141,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
       try {
         await apiRequest(`/shipments/orders/${shipmentId}/status`, {
           method: 'PATCH',
-          body: JSON.stringify({ status: 'READY_TO_DISPATCH' })
+          body: { status: 'READY_TO_DISPATCH' }
         });
 
         Swal.fire('Ready', 'Shipment is ready for dispatch', 'success');

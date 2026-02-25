@@ -306,56 +306,56 @@ const Tracking = ({ apiRequest }) => {
         {/* Right Sidebar - Full Data Binding */}
         <MapCard className="col-span-3 flex flex-col h-full overflow-hidden p-6">
           {selectedShipment ? (
-            <div className="flex flex-col h-full space-y-6">
-              <div className="flex-shrink-0">
-                <h3 className="text-lg font-black text-slate-900 mb-6 tracking-tight">{selectedShipment.code}</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                      <User className="w-5 h-5" />
+            <div className="flex flex-col h-full overflow-hidden">
+              <div className="flex-1 overflow-y-auto space-y-6 pr-1 custom-scrollbar">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 mb-6 tracking-tight">{selectedShipment.code}</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <User className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-black text-slate-900 uppercase leading-none mb-1">{selectedShipment.customer}</p>
+                        <p className="text-[9px] font-bold text-slate-400 tracking-wider">Verified Client</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[11px] font-black text-slate-900 uppercase leading-none mb-1">{selectedShipment.customer}</p>
-                      <p className="text-[9px] font-bold text-slate-400 tracking-wider">Verified Client</p>
+                    
+                    <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                        <Truck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-black text-slate-900 uppercase leading-none mb-1">{selectedShipment.vehicle}</p>
+                        <p className="text-[9px] font-bold text-slate-400 tracking-wider">{selectedShipment.driver}</p>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
-                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
-                      <Truck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-black text-slate-900 uppercase leading-none mb-1">{selectedShipment.vehicle}</p>
-                      <p className="text-[9px] font-bold text-slate-400 tracking-wider">{selectedShipment.driver}</p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
-                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
-                      <Phone className="w-5 h-5" />
+                    <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                        <Phone className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-black text-slate-900 leading-none mb-1">{selectedShipment.driverPhone}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Driver Contact</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[11px] font-black text-slate-900 leading-none mb-1">{selectedShipment.driverPhone}</p>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Driver Contact</p>
-                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-50 text-center">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 opacity-50">Avg Speed</p>
+                    <p className="text-lg font-black text-slate-900">{selectedShipment.speed}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-50 text-center">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 opacity-50">ETA (Time)</p>
+                    <p className="text-lg font-black text-indigo-600 animate-pulse">{routeData.duration}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-50 text-center">
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 opacity-50">Avg Speed</p>
-                  <p className="text-lg font-black text-slate-900">{selectedShipment.speed}</p>
-                </div>
-                <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-50 text-center">
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 opacity-50">ETA (Time)</p>
-                  <p className="text-lg font-black text-indigo-600 animate-pulse">{routeData.duration}</p>
-                </div>
-              </div>
-
-              <div className="flex-1" />
-
-              <div className="space-y-3 pt-6 border-t border-slate-50">
+              <div className="space-y-3 pt-6 border-t border-slate-50 flex-shrink-0 mt-4">
                 <a 
                   href={selectedShipment.driverPhone !== 'N/A' ? `tel:${selectedShipment.driverPhone}` : '#'}
                   className={`w-full py-4 rounded-[24px] font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 transition-all ${
