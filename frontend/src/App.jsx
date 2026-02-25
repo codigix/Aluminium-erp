@@ -46,6 +46,14 @@ import ProductionPlan from './pages/ProductionPlan'
 import WorkOrder from './pages/WorkOrder'
 import WorkOrderForm from './pages/WorkOrderForm'
 import JobCard from "./pages/JobCard";
+import ShipmentOrders from "./pages/ShipmentOrders";
+import ShipmentPlanning from "./pages/ShipmentPlanning";
+import DispatchManagement from "./pages/DispatchManagement";
+import DeliveryChallan from "./pages/DeliveryChallan";
+import Tracking from "./pages/Tracking";
+import ShipmentReturns from "./pages/ShipmentReturns";
+import ShipmentDashboard from "./pages/ShipmentDashboard";
+import ShipmentReports from "./pages/ShipmentReports";
 import StockEntries from "./pages/StockEntries";
 import VendorInvoices from "./pages/InvoiceReceived";
 import PaymentProcessing from "./pages/PaymentProcessing";
@@ -57,7 +65,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history']
+const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -153,7 +161,7 @@ const DEPARTMENT_MODULES = {
   DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet', 'dashboard'],
   PRODUCTION: ['project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'routing-operations', 'process-sheet', 'dashboard'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
-  SHIPMENT: ['incoming-orders', 'dashboard'],
+  SHIPMENT: ['shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'dashboard'],
   ACCOUNTS: ['invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
   PROCUREMENT: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
@@ -163,7 +171,8 @@ const DEPARTMENT_MODULES = {
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
     'quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
     'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses',
-    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'
+    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard',
+    'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'
   ]
 }
 
@@ -999,7 +1008,7 @@ function App() {
     { label: 'Suppliers', moduleId: 'suppliers', icon: 'handshake', indent: true },
     { label: 'Quality Assurance', isGroup: true, groupId: 'quality-group' },
     { label: 'Quality Dashboard', moduleId: 'quality-dashboard', icon: 'trending', indent: true },
-    { label: 'Quality Control', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
+    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
     { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
     { label: 'Quality Reports', moduleId: 'quality-reports', icon: 'files', indent: true },
     { label: 'Accounts Payable (Vendor)', isGroup: true, groupId: 'accounts-payable-group' },
@@ -1008,7 +1017,16 @@ function App() {
     { label: 'Payment History', moduleId: 'payment-history', icon: 'book', indent: true },
     { label: 'Accounts Receivable (Customer)', isGroup: true, groupId: 'accounts-receivable-group' },
     { label: 'Payment Received', moduleId: 'payment-received', icon: 'check', indent: true },
-    { label: 'Payment History', moduleId: 'customer-payment-history', icon: 'book', indent: true }
+    { label: 'Payment History', moduleId: 'customer-payment-history', icon: 'book', indent: true },
+    { label: 'SHIPMENT', isGroup: true, groupId: 'shipment-group' },
+    { label: 'Dashboard', moduleId: 'shipment-dashboard', icon: 'chart', indent: true },
+    { label: 'Shipment Orders', moduleId: 'shipment-orders', icon: 'package', indent: true },
+    { label: 'Shipment Planning', moduleId: 'shipment-planning', icon: 'clipboard', indent: true },
+    { label: 'Dispatch Management', moduleId: 'dispatch-management', icon: 'settings', indent: true },
+    { label: 'Delivery Challan', moduleId: 'delivery-challan', icon: 'document', indent: true },
+    { label: 'Tracking', moduleId: 'shipment-tracking', icon: 'search', indent: true },
+    { label: 'Returns', moduleId: 'shipment-returns', icon: 'refresh', indent: true },
+    { label: 'Reports', moduleId: 'shipment-reports', icon: 'files', indent: true }
   ]
 
   const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
@@ -1616,6 +1634,38 @@ function App() {
 
                 {activeModule === 'stock-entries' && (
                   <StockEntries />
+                )}
+
+                {activeModule === 'shipment-dashboard' && (
+                  <ShipmentDashboard apiRequest={apiRequest} />
+                )}
+
+                {activeModule === 'shipment-orders' && (
+                  <ShipmentOrders apiRequest={apiRequest} />
+                )}
+
+                {activeModule === 'shipment-planning' && (
+                  <ShipmentPlanning apiRequest={apiRequest} />
+                )}
+
+                {activeModule === 'dispatch-management' && (
+                  <DispatchManagement apiRequest={apiRequest} />
+                )}
+
+                {activeModule === 'delivery-challan' && (
+                  <DeliveryChallan />
+                )}
+
+                {activeModule === 'shipment-tracking' && (
+                  <Tracking apiRequest={apiRequest} />
+                )}
+
+                {activeModule === 'shipment-returns' && (
+                  <ShipmentReturns apiRequest={apiRequest} />
+                )}
+
+                {activeModule === 'shipment-reports' && (
+                  <ShipmentReports apiRequest={apiRequest} />
                 )}
               </>
             )}

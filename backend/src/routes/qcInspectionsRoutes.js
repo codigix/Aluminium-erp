@@ -129,4 +129,13 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
   }
 });
 
+router.post('/:qcId/create-shipment', authenticate, authorize(['QC_EDIT']), async (req, res) => {
+  try {
+    const result = await qcService.createShipmentFromQC(req.params.qcId);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

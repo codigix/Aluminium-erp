@@ -1,24 +1,64 @@
 const pool = require('./backend/src/config/db');
 
-async function debug() {
+async function debugSchema() {
   try {
-    console.log('--- Debugging DRW_101 ---');
-    const [m101] = await pool.query('SELECT id, sales_order_item_id, item_code, drawing_no, material_name, parent_id FROM sales_order_item_materials WHERE drawing_no = "DRW_101"');
-    console.log('Materials:', m101);
-    const [c101] = await pool.query('SELECT id, sales_order_item_id, item_code, drawing_no, component_code, source_fg, parent_id FROM sales_order_item_components WHERE drawing_no = "DRW_101"');
-    console.log('Components:', c101);
+    console.log('--- Checking Current Schema ---');
+    const [columns] = await pool.query("SHOW COLUMNS FROM shipment_orders LIKE 'status'");
+    console.log('Status column definition:', columns[0]);
 
-    console.log('\n--- Debugging SA-FRONTPANEL-0001 ---');
-    const [mSA] = await pool.query('SELECT id, sales_order_item_id, item_code, drawing_no, material_name, parent_id FROM sales_order_item_materials WHERE item_code = "SA-FRONTPANEL-0001" OR drawing_no = "DRW_001"');
-    console.log('Materials:', mSA);
-    const [cSA] = await pool.query('SELECT id, sales_order_item_id, item_code, drawing_no, component_code, parent_id FROM sales_order_item_components WHERE item_code = "SA-FRONTPANEL-0001" OR drawing_no = "DRW_001"');
-    console.log('Components:', cSA);
+    console.log('\n--- Attempting Force Update ---');
+    const alterQuery = `
+      ALTER TABLE shipment_orders 
+      MODIFY COLUMN status ENUM(
+        'PENDING_ACCEPTANCE',
+        'ACCEPTED',
+        'REJECTED',
+        'PLANNING',
+        'PLANNED',
+        'READY_TO_DISPATCH',
+        'DISPATCHED',
+        'IN_TRANSIT',
+        'OUT_FOR_DELIVERY',
+        'DELIVERED',
+        'CLOSED',
+        'RETURN_INITIATED',
+        'RETURN_IN_TRANSIT',
+        'RETURN_RECEIVED',
+        'RETURN_COMPLETED'
+      ) DEFAULT 'PENDING_ACCEPTANCE'
+    `;
+    await pool.query(alterQuery);
+    console.log('ALTER TABLE executed.');
 
-  } catch (err) {
-    console.error(err);
-  } finally {
-    pool.end();
+    const [newColumns] = await pool.query("SHOW COLUMNS FROM shipment_orders LIKE 'status'");
+    console.log('New Status column definition:', newColumns[0]);
+
+    // Test the update that was failing
+    console.log('\n--- Testing Update Query ---');
+    // Find a shipment to test with
+    const [shipments] = await pool.query("SELECT id, status FROM shipment_orders LIMIT 1");
+    if (shipments.length > 0) {
+      const testId = shipments[0].id;
+      const originalStatus = shipments[0].status;
+      console.log(`Testing on ID ${testId} (Original: ${originalStatus})`);
+      
+      try {
+        await pool.query("UPDATE shipment_orders SET status = 'RETURN_INITIATED' WHERE id = ?", [testId]);
+        console.log('Update successful!');
+        // Restore
+        await pool.query("UPDATE shipment_orders SET status = ? WHERE id = ?", [originalStatus, testId]);
+      } catch (err) {
+        console.error('Update failed even after ALTER:', err.message);
+      }
+    } else {
+      console.log('No shipments found to test update.');
+    }
+
+    process.exit(0);
+  } catch (error) {
+    console.error('Debug failed:', error);
+    process.exit(1);
   }
 }
 
-debug();
+debugSchema();
