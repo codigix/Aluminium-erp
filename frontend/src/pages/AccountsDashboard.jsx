@@ -21,52 +21,70 @@ const COLORS = {
 };
 
 const AccountsDashboard = () => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/dashboard/accounts`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-ERP-Request': 'true'
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch dashboard data');
+      const data = await response.json();
+      setStats(data);
+    } catch (error) {
+      console.error('Error fetching accounts dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading || !stats) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 mt-4">Fetching financial insights...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Map API data to chart formats
+  const cashFlowData = stats.cashFlow || [];
   
-  // Mock data for visual perfection
-  const cashFlowData = [
-    { name: 'Jan', payments: 45000, receipts: 38000 },
-    { name: 'Feb', payments: 52000, receipts: 48000 },
-    { name: 'Mar', payments: 48000, receipts: 62000 },
-    { name: 'Apr', payments: 61000, receipts: 55000 },
-    { name: 'May', payments: 55000, receipts: 80000 },
-    { name: 'Jun', payments: 72000, receipts: 75000 },
-  ];
+  const statusData = (stats.statusBreakdown || []).map(item => {
+    let color = COLORS.slate;
+    if (item.name === 'PAID') color = COLORS.green;
+    if (item.name === 'SENT' || item.name === 'RECEIVED') color = COLORS.orange;
+    if (item.name === 'FULFILLED') color = COLORS.blue;
+    return { name: item.name, value: item.count, color };
+  });
 
-  const statusData = [
-    { name: 'Paid', value: 52, color: COLORS.green },
-    { name: 'Pending', value: 31, color: COLORS.orange },
-    { name: 'Overdue', value: 12, color: COLORS.red },
-    { name: 'Fulfilled', value: 5, color: COLORS.blue },
-  ];
+  const vendorPayableData = (stats.vendorPayables || []).map((v, i) => ({
+    ...v,
+    color: [COLORS.blue, '#38bdf8', '#4ade80', '#fbbf24', '#f87171'][i % 5]
+  }));
 
-  const vendorPayableData = [
-    { name: 'ABC SUPPLIERS', amount: 180000, color: COLORS.blue },
-    { name: 'sanika mote', amount: 68000, color: '#38bdf8' },
-    { name: 'mack suppliers', amount: 52000, color: '#4ade80' },
-    { name: 'XYZ INDUSTRIES', amount: 36000, color: '#fbbf24' },
-    { name: 'excel traders', amount: 26000, color: '#f87171' },
-  ];
+  const paymentModeData = (stats.paymentModes || []).map((p, i) => ({
+    ...p,
+    color: ['#60a5fa', '#34d399', '#fbbf24', '#818cf8', '#f472b6'][i % 5]
+  }));
 
-  const paymentModeData = [
-    { name: 'UFI', value: 45, color: '#60a5fa' },
-    { name: 'Cheque', value: 23, color: '#34d399' },
-    { name: 'Cash', value: 9, color: '#fbbf24' },
-    { name: 'Other', value: 23, color: '#818cf8' },
-  ];
+  const recentActivity = stats.recentActivity || [];
 
-  const recentActivity = [
-    { id: 1, ref: 'PO-2026-0006', status: 'Overdue', amount: 1416, vendor: 'ABC SUPPLIERS', time: '12h ago' },
-    { id: 2, ref: 'Invoice-2026-ERR08', status: 'Fulfilled', amount: 38000, vendor: 'SNP Tech Solution', time: '1d ago' },
-    { id: 3, ref: 'PO-2026-0022', status: 'Fulfilled', amount: 8500, vendor: 'Sunny Enterprises', time: '3d ago' },
-    { id: 4, ref: 'PO-2026-0019', status: 'Pending', amount: 200000, vendor: 'Excel Traders', time: '5d ago' },
-  ];
-
-  const tableData = [
-    { no: 'PO-2026-0006', vendor: 'ABC SUPPLIERS', amount: 1416, status: 'Overdue', date: '18 Feb 2026' },
-    { no: 'Invoice-2026-ERR09', vendor: 'SNP Tech Solution', amount: 38000, status: 'Paid', date: '25 Feb 2026' },
-    { no: 'PO-2026-0022', vendor: 'ABC SUPPLIERS', amount: 8500, status: 'Fulfilled', date: '24 Feb 2026' },
-  ];
+  const tableData = (stats.recentActivity || []).filter(a => a.type === 'INVOICE').slice(0, 5);
 
   const StatCard = ({ title, amount, subtext, icon: Icon, color, trend }) => (
     <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
@@ -112,11 +130,11 @@ const AccountsDashboard = () => {
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard title="Total Vendor Invoices" amount="128" icon={FileText} trend="+ 12%" />
-        <StatCard title="Total Payable Amount" amount="₹4,52,000" icon={IndianRupee} trend="+ 4%" />
-        <StatCard title="Paid Amount" amount="₹3,10,000" icon={CheckCircle} />
-        <StatCard title="Pending Payable" amount="₹1,42,000" icon={Clock} />
-        <StatCard title="Overdue Invoices" amount="7" icon={AlertCircle} trend="+ 9%" />
+        <StatCard title="Total Vendor Invoices" amount={stats.kpis.totalInvoices} icon={FileText} />
+        <StatCard title="Total Payable Amount" amount={`₹${Number(stats.kpis.totalPayable).toLocaleString('en-IN')}`} icon={IndianRupee} />
+        <StatCard title="Paid Amount" amount={`₹${Number(stats.kpis.paidAmount).toLocaleString('en-IN')}`} icon={CheckCircle} />
+        <StatCard title="Pending Payable" amount={`₹${Number(stats.kpis.pendingPayable).toLocaleString('en-IN')}`} icon={Clock} />
+        <StatCard title="Overdue Invoices" amount={stats.kpis.overdueCount} icon={AlertCircle} />
       </div>
 
       {/* Middle Row: Charts */}
