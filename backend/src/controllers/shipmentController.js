@@ -1,9 +1,23 @@
 const shipmentService = require('../services/shipmentService');
+const finalQCService = require('../services/finalQCService');
 
 exports.getShipmentOrders = async (req, res, next) => {
   try {
     const orders = await shipmentService.getShipmentOrders();
     res.json(orders);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.createShipmentOrder = async (req, res, next) => {
+  try {
+    const { salesOrderId } = req.body;
+    if (!salesOrderId) {
+      return res.status(400).json({ error: 'salesOrderId is required' });
+    }
+    const result = await finalQCService.createShipmentOrder(salesOrderId);
+    res.status(201).json(result);
   } catch (error) {
     next(error);
   }

@@ -93,9 +93,19 @@ const getContacts = async (req, res, next) => {
   }
 };
 
+const getCompanyById = async (req, res, next) => {
+  try {
+    const company = await companyService.getCompanyById(req.params.companyId);
+    res.json(company);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createCompany,
   getCompanies,
+  getCompanyById,
   updateCompany,
   updateCompanyStatus,
   deleteCompany,

@@ -4,6 +4,7 @@ const shipmentController = require('../controllers/shipmentController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.get('/orders', authenticate, authorize(['ORDER_VIEW']), shipmentController.getShipmentOrders);
+router.post('/orders', authenticate, authorize(['ORDER_CREATE']), shipmentController.createShipmentOrder);
 router.get('/orders/:id', authenticate, authorize(['ORDER_VIEW']), shipmentController.getShipmentOrderById);
 router.patch('/orders/:id/status', authenticate, authorize(['STATUS_CHANGE']), shipmentController.updateShipmentStatus);
 router.patch('/orders/:id/planning', authenticate, authorize(['STATUS_CHANGE']), shipmentController.updateShipmentPlanning);

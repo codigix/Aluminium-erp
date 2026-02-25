@@ -48,6 +48,7 @@ import WorkOrderForm from './pages/WorkOrderForm'
 import JobCard from "./pages/JobCard";
 import ShipmentOrders from "./pages/ShipmentOrders";
 import ShipmentPlanning from "./pages/ShipmentPlanning";
+import DispatchManagement from "./pages/DispatchManagement";
 import StockEntries from "./pages/StockEntries";
 import VendorInvoices from "./pages/InvoiceReceived";
 import PaymentProcessing from "./pages/PaymentProcessing";
@@ -1646,10 +1647,7 @@ function App() {
                 )}
 
                 {activeModule === 'dispatch-management' && (
-                  <div className="p-6">
-                    <h2 className="text-2xl font-bold mb-4">Dispatch Management</h2>
-                    <p className="text-slate-600">Coordinate vehicle dispatch and loading.</p>
-                  </div>
+                  <DispatchManagement />
                 )}
 
                 {activeModule === 'delivery-challan' && (

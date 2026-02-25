@@ -415,9 +415,29 @@ const getContacts = async companyId => {
   return rows;
 };
 
+const getCompanyById = async (companyId) => {
+  const [companies] = await pool.query('SELECT * FROM companies WHERE id = ?', [companyId]);
+  if (!companies.length) {
+    const error = new Error('Company not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const company = companies[0];
+
+  const [addresses] = await pool.query('SELECT * FROM company_addresses WHERE company_id = ?', [companyId]);
+  const [contacts] = await pool.query('SELECT * FROM contacts WHERE company_id = ?', [companyId]);
+
+  return {
+    ...company,
+    addresses,
+    contacts
+  };
+};
+
 module.exports = {
   createCompany,
   getCompanies,
+  getCompanyById,
   updateCompany,
   updateCompanyStatus,
   deleteCompany,

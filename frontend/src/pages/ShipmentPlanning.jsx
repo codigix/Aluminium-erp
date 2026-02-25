@@ -26,8 +26,39 @@ const ShipmentPlanning = () => {
     driver_contact: '',
     estimated_delivery_date: '',
     packing_status: 'PENDING',
-    special_instructions: ''
+    special_instructions: '',
+    customer_name: '',
+    customer_phone: '',
+    customer_email: '',
+    shipping_address: '',
+    billing_address: ''
   });
+
+  const fetchCustomerDetails = async (customerId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/companies/${customerId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch customer');
+      const data = await response.json();
+      
+      const primaryContact = data.contacts?.find(c => c.contact_type === 'PRIMARY') || data.contacts?.[0] || {};
+      const shippingAddr = data.addresses?.find(a => a.address_type === 'SHIPPING') || {};
+      const billingAddr = data.addresses?.find(a => a.address_type === 'BILLING') || {};
+
+      setPlanningForm(prev => ({
+        ...prev,
+        customer_name: data.company_name || '',
+        customer_phone: primaryContact.phone || '',
+        customer_email: primaryContact.email || '',
+        shipping_address: shippingAddr.line1 ? `${shippingAddr.line1}, ${shippingAddr.city || ''}, ${shippingAddr.state || ''} - ${shippingAddr.pincode || ''}` : '',
+        billing_address: billingAddr.line1 ? `${billingAddr.line1}, ${billingAddr.city || ''}, ${billingAddr.state || ''} - ${billingAddr.pincode || ''}` : ''
+      }));
+    } catch (error) {
+      console.error('Error fetching customer details:', error);
+    }
+  };
 
   const fetchShipments = useCallback(async () => {
     try {
@@ -39,9 +70,9 @@ const ShipmentPlanning = () => {
       if (!response.ok) throw new Error('Failed to fetch shipments');
       const data = await response.json();
       
-      // Filter for planning page: ACCEPTED, PLANNING, READY_TO_DISPATCH
+      // Filter for planning page: ACCEPTED, PLANNING
       const planningData = data.filter(s => 
-        ['ACCEPTED', 'PLANNING', 'READY_TO_DISPATCH'].includes(s.shipment_status)
+        ['ACCEPTED', 'PLANNING'].includes(s.shipment_status)
       );
       setShipments(planningData);
     } catch (error) {
@@ -65,8 +96,18 @@ const ShipmentPlanning = () => {
       driver_contact: shipment.driver_contact || '',
       estimated_delivery_date: shipment.estimated_delivery_date ? new Date(shipment.estimated_delivery_date).toISOString().split('T')[0] : '',
       packing_status: shipment.packing_status || 'PENDING',
-      special_instructions: shipment.special_instructions || ''
+      special_instructions: shipment.special_instructions || '',
+      customer_name: shipment.snapshot_customer_name || shipment.company_name || '',
+      customer_phone: shipment.snapshot_customer_phone || '',
+      customer_email: shipment.snapshot_customer_email || '',
+      shipping_address: shipment.snapshot_shipping_address || '',
+      billing_address: shipment.snapshot_billing_address || ''
     });
+
+    if (!shipment.snapshot_customer_name && shipment.customer_id) {
+      fetchCustomerDetails(shipment.customer_id);
+    }
+    
     setShowPlanModal(true);
   };
 
@@ -192,7 +233,6 @@ const ShipmentPlanning = () => {
               <option value="ALL">All Status</option>
               <option value="ACCEPTED">Accepted</option>
               <option value="PLANNING">Planning</option>
-              <option value="READY_TO_DISPATCH">Ready</option>
             </select>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
@@ -229,7 +269,9 @@ const ShipmentPlanning = () => {
                 {filteredShipments.map(shipment => (
                   <tr key={shipment.shipment_order_id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-4 font-bold text-blue-600">{shipment.shipment_code}</td>
-                    <td className="px-5 py-4 font-medium text-slate-900">{shipment.so_number || '—'}</td>
+                    <td className="px-5 py-4 font-medium text-slate-900">
+                      {shipment.so_number || (shipment.sales_order_id ? `SO-${String(shipment.sales_order_id).padStart(4, '0')}` : '—')}
+                    </td>
                     <td className="px-5 py-4 text-slate-900">{shipment.company_name}</td>
                     <td className="px-5 py-4 text-slate-600">
                       {shipment.planned_dispatch_date ? new Date(shipment.planned_dispatch_date).toLocaleDateString('en-IN') : 'Not Set'}
@@ -285,6 +327,57 @@ const ShipmentPlanning = () => {
         size="4xl"
       >
         <form onSubmit={handleSavePlan} className="space-y-6 p-2">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4 mb-6">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+              <User className="w-4 h-4" />
+              Customer Information (Read-only)
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormControl label="Customer Name">
+                <input
+                  type="text"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm bg-white text-slate-500"
+                  value={planningForm.customer_name}
+                  readOnly
+                />
+              </FormControl>
+              <FormControl label="Contact Number">
+                <input
+                  type="text"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm bg-white text-slate-500"
+                  value={planningForm.customer_phone}
+                  readOnly
+                />
+              </FormControl>
+              <FormControl label="Email Address">
+                <input
+                  type="text"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm bg-white text-slate-500"
+                  value={planningForm.customer_email}
+                  readOnly
+                />
+              </FormControl>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormControl label="Shipping Address">
+                <textarea
+                  className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={planningForm.shipping_address}
+                  onChange={(e) => setPlanningForm({...planningForm, shipping_address: e.target.value})}
+                  rows="2"
+                />
+              </FormControl>
+              <FormControl label="Billing Address">
+                <textarea
+                  className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={planningForm.billing_address}
+                  onChange={(e) => setPlanningForm({...planningForm, billing_address: e.target.value})}
+                  rows="2"
+                />
+              </FormControl>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormControl label="Planned Dispatch Date *">
               <div className="relative">

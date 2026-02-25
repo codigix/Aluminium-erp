@@ -1,4 +1,6 @@
 const pool = require('../config/db');
+const { postInventoryFromDispatch } = require('./inventoryPostingService');
+const { addStockLedgerEntry } = require('./stockService');
 
 const getShipmentOrders = async () => {
   const [rows] = await pool.query(`
@@ -12,13 +14,19 @@ const getShipmentOrders = async () => {
       s.dispatch_target_date,
       s.priority,
       s.sales_order_id,
+      s.customer_id,
       s.planned_dispatch_date,
       s.transporter,
       s.vehicle_number,
       s.driver_name,
       s.driver_contact,
       s.estimated_delivery_date,
-      s.packing_status
+      s.packing_status,
+      s.customer_name as snapshot_customer_name,
+      s.customer_phone as snapshot_customer_phone,
+      s.customer_email as snapshot_customer_email,
+      s.shipping_address as snapshot_shipping_address,
+      s.billing_address as snapshot_billing_address
     FROM shipment_orders s
     LEFT JOIN sales_orders so ON s.sales_order_id = so.id
     LEFT JOIN companies c ON s.customer_id = c.id
@@ -41,12 +49,12 @@ const getShipmentOrders = async () => {
         `, [qcId]);
         if (poRows.length > 0) {
           row.so_number = poRows[0].po_number;
-          row.company_name = row.customer_name || poRows[0].vendor_name;
+          row.company_name = row.snapshot_customer_name || row.customer_name || poRows[0].vendor_name;
         }
       }
     } else {
-      row.so_number = row.customer_po_number;
-      row.company_name = row.customer_name;
+      row.so_number = row.customer_po_number || (row.so_id ? `SO-${String(row.so_id).padStart(4, '0')}` : null);
+      row.company_name = row.snapshot_customer_name || row.customer_name;
       row.id = row.so_id;
     }
   }
@@ -92,7 +100,9 @@ const getShipmentOrderById = async (id) => {
         LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
         LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
         LEFT JOIN warehouses w ON qci.warehouse_id = w.id
+        LEFT JOIN stock_balance sb ON sb.item_code = COALESCE(NULLIF(TRIM(qci.item_code), ''), NULLIF(TRIM(poi.item_code), ''), poi.drawing_no)
         WHERE qci.qc_inspection_id = ?
+        AND (sb.material_type = 'FG' OR poi.material_name LIKE '%FG%' OR poi.description LIKE '%FG%')
       `, [qcId]);
       items = qcItems;
 
@@ -119,11 +129,13 @@ const getShipmentOrderById = async (id) => {
         COALESCE(sb.warehouse, 'MAIN STORE') as warehouse
       FROM sales_order_items soi
       LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
-      WHERE soi.sales_order_id = ?
+      WHERE soi.sales_order_id = ? 
+      AND (sb.material_type = 'FG' OR soi.item_type = 'FG' OR soi.description LIKE '%FG%')
     `, [shipment.sales_order_id]);
     items = soItems;
     
     shipment.po_number = shipment.customer_po_number;
+    shipment.so_number = shipment.customer_po_number || (shipment.so_id ? `SO-${String(shipment.so_id).padStart(4, '0')}` : null);
     shipment.company_name = shipment.customer_name;
   }
 
@@ -136,23 +148,97 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Update Shipment Order Status
+    // 1. Get current shipment data
+    const [currentRows] = await connection.query('SELECT * FROM shipment_orders WHERE id = ?', [shipmentOrderId]);
+    if (currentRows.length === 0) {
+      throw new Error('Shipment order not found');
+    }
+    const shipment = currentRows[0];
+
+    // 2. Update Shipment Order Status
     await connection.execute(
       'UPDATE shipment_orders SET status = ?, updated_at = NOW() WHERE id = ?',
       [status, shipmentOrderId]
     );
 
-    // 2. If status is ACCEPTED, update Sales Order to reflect planning
+    // 3. Handle specific status transitions
     if (status === 'ACCEPTED') {
-       const [shipRows] = await connection.query('SELECT sales_order_id FROM shipment_orders WHERE id = ?', [shipmentOrderId]);
-       const salesOrderId = shipRows[0]?.sales_order_id;
-       
-       if (salesOrderId) {
+       if (shipment.sales_order_id) {
          await connection.execute(
            "UPDATE sales_orders SET status = 'READY_FOR_SHIPMENT', updated_at = NOW() WHERE id = ?",
-           [salesOrderId]
+           [shipment.sales_order_id]
          );
        }
+    } else if (status === 'DISPATCHED') {
+      // Start Dispatch - Reduce stock
+      // We need the items for this shipment
+      let items = [];
+      if (shipment.shipment_code && shipment.shipment_code.includes('-QC')) {
+        const match = shipment.shipment_code.match(/-QC(\d+)$/);
+        if (match) {
+          const qcId = parseInt(match[1], 10);
+          const [qcItems] = await connection.query(`
+            SELECT qci.item_code, qci.po_qty as quantity, qci.warehouse_id
+            FROM qc_inspection_items qci
+            LEFT JOIN stock_balance sb ON sb.item_code = qci.item_code
+            WHERE qci.qc_inspection_id = ?
+            AND (sb.material_type = 'FG' OR qci.item_code LIKE '%FG%')
+          `, [qcId]);
+          items = qcItems;
+        }
+      } else {
+        const [soItems] = await connection.query(`
+          SELECT soi.item_code, soi.quantity
+          FROM sales_order_items soi
+          LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
+          WHERE soi.sales_order_id = ?
+          AND (sb.material_type = 'FG' OR soi.item_type = 'FG' OR soi.description LIKE '%FG%')
+        `, [shipment.sales_order_id]);
+        items = soItems;
+      }
+
+      if (items.length > 0) {
+        for (const item of items) {
+          // 1. Update inventory master table
+          await connection.execute(
+            `UPDATE inventory SET stock_on_hand = stock_on_hand - ?, updated_at = NOW() WHERE item_code = ?`,
+            [item.quantity, item.item_code]
+          );
+
+          // 2. Create entry in inventory_postings
+          const [invRows] = await connection.query('SELECT id FROM inventory WHERE item_code = ?', [item.item_code]);
+          if (invRows.length > 0) {
+            await connection.execute(
+              `INSERT INTO inventory_postings (inventory_id, posting_type, quantity, reference_type, reference_id, remarks) 
+               VALUES (?, 'OUTWARD', ?, 'DISPATCH', ?, ?)`,
+              [invRows[0].id, item.quantity, shipmentOrderId, `Dispatched for shipment ${shipment.shipment_code}`]
+            );
+          }
+
+          // 3. Update stock_ledger and stock_balance using addStockLedgerEntry
+          // This ensures warehouse-specific tracking is updated correctly
+          await addStockLedgerEntry(
+            item.item_code,
+            'OUT',
+            item.quantity,
+            'DISPATCH',
+            shipmentOrderId,
+            shipment.shipment_code,
+            {
+              connection,
+              remarks: `Dispatched for shipment ${shipment.shipment_code}`,
+              warehouse: item.warehouse_id || item.warehouse || 'MAIN STORE'
+            }
+          );
+        }
+      }
+    } else if (status === 'DELIVERED') {
+       // Logic for auto-creating Delivery Challan could go here
+       // For now just update the date
+       await connection.execute(
+         'UPDATE shipment_orders SET actual_delivery_date = NOW(), updated_at = NOW() WHERE id = ?',
+         [shipmentOrderId]
+       );
     }
 
     await connection.commit();
@@ -174,7 +260,12 @@ const updateShipmentPlanning = async (id, planningData) => {
     driver_contact,
     estimated_delivery_date,
     packing_status,
-    status
+    status,
+    customer_name,
+    customer_phone,
+    customer_email,
+    shipping_address,
+    billing_address
   } = planningData;
 
   const [result] = await pool.execute(
@@ -187,6 +278,11 @@ const updateShipmentPlanning = async (id, planningData) => {
       estimated_delivery_date = ?,
       packing_status = ?,
       status = COALESCE(?, status),
+      customer_name = ?,
+      customer_phone = ?,
+      customer_email = ?,
+      shipping_address = ?,
+      billing_address = ?,
       updated_at = NOW()
      WHERE id = ?`,
     [
@@ -198,6 +294,11 @@ const updateShipmentPlanning = async (id, planningData) => {
       estimated_delivery_date || null,
       packing_status || 'PENDING',
       status || null,
+      customer_name || null,
+      customer_phone || null,
+      customer_email || null,
+      shipping_address || null,
+      billing_address || null,
       id
     ]
   );
