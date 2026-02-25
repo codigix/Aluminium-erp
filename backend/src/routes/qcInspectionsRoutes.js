@@ -14,6 +14,15 @@ router.get('/stats', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   }
 });
 
+router.get('/reports', authenticate, authorize(['QC_VIEW']), async (req, res) => {
+  try {
+    const reports = await qcService.getQCReports();
+    res.json(reports);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 router.get('/', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
     const qcs = await qcService.getAllQCs();
