@@ -700,7 +700,9 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_Approved ', 'BOM_Approved ')`;
+     WHERE (TRIM(so.status) = 'BOM_Approved' 
+        OR so.status IN ('PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
+        AND so.quotation_id IS NULL`;
   
   const params = [];
   if (companyId) {
@@ -715,6 +717,7 @@ const getApprovedDrawings = async (companyId = null) => {
   for (const order of rows) {
     const [items] = await pool.query(
       `SELECT soi.*, 
+              COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, ''), 'FG') as item_group,
               COALESCE(
                 poi.quantity, 
                 (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
@@ -724,7 +727,8 @@ const getApprovedDrawings = async (companyId = null) => {
        LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
-       WHERE soi.sales_order_id = ? AND soi.item_group = 'FG' AND (soi.bom_cost > 0 OR soi.status = 'REJECTED')`,
+       WHERE soi.sales_order_id = ? 
+       AND (soi.item_group = 'FG' OR soi.item_type = 'FG' OR soi.item_group IS NULL OR soi.item_group = '')`,
       [order.id]
     );
     order.items = items;
