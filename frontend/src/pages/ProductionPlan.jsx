@@ -30,6 +30,11 @@ const ProductionPlan = () => {
   const [selectedBomId, setSelectedBomId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   
+  const [mrModalOpen, setMrModalOpen] = useState(false);
+  const [mrItems, setMrItems] = useState([]);
+  const [mrPlanDetails, setMrPlanDetails] = useState(null);
+  const [transmittingMr, setTransmittingMr] = useState(false);
+
   const [newPlan, setNewPlan] = useState({
     planCode: '',
     planDate: new Date().toISOString().split('T')[0],
@@ -219,36 +224,57 @@ const ProductionPlan = () => {
 
   const handleTransmitMR = async (planId) => {
     try {
-      const result = await Swal.fire({
-        title: 'Transmit Material Request?',
-        text: "This will generate a Material Request in Inventory for all required materials in this plan.",
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#4f46e5',
-        cancelButtonColor: '#64748b',
-        confirmButtonText: 'Yes, transmit it!',
-        cancelButtonText: 'Cancel'
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/material-request-items/${planId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMrItems(data.items || []);
+        setMrPlanDetails({
+          id: planId,
+          planCode: data.plan_code,
+          startDate: data.start_date
+        });
+        setMrModalOpen(true);
+      } else {
+        const error = await response.json();
+        errorToast(error.message || 'Failed to fetch items for Material Request');
+      }
+    } catch (error) {
+      console.error('Error fetching MR items:', error);
+      errorToast('Failed to load items for transmission');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmTransmitMR = async () => {
+    if (!mrPlanDetails) return;
+    
+    try {
+      setTransmittingMr(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/transmit-mr/${mrPlanDetails.id}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      if (result.isConfirmed) {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/production-plans/transmit-mr/${planId}`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          successToast(data.message || 'Material Request created successfully');
-          fetchPlans();
-        } else {
-          const error = await response.json();
-          errorToast(error.message || 'Failed to transmit Material Request');
-        }
+      if (response.ok) {
+        const data = await response.json();
+        successToast(data.message || 'Material Request created successfully');
+        setMrModalOpen(false);
+        fetchPlans();
+      } else {
+        const error = await response.json();
+        errorToast(error.message || 'Failed to transmit Material Request');
       }
     } catch (error) {
       console.error('Error transmitting MR:', error);
       errorToast('An unexpected error occurred');
+    } finally {
+      setTransmittingMr(false);
     }
   };
 
@@ -1767,6 +1793,141 @@ const ProductionPlan = () => {
           </div>
         </div>
       </Card>
+
+      {/* Material Request Preview Modal */}
+      <Modal
+        isOpen={mrModalOpen}
+        onClose={() => !transmittingMr && setMrModalOpen(false)}
+        title={
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-slate-800 tracking-tight">Material Request</h2>
+              <div className="flex items-center gap-1 text-[10px] text-indigo-500 font-bold uppercase tracking-widest">
+                <Activity className="w-3 h-3" />
+                Resource Acquisition Phase
+              </div>
+            </div>
+          </div>
+        }
+        size="4xl"
+      >
+        <div className="space-y-6">
+          {/* MR Header Info */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Request Identifier</label>
+              <div className="text-sm font-black text-slate-800">{mrPlanDetails?.planCode || '---'}</div>
+            </div>
+            <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Originating Dept</label>
+              <div className="text-sm font-black text-slate-800">Production</div>
+            </div>
+            <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">SLA Target Date</label>
+              <div className="text-sm font-black text-slate-800">
+                {mrPlanDetails?.startDate ? new Date(mrPlanDetails.startDate).toLocaleDateString() : '---'}
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs and Items Count */}
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="flex gap-6">
+              <button className="flex items-center gap-2 pb-2 border-b-2 border-rose-500 text-rose-600">
+                <span className="text-xs font-black">Pending Request</span>
+                <span className="px-1.5 py-0.5 bg-rose-50 rounded text-[10px] font-black">{mrItems.length}</span>
+              </button>
+              <button className="flex items-center gap-2 pb-2 text-slate-400 hover:text-slate-600">
+                <span className="text-xs font-black">Complete Request</span>
+                <span className="px-1.5 py-0.5 bg-slate-50 rounded text-[10px] font-black">0</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
+              <span className="text-[11px] font-black text-slate-700">Items to Request ({mrItems.length})</span>
+            </div>
+          </div>
+
+          {/* Items Table */}
+          <div className="max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left border-b border-slate-50">
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Component Intelligence</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Required</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Inventory</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {mrItems.map((item, idx) => (
+                  <tr key={idx} className="group">
+                    <td className="py-4">
+                      <div className="text-xs font-black text-slate-700">{item.material_name}</div>
+                      <div className="text-[10px] text-slate-400">({item.item_code})</div>
+                    </td>
+                    <td className="py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs font-black text-slate-800">{Number(item.quantity).toFixed(2)}</span>
+                        <span className="text-[10px] text-slate-400">{item.uom}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 text-center">
+                      <div className="text-xs font-black text-slate-800">{Number(item.inventory || 0).toFixed(2)}</div>
+                    </td>
+                    <td className="py-4 text-right">
+                      {item.inventory >= item.quantity ? (
+                        <div className="flex items-center justify-end gap-1.5 text-emerald-500">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span className="text-[10px] font-black uppercase tracking-tight">In Stock</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1.5 text-rose-500">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          <span className="text-[10px] font-black uppercase tracking-tight">
+                            {item.inventory <= 0 ? 'Zero Stock' : 'Shortage'}
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
+            <button
+              onClick={() => setMrModalOpen(false)}
+              disabled={transmittingMr}
+              className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Abort Request
+            </button>
+            <button
+              onClick={confirmTransmitMR}
+              disabled={transmittingMr || mrItems.length === 0}
+              className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all text-xs font-black shadow-lg shadow-slate-200 disabled:opacity-50"
+            >
+              {transmittingMr ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Transmitting...
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  Material Request
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

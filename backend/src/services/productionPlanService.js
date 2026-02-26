@@ -927,6 +927,88 @@ const getItemBOMDetails = async (salesOrderItemId) => {
   };
 };
 
+const getMaterialRequestItemsForPlan = async (planId) => {
+  const [plans] = await pool.query(
+    'SELECT * FROM production_plans WHERE id = ?',
+    [planId]
+  );
+
+  if (plans.length === 0) {
+    throw new Error('Production Plan not found');
+  }
+
+  const plan = plans[0];
+  const aggregatedMap = new Map();
+
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance) => {
+    if (!itemCode && !name) return;
+    
+    const code = (itemCode || name).trim();
+    const key = code.toUpperCase();
+    
+    const mapItemType = (code, cat) => {
+      const materialCategories = ['CORE', 'EXPLODED', 'RAW_MATERIAL', 'COMPONENT'];
+      if (materialCategories.includes(String(cat).toUpperCase())) return 'RAW_MATERIAL';
+
+      const c = (code || '').toUpperCase();
+      if (c.startsWith('RM-')) return 'RAW_MATERIAL';
+      if (c.startsWith('SA-')) return 'SUB_ASSEMBLY';
+      if (c.startsWith('FG-')) return 'FG';
+      
+      if (cat === 'FG') return 'FG';
+      if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
+      return 'RAW_MATERIAL';
+    };
+
+    if (aggregatedMap.has(key)) {
+      const existing = aggregatedMap.get(key);
+      existing.quantity += Number(qty);
+      existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
+      if (existing.item_type !== 'RAW_MATERIAL') {
+        const newType = mapItemType(code, category);
+        if (newType === 'RAW_MATERIAL') existing.item_type = 'RAW_MATERIAL';
+      }
+      if (rate && !existing.unit_rate) existing.unit_rate = rate;
+    } else {
+      aggregatedMap.set(key, {
+        item_code: code,
+        quantity: Number(qty),
+        design_qty: Number(designQty || 0),
+        uom: uom || 'Nos',
+        material_name: name || code,
+        warehouse: warehouse,
+        item_type: mapItemType(code, category),
+        unit_rate: rate || 0,
+        inventory: Math.max(0, Number(currentBalance || 0))
+      });
+    }
+  };
+
+  // Step 1: Add Materials (ONLY materials should be in Material Request)
+  const [materials] = await pool.query(`
+    SELECT ppm.*, 
+           COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
+           COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
+           COALESCE(actual_sb.current_balance, 0) as current_balance
+    FROM production_plan_materials ppm
+    LEFT JOIN stock_balance actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+    WHERE ppm.plan_id = ?
+  `, [planId]);
+
+  for (const mat of materials) {
+    const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
+    if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
+    
+    addToMap(mat.actual_item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', mat.rate || mat.stock_rate || 0, mat.design_qty, mat.current_balance);
+  }
+
+  return {
+    plan_code: plan.plan_code,
+    start_date: plan.start_date,
+    items: Array.from(aggregatedMap.values())
+  };
+};
+
 const createMaterialRequestFromPlan = async (planId, userId) => {
   const connection = await pool.getConnection();
   try {
@@ -954,45 +1036,19 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
       throw new Error(`A Material Request already exists for Production Plan ${plan.plan_code}`);
     }
 
-    // 2. Aggregate everything into a single map
+    // 2. Aggregate only materials into a single map
     const aggregatedMap = new Map();
 
-    const addToMap = (itemCode, qty, uom, name, warehouse, defaultWarehouse, category, rate, designQty) => {
+    const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty) => {
       if (!itemCode && !name) return;
       
       const code = (itemCode || name).trim();
-      const targetWarehouse = warehouse || defaultWarehouse;
-      // Aggregation key: use code to distinguish items. 
-      // Now that we have the ACTUAL material code for materials, they will aggregate correctly.
       const key = code.toUpperCase();
       
-      // Correct Item Type Mapping
-      const mapItemType = (code, cat) => {
-        // Force RAW_MATERIAL for material categories
-        const materialCategories = ['CORE', 'EXPLODED', 'RAW_MATERIAL', 'COMPONENT'];
-        if (materialCategories.includes(String(cat).toUpperCase())) return 'RAW_MATERIAL';
-
-        const c = (code || '').toUpperCase();
-        if (c.startsWith('RM-')) return 'RAW_MATERIAL';
-        if (c.startsWith('SA-')) return 'SUB_ASSEMBLY';
-        if (c.startsWith('FG-')) return 'FG';
-        
-        // Fallback based on source category
-        if (cat === 'FG') return 'FG';
-        if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
-        return 'RAW_MATERIAL';
-      };
-
       if (aggregatedMap.has(key)) {
         const existing = aggregatedMap.get(key);
         existing.quantity += Number(qty);
         existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
-        // Upgrade type to RAW_MATERIAL if it was previously something else but now identified as material
-        if (existing.item_type !== 'RAW_MATERIAL') {
-          const newType = mapItemType(code, category);
-          if (newType === 'RAW_MATERIAL') existing.item_type = 'RAW_MATERIAL';
-        }
-        if (rate && !existing.unit_rate) existing.unit_rate = rate;
       } else {
         aggregatedMap.set(key, {
           item_code: code,
@@ -1000,53 +1056,22 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
           design_qty: Number(designQty || 0),
           uom: uom || 'Nos',
           material_name: name || code,
-          warehouse: targetWarehouse,
-          item_type: mapItemType(code, category),
+          warehouse: warehouse,
+          item_type: 'RAW_MATERIAL', // Only materials are requested
           unit_rate: rate || 0
         });
       }
     };
 
-    // Step 1: Add Finished Goods (FG)
-    const [fgItems] = await connection.query(`
-      SELECT ppi.*, COALESCE(ppi.description, soi.description, oi.description, ppi.item_code) as item_name,
-             COALESCE(sb.valuation_rate, 0) as stock_rate
-      FROM production_plan_items ppi
-      LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-      LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id
-      LEFT JOIN (SELECT item_code, MAX(valuation_rate) as valuation_rate FROM stock_balance GROUP BY item_code) sb ON ppi.item_code = sb.item_code
-      WHERE ppi.plan_id = ?
-    `, [planId]);
-
-    for (const fg of fgItems) {
-      const effectiveRate = fg.rate || fg.stock_rate || 0;
-      addToMap(fg.item_code, fg.planned_qty, fg.uom, fg.item_name, fg.warehouse, 'Finished Goods - NC', 'FG', effectiveRate, fg.design_qty);
-    }
-
-    // Step 2: Add Sub Assemblies (SA)
-    const [saItems] = await connection.query(`
-      SELECT sa.*, COALESCE(sa.description, sb.material_name, sa.item_code) as item_name,
-             COALESCE(sb.valuation_rate, 0) as stock_rate
-      FROM production_plan_sub_assemblies sa
-      LEFT JOIN (
-        SELECT item_code, MAX(material_name) as material_name, MAX(valuation_rate) as valuation_rate FROM stock_balance GROUP BY item_code
-      ) sb ON sa.item_code = sb.item_code
-      WHERE sa.plan_id = ?
-    `, [planId]);
-
-    for (const sa of saItems) {
-      const effectiveRate = sa.rate || sa.stock_rate || 0;
-      addToMap(sa.item_code, sa.required_qty, 'Nos', sa.item_name, sa.target_warehouse, 'Work In Progress - NC', 'SUB_ASSEMBLY', effectiveRate, sa.design_qty);
-    }
-
-    // Step 3: Add Materials (CORE & EXPLODED)
+    // Step 1: Add Materials (Skip FG and SA as per requirement)
     const [materials] = await connection.query(`
       SELECT ppm.*, 
              COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
-             COALESCE(actual_sb.valuation_rate, 0) as stock_rate
+             COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
+             COALESCE(actual_sb.current_balance, 0) as current_balance
       FROM production_plan_materials ppm
       LEFT JOIN (
-        SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate 
+        SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate, MAX(current_balance) as current_balance
         FROM stock_balance 
         GROUP BY material_name
       ) actual_sb ON ppm.material_name = actual_sb.material_name
@@ -1054,14 +1079,15 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
     `, [planId]);
 
     for (const mat of materials) {
-      // Prioritize rate from production_plan_materials (which came from BOM)
+      const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
+      if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
+
       const effectiveRate = mat.rate || mat.stock_rate || 0;
-      // Force it to be RAW_MATERIAL because it's from the materials table
-      addToMap(mat.actual_item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'Store - NC', 'RAW_MATERIAL', effectiveRate, mat.design_qty);
+      addToMap(mat.actual_item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
     }
 
     if (aggregatedMap.size === 0) {
-      throw new Error('No items found in this Production Plan to request');
+      throw new Error('No materials found in this Production Plan to request');
     }
 
     const aggregatedItems = Array.from(aggregatedMap.values());
@@ -1175,5 +1201,6 @@ module.exports = {
   generatePlanCode,
   getItemBOMDetails,
   deleteProductionPlan,
-  createMaterialRequestFromPlan
+  createMaterialRequestFromPlan,
+  getMaterialRequestItemsForPlan
 };

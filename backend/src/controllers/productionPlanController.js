@@ -102,6 +102,15 @@ const createMaterialRequestFromPlan = async (req, res, next) => {
   }
 };
 
+const getMaterialRequestItemsForPlan = async (req, res, next) => {
+  try {
+    const items = await productionPlanService.getMaterialRequestItemsForPlan(req.params.id);
+    res.json(items);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
@@ -113,5 +122,6 @@ module.exports = {
   getNextPlanCode,
   getItemBOMDetails,
   deleteProductionPlan,
-  createMaterialRequestFromPlan
+  createMaterialRequestFromPlan,
+  getMaterialRequestItemsForPlan
 };

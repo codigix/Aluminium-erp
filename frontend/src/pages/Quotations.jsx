@@ -28,7 +28,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const rfqStatusColors = {
   DRAFT: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'Draft' },
-  Sent : { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Sent' },
+  SENT: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Sent' },
   EMAIL_RECEIVED: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-600', badge: 'bg-sky-100 text-sky-700', label: 'Email Received' },
   RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
   REVIEWED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Reviewed' },
@@ -990,7 +990,7 @@ const Quotations = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'Sent ' })
+        body: JSON.stringify({ status: 'SENT' })
       });
 
       successToast('Email sent to vendor successfully');
@@ -1152,16 +1152,16 @@ const Quotations = () => {
             )}
             {activeTab === 'sent' && (
               <>
-                {['DRAFT', 'Sent ', 'EMAIL_RECEIVED'].includes(q.status) && (
+                {['DRAFT', 'SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); openEmailModal(q); }}
                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all border border-transparent hover:border-blue-100"
-                    title={q.status === 'Sent ' ? 'Resend RFQ' : 'Send RFQ'}
+                    title={q.status === 'SENT' ? 'Resend RFQ' : 'Send RFQ'}
                   >
                     <Mail className="w-4 h-4" />
                   </button>
                 )}
-                {['Sent ', 'EMAIL_RECEIVED'].includes(q.status) && (
+                {['SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); openRecordModal(q); }}
                     className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded  transition-all border border-transparent hover:border-cyan-100"

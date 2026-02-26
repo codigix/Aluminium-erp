@@ -942,7 +942,6 @@ const POMaterialRequest = () => {
                     <tr className="bg-slate-50/50 border-b border-slate-100">
                       <th className="p-2  text-lefttext-xs   text-slate-400  tracking-widest">Item Details</th>
                       <th className="p-2  text-centertext-xs   text-slate-400  tracking-widest">Design Qty</th>
-                      <th className="p-2  text-centertext-xs   text-slate-400  tracking-widest">Warehouse</th>
                       <th className="p-2  text-centertext-xs   text-slate-400  tracking-widest">Stock Level</th>
                       <th className="p-2  text-righttext-xs   text-slate-400  tracking-widest">Status</th>
                     </tr>
@@ -960,49 +959,39 @@ const POMaterialRequest = () => {
                             <div>
                               <p className="text-[11px]  text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
                               <p className="text-sm  text-slate-600 mt-0.5">{item.name}</p>
-                              <div className="mt-1.5 flex items-center gap-2 ">
-                                <span className={`p-1  rounded text-[9px]   ${
-                                  item.material_type === 'RAW_MATERIAL' || item.material_type === 'Raw Material' ? 'bg-slate-100 text-slate-600' :
-                                  item.material_type === 'SUB_ASSEMBLY' || item.material_type === 'Sub Assembly' ? 'bg-blue-50 text-blue-600' :
-                                  item.material_type === 'FG' || item.material_type === 'Finished Good' ? 'bg-purple-50 text-purple-600' :
-                                  'bg-slate-50 text-slate-500'
-                                }`}>
-                                  {item.material_type?.replace('_', ' ')}
-                                </span>
-                              </div>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <span className="text-xs  text-slate-700">
-                              {Number(item.design_qty || 0).toFixed(3)}
+                              {Number(item.quantity || item.design_qty || 0).toFixed(3)}
                             </span>
-                          </td>
-                          <td className="px-6 py-5 text-center text-xs  text-slate-600">
-                            {item.warehouse || '—'}
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <p className={`text-sm  ${item.total_stock > 0 ? 'text-indigo-600' : 'text-rose-500'}`}>
-                                {Number(item.total_stock || 0).toFixed(Number(item.total_stock) % 1 === 0 ? 0 : 2)} {item.uom}
+                              <p className={`text-sm font-medium ${item.total_stock >= (item.quantity || item.design_qty) ? 'text-slate-500' : 'text-slate-400'}`}>
+                                {Number(item.total_stock || 0).toFixed(0)} {item.uom}
                               </p>
-                              <div className="flex flex-col items-center mt-1 gap-1">
-                                {item.stocks?.map((st, sidx) => (
-                                  <span key={sidx} className={`text-[9px] px-1.5 py-0.5 rounded-md  ${st.warehouse_name === item.suggested_warehouse ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'text-slate-500'}`}>
-                                    {st.warehouse_name}: {Number(st.current_stock).toFixed(Number(st.current_stock) % 1 === 0 ? 0 : 1)}
-                                    {st.warehouse_name === item.suggested_warehouse && <span className="ml-1 text-[8px]   tracking-tighter">(Suggested)</span>}
-                                  </span>
-                                ))}
+                              <div className="flex flex-col items-center mt-1">
+                                {item.stocks && item.stocks.length > 0 ? (
+                                  item.stocks.map((st, sidx) => (
+                                    <span key={sidx} className="text-[10px] text-indigo-500 font-medium leading-tight">
+                                      {st.warehouse_name}: {Number(st.current_stock).toFixed(0)}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-[10px] text-indigo-400 font-medium">All Warehouses</span>
+                                )}
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-5">
                             <div className="flex flex-col items-end gap-1.5">
                               <span className={`px-2.5 py-1 rounded  text-[9px]   border  ${
-                                isAvailable 
+                                item.total_stock >= (item.quantity || item.design_qty) 
                                   ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
                                   : 'bg-rose-50 text-rose-600 border-rose-100'
                               }`}>
-                                {isAvailable ? 'in stock' : 'low stock'}
+                                {item.total_stock >= (item.quantity || item.design_qty) ? 'in stock' : 'out of stock'}
                               </span>
                               <span className="px-2.5 py-1 rounded  bg-slate-50 text-slate-600 text-[9px]   border border-slate-100 ">
                                 {selectedRequest?.status || 'Draft'}
@@ -1025,7 +1014,7 @@ const POMaterialRequest = () => {
                   const type = (item.material_type || '').toUpperCase();
                   return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
                 }) || [];
-                const allAvailable = filteredItems.every(item => item.fulfillment_source === 'STOCK');
+                const allAvailable = filteredItems.length > 0 && filteredItems.every(item => item.total_stock >= (item.quantity || item.design_qty));
                 return (
                   <div className="bg-white rounded-3xl border border-slate-100  overflow-hidden flex flex-col">
                     <div className={`p-5 border-b border-slate-50 flex justify-between items-center transition-colors ${allAvailable ? 'bg-emerald-500' : 'bg-amber-500'}`}>
@@ -1146,31 +1135,38 @@ const POMaterialRequest = () => {
             >
               Cancel
             </button>
-            {selectedRequest?.items?.filter(item => {
-              const type = (item.material_type || '').toUpperCase();
-              return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-            }).some(item => {
-              const totalStock = item.stocks ? item.stocks.reduce((acc, st) => acc + (Number(st.current_stock) || 0), 0) : 0;
-              return totalStock < Number(item.quantity);
-            }) && !selectedRequest?.linked_po_id && 
-               !['PROCESSING', 'PO_CREATED', 'COMPLETED'].includes(selectedRequest?.status?.toUpperCase()) && (
-              <button 
-                onClick={() => handleRequestQuote(selectedRequest)}
-                className="px-8 py-3 bg-indigo-500 text-white rounded  text-xs  hover:bg-indigo-600 flex items-center gap-3 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-              >
-                Request Quote (RFQ)
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-              </button>
-            )}
-            {selectedRequest?.status?.toUpperCase() !== 'COMPLETED' && (
-              <button 
-                onClick={() => handleReleaseMaterial(selectedRequest?.id)}
-                className="px-8 py-3 bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-3 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-              >
-                Release Material
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-              </button>
-            )}
+            {(() => {
+              const filteredItems = selectedRequest?.items?.filter(item => {
+                const type = (item.material_type || '').toUpperCase();
+                return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+              }) || [];
+              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => item.total_stock >= (item.quantity || item.design_qty));
+              const hasInsufficientStock = filteredItems.some(item => item.total_stock < (item.quantity || item.design_qty));
+              
+              return (
+                <>
+                  {hasInsufficientStock && !selectedRequest?.linked_po_id && 
+                    !['PROCESSING', 'PO_CREATED', 'COMPLETED'].includes(selectedRequest?.status?.toUpperCase()) && (
+                    <button 
+                      onClick={() => handleRequestQuote(selectedRequest)}
+                      className="px-8 py-3 bg-indigo-500 text-white rounded  text-xs  hover:bg-indigo-600 flex items-center gap-3 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                      Request Quote (RFQ)
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </button>
+                  )}
+                  {allAvailable && selectedRequest?.status?.toUpperCase() !== 'COMPLETED' && (
+                    <button 
+                      onClick={() => handleReleaseMaterial(selectedRequest?.id)}
+                      className="px-8 py-3 bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-3 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                      Release Material
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       </Modal>

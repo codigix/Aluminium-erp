@@ -236,7 +236,7 @@ const getQuotationById = async (quotationId) => {
 };
 
 const updateQuotationStatus = async (quotationId, status) => {
-  const validStatuses = ['DRAFT', 'Sent ', 'EMAIL_RECEIVED', 'RECEIVED', 'REVIEWED', 'CLOSED', 'PENDING'];
+  const validStatuses = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'RECEIVED', 'REVIEWED', 'CLOSED', 'PENDING'];
   if (!validStatuses.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
