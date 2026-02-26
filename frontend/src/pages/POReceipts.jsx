@@ -1141,8 +1141,11 @@ const POReceipts = () => {
                             />
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-center font-black text-slate-900 text-xs">
-                          {formatCurrency(item.amount || 0)}
+                        <td className="px-4 py-4 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="font-black text-slate-900 text-xs">{formatCurrency(item.amount || 0)}</span>
+                            <span className="text-[9px] text-slate-400 font-normal">Incl. 18% GST: {formatCurrency((item.amount || 0) * 1.18)}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-4 text-center">
                           <button
@@ -1181,6 +1184,11 @@ const POReceipts = () => {
               <div>
                 <p className="text-[10px] text-emerald-600 font-black  tracking-widest">Total Valuation</p>
                 <p className="text-xl font-black text-emerald-600">{formatCurrency(formData.totalValuation || 0)}</p>
+              </div>
+              <div className="h-10 w-[1px] bg-slate-200"></div>
+              <div>
+                <p className="text-[10px] text-indigo-600 font-black  tracking-widest">Grand Total (18% GST)</p>
+                <p className="text-xl font-black text-indigo-600">{formatCurrency((formData.totalValuation || 0) * 1.18)}</p>
               </div>
             </div>
             
