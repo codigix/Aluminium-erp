@@ -44,16 +44,23 @@ const getShipmentOrders = async () => {
       if (match) {
         const qcId = parseInt(match[1], 10);
         const [poRows] = await pool.query(`
-          SELECT g.po_number, v.vendor_name
+          SELECT 
+            g.po_number, 
+            v.vendor_name,
+            so.id as linked_so_id,
+            c.company_name as linked_customer_name
           FROM qc_inspections qc
           JOIN grns g ON qc.grn_id = g.id
           LEFT JOIN purchase_orders po ON g.po_number = po.po_number
           LEFT JOIN vendors v ON po.vendor_id = v.id
+          LEFT JOIN sales_orders so ON po.sales_order_id = so.id
+          LEFT JOIN companies c ON so.company_id = c.id
           WHERE qc.id = ?
         `, [qcId]);
         if (poRows.length > 0) {
-          row.so_number = poRows[0].po_number;
-          row.company_name = row.snapshot_customer_name || row.customer_name || poRows[0].vendor_name;
+          const poData = poRows[0];
+          row.so_number = poData.linked_so_id ? `SO-${String(poData.linked_so_id).padStart(4, '0')}` : poData.po_number;
+          row.company_name = row.snapshot_customer_name || row.customer_name || poData.linked_customer_name || poData.vendor_name;
         }
       }
     } else {
@@ -114,17 +121,25 @@ const getShipmentOrderById = async (id) => {
 
       // Also get PO number and Vendor if SO info is missing
       const [poRows] = await pool.query(`
-        SELECT g.po_number, v.vendor_name
+        SELECT 
+          g.po_number, 
+          v.vendor_name,
+          so.id as linked_so_id,
+          c.company_name as linked_customer_name
         FROM qc_inspections qc
         JOIN grns g ON qc.grn_id = g.id
         LEFT JOIN purchase_orders po ON g.po_number = po.po_number
         LEFT JOIN vendors v ON po.vendor_id = v.id
+        LEFT JOIN sales_orders so ON po.sales_order_id = so.id
+        LEFT JOIN companies c ON so.company_id = c.id
         WHERE qc.id = ?
       `, [qcId]);
       
       if (poRows.length > 0) {
-        shipment.po_number = poRows[0].po_number;
-        shipment.company_name = shipment.customer_name || poRows[0].vendor_name;
+        const poData = poRows[0];
+        shipment.po_number = poData.po_number;
+        shipment.so_number = poData.linked_so_id ? `SO-${String(poData.linked_so_id).padStart(4, '0')}` : poData.po_number;
+        shipment.company_name = shipment.customer_name || poData.linked_customer_name || poData.vendor_name;
       }
     }
   } else {
@@ -545,11 +560,53 @@ const getShipmentReports = async () => {
   };
 };
 
+const deleteShipmentOrder = async (id) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get shipment info first to see if it's linked to a Sales Order
+    const [shipment] = await connection.query('SELECT sales_order_id, status, shipment_code FROM shipment_orders WHERE id = ?', [id]);
+    if (!shipment.length) throw new Error('Shipment order not found');
+
+    // 2. Delete tracking logs
+    await connection.execute('DELETE FROM shipment_tracking_logs WHERE shipment_id = ?', [id]);
+
+    // 3. Delete delivery challans (and items)
+    const [challans] = await connection.query('SELECT id FROM delivery_challans WHERE shipment_id = ?', [id]);
+    for (const challan of challans) {
+      await connection.execute('DELETE FROM delivery_challan_items WHERE challan_id = ?', [challan.id]);
+    }
+    await connection.execute('DELETE FROM delivery_challans WHERE shipment_id = ?', [id]);
+
+    // 4. If it was linked to a Sales Order and not dispatched, we might want to reset the SO status
+    // But usually deletion is a hard reset. We'll set SO status back to PRODUCTION_COMPLETED if it was READY_FOR_SHIPMENT
+    if (shipment[0].sales_order_id && shipment[0].status !== 'DISPATCHED' && shipment[0].status !== 'DELIVERED') {
+      await connection.execute(
+        "UPDATE sales_orders SET status = 'PRODUCTION_COMPLETED', current_department = 'QUALITY' WHERE id = ? AND status = 'READY_FOR_SHIPMENT'",
+        [shipment[0].sales_order_id]
+      );
+    }
+
+    // 5. Delete the shipment order itself
+    await connection.execute('DELETE FROM shipment_orders WHERE id = ?', [id]);
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getShipmentOrders,
   getShipmentOrderById,
   updateShipmentStatus,
   updateShipmentPlanning,
+  deleteShipmentOrder,
   updateTracking,
   getTrackingHistory,
   getTrackingDashboard,

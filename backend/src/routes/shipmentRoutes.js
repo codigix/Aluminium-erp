@@ -11,6 +11,7 @@ router.post('/orders', authenticate, authorize(['ORDER_CREATE']), shipmentContro
 router.get('/orders/:id', authenticate, authorize(['ORDER_VIEW']), shipmentController.getShipmentOrderById);
 router.patch('/orders/:id/status', authenticate, authorize(['STATUS_CHANGE']), shipmentController.updateShipmentStatus);
 router.patch('/orders/:id/planning', authenticate, authorize(['STATUS_CHANGE']), shipmentController.updateShipmentPlanning);
+router.delete('/orders/:id', authenticate, authorize(['ORDER_EDIT', 'STATUS_CHANGE']), shipmentController.deleteShipmentOrder);
 
 // Return Routes
 router.get('/returns', authenticate, authorize(['ORDER_VIEW']), returnController.getReturns);

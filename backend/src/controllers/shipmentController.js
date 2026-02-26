@@ -104,3 +104,13 @@ exports.getShipmentReports = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.deleteShipmentOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await shipmentService.deleteShipmentOrder(id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, StatusBadge, Modal } from '../components/ui.jsx';
-import { Package, CheckCircle, XCircle, Search, Eye, ListTodo, Filter, Download } from 'lucide-react';
+import { Package, CheckCircle, XCircle, Search, Eye, ListTodo, Filter, Download, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -62,6 +62,31 @@ const ShipmentOrders = ({ apiRequest }) => {
         });
 
         Swal.fire('Updated', `Shipment order ${status.toLowerCase()}`, 'success');
+        fetchShipments();
+      } catch (error) {
+        Swal.fire('Error', error.message, 'error');
+      }
+    }
+  };
+
+  const handleDelete = async (shipmentId) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this! This shipment order will be permanently deleted.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await apiRequest(`/shipments/orders/${shipmentId}`, {
+          method: 'DELETE'
+        });
+
+        Swal.fire('Deleted!', 'Shipment order has been deleted.', 'success');
         fetchShipments();
       } catch (error) {
         Swal.fire('Error', error.message, 'error');
@@ -188,6 +213,13 @@ const ShipmentOrders = ({ apiRequest }) => {
                             title="View Details"
                           >
                             <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(order.id || order.shipment_order_id)}
+                            className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors border border-rose-100"
+                            title="Delete Shipment"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>

@@ -989,14 +989,18 @@ const createShipmentFromQC = async (qcId) => {
         g.po_number,
         po.sales_order_id,
         po.vendor_id,
+        v.vendor_name,
         so.company_id as so_customer_id,
+        c.company_name as so_customer_name,
         so.target_dispatch_date,
         so.production_priority,
         so.status as so_status
        FROM qc_inspections qc
        JOIN grns g ON qc.grn_id = g.id
        JOIN purchase_orders po ON g.po_number = po.po_number
+       LEFT JOIN vendors v ON po.vendor_id = v.id
        LEFT JOIN sales_orders so ON po.sales_order_id = so.id
+       LEFT JOIN companies c ON so.company_id = c.id
        WHERE qc.id = ?`,
       [qcId]
     );
@@ -1007,11 +1011,10 @@ const createShipmentFromQC = async (qcId) => {
 
     const qcData = qcRows[0];
     
-    // Determine customer_id and sales_order_id
-    // If it's linked to an SO, use SO's customer and priority
-    // If not, it's a standalone stock/vendor shipment (maybe return or internal)
+    // Determine customer_id and snapshot details
     const salesOrderId = qcData.sales_order_id || null;
-    const customerId = qcData.so_customer_id || null; // Could also use vendor_id if needed, but schema says customer_id
+    const customerId = qcData.so_customer_id || null;
+    const customerName = qcData.so_customer_name || qcData.vendor_name || null;
     const targetDate = qcData.target_dispatch_date || new Date();
     const priority = qcData.production_priority || 'NORMAL';
 
@@ -1025,9 +1028,10 @@ const createShipmentFromQC = async (qcId) => {
     let result;
     try {
       [result] = await connection.execute(
-        `INSERT INTO shipment_orders (shipment_code, sales_order_id, customer_id, dispatch_target_date, priority, status)
-         VALUES (?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
-        [shipmentCode, salesOrderId, customerId, targetDate, priority]
+        `INSERT INTO shipment_orders 
+         (shipment_code, sales_order_id, customer_id, customer_name, dispatch_target_date, priority, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
+        [shipmentCode, salesOrderId, customerId, customerName, targetDate, priority]
       );
     } catch (insertErr) {
       console.error('INSERT FAILED in createShipmentFromQC:', insertErr);
