@@ -32,8 +32,8 @@ const getQuotationRequests = async (req, res, next) => {
     const params = [];
 
     if (status) {
-      const statusArray = status.split(',');
-      query += ` AND qr.status IN (${statusArray.map(() => '?').join(',')})`;
+      const statusArray = status.split(',').map(s => s.trim());
+      query += ` AND TRIM(qr.status) IN (${statusArray.map(() => '?').join(',')})`;
       params.push(...statusArray);
     }
 

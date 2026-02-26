@@ -326,7 +326,7 @@ const ClientQuotations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests?status=Approved,Rejected,Accepted,Approval,Completed`, {
+      const response = await fetch(`${API_BASE}/quotation-requests?status=Approved,Approved ,Rejected,REJECTED,Accepted,ACCEPTED,Approval,APPROVAL,Completed,COMPLETED`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch received quotations');

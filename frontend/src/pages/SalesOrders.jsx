@@ -138,7 +138,7 @@ const SalesOrders = () => {
     try {
       const token = localStorage.getItem('authToken');
       const [quotesRes, approvedRes] = await Promise.all([
-        fetch(`${API_BASE}/quotation-requests?status=Approved ,COMPLETED,ACCEPTED&company_id=${companyId}`, {
+        fetch(`${API_BASE}/quotation-requests?status=Approved,Approved ,COMPLETED,Completed,ACCEPTED,Accepted,Approval,APPROVAL&company_id=${companyId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
         fetch(`${API_BASE}/order/approved-drawings?company_id=${companyId}`, {
