@@ -1854,13 +1854,13 @@ const ProductionPlan = () => {
               <button className="flex items-center gap-2 pb-2 border-b-2 border-rose-500 text-rose-600">
                 <span className="text-xs font-black">Pending Request</span>
                 <span className="px-1.5 py-0.5 bg-rose-50 rounded text-[10px] font-black">
-                  {mrItems.filter(item => item.inventory < item.quantity).length}
+                  {mrItems.filter(item => !item.is_fulfilled && item.inventory < item.quantity).length}
                 </span>
               </button>
               <button className="flex items-center gap-2 pb-2 text-slate-400 hover:text-slate-600">
                 <span className="text-xs font-black">Complete Request</span>
                 <span className="px-1.5 py-0.5 bg-slate-50 rounded text-[10px] font-black">
-                  {mrItems.filter(item => item.inventory >= item.quantity).length}
+                  {mrItems.filter(item => item.is_fulfilled || item.inventory >= item.quantity).length}
                 </span>
               </button>
             </div>
@@ -1898,10 +1898,12 @@ const ProductionPlan = () => {
                       <div className="text-xs font-black text-slate-800">{Number(item.inventory || 0).toFixed(2)}</div>
                     </td>
                     <td className="py-4 text-right">
-                      {item.inventory >= item.quantity ? (
+                      {item.is_fulfilled || item.inventory >= item.quantity ? (
                         <div className="flex items-center justify-end gap-1.5 text-emerald-500">
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-black uppercase tracking-tight">In Stock</span>
+                          <span className="text-[10px] font-black uppercase tracking-tight">
+                            {item.is_fulfilled ? 'Fulfilled' : 'In Stock'}
+                          </span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1.5 text-rose-500">
@@ -1927,23 +1929,25 @@ const ProductionPlan = () => {
             >
               Abort Request
             </button>
-            <button
-              onClick={confirmTransmitMR}
-              disabled={transmittingMr || mrItems.length === 0}
-              className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all text-xs font-black shadow-lg shadow-slate-200 disabled:opacity-50"
-            >
-              {transmittingMr ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  Transmitting...
-                </>
-              ) : (
-                <>
-                  <Send className="w-3.5 h-3.5" />
-                  Material Request
-                </>
-              )}
-            </button>
+            {mrItems.length > 0 && mrItems.some(item => !item.is_fulfilled && item.inventory < item.quantity) && (
+              <button
+                onClick={confirmTransmitMR}
+                disabled={transmittingMr}
+                className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all text-xs font-black shadow-lg shadow-slate-200 disabled:opacity-50"
+              >
+                {transmittingMr ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                    Transmitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    Material Request
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </Modal>

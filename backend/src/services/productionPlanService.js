@@ -940,9 +940,10 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   }
 
   const plan = plans[0];
+  const planCode = plan.plan_code;
   const aggregatedMap = new Map();
 
-  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance) => {
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled) => {
     if (!itemCode && !name) return;
     
     const code = (itemCode || name).trim();
@@ -966,6 +967,11 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       const existing = aggregatedMap.get(key);
       existing.quantity += Number(qty);
       existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
+      // Ensure inventory is updated if the new source has a higher value (e.g. from fulfilled MR)
+      if (Number(currentBalance) > existing.inventory) {
+        existing.inventory = Number(currentBalance);
+        existing.is_fulfilled = isFulfilled || existing.is_fulfilled;
+      }
       if (existing.item_type !== 'RAW_MATERIAL') {
         const newType = mapItemType(code, category);
         if (newType === 'RAW_MATERIAL') existing.item_type = 'RAW_MATERIAL';
@@ -981,7 +987,8 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         warehouse: warehouse,
         item_type: mapItemType(code, category),
         unit_rate: rate || 0,
-        inventory: Math.max(0, Number(currentBalance || 0))
+        inventory: Math.max(0, Number(currentBalance || 0)),
+        is_fulfilled: !!isFulfilled
       });
     }
   };
@@ -992,7 +999,8 @@ const getMaterialRequestItemsForPlan = async (planId) => {
            COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
            COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
            COALESCE(actual_sb.current_balance, 0) as current_balance,
-           COALESCE(issued.issued_qty, 0) as issued_qty
+           COALESCE(issued.issued_qty, 0) as issued_qty,
+           COALESCE(mr_data.status_rank, 0) as status_rank
     FROM production_plan_materials ppm
     LEFT JOIN (
         SELECT 
@@ -1014,14 +1022,51 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         WHERE wo.plan_id = ?
         GROUP BY mii.item_code, mii.material_name
     ) issued ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
+    LEFT JOIN (
+        SELECT 
+            LOWER(TRIM(mri.item_code)) as join_item_code,
+            LOWER(TRIM(mri.item_name)) as join_item_name,
+            MAX(CASE mr.status 
+                WHEN 'COMPLETED' THEN 5
+                WHEN 'FULFILLED' THEN 4
+                WHEN 'Fulfilled' THEN 4
+                WHEN 'PROCESSING' THEN 3
+                WHEN 'Approved ' THEN 2
+                WHEN 'DRAFT' THEN 1
+                ELSE 0 END) as status_rank
+        FROM material_requests mr
+        JOIN material_request_items mri ON mr.id = mri.mr_id
+        WHERE mr.plan_id = ? OR mr.notes LIKE ?
+        GROUP BY join_item_code, join_item_name
+    ) mr_data ON (
+        (ppm.item_code IS NOT NULL AND LOWER(TRIM(ppm.item_code)) = mr_data.join_item_code) OR 
+        (ppm.material_name IS NOT NULL AND LOWER(TRIM(ppm.material_name)) = mr_data.join_item_name)
+    )
     WHERE ppm.plan_id = ?
-  `, [planId, planId]);
+  `, [planId, planId, `%${planCode}%`, planId]);
 
   for (const mat of materials) {
     const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
     if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
     
-    addToMap(mat.actual_item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', mat.rate || mat.stock_rate || 0, mat.design_qty, Number(mat.current_balance) + Number(mat.issued_qty));
+    // If material request is fulfilled or completed, show full quantity as available
+    const isFulfilled = (mat.status_rank || 0) >= 4;
+    const effectiveInventory = isFulfilled 
+      ? Math.max(Number(mat.required_qty), Number(mat.current_balance) + Number(mat.issued_qty))
+      : Number(mat.current_balance) + Number(mat.issued_qty);
+    
+    addToMap(
+      mat.actual_item_code, 
+      mat.required_qty, 
+      mat.uom, 
+      mat.material_name, 
+      mat.warehouse, 
+      'RAW_MATERIAL', 
+      mat.rate || mat.stock_rate || 0, 
+      mat.design_qty, 
+      effectiveInventory,
+      isFulfilled
+    );
   }
 
   return {
