@@ -40,7 +40,14 @@ const completeFinalQC = async (salesOrderId, inspectionData) => {
 
       if (existingShipment.length === 0) {
         const [orderRows] = await connection.query(
-          'SELECT company_id, target_dispatch_date, production_priority FROM sales_orders WHERE id = ?',
+          `SELECT 
+            so.company_id, 
+            c.company_name,
+            so.target_dispatch_date, 
+            so.production_priority 
+          FROM sales_orders so
+          LEFT JOIN companies c ON so.company_id = c.id
+          WHERE so.id = ?`,
           [salesOrderId]
         );
         const order = orderRows[0];
@@ -51,9 +58,9 @@ const completeFinalQC = async (salesOrderId, inspectionData) => {
         const shipmentCode = `SHP-${year}${month}-SO${String(salesOrderId).padStart(4, '0')}`;
         
         await connection.execute(
-          `INSERT INTO shipment_orders (shipment_code, sales_order_id, customer_id, dispatch_target_date, priority, status)
-           VALUES (?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
-          [shipmentCode, salesOrderId, order?.company_id || null, order?.target_dispatch_date || null, order?.production_priority || 'NORMAL']
+          `INSERT INTO shipment_orders (shipment_code, sales_order_id, customer_id, customer_name, dispatch_target_date, priority, status)
+           VALUES (?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
+          [shipmentCode, salesOrderId, order?.company_id || null, order?.company_name || null, order?.target_dispatch_date || null, order?.production_priority || 'NORMAL']
         );
       }
     }
@@ -85,7 +92,15 @@ const createShipmentOrder = async (salesOrderId) => {
 
     // 2. Fetch Sales Order Details
     const [orderRows] = await connection.query(
-      'SELECT company_id, target_dispatch_date, production_priority, status FROM sales_orders WHERE id = ?',
+      `SELECT 
+        so.company_id, 
+        c.company_name,
+        so.target_dispatch_date, 
+        so.production_priority, 
+        so.status 
+      FROM sales_orders so
+      LEFT JOIN companies c ON so.company_id = c.id
+      WHERE so.id = ?`,
       [salesOrderId]
     );
 
@@ -103,9 +118,9 @@ const createShipmentOrder = async (salesOrderId) => {
 
     // 4. Create Shipment Order
     await connection.execute(
-      `INSERT INTO shipment_orders (shipment_code, sales_order_id, customer_id, dispatch_target_date, priority, status)
-       VALUES (?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
-      [shipmentCode, salesOrderId, order?.company_id || null, order?.target_dispatch_date || null, order?.production_priority || 'NORMAL']
+      `INSERT INTO shipment_orders (shipment_code, sales_order_id, customer_id, customer_name, dispatch_target_date, priority, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
+      [shipmentCode, salesOrderId, order?.company_id || null, order?.company_name || null, order?.target_dispatch_date || null, order?.production_priority || 'NORMAL']
     );
 
     // 5. Update Sales Order Status to READY_FOR_SHIPMENT if not already

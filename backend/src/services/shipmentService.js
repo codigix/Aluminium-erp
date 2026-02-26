@@ -7,7 +7,7 @@ const getShipmentOrders = async () => {
     SELECT 
       s.id,
       so.id as so_id,
-      c.company_name as customer_name, 
+      COALESCE(c_so.company_name, c.company_name) as customer_name, 
       cp.po_number as customer_po_number, 
       s.id as shipment_order_id, 
       s.shipment_code, 
@@ -33,6 +33,7 @@ const getShipmentOrders = async () => {
       s.last_location_update
     FROM shipment_orders s
     LEFT JOIN sales_orders so ON s.sales_order_id = so.id
+    LEFT JOIN companies c_so ON so.company_id = c_so.id
     LEFT JOIN companies c ON s.customer_id = c.id
     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
     ORDER BY s.created_at DESC
@@ -80,11 +81,12 @@ const getShipmentOrderById = async (id) => {
       s.*, 
       so.id as so_id,
       so.project_name,
-      c.company_name as customer_name, 
+      COALESCE(c_so.company_name, c.company_name) as customer_name, 
       cp.po_number as customer_po_number, 
       s.status as shipment_status
     FROM shipment_orders s
     LEFT JOIN sales_orders so ON s.sales_order_id = so.id
+    LEFT JOIN companies c_so ON so.company_id = c_so.id
     LEFT JOIN companies c ON s.customer_id = c.id
     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
     WHERE s.id = ?
