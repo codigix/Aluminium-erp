@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (invoice_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
   FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
-  FOREIGN KEY (vendor_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
   FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE SET NULL,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_vendor_date (vendor_id, payment_date),
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS payment_vouchers (
   pdf_path VARCHAR(500),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE,
-  FOREIGN KEY (vendor_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
   INDEX idx_vendor_date (vendor_id, voucher_date)
 );
 
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS vendor_ledger (
   description TEXT,
   ledger_date DATE NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (vendor_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
   INDEX idx_vendor_date (vendor_id, ledger_date),
   INDEX idx_reference (reference_doc_id, reference_doc_type)
 );

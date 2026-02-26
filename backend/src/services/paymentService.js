@@ -168,14 +168,13 @@ const getPayments = async (filters = {}) => {
     SELECT 
       p.*,
       po.po_number,
-      c.company_name as vendor_name,
-      con.email as vendor_email,
+      v.vendor_name,
+      v.email as vendor_email,
       ba.bank_name,
       ba.account_number
     FROM payments p
     LEFT JOIN purchase_orders po ON p.po_id = po.id
-    LEFT JOIN companies c ON p.vendor_id = c.id
-    LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
+    LEFT JOIN vendors v ON p.vendor_id = v.id
     LEFT JOIN bank_accounts ba ON p.bank_account_id = ba.id
     WHERE 1=1
   `;
@@ -212,12 +211,12 @@ const getPaymentById = async (paymentId) => {
     `SELECT 
       p.*,
       po.po_number,
-      c.company_name as vendor_name,
+      v.vendor_name,
       ba.bank_name,
       ba.account_number
     FROM payments p
     LEFT JOIN purchase_orders po ON p.po_id = po.id
-    LEFT JOIN companies c ON p.vendor_id = c.id
+    LEFT JOIN vendors v ON p.vendor_id = v.id
     LEFT JOIN bank_accounts ba ON p.bank_account_id = ba.id
     WHERE p.id = ?`,
     [paymentId]
@@ -254,13 +253,13 @@ const getPendingPayments = async () => {
       po.po_number,
       po.total_amount,
       po.created_at,
-      c.company_name as vendor_name,
-      c.id as vendor_id,
+      v.vendor_name,
+      v.id as vendor_id,
       COALESCE(SUM(payments.payment_amount), 0) as already_paid,
       (po.total_amount - COALESCE(SUM(payments.payment_amount), 0)) as outstanding
     FROM purchase_orders p
     LEFT JOIN payments ON p.id = payments.po_id
-    LEFT JOIN companies c ON p.vendor_id = c.id
+    LEFT JOIN vendors v ON p.vendor_id = v.id
     WHERE p.status IN ('SENT', 'RECEIVED')
     GROUP BY p.id
     HAVING outstanding > 0
@@ -296,7 +295,7 @@ const generatePaymentVoucherPDF = async (paymentId) => {
   const payment = await getPaymentById(paymentId);
   
   const [vendorRows] = await pool.query(
-    'SELECT * FROM companies WHERE id = ?',
+    'SELECT * FROM vendors WHERE id = ?',
     [payment.vendor_id]
   );
   const vendor = vendorRows[0];
@@ -419,9 +418,9 @@ const generatePaymentVoucherPDF = async (paymentId) => {
 
   const viewData = {
     ...payment,
-    vendor_name: vendor?.company_name || vendor?.vendor_name || 'N/A',
+    vendor_name: vendor?.vendor_name || 'N/A',
     email: vendor?.email || 'N/A',
-    location: vendor?.address || vendor?.location || 'N/A',
+    location: vendor?.location || 'N/A',
     phone: vendor?.phone || 'N/A',
     formatted_date: formatDate(payment.payment_date),
     formatted_cheque_date: formatDate(payment.cheque_date),
@@ -451,10 +450,9 @@ const sendPaymentVoucherEmail = async (paymentId, emailData = {}) => {
   const payment = await getPaymentById(paymentId);
   
   const [vendorRows] = await pool.query(
-    `SELECT c.company_name, con.email 
-     FROM companies c 
-     LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
-     WHERE c.id = ?`,
+    `SELECT vendor_name as company_name, email 
+     FROM vendors 
+     WHERE id = ?`,
     [payment.vendor_id]
   );
   const vendor = vendorRows[0];

@@ -73,12 +73,12 @@ const getAccountsDashboardStats = async () => {
   // 4. Vendor Wise Payable
   const [vendorPayables] = await pool.query(`
     SELECT 
-      c.company_name as name,
+      v.vendor_name as name,
       SUM(po.total_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0)) as amount
     FROM purchase_orders po
-    JOIN companies c ON po.vendor_id = c.id
+    JOIN vendors v ON po.vendor_id = v.id
     WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID', 'PO_REQUEST')
-    GROUP BY c.id
+    GROUP BY v.id
     HAVING amount > 0
     ORDER BY amount DESC
     LIMIT 5
@@ -101,7 +101,7 @@ const getAccountsDashboardStats = async () => {
       po_number as ref,
       status,
       total_amount as amount,
-      (SELECT company_name FROM companies WHERE id = vendor_id) as vendor,
+      (SELECT vendor_name FROM vendors WHERE id = vendor_id) as vendor,
       created_at as time
     FROM purchase_orders
     ORDER BY created_at DESC LIMIT 5)
@@ -111,7 +111,7 @@ const getAccountsDashboardStats = async () => {
       payment_voucher_no as ref,
       status,
       payment_amount as amount,
-      (SELECT company_name FROM companies WHERE id = vendor_id) as vendor,
+      (SELECT vendor_name FROM vendors WHERE id = vendor_id) as vendor,
       created_at as time
     FROM payments
     ORDER BY created_at DESC LIMIT 5)
