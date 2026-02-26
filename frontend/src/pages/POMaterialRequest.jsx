@@ -239,7 +239,7 @@ const POMaterialRequest = () => {
     try {
       const result = await Swal.fire({
         title: 'Release Material?',
-        text: 'This will mark the material request as completed.',
+        text: 'This will mark the material request as fulfilled.',
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
@@ -256,7 +256,7 @@ const POMaterialRequest = () => {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ status: 'completed' })
+          body: JSON.stringify({ status: 'FULFILLED' })
         });
 
         if (response.ok) {
@@ -321,11 +321,11 @@ const POMaterialRequest = () => {
       processing: 0,
       po_created: 0,
       fulfilled: 0,
-      completed: 0,
       cancelled: 0
     };
     requests.forEach(req => {
-      const status = (req.status || 'DRAFT').toLowerCase();
+      let status = (req.status || 'DRAFT').toLowerCase();
+      if (status === 'completed') status = 'fulfilled';
       if (counts[status] !== undefined) counts[status]++;
     });
     return counts;
@@ -359,7 +359,10 @@ const POMaterialRequest = () => {
       key: 'status',
       label: 'Status',
       sortable: true,
-      render: (val) => <StatusBadge status={val || 'DRAFT'} />
+      render: (val) => {
+        const status = val === 'COMPLETED' ? 'FULFILLED' : (val || 'DRAFT');
+        return <StatusBadge status={status} />;
+      }
     },
     {
       key: 'required_by',
@@ -502,14 +505,13 @@ const POMaterialRequest = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-4 mb-6">
+        <div className="grid grid-cols-6 gap-4 mb-6">
           {[
             { label: 'Total Requests', count: statusCounts.total, icon: '📋', color: 'indigo', active: true },
             { label: 'Draft', count: statusCounts.draft, icon: '📝', color: 'slate' },
             { label: 'Approved', count: statusCounts.approved, icon: '🛡️', color: 'blue' },
             { label: 'Processing', count: statusCounts.processing, icon: '⚙️', color: 'purple' },
             { label: 'Fulfilled', count: statusCounts.fulfilled, icon: '✅', color: 'emerald' },
-            { label: 'Completed', count: statusCounts.completed, icon: '✔️', color: 'emerald' },
             { label: 'Cancelled', count: statusCounts.cancelled, icon: '❌', color: 'rose' }
           ].map((card, idx) => (
             <div key={idx} className={`bg-white p-4 rounded  border ${card.active ? 'border-indigo-200 ring-4 ring-indigo-50' : 'border-slate-100 hover:border-slate-200'} transition-all cursor-pointer group`}>

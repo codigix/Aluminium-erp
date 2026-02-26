@@ -405,7 +405,7 @@ const Quotations = () => {
     // Find the quotation for this project/MR and vendor
     const quotation = quotations.find(q => {
       const isVendorMatch = String(q.vendor_id) === String(vendorId);
-      const isStatusMatch = ['Sent ', 'DRAFT'].includes(q.status);
+      const isStatusMatch = ['SENT', 'DRAFT'].includes(q.status);
       
       let isProjectMatch = false;
       if (recordData.projectId.startsWith('MR-')) {
@@ -1359,7 +1359,7 @@ const Quotations = () => {
             >
               <option value="All Quotations">All Statuses</option>
               <option value="DRAFT">Draft</option>
-              <option value="Sent ">Sent</option>
+              <option value="SENT">Sent</option>
               <option value="RECEIVED">Received</option>
               <option value="REVIEWED">Reviewed</option>
               <option value="PENDING">Pending</option>

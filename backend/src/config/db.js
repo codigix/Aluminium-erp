@@ -415,7 +415,8 @@ const ensureMaterialRequestColumns = async () => {
       { name: 'linked_po_id', definition: 'INT NULL' },
       { name: 'linked_po_number', definition: 'VARCHAR(100) NULL' },
       { name: 'target_warehouse', definition: 'VARCHAR(100) NULL' },
-      { name: 'source_warehouse', definition: 'VARCHAR(100) NULL' }
+      { name: 'source_warehouse', definition: 'VARCHAR(100) NULL' },
+      { name: 'plan_id', definition: 'INT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

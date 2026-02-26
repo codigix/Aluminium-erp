@@ -20,7 +20,8 @@ const listProductionPlans = async () => {
             ) as item_description,
             (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id) as wo_count,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id) as total_ops,
-            (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops
+            (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops,
+            (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
      LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
@@ -47,7 +48,8 @@ const getProductionPlanById = async (id) => {
     `SELECT pp.*, u.username as creator_name,
             COALESCE(o_direct.order_no) as order_no,
             COALESCE(ppi_first.item_code) as item_code,
-            COALESCE(ppi_first.description) as item_description
+            COALESCE(ppi_first.description) as item_description,
+            (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
      LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
@@ -989,17 +991,37 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     SELECT ppm.*, 
            COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
            COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
-           COALESCE(actual_sb.current_balance, 0) as current_balance
+           COALESCE(actual_sb.current_balance, 0) as current_balance,
+           COALESCE(issued.issued_qty, 0) as issued_qty
     FROM production_plan_materials ppm
-    LEFT JOIN stock_balance actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+    LEFT JOIN (
+        SELECT 
+            material_name, 
+            MAX(item_code) as item_code, 
+            MAX(valuation_rate) as valuation_rate, 
+            SUM(current_balance) as current_balance
+        FROM stock_balance 
+        GROUP BY material_name
+    ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+    LEFT JOIN (
+        SELECT 
+            mii.item_code, 
+            mii.material_name,
+            SUM(mii.quantity) as issued_qty
+        FROM material_issue_items mii
+        JOIN material_issues mi ON mii.issue_id = mi.id
+        JOIN work_orders wo ON mi.work_order_id = wo.id
+        WHERE wo.plan_id = ?
+        GROUP BY mii.item_code, mii.material_name
+    ) issued ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
     WHERE ppm.plan_id = ?
-  `, [planId]);
+  `, [planId, planId]);
 
   for (const mat of materials) {
     const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
     if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
     
-    addToMap(mat.actual_item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', mat.rate || mat.stock_rate || 0, mat.design_qty, mat.current_balance);
+    addToMap(mat.actual_item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', mat.rate || mat.stock_rate || 0, mat.design_qty, Number(mat.current_balance) + Number(mat.issued_qty));
   }
 
   return {
@@ -1068,22 +1090,42 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
       SELECT ppm.*, 
              COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
              COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
-             COALESCE(actual_sb.current_balance, 0) as current_balance
+             COALESCE(actual_sb.current_balance, 0) as current_balance,
+             COALESCE(issued.issued_qty, 0) as issued_qty
       FROM production_plan_materials ppm
       LEFT JOIN (
-        SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate, MAX(current_balance) as current_balance
+        SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate, SUM(current_balance) as current_balance
         FROM stock_balance 
         GROUP BY material_name
-      ) actual_sb ON ppm.material_name = actual_sb.material_name
+      ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+      LEFT JOIN (
+        SELECT 
+            mii.item_code, 
+            mii.material_name,
+            SUM(mii.quantity) as issued_qty
+        FROM material_issue_items mii
+        JOIN material_issues mi ON mii.issue_id = mi.id
+        JOIN work_orders wo ON mi.work_order_id = wo.id
+        WHERE wo.plan_id = ?
+        GROUP BY mii.item_code, mii.material_name
+      ) issued ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
       WHERE ppm.plan_id = ?
-    `, [planId]);
+    `, [planId, planId]);
 
     for (const mat of materials) {
       const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
       if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
 
       const effectiveRate = mat.rate || mat.stock_rate || 0;
-      addToMap(mat.actual_item_code, mat.required_qty, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
+      
+      // Calculate deficit: required - (available + issued)
+      const availableTotal = Number(mat.current_balance) + Number(mat.issued_qty);
+      const shortage = Math.max(0, Number(mat.required_qty) - availableTotal);
+      
+      // Only add to MR if there's a shortage
+      if (shortage > 0) {
+        addToMap(mat.actual_item_code, shortage, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
+      }
     }
 
     if (aggregatedMap.size === 0) {
@@ -1115,8 +1157,8 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
     const [mrResult] = await connection.execute(
       `INSERT INTO material_requests (
         mr_number, department, requested_by, required_by, 
-        purpose, status, notes, source_warehouse
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        purpose, status, notes, source_warehouse, plan_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         mrNumber,
         'Production',
@@ -1125,7 +1167,8 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
         'Purchase Request',
         'DRAFT',
         `Generated from Production Plan ${plan.plan_code}`,
-        'Consumables Store'
+        'Consumables Store',
+        planId
       ]
     );
 

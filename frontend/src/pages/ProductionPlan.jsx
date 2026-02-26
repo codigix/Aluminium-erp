@@ -1167,7 +1167,13 @@ const ProductionPlan = () => {
                           <span className="text-[10px] text-slate-400 ">{isViewing ? mat.bom_ref : mat.bom_no}</span>
                         </td>
                         <td className="p-2  text-center">
-                          <span className="p-1  bg-slate-100 text-slate-500 text-xs   rounded ">{isViewing ? mat.status : '--'}</span>
+                          <span className={`p-1 rounded text-[10px] font-black tracking-tighter border
+                            ${mat.status === 'FULFILLED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                              mat.status === 'SUBMITTED' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
+                              'bg-slate-100 text-slate-500 border-slate-200'}`}
+                          >
+                            {isViewing ? (mat.status === 'FULFILLED' ? '✅ FULFILLED' : mat.status) : '--'}
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -1653,7 +1659,7 @@ const ProductionPlan = () => {
                           </div>
                           <span className="text-[10px]  text-slate-600">{plan.order_no || 'N/A'}</span>
                         </div>
-                        <div className="flex">
+                        <div className="flex gap-1.5">
                           <span className={`p-1  rounded  text-[9px] font-black  tracking-tighter border flex items-center gap-1
                             ${plan.status === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
                               plan.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
@@ -1662,6 +1668,15 @@ const ProductionPlan = () => {
                             <span className={`w-1 h-1 rounded  ${plan.status === 'Draft' ? 'bg-amber-400' : plan.status === 'Completed' ? 'bg-emerald-400' : 'bg-indigo-400'}`} />
                             {plan.status}
                           </span>
+                          {plan.mr_status && (
+                            <span className={`p-1 rounded text-[9px] font-black tracking-tighter border flex items-center gap-1
+                              ${plan.mr_status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                                plan.mr_status === 'DRAFT' ? 'bg-slate-50 text-slate-600 border-slate-100' : 
+                                'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
+                            >
+                               {plan.mr_status === 'COMPLETED' ? '✅ FULFILLED' : `MR: ${plan.mr_status}`}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -1838,11 +1853,15 @@ const ProductionPlan = () => {
             <div className="flex gap-6">
               <button className="flex items-center gap-2 pb-2 border-b-2 border-rose-500 text-rose-600">
                 <span className="text-xs font-black">Pending Request</span>
-                <span className="px-1.5 py-0.5 bg-rose-50 rounded text-[10px] font-black">{mrItems.length}</span>
+                <span className="px-1.5 py-0.5 bg-rose-50 rounded text-[10px] font-black">
+                  {mrItems.filter(item => item.inventory < item.quantity).length}
+                </span>
               </button>
               <button className="flex items-center gap-2 pb-2 text-slate-400 hover:text-slate-600">
                 <span className="text-xs font-black">Complete Request</span>
-                <span className="px-1.5 py-0.5 bg-slate-50 rounded text-[10px] font-black">0</span>
+                <span className="px-1.5 py-0.5 bg-slate-50 rounded text-[10px] font-black">
+                  {mrItems.filter(item => item.inventory >= item.quantity).length}
+                </span>
               </button>
             </div>
             <div className="flex items-center gap-2">

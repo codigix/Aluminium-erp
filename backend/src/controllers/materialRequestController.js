@@ -151,8 +151,8 @@ const materialRequestController = {
       const { status } = req.body;
       const normalizedStatus = status.toUpperCase();
 
-      // If status is being updated to COMPLETED, trigger stock out
-      if (normalizedStatus === 'COMPLETED') {
+      // If status is being updated to COMPLETED or FULFILLED, trigger stock out
+      if (normalizedStatus === 'COMPLETED' || normalizedStatus === 'FULFILLED') {
         // Fetch MR and its items
         const [mrRows] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [id]);
         if (mrRows.length === 0) {
@@ -160,8 +160,8 @@ const materialRequestController = {
         }
         const mr = mrRows[0];
 
-        // Only process stock out if it wasn't already completed
-        if (mr.status?.toUpperCase() !== 'COMPLETED') {
+        // Only process stock out if it wasn't already completed/fulfilled
+        if (mr.status?.toUpperCase() !== 'COMPLETED' && mr.status?.toUpperCase() !== 'FULFILLED') {
           const [items] = await connection.query('SELECT * FROM material_request_items WHERE mr_id = ?', [id]);
           
           for (const item of items) {
@@ -194,6 +194,14 @@ const materialRequestController = {
                 unit: item.uom
               },
               connection
+            );
+          }
+
+          // If linked to a production plan, update its material status
+          if (mr.plan_id) {
+            await connection.query(
+              "UPDATE production_plan_materials SET status = 'FULFILLED' WHERE plan_id = ?",
+              [mr.plan_id]
             );
           }
         }

@@ -411,7 +411,7 @@ const getQuotationStats = async () => {
   const [stats] = await pool.query(`
     SELECT 
       COUNT(*) as total_quotations,
-      SUM(CASE WHEN status = 'Sent ' THEN 1 ELSE 0 END) as sent_quotations,
+      SUM(CASE WHEN status = 'SENT' THEN 1 ELSE 0 END) as sent_quotations,
       SUM(CASE WHEN status = 'EMAIL_RECEIVED' THEN 1 ELSE 0 END) as email_received_quotations,
       SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pending_quotations,
       SUM(CASE WHEN status = 'REVIEWED' THEN 1 ELSE 0 END) as approved_quotations,
@@ -470,7 +470,7 @@ const sendQuotationEmail = async (quotationId, emailData) => {
     
     await pool.execute(
       'UPDATE quotations SET status = ? WHERE id = ?',
-      ['Sent ', quotationId]
+      ['SENT', quotationId]
     );
 
     return {
@@ -681,18 +681,23 @@ const parseVendorQuotationPDF = async (filePath) => {
   const lines = text.split('\n');
 
   let tableStarted = false;
+  let hasDrawingNoColumn = true;
+
   for (let line of lines) {
     line = line.trim();
     if (!line) continue;
 
-    // Detect table start
-    if (line.includes('Drawing No') || line.includes('Material Name') || (line.includes('Qty') && line.includes('Rate'))) {
+    // Detect table start and column structure
+    if (line.includes('Drawing No') || line.includes('Material Name') || (line.includes('Qty') && line.includes('Rate')) || line.includes('Material')) {
       tableStarted = true;
+      if (line.includes('Material') && !line.includes('Drawing No')) {
+        hasDrawingNoColumn = false;
+      }
       continue;
     }
 
     if (tableStarted) {
-      if (line.toLowerCase().includes('total value') || line.toLowerCase().includes('total amount')) {
+      if (line.toLowerCase().includes('total value') || line.toLowerCase().includes('total amount') || line.toLowerCase().includes('subtotal')) {
         break;
       }
 
@@ -701,9 +706,9 @@ const parseVendorQuotationPDF = async (filePath) => {
       const parts = line.split(/\s+/);
       
       for (let i = parts.length - 1; i >= 0; i--) {
-        const val = parts[i].replace(/[^\d.,]/g, '');
-        if (val && !isNaN(parseFloat(val.replace(/,/g, '')))) {
-          numericParts.push({ val: val.replace(/,/g, ''), index: i });
+        const rawVal = parts[i].replace(/[^\d.,]/g, '');
+        if (rawVal && !isNaN(parseFloat(rawVal.replace(/,/g, '')))) {
+          numericParts.push({ val: rawVal.replace(/,/g, ''), index: i });
         }
         if (numericParts.length >= 3) break; // Qty, Rate, Amount
       }
@@ -713,47 +718,41 @@ const parseVendorQuotationPDF = async (filePath) => {
         const amount = parseFloat(numericParts[0].val);
         const rate = parseFloat(numericParts[1].val);
         
-        // Try to find quantity - it should be the one before rate or the 3rd numeric part
         let qty = 0;
         let unit = '';
         
         if (numericParts.length >= 3) {
           qty = parseFloat(numericParts[2].val);
-          // Unit is usually between qty and rate
           const qtyIdx = numericParts[2].index;
           const rateIdx = numericParts[1].index;
+          // Unit is usually between qty and rate
           if (rateIdx > qtyIdx + 1) {
-            unit = parts[qtyIdx + 1];
+            unit = parts.slice(qtyIdx + 1, rateIdx).join(' ');
           }
         }
 
-        // The rest (everything before the first numeric part) is DrawingNo and MaterialName
         const firstNumericIdx = numericParts[numericParts.length - 1].index;
-        const drawingNo = parts[0];
-        const materialName = parts.slice(1, firstNumericIdx).join(' ');
-        
-        items.push({
-          drawing_no: drawingNo,
-          material_name: materialName,
-          quantity: qty,
-          unit: unit,
-          unit_rate: rate,
-          amount: amount
-        });
-        continue;
-      }
+        let drawingNo = '—';
+        let materialName = '';
 
-      // Fallback to original regex
-      const match = line.match(/^(\S+)\s+(.+?)\s+([\d.]+)\s+(\w+)\s+([\d,.]+)\s+([\d,.]+)$/);
-      if (match) {
-        items.push({
-          drawing_no: match[1],
-          material_name: match[2],
-          quantity: parseFloat(match[3]),
-          unit: match[4],
-          unit_rate: parseFloat(match[5].replace(/,/g, '')),
-          amount: parseFloat(match[6].replace(/,/g, ''))
-        });
+        if (hasDrawingNoColumn && firstNumericIdx > 1) {
+          drawingNo = parts[0];
+          materialName = parts.slice(1, firstNumericIdx).join(' ');
+        } else {
+          materialName = parts.slice(0, firstNumericIdx).join(' ');
+        }
+        
+        if (materialName) {
+          items.push({
+            drawing_no: drawingNo,
+            material_name: materialName,
+            quantity: qty,
+            unit: unit,
+            unit_rate: rate,
+            amount: amount
+          });
+        }
+        continue;
       }
     }
   }

@@ -102,9 +102,9 @@ const uploadVendorResponse = async (req, res, next) => {
       received_pdf_path: filePath
     });
     
-    // Auto-mark as RECEIVED if status is currently Sent  or DRAFT
+    // Auto-mark as RECEIVED if status is currently SENT or DRAFT
     const quotation = await quotationService.getQuotationById(req.params.quotationId);
-    if (['Sent ', 'DRAFT', 'EMAIL_RECEIVED'].includes(quotation.status)) {
+    if (['SENT', 'DRAFT', 'EMAIL_RECEIVED'].includes(quotation.status)) {
       await quotationService.updateQuotationStatus(req.params.quotationId, 'RECEIVED');
     }
     
