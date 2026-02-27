@@ -291,7 +291,7 @@ const BOMCreation = () => {
             { label: 'Active Clients', value: stats.totalClients, sub: 'In Design Phase', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', color: 'blue' },
             { label: 'Total Drawings', value: stats.totalDrawings, sub: 'Across all Clients', icon: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'indigo' },
             { label: 'Completion Rate', value: `${stats.completionRate}%`, sub: 'BOMs Finalized', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'emerald', progress: stats.completionRate },
-            { label: 'Est. BOM Value', value: `₹${stats.totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, sub: 'Production Costing', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', color: 'amber' }
+            { label: 'Est. BOM Value', value: `₹${stats.totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: 'Production Costing', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', color: 'amber' }
           ].map((stat, i) => (
             <div key={i} className="bg-white p-4 rounded  border border-slate-200 ">
               <div className='flex justify-between items-start'>
@@ -325,7 +325,7 @@ const BOMCreation = () => {
                 <tr>
                   <th className="p-2 text-left text-xs  text-slate-500 ">Client Name</th>
                   <th className="p-2 text-left text-xs  text-slate-500 ">Total Drawings</th>
-                  <th className="p-2 text-left text-xs  text-slate-500 ">Delivery Date</th>
+                  <th className="p-2 text-left text-xs  text-slate-500 ">FG BOM Cost (Amount)</th>
                   <th className="p-2 text-left text-xs  text-slate-500 ">Overall Status</th>
                   <th className="p-2 text-left text-xs  text-slate-500 ">Action</th>
                 </tr>
@@ -354,14 +354,13 @@ const BOMCreation = () => {
                     const drawingsSet = new Set(items.map(i => cleanText(i.drawing_no || 'N/A')));
                     const totalDrawingsCount = drawingsSet.size;
                     
-                    const deliveryDate = items.length > 0 
-                      ? items.reduce((earliest, item) => {
-                          if (!item.delivery_date) return earliest;
-                          const itemDate = new Date(item.delivery_date);
-                          if (!earliest || isNaN(earliest.getTime())) return itemDate;
-                          return itemDate < earliest ? itemDate : earliest;
-                        }, null)
-                      : null;
+                    const fgBomCost = items.reduce((total, i) => {
+                      const isFG = (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'));
+                      if (isFG) {
+                        return total + (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
+                      }
+                      return total;
+                    }, 0);
 
                     const drawingsMapForStatus = items.reduce((acc, item) => {
                       const dwg = cleanText(item.drawing_no || 'N/A');
@@ -397,10 +396,8 @@ const BOMCreation = () => {
                             <span className="text-sm text-slate-900 ">{totalDrawingsCount}</span>
                           </td>
                           <td className="p-2 text-left">
-                            <span className="text-sm text-slate-600">
-                              {deliveryDate && !isNaN(deliveryDate.getTime()) 
-                                ? deliveryDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                : '—'}
+                            <span className="text-sm font-medium text-slate-900">
+                              ₹{fgBomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </td>
                           <td className="p-2 text-left">
