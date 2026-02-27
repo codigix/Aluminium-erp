@@ -231,7 +231,7 @@ const BOMFormPage = () => {
     const isComponentType = (type) => {
       const t = (type || '').toLowerCase();
       // Exclude FG/Finished goods from component selection as they shouldn't be inside another BOM normally
-      return t.includes('semi') || t.includes('assembly') || t.includes('sfg') || t.includes('sub');
+      return t.includes('semi') || t.includes('assembly') || t.includes('sfg') || t.includes('sub') || t.includes('consumable');
     };
 
     // 1. Add Stock Items
@@ -242,7 +242,7 @@ const BOMFormPage = () => {
       // Strict FG check by code prefix
       if (item.item_code && item.item_code.startsWith("FG-")) return;
 
-      const isSA = (item.item_code || "").startsWith("SA-") || type.includes("assembly") || type.includes("sub");
+      const isSA = (item.item_code || "").startsWith("SA-") || type.includes("assembly") || type.includes("sub") || type.includes("consumable");
       
       if (!showAllDrawings) {
         if (productDrawing && item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== productDrawing) return;
@@ -271,7 +271,7 @@ const BOMFormPage = () => {
     // 2. Add Approved Drawings (Sales Order Items)
     approvedDrawings.forEach(item => {
       const type = (item.item_group || "").toLowerCase();
-      const isSA = (item.item_code || "").startsWith("SA-") || type.includes("assembly") || type.includes("sub");
+      const isSA = (item.item_code || "").startsWith("SA-") || type.includes("assembly") || type.includes("sub") || type.includes("consumable");
       
       if (!isSA && !showAllDrawings) return; 
       // Strict FG check
