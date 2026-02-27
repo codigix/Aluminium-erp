@@ -1022,7 +1022,6 @@ const ProductionPlan = () => {
                     <th className="p-2   text-center">Planned Qty</th>
                     <th className="p-2  ">Bom No</th>
                     <th className="p-2  ">Source FG</th>
-                    <th className="p-2  ">Raw Materials</th>
                     <th className="p-2   text-center">Manufacturing Type</th>
                   </tr>
                 </thead>
@@ -1070,22 +1069,6 @@ const ProductionPlan = () => {
                         <span className="text-[10px] text-slate-500 ">
                           {sa.sourceFg || sa.source_fg || '-'}
                         </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          {!isViewing ? (sa.materials?.map((mat, mIdx) => (
-                            <div key={mIdx} className="flex items-center gap-2 text-xs ">
-                              <span className="w-1 h-1 bg-amber-400 rounded "></span>
-                              <span className=" text-slate-700">{mat.material_name}:</span>
-                              <span className="text-slate-500">{(mat.qty_per_pc * sa.quantity * sa.parentPlannedQty).toFixed(3)} {mat.uom}</span>
-                            </div>
-                          ))) : (
-                            <span className="text-[10px] text-slate-400 italic">Consolidated in Materials tab</span>
-                          )}
-                          {!isViewing && (!sa.materials || sa.materials.length === 0) && (
-                            <span className="text-[10px] text-slate-400 italic">No direct materials</span>
-                          )}
-                        </div>
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className="p-1  bg-rose-50 text-rose-600text-xs   rounded  border border-rose-100">{sa.manufacturingType || sa.manufacturing_type || 'In House'}</span>
@@ -1187,62 +1170,7 @@ const ProductionPlan = () => {
               </div>
             </div>
 
-            {/* Exploded Components */}
-            <div>
-              <div className="flex items-center gap-2  mb-4">
-                <div className="w-2 h-2 bg-rose-500 rounded "></div>
-                <h3 className="text-[10px]  text-rose-600  tracking-widest">Exploded Components</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-lefttext-xs  text-slate-400   border-b border-slate-100">
-                    <tr>
-                      <th className="p-2  ">Component Specification</th>
-                      <th className="p-2   text-right">Design Qty</th>
-                      <th className="p-2   text-right">Planned Qty</th>
-                      <th className="p-2  ">Source Assembly</th>
-                      <th className="p-2  ">BOM Ref</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).map((mat, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50">
-                        <td className="p-2 ">
-                          <div className=" text-slate-800 text-xs  tracking-tight">{mat.material_name}</div>
-                          <div className="text-[10px] text-slate-400 italic ">{mat.description || 'Raw Material'}</div>
-                        </td>
-                        <td className="p-2  text-right  text-slate-700">
-                          {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
-                        </td>
-                        <td className="p-2  text-right">
-                          <div className=" text-rose-600">
-                            {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
-                          </div>
-                          <div className="text-[8px] text-slate-400  ">{isViewing ? mat.uom : mat.unit}</div>
-                        </td>
-                        <td className="p-2 ">
-                          <span className="inline-flex items-center gap-1.5 p-2  bg-rose-50 text-rose-600 text-[9px]  rounded  border border-rose-100">
-                            <svg className="w-3 h-3 rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                            {isViewing ? mat.source_assembly : mat.source_assembly}
-                          </span>
-                        </td>
-                        <td className="p-2 ">
-                          <span className="inline-flex items-center gap-1.5 p-1  bg-slate-50 text-indigo-600text-xs   rounded border border-slate-100">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            {isViewing ? mat.bom_ref : mat.bom_no}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                    {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).length === 0 && (
-                      <tr>
-                        <td colSpan="4" className="px-4 py-8 text-center text-slate-400 italic text-xs">No exploded components available</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+
 
           </div>
         </Card>
