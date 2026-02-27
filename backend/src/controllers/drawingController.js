@@ -26,11 +26,44 @@ const getDrawingRevisions = async (req, res, next) => {
 
 const updateDrawing = async (req, res, next) => {
   try {
-    const { drawingNo } = req.params;
-    const { description, revisionNo } = req.body;
+    const { id } = req.params;
+    const { 
+      description, 
+      revisionNo, 
+      clientName, 
+      contactPerson, 
+      phoneNumber, 
+      emailAddress,
+      customerType,
+      gstin,
+      city,
+      state,
+      billingAddress,
+      shippingAddress,
+      qty,
+      remarks,
+      drawingNo
+    } = req.body;
     const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
 
-    await drawingService.updateDrawing(drawingNo, { description, revisionNo, drawingPdf });
+    await drawingService.updateDrawing(id, { 
+      description, 
+      revisionNo, 
+      drawingPdf,
+      clientName,
+      contactPerson,
+      phoneNumber,
+      emailAddress,
+      customerType,
+      gstin,
+      city,
+      state,
+      billingAddress,
+      shippingAddress,
+      qty,
+      remarks,
+      drawingNo
+    });
     res.json({ message: 'Drawing updated successfully' });
   } catch (error) {
     next(error);
@@ -52,7 +85,11 @@ const updateItemDrawing = async (req, res, next) => {
 
 const createDrawing = async (req, res, next) => {
   try {
-    const { clientName, drawingNo, revision, qty, description, remarks, fileType, contactPerson, phoneNumber, emailAddress } = req.body;
+    const { 
+      clientName, drawingNo, revision, qty, description, remarks, fileType, 
+      contactPerson, phoneNumber, emailAddress,
+      customerType, gstin, city, state, billingAddress, shippingAddress
+    } = req.body;
     
     // Check for both single file and multiple files (upload.fields)
     const excelFile = req.files?.file?.[0] || req.file;
@@ -129,7 +166,13 @@ const createDrawing = async (req, res, next) => {
             uploadedBy,
             contactPerson,
             phoneNumber,
-            emailAddress
+            emailAddress,
+            customerType,
+            gstin,
+            city,
+            state,
+            billingAddress,
+            shippingAddress
           });
         }
         
@@ -153,7 +196,13 @@ const createDrawing = async (req, res, next) => {
       uploadedBy,
       contactPerson,
       phoneNumber,
-      emailAddress
+      emailAddress,
+      customerType,
+      gstin,
+      city,
+      state,
+      billingAddress,
+      shippingAddress
     });
 
     res.status(201).json({ message: 'Customer drawing uploaded successfully', id });

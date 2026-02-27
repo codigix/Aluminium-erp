@@ -167,13 +167,18 @@ const getPaymentsReceived = async (filters = {}) => {
   let query = `
     SELECT 
       cp.*,
-      so.so_number,
+      CASE 
+        WHEN cp.sales_order_source = 'DIRECT_ORDER' THEN o.order_no
+        ELSE COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR))
+      END as so_number,
       c.company_name as customer_name,
       con.email as customer_email,
       ba.bank_name,
       ba.account_number
     FROM customer_payments cp
-    LEFT JOIN sales_orders so ON cp.sales_order_id = so.id
+    LEFT JOIN sales_orders so ON cp.sales_order_id = so.id AND cp.sales_order_source = 'SALES_ORDER'
+    LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
+    LEFT JOIN orders o ON cp.sales_order_id = o.id AND cp.sales_order_source = 'DIRECT_ORDER'
     LEFT JOIN companies c ON cp.customer_id = c.id
     LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
     LEFT JOIN bank_accounts ba ON cp.bank_account_id = ba.id
@@ -211,12 +216,17 @@ const getPaymentReceivedById = async (paymentId) => {
   const [rows] = await pool.query(
     `SELECT 
       cp.*,
-      so.so_number,
+      CASE 
+        WHEN cp.sales_order_source = 'DIRECT_ORDER' THEN o.order_no
+        ELSE COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR))
+      END as so_number,
       c.company_name as customer_name,
       ba.bank_name,
       ba.account_number
     FROM customer_payments cp
-    LEFT JOIN sales_orders so ON cp.sales_order_id = so.id
+    LEFT JOIN sales_orders so ON cp.sales_order_id = so.id AND cp.sales_order_source = 'SALES_ORDER'
+    LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
+    LEFT JOIN orders o ON cp.sales_order_id = o.id AND cp.sales_order_source = 'DIRECT_ORDER'
     LEFT JOIN companies c ON cp.customer_id = c.id
     LEFT JOIN bank_accounts ba ON cp.bank_account_id = ba.id
     WHERE cp.id = ?`,

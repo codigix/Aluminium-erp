@@ -943,7 +943,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   const planCode = plan.plan_code;
   const aggregatedMap = new Map();
 
-  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled) => {
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists) => {
     if (!itemCode && !name) return;
     
     const code = (itemCode || name).trim();
@@ -971,6 +971,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       if (Number(currentBalance) > existing.inventory) {
         existing.inventory = Number(currentBalance);
         existing.is_fulfilled = isFulfilled || existing.is_fulfilled;
+        existing.request_exists = requestExists || existing.request_exists;
       }
       if (existing.item_type !== 'RAW_MATERIAL') {
         const newType = mapItemType(code, category);
@@ -988,7 +989,8 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         item_type: mapItemType(code, category),
         unit_rate: rate || 0,
         inventory: Math.max(0, Number(currentBalance || 0)),
-        is_fulfilled: !!isFulfilled
+        is_fulfilled: !!isFulfilled,
+        request_exists: !!requestExists
       });
     }
   };
@@ -1051,6 +1053,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     
     // If material request is fulfilled or completed, show full quantity as available
     const isFulfilled = (mat.status_rank || 0) >= 4;
+    const requestExists = (mat.status_rank || 0) > 0;
     const effectiveInventory = isFulfilled 
       ? Math.max(Number(mat.required_qty), Number(mat.current_balance) + Number(mat.issued_qty))
       : Number(mat.current_balance) + Number(mat.issued_qty);
@@ -1065,7 +1068,8 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       mat.rate || mat.stock_rate || 0, 
       mat.design_qty, 
       effectiveInventory,
-      isFulfilled
+      isFulfilled,
+      requestExists
     );
   }
 

@@ -19,6 +19,7 @@ const DrawingMaster = () => {
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [editData, setEditData] = useState({
+    id: '',
     drawing_no: '',
     revision_no: '',
     description: '',
@@ -230,6 +231,7 @@ const DrawingMaster = () => {
 
   const handleEdit = (drawing) => {
     setEditData({
+      id: drawing.id,
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision_no || '0',
       description: drawing.description || '',
@@ -250,7 +252,7 @@ const DrawingMaster = () => {
         formData.append('drawing_pdf', editData.drawing_pdf);
       }
 
-      const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(editData.drawing_no)}`, {
+      const response = await fetch(`${API_BASE}/drawings/${editData.id}`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -289,7 +291,7 @@ const DrawingMaster = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(drawing.drawing_no)}`, {
+        const response = await fetch(`${API_BASE}/drawings/${drawing.id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });

@@ -249,21 +249,19 @@ const getVendorBalance = async (vendorId) => {
 const getPendingPayments = async () => {
   const [payments] = await pool.query(
     `SELECT 
-      p.*,
+      po.*,
       po.po_number,
       po.total_amount,
       po.created_at,
       v.vendor_name,
       v.id as vendor_id,
-      COALESCE(SUM(payments.payment_amount), 0) as already_paid,
-      (po.total_amount - COALESCE(SUM(payments.payment_amount), 0)) as outstanding
-    FROM purchase_orders p
-    LEFT JOIN payments ON p.id = payments.po_id
-    LEFT JOIN vendors v ON p.vendor_id = v.id
-    WHERE p.status IN ('SENT', 'RECEIVED')
-    GROUP BY p.id
+      COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0) as already_paid,
+      (po.total_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0)) as outstanding
+    FROM purchase_orders po
+    LEFT JOIN vendors v ON po.vendor_id = v.id
+    WHERE po.status IN ('SENT', 'RECEIVED', 'PARTIALLY_RECEIVED')
     HAVING outstanding > 0
-    ORDER BY p.created_at DESC`
+    ORDER BY po.created_at DESC`
   );
 
   return payments;

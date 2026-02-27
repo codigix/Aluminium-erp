@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, DataTable, StatusBadge, FormControl } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Plus, Search, RefreshCw, Filter, FileText, Send } from 'lucide-react';
+import { Plus, Search, RefreshCw, Filter, FileText, Send, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast, infoToast } from '../utils/toast';
 
@@ -29,11 +29,26 @@ const CustomerDrawing = () => {
   
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
+  const [modalMode, setModalMode] = useState('edit'); // 'view' or 'edit'
   const [editData, setEditData] = useState({
+    id: '',
     drawing_no: '',
     revision_no: '',
     description: '',
-    drawing_pdf: null
+    client_name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    customer_type: '',
+    gstin: '',
+    city: '',
+    state: '',
+    billing_address: '',
+    shipping_address: '',
+    qty: 1,
+    remarks: '',
+    drawing_pdf: null,
+    file_path: ''
   });
   const [saveLoading, setSaveLoading] = useState(false);
 
@@ -365,19 +380,45 @@ const CustomerDrawing = () => {
     }
   };
 
-  const handleEdit = (drawing) => {
+  const handleEdit = (drawing, mode = 'edit') => {
+    const company = companies.find(c => c.company_name === drawing.client_name);
+    
+    let billingAddressLine = '';
+    let shippingAddressLine = '';
+    
+    if (company) {
+      const billingAddress = company.addresses?.find(a => a.address_type === 'BILLING');
+      const shippingAddress = company.addresses?.find(a => a.address_type === 'SHIPPING');
+      billingAddressLine = billingAddress ? `${billingAddress.line1}${billingAddress.line2 ? ', ' + billingAddress.line2 : ''}, ${billingAddress.city}, ${billingAddress.state} ${billingAddress.pincode}` : '';
+      shippingAddressLine = shippingAddress ? `${shippingAddress.line1}${shippingAddress.line2 ? ', ' + shippingAddress.line2 : ''}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}` : '';
+    }
+
     setEditData({
+      id: drawing.id,
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision || drawing.revision_no || '0',
       description: drawing.description || '',
-      drawing_pdf: null
+      client_name: drawing.client_name,
+      contact_person: drawing.contact_person || (company ? company.contact_person : ''),
+      phone: drawing.phone || (company ? company.contact_mobile : ''),
+      email: drawing.email || (company ? company.contact_email : ''),
+      customer_type: drawing.customer_type || (company ? company.customer_type : ''),
+      gstin: drawing.gstin || (company ? company.gstin : ''),
+      city: drawing.city || (company ? (company.addresses?.find(a => a.address_type === 'BILLING')?.city || '') : ''),
+      state: drawing.state || (company ? (company.addresses?.find(a => a.address_type === 'BILLING')?.state || '') : ''),
+      billing_address: drawing.billing_address || billingAddressLine,
+      shipping_address: drawing.shipping_address || shippingAddressLine,
+      qty: drawing.qty || 1,
+      remarks: drawing.remarks || '',
+      drawing_pdf: null,
+      file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
+    setModalMode(mode);
     setShowEditModal(true);
   };
 
   const handlePreview = (drawing) => {
-    setPreviewDrawing(drawing);
-    setShowPreviewModal(true);
+    handleEdit(drawing, 'view');
   };
 
   const handleSave = async (e) => {
@@ -386,13 +427,28 @@ const CustomerDrawing = () => {
       setSaveLoading(true);
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
+      formData.append('id', editData.id);
+      formData.append('drawingNo', editData.drawing_no);
       formData.append('revisionNo', editData.revision_no);
       formData.append('description', editData.description);
+      formData.append('clientName', editData.client_name);
+      formData.append('contactPerson', editData.contact_person);
+      formData.append('phoneNumber', editData.phone);
+      formData.append('emailAddress', editData.email);
+      formData.append('customerType', editData.customer_type);
+      formData.append('gstin', editData.gstin);
+      formData.append('city', editData.city);
+      formData.append('state', editData.state);
+      formData.append('billingAddress', editData.billing_address);
+      formData.append('shippingAddress', editData.shipping_address);
+      formData.append('qty', editData.qty);
+      formData.append('remarks', editData.remarks);
+
       if (editData.drawing_pdf) {
         formData.append('drawing_pdf', editData.drawing_pdf);
       }
 
-      const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(editData.drawing_no)}`, {
+      const response = await fetch(`${API_BASE}/drawings/${editData.id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1175,76 +1231,239 @@ const CustomerDrawing = () => {
       </div>
     </div>
 
-      {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 py-4">
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowEditModal(false)}></div>
-            <div className="relative bg-white rounded  shadow-2xl max-w-md w-full p-5 transform transition-all">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-md text-slate-900">Edit Drawing</h3>
-                <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">
-                  ✕
-                </button>
-              </div>
-              <p className="text-slate-600 text-xs mb-3">Drawing: <span className=" text-indigo-600">{editData.drawing_no}</span></p>
-              
-              <form onSubmit={handleSave} className="space-y-3">
+      {/* Edit/View Modal */}
+      <Modal 
+        isOpen={showEditModal} 
+        onClose={() => setShowEditModal(false)}
+        title={modalMode === 'view' ? 'View Drawing Details' : 'Edit Drawing'}
+        size="4xl"
+      >
+        <form onSubmit={handleSave} className="space-y-4 pb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded  border border-slate-200">
+            {/* Client Info Section */}
+            <div className="lg:col-span-1">
+              <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
+              <input 
+                type="text"
+                readOnly
+                className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600"
+                value={editData.client_name}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Contact Person</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Contact person name"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.contact_person}
+                onChange={(e) => setEditData({...editData, contact_person: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Phone</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Phone number"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.phone}
+                onChange={(e) => setEditData({...editData, phone: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Email</label>
+              <input 
+                type="email"
+                disabled={modalMode === 'view'}
+                placeholder="Email address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.email}
+                onChange={(e) => setEditData({...editData, email: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Type</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Customer type"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.customer_type}
+                onChange={(e) => setEditData({...editData, customer_type: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">GSTIN</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="GST number"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.gstin}
+                onChange={(e) => setEditData({...editData, gstin: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">City</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="City"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.city}
+                onChange={(e) => setEditData({...editData, city: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">State</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="State"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.state}
+                onChange={(e) => setEditData({...editData, state: e.target.value})}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs  text-slate-700 mb-1">Billing Address</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Billing address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.billing_address}
+                onChange={(e) => setEditData({...editData, billing_address: e.target.value})}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs  text-slate-700 mb-1">Shipping Address</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Shipping address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.shipping_address}
+                onChange={(e) => setEditData({...editData, shipping_address: e.target.value})}
+              />
+            </div>
+          </div>
+
+          {/* Drawing Details Section */}
+          <div className="mt-4">
+            <h3 className="text-xs  text-slate-700 mb-2">Drawing Details</h3>
+            <div className="bg-slate-50 p-4 rounded border border-slate-200 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className=" flex items-center gap-2  text-xs text-slate-600">Revision</label>
+                  <label className="block text-xs text-slate-700 mb-1">Drawing # *</label>
                   <input 
-                    type="text" 
-                    className="w-full p-2 .5 border border-slate-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors text-xs"
+                    type="text"
+                    readOnly
+                    className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600"
+                    value={editData.drawing_no}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-700 mb-1">Revision</label>
+                  <input 
+                    type="text"
+                    disabled={modalMode === 'view'}
+                    className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={editData.revision_no}
                     onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className=" flex items-center gap-2  text-xs text-slate-600">Description</label>
-                  <textarea 
-                    className="w-full p-2 .5 border border-slate-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none text-xs"
-                    value={editData.description}
-                    onChange={(e) => setEditData({...editData, description: e.target.value})}
+                  <label className="block text-xs text-slate-700 mb-1">Qty</label>
+                  <input 
+                    type="number"
+                    disabled={modalMode === 'view'}
+                    className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    value={editData.qty}
+                    onChange={(e) => setEditData({...editData, qty: parseInt(e.target.value) || 0})}
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-700 mb-1">Description</label>
+                <textarea 
+                  disabled={modalMode === 'view'}
+                  className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                  value={editData.description}
+                  onChange={(e) => setEditData({...editData, description: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-700 mb-1">Remarks</label>
+                <textarea 
+                  disabled={modalMode === 'view'}
+                  className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                  value={editData.remarks}
+                  onChange={(e) => setEditData({...editData, remarks: e.target.value})}
+                />
+              </div>
+
+              {modalMode === 'edit' && (
                 <div>
-                  <label className=" flex items-center gap-2  text-xs text-slate-600">PDF File</label>
-                  <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                  <label className="block text-xs text-slate-700 mb-1">Update PDF File</label>
+                  <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-4 hover:border-indigo-400 transition-colors bg-white cursor-pointer relative">
                     <input 
                       type="file" 
                       accept=".pdf"
-                      className="hidden"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
-                      id="edit-file"
                     />
-                    <label htmlFor="edit-file" className="cursor-pointer text-center w-full">
-                      <svg className="mx-auto h-6 w-6 text-slate-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                      <p className="text-xs text-slate-600 ">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click'}</p>
-                    </label>
+                    <div className="text-center">
+                      <svg className="mx-auto h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                      <p className="mt-1 text-xs text-slate-500">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click to update PDF'}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200">
+              )}
+              
+              {editData.file_path && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs text-slate-500">Current File:</span>
                   <button 
                     type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="flex-1 p-2 .5 text-slate-700  hover:bg-slate-100 rounded transition-colors text-xs"
+                    onClick={() => {
+                      setPreviewDrawing({ ...editData, drawing_pdf: editData.file_path });
+                      setShowPreviewModal(true);
+                    }}
+                    className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
                   >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    disabled={saveLoading}
-                    className="flex-1 p-2 .5 bg-indigo-600 text-white  rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 text-xs"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
-                    {saveLoading ? 'Saving...' : 'Save'}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    View Current PDF
                   </button>
                 </div>
-              </form>
+              )}
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <button 
+              type="button"
+              onClick={() => setShowEditModal(false)}
+              className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
+            >
+              Close
+            </button>
+            {modalMode === 'edit' && (
+              <button 
+                type="submit"
+                disabled={saveLoading}
+                className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                {saveLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                Save Changes
+              </button>
+            )}
+          </div>
+        </form>
+      </Modal>
 
       {/* Revisions Modal */}
       {showRevisions && (

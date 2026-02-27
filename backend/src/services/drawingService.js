@@ -18,13 +18,23 @@ const listDrawings = async (searchTerm = '') => {
 };
 
 const createCustomerDrawing = async (data) => {
-  const { clientName, drawingNo, revision, qty, description, filePath, fileType, remarks, uploadedBy, contactPerson, phoneNumber, emailAddress } = data;
+  const { 
+    clientName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
+    uploadedBy, contactPerson, phoneNumber, emailAddress,
+    customerType, gstin, city, state, billingAddress, shippingAddress
+  } = data;
   const [result] = await pool.execute(
     `INSERT INTO customer_drawings 
-      (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, uploaded_by, contact_person, phone, email)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, 
+       uploaded_by, contact_person, phone, email, 
+       customer_type, gstin, city, state, billing_address, shipping_address)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ,
-    [clientName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null]
+    [
+      clientName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, 
+      uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
+      customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null
+    ]
   );
   return result.insertId;
 };
@@ -44,12 +54,20 @@ const createBatchCustomerDrawings = async (drawings) => {
     d.uploadedBy || 'Sales',
     d.contactPerson || null,
     d.phoneNumber || null,
-    d.emailAddress || null
+    d.emailAddress || null,
+    d.customerType || null,
+    d.gstin || null,
+    d.city || null,
+    d.state || null,
+    d.billingAddress || null,
+    d.shippingAddress || null
   ]);
 
   const [result] = await pool.query(
     `INSERT INTO customer_drawings 
-      (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, uploaded_by, contact_person, phone, email)
+      (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, 
+       uploaded_by, contact_person, phone, email,
+       customer_type, gstin, city, state, billing_address, shipping_address)
      VALUES ?`,
     [values]
   );
@@ -130,28 +148,60 @@ const getDrawingRevisions = async (drawingNo) => {
   return rows;
 };
 
-const updateDrawing = async (drawingNo, data) => {
-  const { description, revisionNo, drawingPdf } = data;
-  let query = 'UPDATE sales_order_items SET updated_at = CURRENT_TIMESTAMP';
+const updateDrawing = async (id, data) => {
+  const { 
+    description, 
+    revisionNo, 
+    drawingPdf,
+    clientName,
+    contactPerson,
+    phoneNumber,
+    emailAddress,
+    qty,
+    remarks,
+    drawingNo
+  } = data;
+
+  // 1. Update customer_drawings
+  let query = 'UPDATE customer_drawings SET ';
   const params = [];
+  const updates = [];
 
-  if (description) {
-    query += ', description = ?';
-    params.push(description);
-  }
-  if (revisionNo) {
-    query += ', revision_no = ?';
-    params.push(revisionNo);
-  }
-  if (drawingPdf) {
-    query += ', drawing_pdf = ?';
-    params.push(drawingPdf);
-  }
+  if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+  if (revisionNo !== undefined) { updates.push('revision = ?'); params.push(revisionNo); }
+  if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('file_path = ?'); params.push(drawingPdf); }
+  if (clientName !== undefined) { updates.push('client_name = ?'); params.push(clientName); }
+  if (contactPerson !== undefined) { updates.push('contact_person = ?'); params.push(contactPerson); }
+  if (phoneNumber !== undefined) { updates.push('phone = ?'); params.push(phoneNumber); }
+  if (emailAddress !== undefined) { updates.push('email = ?'); params.push(emailAddress); }
+  if (qty !== undefined) { updates.push('qty = ?'); params.push(qty); }
+  if (remarks !== undefined) { updates.push('remarks = ?'); params.push(remarks); }
+  if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
 
-  query += ' WHERE drawing_no = ?';
-  params.push(drawingNo);
+  if (updates.length === 0) return;
+
+  query += updates.join(', ');
+  query += ' WHERE id = ?';
+  params.push(id);
 
   await pool.execute(query, params);
+
+  // 2. Sync with sales_order_items if they exist
+  let soiQuery = 'UPDATE sales_order_items SET updated_at = CURRENT_TIMESTAMP';
+  const soiParams = [];
+  const soiUpdates = [];
+  
+  if (description !== undefined) { soiUpdates.push('description = ?'); soiParams.push(description); }
+  if (revisionNo !== undefined) { soiUpdates.push('revision_no = ?'); soiParams.push(revisionNo); }
+  if (drawingPdf !== undefined && drawingPdf !== null) { soiUpdates.push('drawing_pdf = ?'); soiParams.push(drawingPdf); }
+  if (drawingNo !== undefined) { soiUpdates.push('drawing_no = ?'); soiParams.push(drawingNo); }
+  if (qty !== undefined) { soiUpdates.push('quantity = ?'); soiParams.push(qty); }
+
+  if (soiUpdates.length > 0) {
+    soiQuery = 'UPDATE sales_order_items SET ' + soiUpdates.join(', ') + ' WHERE drawing_id = ?';
+    soiParams.push(id);
+    await pool.execute(soiQuery, soiParams);
+  }
 };
 
 const updateItemDrawing = async (itemId, data) => {

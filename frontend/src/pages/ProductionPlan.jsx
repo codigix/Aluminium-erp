@@ -1929,7 +1929,7 @@ const ProductionPlan = () => {
             >
               Abort Request
             </button>
-            {mrItems.length > 0 && mrItems.some(item => !item.is_fulfilled && item.inventory < item.quantity) && (
+            {mrItems.length > 0 && mrItems.some(item => !item.request_exists && item.inventory < item.quantity) && (
               <button
                 onClick={confirmTransmitMR}
                 disabled={transmittingMr}

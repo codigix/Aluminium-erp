@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const mysql = require('mysql2/promise');
 
 const baseConfig = {
@@ -697,6 +698,42 @@ const ensureCustomerDrawingTable = async () => {
     if (phoneCols.length === 0) {
       await connection.query("ALTER TABLE customer_drawings ADD COLUMN phone VARCHAR(20) NULL");
       console.log('Added phone column to customer_drawings');
+    }
+
+    const [customerTypeCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'customer_type'");
+    if (customerTypeCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN customer_type VARCHAR(50) NULL");
+      console.log('Added customer_type column to customer_drawings');
+    }
+
+    const [gstinCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'gstin'");
+    if (gstinCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN gstin VARCHAR(50) NULL");
+      console.log('Added gstin column to customer_drawings');
+    }
+
+    const [cityCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'city'");
+    if (cityCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN city VARCHAR(100) NULL");
+      console.log('Added city column to customer_drawings');
+    }
+
+    const [stateCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'state'");
+    if (stateCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN state VARCHAR(100) NULL");
+      console.log('Added state column to customer_drawings');
+    }
+
+    const [billingAddressCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'billing_address'");
+    if (billingAddressCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN billing_address TEXT NULL");
+      console.log('Added billing_address column to customer_drawings');
+    }
+
+    const [shippingAddressCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'shipping_address'");
+    if (shippingAddressCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN shipping_address TEXT NULL");
+      console.log('Added shipping_address column to customer_drawings');
     }
 
     console.log('Customer drawings table synchronized');
