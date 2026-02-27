@@ -551,25 +551,9 @@ const createBOMRequest = async (bomData) => {
     }
 
     // 4. Update sales_order status (only if linked to sales order)
-    let finalSalesOrderId = salesOrderId;
-    if (!finalSalesOrderId && itemId) {
-      const [itemRows] = await connection.query(
-        'SELECT sales_order_id FROM sales_order_items WHERE id = ?',
-        [itemId]
-      );
-
-      if (itemRows.length > 0) {
-        finalSalesOrderId = itemRows[0].sales_order_id;
-      }
-    }
-
-    if (finalSalesOrderId) {
-      await connection.execute(
-        "UPDATE sales_orders SET status = 'BOM_SUBMITTED', updated_at = NOW() WHERE id = ?",
-        [finalSalesOrderId]
-      );
-    }
-
+    // 4. Removed automatic update of sales_order status to BOM_SUBMITTED
+    // This allows manual submission via "BOM Approval" button in frontend
+    
     await connection.commit();
     return { success: true };
   } catch (error) {
