@@ -1082,7 +1082,7 @@ const BOMFormPage = () => {
           </div>
           {!collapsedSections.productInfo && (
             <div className="p-4 bg-white">
-              {!isReadOnly && (
+              {/* {!isReadOnly && (
                 <div className="bg-blue-50/40 p-3 rounded  border border-blue-100/50 mb-4 flex flex-col md:flex-row items-end gap-4">
                   <div className="flex-1 space-y-1.5">
                     <label className="text-[10px]  text-blue-600  ml-1">Quick Filter by Drawing</label>
@@ -1166,7 +1166,7 @@ const BOMFormPage = () => {
                     </div>
                   )}
                 </div>
-              )}
+              )} */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Product Name <span className="text-rose-500">*</span></label>
