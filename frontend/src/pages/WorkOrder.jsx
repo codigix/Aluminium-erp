@@ -223,109 +223,116 @@ const WorkOrder = () => {
         </div>
 
         {/* Work Orders List */}
-        <Card className="border-none  bg-white rounded-3xl overflow-hidden">
+        <Card className="border-none bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
-                  <th className="p-2 text-xs   text-slate-400  tracking-widest">Order Identity</th>
-                  <th className="p-2 text-xs   text-slate-400  tracking-widest">Item</th>
-                  <th className="p-2 text-xs   text-slate-400  tracking-widest">Status & Priority</th>
-                  <th className="p-2 text-xs   text-slate-400  tracking-widest text-center">Progress</th>
-                  <th className="p-2 text-xs   text-slate-400  tracking-widest text-right">Actions</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Item To Manufacture</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Qty To Manufacture</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Planned Start Date</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Manufacturing Progress</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Process Loss</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Work Order ID</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
-                {workOrders.map((wo) => (
-                  <tr key={wo.id} className="group hover:bg-slate-50/30 transition-colors">
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
-                          <FileText className="w-5 h-5" />
+              <tbody className="divide-y divide-slate-100">
+                {workOrders.map((wo) => {
+                  const progress = wo.total_job_cards > 0 ? Math.round((wo.completed_job_cards / wo.total_job_cards) * 100) : 0;
+                  return (
+                    <tr key={wo.id} className="group hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-2.5">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold text-slate-900 leading-tight">{wo.item_name || wo.item_code}</span>
+                          <span className="text-[10px] text-slate-400 mt-0.5">BOM-{wo.bom_no || 'NA'}</span>
                         </div>
-                        <div>
-                          <div className="text-sm  text-slate-900 tracking-tight">{wo.wo_number}</div>
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            <span className="text-[10px]  text-slate-400  tracking-tight">
-                              {new Date(wo.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-[11px] font-semibold ${
+                          wo.status === 'IN_PROGRESS' ? 'text-amber-600' : 
+                          wo.status === 'COMPLETED' ? 'text-emerald-600' : 'text-slate-500'
+                        }`}>
+                          {wo.status === 'IN_PROGRESS' ? 'In-Progress' : wo.status?.charAt(0) + wo.status?.slice(1).toLowerCase()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-[11px] font-bold text-slate-900">
+                          {wo.quantity || 0} <span className="text-slate-400 font-normal">units</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                          <Clock className="w-3.5 h-3.5 text-slate-300" />
+                          {formatDisplayDate(wo.start_date)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="w-full max-w-[120px]">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-medium text-slate-600">
+                              {wo.completed_job_cards || 0} / {wo.total_job_cards || 0}
                             </span>
+                            <span className="text-[10px] font-bold text-blue-600">{progress}%</span>
+                          </div>
+                          <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-500 rounded-full transition-all duration-500" 
+                              style={{ width: `${progress}%` }}
+                            ></div>
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div>
-                        <div className="text-sm  text-slate-800 tracking-tight">{wo.item_name || wo.item_code}</div>
-                        <div className="text-[10px]  text-slate-400 mt-1  ">
-                          BOM-{wo.bom_no || 'NA'}
+                      </td>
+                      <td className="px-4 py-2.5 text-[11px] text-slate-600">
+                        {wo.process_loss || '0.0'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-[11px] font-medium text-indigo-600">
+                          {wo.wo_number}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button 
+                            onClick={() => setPreviewDrawing({
+                              item_code: wo.item_code,
+                              description: wo.item_name || wo.item_code
+                            })}
+                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
+                            title="Preview Drawing"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                          <button 
+                            onClick={() => navigate(`/job-card?filter_work_order=${wo.wo_number}`)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                            title="Track Production"
+                          >
+                            <Activity className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => handleEdit(wo.id)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(wo.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-1.5 p-1  bg-slate-100 text-slate-600text-xs   rounded w-fit  tracking-tighter">
-                          <Clock className="w-3 h-3" />
-                          {wo.status?.toLowerCase() || 'draft'}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className={`w-2 h-2 rounded  ${
-                            wo.priority === 'HIGH' ? 'bg-rose-500' : 
-                            wo.priority === 'URGENT' ? 'bg-purple-500' : 'bg-amber-500'
-                          }`}></div>
-                          <span className="text-[10px]  text-slate-400  tracking-tight">
-                            {wo.priority?.toLowerCase() || 'medium'} priority
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="max-w-[140px] mx-auto">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[10px]  text-slate-900">
-                            {wo.total_job_cards > 0 ? Math.round((wo.completed_job_cards / wo.total_job_cards) * 100) : 0}% COMPLETE
-                          </span>
-                          <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded  tracking-tighter">
-                            {wo.completed_job_cards || 0}/{wo.total_job_cards || 0} OPS
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-slate-100 rounded  overflow-hidden">
-                          <div 
-                            className={`h-full rounded  transition-all duration-500 ${
-                              wo.total_job_cards > 0 && (wo.completed_job_cards / wo.total_job_cards) === 1 
-                                ? 'bg-emerald-500' 
-                                : wo.total_job_cards > 0 ? 'bg-indigo-500' : 'bg-slate-200'
-                            }`} 
-                            style={{ width: `${wo.total_job_cards > 0 ? (wo.completed_job_cards / wo.total_job_cards) * 100 : 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button 
-                          onClick={() => navigate(`/job-card?filter_work_order=${wo.wo_number}`)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
-                          title="Track Production"
-                        >
-                          <Activity className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleEdit(wo.id)}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(wo.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {workOrders.length === 0 && !loading && (
                   <tr>
                     <td colSpan="5" className="px-6 p-2 text-center">
@@ -343,13 +350,29 @@ const WorkOrder = () => {
           </div>
           
           {/* Pagination Footer */}
-          <div className="p-2  bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-[10px]  text-slate-400  tracking-widest">
-              Showing {workOrders.length} manufacturing sequences
-            </span>
-            <div className="flex items-center gap-2 ">
-              <button className="p-2 .5text-xs   text-slate-400  tracking-widest hover:text-slate-900 transition-colors">Previous</button>
-              <button className="px-4 py-1.5 bg-white border border-slate-200 rounded text-xs   text-slate-900  tracking-widest  hover:bg-slate-50 transition-colors">Next</button>
+          <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Rows per page:</span>
+                <select className="text-xs border-none bg-transparent font-medium text-slate-700 focus:ring-0 cursor-pointer">
+                  <option>50</option>
+                  <option>100</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <span className="text-xs text-slate-500 font-medium">
+                Page 1 of 1 <span className="text-slate-400 ml-1">({workOrders.length} total)</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <button className="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors">
+                  ← Prev
+                </button>
+                <button className="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors border border-slate-200 rounded-md bg-white shadow-sm">
+                  Next →
+                </button>
+              </div>
             </div>
           </div>
         </Card>

@@ -9,7 +9,7 @@ const listWorkOrders = async () => {
      FROM work_orders wo
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
-     ORDER BY wo.created_at DESC`
+     ORDER BY CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.created_at DESC`
   );
   return rows;
 };

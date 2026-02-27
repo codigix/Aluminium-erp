@@ -261,6 +261,8 @@ const JobCard = () => {
   }, [jobCards, selectedJC?.id]);
 
   const [activeTab, setActiveTab] = useState('time');
+  const [viewTab, setViewTab] = useState('timeline');
+  const [viewingJobCard, setViewingJobCard] = useState(null);
   const [logs, setLogs] = useState({ timeLogs: [], qualityLogs: [], downtimeLogs: [] });
   const [progressData, setProgressData] = useState({
     producedQty: 0,
@@ -639,243 +641,323 @@ const JobCard = () => {
         </button>
       </div>
 
-      {/* Grouped Content */}
-      <div className="space-y-6">
-        {Object.values(groupedJobCards).map((group) => {
-          const isExpanded = expandedWOs.has(String(group.id));
-          return (
-            <div key={group.id} className="bg-white rounded-[32px] border border-slate-100  overflow-hidden">
-              {/* Group Header */}
-              <div 
-                className={`px-8 py-6 flex items-center justify-between cursor-pointer group transition-colors ${
-                  isExpanded ? 'bg-slate-50/50 border-b border-slate-100' : 'hover:bg-slate-50'
-                }`}
-                onClick={() => toggleWO(group.id)}
-              >
-                <div className="flex items-center gap-5">
-                  <div className="w-12 h-12 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100 group-hover:scale-110 transition-all">
-                    <Package className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-lg  text-slate-900">
-                        {group.item_code} <span className="text-slate-400  ml-1">{group.item_name}</span>
-                      </h3>
-                      <span className={`p-1 text-xs   rounded   border ${
-                        group.wo_status === 'RELEASED' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                        group.wo_status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                        group.wo_status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                        'bg-white text-slate-500 border-slate-200'
-                      }`}>
-                        {group.wo_status || 'draft'}
-                      </span>
-                      {group.source_type === 'SA' && (
-                        <span className="p-1  bg-purple-50 text-purple-600 border border-purple-100text-xs   rounded  ">
-                          Sub-Assembly
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs  text-slate-400  tracking-widest">{group.wo_number}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-12">
-                  <div className="hidden md:block">
-                    <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Priority Level</p>
-                    <span className={`p-2  rounded text-xs     ${
-                      group.priority === 'HIGH' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                      'bg-amber-50 text-amber-600 border border-amber-100'
-                    }`}>
-                      {group.priority || 'medium'}
+      {/* Flat Table Layout */}
+      <Card className="border-none bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 border-b border-slate-100">
+              <tr>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">ID</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operation</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Execution Type</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Qty To Manufacture</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Produced Qty</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Accepted Qty</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Workstation</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Assignee</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredJobCards.map((jc) => (
+                <tr key={jc.id} className="group hover:bg-slate-50/50 transition-colors">
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] font-bold text-indigo-600">
+                      {jc.job_card_no}
                     </span>
-                  </div>
-                  <div className="hidden sm:block">
-                    <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Total Quantity</p>
-                    <p className="text-sm  text-slate-900">{group.wo_quantity} <span className="text-slate-400 ">Units</span></p>
-                  </div>
-                  <div className="hidden lg:block">
-                    <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Scheduled End</p>
-                    <div className="flex items-center gap-2  text-indigo-600">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-sm ">
-                        {group.wo_end_date ? new Date(group.wo_end_date).toLocaleDateString() : '-'}
-                      </span>
+                    <div className="text-[9px] text-slate-400 mt-0.5">
+                      WO: {jc.wo_number}
                     </div>
-                  </div>
-                  <div className={`p-2 rounded  bg-indigo-50 text-indigo-600 transition-transform ${isExpanded ? 'rotate-180' : 'rotate-0'}`}>
-                    <ChevronDown className="w-5 h-5" />
-                  </div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-slate-900">{jc.operation_name}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">{jc.item_name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-[11px] font-semibold ${
+                      jc.status === 'IN_PROGRESS' ? 'text-amber-600' : 
+                      jc.status === 'COMPLETED' ? 'text-emerald-600' : 'text-slate-500'
+                    }`}>
+                      {jc.status === 'IN_PROGRESS' ? 'In-Progress' : jc.status?.charAt(0) + jc.status?.slice(1).toLowerCase()}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-[11px] font-medium ${jc.workstation_name === 'Subcontract' ? 'text-purple-600' : 'text-blue-600'}`}>
+                      {jc.workstation_name === 'Subcontract' ? 'Subcontract' : 'In-house'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] font-bold text-slate-900">
+                      {jc.planned_qty || 0} <span className="text-slate-400 font-normal">units</span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] font-bold text-indigo-600">
+                      {parseFloat(jc.produced_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] font-bold text-emerald-600">
+                      {parseFloat(jc.accepted_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] text-slate-600">
+                      {jc.workstation_name || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] text-slate-600">
+                      {jc.operator_name || 'Unassigned'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button 
+                        onClick={() => setViewingJobCard(jc)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
+                        title="View Details"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
+                        <button 
+                          onClick={() => handleUpdateStatus(jc.id, 'IN_PROGRESS')}
+                          className="p-1.5 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                          title="Start"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {jc.status === 'IN_PROGRESS' && (
+                        <button 
+                          onClick={() => handleLogProgress(jc)}
+                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
+                          title="Log Progress"
+                        >
+                          <Zap className="w-3.5 h-3.5 fill-indigo-600" />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleEdit(jc)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                        title="Edit"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(jc.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredJobCards.length === 0 && !loading && (
+                <tr>
+                  <td colSpan="10" className="px-6 py-8 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded flex items-center justify-center">
+                        <AlertCircle className="w-6 h-6" />
+                      </div>
+                      <p className="text-slate-400 text-sm italic">No job cards found</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Rows per page:</span>
+              <select className="text-xs border-none bg-transparent font-medium text-slate-700 focus:ring-0 cursor-pointer">
+                <option>20</option>
+                <option>50</option>
+                <option>100</option>
+              </select>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-6">
+            <span className="text-xs text-slate-500 font-medium">
+              Page 1 of 1 <span className="text-slate-400 ml-1">({filteredJobCards.length} total)</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <button className="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors">
+                ← Prev
+              </button>
+              <button className="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors border border-slate-200 rounded-md bg-white shadow-sm">
+                Next →
+              </button>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Job Card View Modal */}
+      <Modal
+        isOpen={!!viewingJobCard}
+        onClose={() => setViewingJobCard(null)}
+        title="Operational Intelligence"
+        maxWidth="max-w-2xl"
+      >
+        {viewingJobCard && (
+          <div className="space-y-6">
+            {/* Header with Operation Name and Progress */}
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-lg p-6 text-white">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold">{viewingJobCard.operation_name}</h3>
+                  <p className="text-slate-300 text-sm mt-1">Work Order: {viewingJobCard.wo_number}</p>
+                </div>
+                <span className="text-4xl font-bold text-indigo-300">
+                  {viewingJobCard.planned_qty > 0 ? Math.round((parseFloat(viewingJobCard.accepted_qty || 0) / viewingJobCard.planned_qty) * 100) : 0}%
+                </span>
+              </div>
+
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-4 gap-4">
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wider">Planned Capacity</p>
+                  <p className="text-xl font-semibold mt-1">{viewingJobCard.planned_qty || 0}.00 <span className="text-sm font-normal text-slate-300">Units</span></p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wider">Accepted Output</p>
+                  <p className="text-xl font-semibold mt-1 text-emerald-400">{parseFloat(viewingJobCard.accepted_qty || 0).toFixed(2)} <span className="text-sm font-normal text-slate-300">Units</span></p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Total Produced: {parseFloat(viewingJobCard.produced_qty || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wider">Transferred</p>
+                  <p className="text-xl font-semibold mt-1 text-indigo-400">{parseFloat(viewingJobCard.accepted_qty || 0).toFixed(2)} <span className="text-sm font-normal text-slate-300">Units</span></p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Available: {(parseFloat(viewingJobCard.accepted_qty || 0)).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wider">Production Progress</p>
+                  <p className="text-xl font-semibold mt-1">
+                    {viewingJobCard.planned_qty > 0 ? Math.round((parseFloat(viewingJobCard.produced_qty || 0) / viewingJobCard.planned_qty) * 100) : 0}%
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Available: {(parseFloat(viewingJobCard.accepted_qty || 0)).toFixed(2)}</p>
                 </div>
               </div>
-
-              {/* Operations List */}
-              {isExpanded && (
-                <div className="p-8 pt-0 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="grid grid-cols-12 p-2text-xs   text-slate-400  tracking-widest">
-                    <div className="col-span-2">Operational Phase</div>
-                    <div className="col-span-2">Assignment</div>
-                    <div className="col-span-1 text-center">Status</div>
-                    <div className="col-span-2 text-center">Duration & Cost</div>
-                    <div className="col-span-2 text-center">Metrics</div>
-                    <div className="col-span-3 text-right pr-4">Action</div>
-                  </div>
-
-                  {group.cards.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 bg-slate-50/30 border border-dashed border-slate-200 rounded-[32px] transition-all">
-                      <div className="w-16 h-16 bg-white rounded  flex items-center justify-center  mb-4 border border-slate-100">
-                        <AlertCircle className="w-8 h-8 text-slate-300" />
-                      </div>
-                      <h4 className="text-sm  text-slate-900 mb-1">No operations defined</h4>
-                      <p className="text-[10px]  text-slate-400  tracking-widest text-center max-w-[200px]">
-                        This item does not have any manufacturing operations assigned to it.
-                      </p>
-                    </div>
-                  ) : (
-                    group.cards.map((jc) => {
-                      const efficiency = calculateEfficiency(jc);
-                      const stdTime = parseFloat(jc.std_time || 0);
-                      const hourlyRate = parseFloat(jc.hourly_rate || 0);
-                      const totalStdHrs = (stdTime * parseFloat(jc.planned_qty || 0)) / 60;
-                      const estimatedCost = totalStdHrs * hourlyRate;
-                      const yieldPercent = jc.planned_qty > 0 ? Math.round((parseFloat(jc.accepted_qty || 0) / parseFloat(jc.planned_qty)) * 100) : 0;
-
-                      return (
-                        <div key={jc.id} className="grid grid-cols-12 items-center bg-white hover:bg-slate-50/50 border border-slate-100 rounded  p-4 transition-all group/row">
-                          {/* Operation Name */}
-                          <div className="col-span-2 flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded  flex items-center justify-center ${
-                              jc.status === 'IN_PROGRESS' ? 'bg-indigo-100 text-indigo-600 animate-pulse' : 
-                              jc.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-50 text-slate-400'
-                            }`}>
-                              <Activity className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <h4 className="text-sm  text-slate-900 group-hover/row:text-indigo-600 transition-colors truncate max-w-[120px]">
-                                {jc.operation_name}
-                              </h4>
-                              <p className="text-[10px]  text-slate-400  tracking-widest mt-0.5">
-                                {jc.job_card_no || `JC-${jc.id}`}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Assignment */}
-                          <div className="col-span-2">
-                            <div className="flex items-center gap-2  mb-1.5 text-slate-600">
-                              <Monitor className="w-3.5 h-3.5 text-slate-400" />
-                              <span className="text-xs ">
-                                {jc.workstation_name || 'Unassigned'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2  text-slate-400">
-                              <Zap className="w-3.5 h-3.5" />
-                              <span className="text-[10px]   ">
-                                {jc.operator_name || 'N/A'}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Status */}
-                          <div className="col-span-1 flex justify-center">
-                            <div className={`flex items-center gap-2  p-2 .5 rounded  border ${
-                              jc.status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                              jc.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                              'bg-indigo-50 text-indigo-600 border-indigo-100'
-                            }`}>
-                              <div className={`w-1.5 h-1.5 rounded  ${
-                                jc.status === 'IN_PROGRESS' ? 'bg-amber-500 animate-pulse' :
-                                jc.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-indigo-500'
-                              }`}></div>
-                              <span className="text-[10px]   ">
-                                {(jc.status === 'PENDING' || jc.status === 'DRAFT' || !jc.status) ? 'ready' : jc.status?.toLowerCase()}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Duration & Cost */}
-                          <div className="col-span-2">
-                            <div className="flex flex-col gap-1 px-2 border-l border-slate-50">
-                              <div className="flex items-center gap-1.5 text-slate-600">
-                                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                <span className="text-xs ">{stdTime.toFixed(2)}m <span className="text-slate-400 ">/ unit</span></span>
-                              </div>
-                              <p className="text-[10px]  text-slate-400  tracking-widest whitespace-nowrap">Total: {totalStdHrs.toFixed(1)} hrs</p>
-                              <div className="flex items-center gap-0.5 text-indigo-600  text-xs mt-0.5">
-                                <span className="text-[10px]">₹</span>
-                                {estimatedCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Metrics */}
-                          <div className="col-span-2 px-4 border-l border-slate-50">
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[10px]  text-slate-400  tracking-widest">Quality Yield</span>
-                              <span className="text-xs  text-slate-900">{yieldPercent}%</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded  overflow-hidden mb-1.5 shadow-inner">
-                              <div 
-                                className={`h-full transition-all duration-500 ${
-                                  yieldPercent >= 90 ? 'bg-emerald-500' : yieldPercent >= 50 ? 'bg-amber-500' : 'bg-indigo-500'
-                                }`}
-                                style={{ width: `${yieldPercent}%` }}
-                              ></div>
-                            </div>
-                            <div className="flex justify-center">
-                              <span className="text-[10px]  text-slate-400 tracking-widest">
-                                {parseFloat(jc.accepted_qty || 0).toFixed(2)} / {parseFloat(jc.planned_qty || 0).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="col-span-3 flex items-center justify-end gap-1.5">
-                            <button 
-                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
-                              onClick={(e) => { e.stopPropagation(); }}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {(jc.status === 'PENDING' || jc.status === 'DRAFT' || !jc.status) && (
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleUpdateStatus(jc.id, 'IN_PROGRESS'); }}
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-600 rounded  hover:bg-emerald-600 hover:text-white transition-all text-xs     group/btn border border-emerald-100"
-                              >
-                                <Zap className="w-3 h-3 group-hover/btn:fill-current text-emerald-500 group-hover:text-white transition-colors" />
-                                Start
-                              </button>
-                            )}
-                            {jc.status === 'IN_PROGRESS' && (
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleLogProgress(jc); }}
-                                className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 group/zap flex items-center justify-center"
-                              >
-                                <Zap className="w-4 h-4 fill-current animate-pulse" />
-                              </button>
-                            )}
-                            <button 
-                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all"
-                              onClick={(e) => { e.stopPropagation(); handleEdit(jc); }}
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button 
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all"
-                              onClick={(e) => { e.stopPropagation(); handleDelete(jc.id); }}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
             </div>
-          );
-        })}
-      </div>
+
+            {/* Tabs */}
+            <div className="flex items-center gap-2 border-b border-slate-200">
+              {[
+                { id: 'timeline', label: 'Operational Timeline', icon: '📅' },
+                { id: 'costing', label: 'Costing Details', icon: '📊' },
+                { id: 'assignment', label: 'Assignment Data', icon: '👤' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setViewTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    viewTab === tab.id
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            <div>
+              {viewTab === 'timeline' && (
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Scheduled Start</p>
+                    <p className="text-sm font-semibold text-slate-900">N/A</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Estimated End</p>
+                    <p className="text-sm font-semibold text-slate-900">N/A</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Actual Duration</p>
+                    <p className="text-sm font-semibold text-slate-900">-</p>
+                  </div>
+                </div>
+              )}
+
+              {viewTab === 'costing' && (
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Hourly Rate</p>
+                    <p className="text-sm font-semibold text-slate-900">₹{parseFloat(viewingJobCard.hourly_rate || 0).toFixed(2)}</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Actual Cost</p>
+                    <p className="text-sm font-semibold text-indigo-600">₹0.00</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Estimated Cost</p>
+                    <p className="text-sm font-semibold text-slate-900">₹0.00</p>
+                  </div>
+                </div>
+              )}
+
+              {viewTab === 'assignment' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Assigned Unit</p>
+                    <p className="text-sm font-semibold text-slate-900">{viewingJobCard.workstation_name || 'N/A'}</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Operator / Vendor</p>
+                    <p className="text-sm font-semibold text-slate-900">{viewingJobCard.operator_name || 'Unassigned'}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Intelligence Notes */}
+            <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🧠</span>
+                <h4 className="font-semibold text-slate-900">Intelligence Notes</h4>
+              </div>
+              <p className="text-sm text-amber-700">
+                {viewingJobCard.remarks || 'No supplemental operational data recorded for this phase.'}
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setViewingJobCard(null)}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                ✕ Terminate View
+              </button>
+              {viewingJobCard.status !== 'COMPLETED' && (
+                <button
+                  onClick={() => {
+                    handleUpdateStatus(viewingJobCard.id, 'COMPLETED');
+                    setViewingJobCard(null);
+                  }}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:shadow-lg transition-all font-medium"
+                >
+                  <span>⚡</span>
+                  Transition to completed
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Existing Modals */}
       <Modal 
