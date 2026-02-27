@@ -1486,6 +1486,7 @@ const ensureWorkOrderTables = async () => {
     if (!existingWoCols.has('item_name')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_name VARCHAR(255) AFTER item_code');
     if (!existingWoCols.has('bom_no')) await connection.query('ALTER TABLE work_orders ADD COLUMN bom_no VARCHAR(100) AFTER item_name');
     if (!existingWoCols.has('source_type')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_type ENUM("FG", "SA") DEFAULT "FG" AFTER bom_no');
+    if (!existingWoCols.has('source_fg')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_fg VARCHAR(120) AFTER source_type');
     
     // Update status enum and make sales order columns nullable
     await connection.query("ALTER TABLE work_orders MODIFY COLUMN sales_order_id INT NULL");

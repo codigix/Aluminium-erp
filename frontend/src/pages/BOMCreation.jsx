@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Card, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -15,6 +15,44 @@ const BOMCreation = () => {
   const [expandedClients, setExpandedClients] = useState({}); // { [clientId]: boolean }
   const [expandedDrawings, setExpandedDrawings] = useState({}); // { drawingKey: boolean }
   const [searchTerm, setSearchTerm] = useState('');
+  const location = useLocation();
+
+  const filter = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('filter');
+  }, [location.search]);
+
+  useEffect(() => {
+    if (filter === 'drafts' && orders.length > 0) {
+      // Auto-expand clients and drawings that have drafts
+      const newExpandedClients = { ...expandedClients };
+      const newExpandedDrawings = { ...expandedDrawings };
+
+      orders.forEach(client => {
+        const items = clientData[client.id]?.items || [];
+        const hasDraft = items.some(i => i.status === 'DRAFT');
+        if (hasDraft) {
+          newExpandedClients[client.id] = true;
+          
+          const drawings = items.reduce((acc, item) => {
+            const dwg = cleanText(item.drawing_no || 'N/A');
+            if (!acc[dwg]) acc[dwg] = [];
+            acc[dwg].push(item);
+            return acc;
+          }, {});
+
+          Object.entries(drawings).forEach(([dwgNo, dwgItems]) => {
+            if (dwgItems.some(i => i.status === 'DRAFT')) {
+              newExpandedDrawings[`${client.id}_${dwgNo}`] = true;
+            }
+          });
+        }
+      });
+
+      setExpandedClients(newExpandedClients);
+      setExpandedDrawings(newExpandedDrawings);
+    }
+  }, [filter, orders, clientData]);
 
   const fetchClientDrawings = useCallback(async (client) => {
     try {
@@ -534,7 +572,7 @@ const BOMCreation = () => {
                                                             </span>
                                                           </td>
                                                           <td className="p-2 text-center">
-                                                            <StatusBadge status={item.has_bom ? "FINALIZED" : "PENDING"} />
+                                                            <StatusBadge status={item.status === 'DRAFT' ? 'DRAFT' : (item.has_bom ? "FINALIZED" : "PENDING")} />
                                                           </td>
                                                           <td className="p-2 ">
                                                             <div className="flex justify-center gap-2">

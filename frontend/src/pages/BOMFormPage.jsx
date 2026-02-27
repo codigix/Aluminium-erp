@@ -253,14 +253,15 @@ const BOMFormPage = () => {
       if (currentItemCode && item.item_code === currentItemCode) return; // Skip self by code
 
       if (!seenCodes.has(item.item_code)) {
-        // Find if this item has an approved BOM cost
-        const bomInfo = approvedBOMs.find(b => b.item_code === item.item_code);
-        const bomCost = bomInfo ? parseFloat(bomInfo.bom_cost) : 0;
+        // Find if this item has an approved BOM cost, prioritizing those with non-zero cost
+        const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code);
+        const bomInfo = matchingBOMs.length > 0 ? matchingBOMs.sort((a, b) => (parseFloat(b.bom_cost) || 0) - (parseFloat(a.bom_cost) || 0))[0] : null;
+        const bomCost = bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0;
 
         options.push({
-          label: `${item.item_code} - ${item.material_name}${bomCost > 0 ? ` | ₹${bomCost.toLocaleString('en-IN')}` : ''}`,
+          label: `${item.item_code} – ${item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
           value: item.item_code,
-          subLabel: item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}`,
+          subLabel: item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0)),
           uom: item.unit || 'Kg',
           description: item.material_name
@@ -291,13 +292,22 @@ const BOMFormPage = () => {
       }
 
       if (!seenCodes.has(item.item_code)) {
-        const bomInfo = approvedBOMs.find(b => b.item_code === item.item_code || (b.drawing_no === item.drawing_no && b.drawing_no !== 'N/A'));
-        const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? parseFloat(bomInfo.bom_cost) : 0);
+        // Find if this item has an approved BOM cost, prioritizing code match then drawing match, and non-zero costs
+        const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code || (b.drawing_no === item.drawing_no && b.drawing_no !== 'N/A'));
+        const bomInfo = matchingBOMs.length > 0 ? matchingBOMs.sort((a, b) => {
+          // Prioritize code match
+          if (a.item_code === item.item_code && b.item_code !== item.item_code) return -1;
+          if (b.item_code === item.item_code && a.item_code !== item.item_code) return 1;
+          // Then prioritize cost
+          return (parseFloat(b.bom_cost) || 0) - (parseFloat(a.bom_cost) || 0);
+        })[0] : null;
+
+        const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0);
 
         options.push({
-          label: `${item.item_code} - ${item.description || item.material_name}${bomCost > 0 ? ` | ₹${bomCost.toLocaleString('en-IN')}` : ''}`,
+          label: `${item.item_code} – ${item.description || item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
           value: item.item_code,
-          subLabel: `Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toFixed(2)}]` : ''}`,
+          subLabel: `Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.rate || 0),
           uom: item.unit || 'Kg',
           description: item.description || item.material_name
@@ -901,16 +911,25 @@ const BOMFormPage = () => {
     setScrapForm({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
   };
 
-  const handleCreateBOM = async () => {
+  const handleCreateBOM = async (status = 'Active') => {
     try {
-      if (!selectedItem?.id && !productForm.drawingNo) {
-        throw new Error('Product/Item or Drawing not selected');
-      }
-      if (!productForm.quantity || productForm.quantity <= 0) {
-        throw new Error('Quantity must be greater than 0');
-      }
-      if (bomData.materials.length === 0 && bomData.components.length === 0) {
-        throw new Error('At least one raw material or sub-assembly component is required');
+      const isDraft = status === 'Draft';
+
+      if (!isDraft) {
+        if (!selectedItem?.id && !productForm.drawingNo) {
+          throw new Error('Product/Item or Drawing not selected');
+        }
+        if (!productForm.quantity || productForm.quantity <= 0) {
+          throw new Error('Quantity must be greater than 0');
+        }
+        if (bomData.materials.length === 0 && bomData.components.length === 0) {
+          throw new Error('At least one raw material or sub-assembly component is required');
+        }
+      } else {
+        // Relaxed validation for draft
+        if (!selectedItem?.id && !productForm.drawingNo && !productForm.description) {
+          throw new Error('Provide a name or select a drawing to save as draft');
+        }
       }
 
       const effectiveItemId = (itemId && itemId !== 'bom-form') 
@@ -924,6 +943,7 @@ const BOMFormPage = () => {
       const bomPayload = {
         itemId: effectiveItemId,
         salesOrderId: salesOrderIdFromUrl,
+        status: status,
         productForm: productForm,
         materials: bomData.materials,
         components: bomData.components.map(c => ({
@@ -960,7 +980,7 @@ const BOMFormPage = () => {
       }
 
       await response.json();
-      successToast('BOM created successfully');
+      successToast(isDraft ? 'BOM saved as draft' : 'BOM created successfully');
 
       // Instead of resetting and navigating to list, stay on the page in view mode
       // This solves the "did not show saved bom" problem
@@ -973,7 +993,8 @@ const BOMFormPage = () => {
           : '?view=true';
         navigate(`/bom-form/${targetId}${queryParams}`);
       } else {
-        resetForm();
+        // If it was a draft without specific item selection, we might need a better way to find it
+        // but for now, redirect back to creation list
         navigate('/bom-creation');
       }
     } catch (error) {
@@ -1058,6 +1079,11 @@ const BOMFormPage = () => {
                 {isReadOnly
                   ? `Viewing BOM: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
                   : 'Create BOM'}
+                {selectedItem?.status === 'DRAFT' && (
+                  <span className="px-2 py-1 rounded text-[10px] bg-amber-100 text-amber-600 border border-amber-200">
+                    Draft BOM
+                  </span>
+                )}
                 {selectedItem?.status === 'REJECTED' && (
                   <span className="px-2 py-1 roundedtext-xs   bg-rose-100 text-rose-600 border border-rose-200 animate-pulse ">
                     Rejected Drawing
@@ -1072,7 +1098,13 @@ const BOMFormPage = () => {
             </div>
           </div>
           <div className="flex gap-2">
-            <button className="px-4 py-1.5 bg-blue-50 text-blue-600 rounded  text-xs  border border-blue-100">Drafts</button>
+            <button 
+              onClick={() => navigate('/bom-creation?filter=drafts')} 
+              className="px-4 py-1.5 bg-blue-50 text-blue-600 rounded  text-xs  border border-blue-100 hover:bg-blue-100 transition-all flex items-center gap-1.5"
+            >
+              <History className="w-3.5 h-3.5" />
+              View Drafts
+            </button>
             <button onClick={() => navigate('/bom-creation')} className="px-4 py-1.5 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50  transition-all flex items-center gap-1">
               ← Back
             </button>
@@ -2482,9 +2514,18 @@ const BOMFormPage = () => {
           {isReadOnly ? 'Back to List' : 'Cancel'}
         </button>
         {!isReadOnly && (
-          <button onClick={handleCreateBOM} className="px-8 py-2.5 bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all flex items-center gap-2 ">
-            {itemId && itemId !== 'bom-form' ? 'Update BOM' : 'Create BOM'}
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => handleCreateBOM('Draft')} 
+              className="px-8 py-2.5 bg-white border border-indigo-200 text-indigo-600 rounded  text-sm  hover:bg-indigo-50 transition-all flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Save as Draft
+            </button>
+            <button onClick={() => handleCreateBOM('Active')} className="px-8 py-2.5 bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all flex items-center gap-2 ">
+              {itemId && itemId !== 'bom-form' ? 'Update BOM' : 'Create BOM'}
+            </button>
+          </div>
         )}
       </div>
 

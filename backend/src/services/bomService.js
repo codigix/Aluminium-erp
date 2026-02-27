@@ -293,11 +293,12 @@ const getBOMBySalesOrder = async (salesOrderId) => {
 };
 
 const createBOMRequest = async (bomData) => {
-  const { itemId, salesOrderId, productForm, materials, components, operations, scrap, source, costing } = bomData;
-  console.log(`[createBOMRequest] ItemID: ${itemId}, SOID: ${salesOrderId}, Source: ${source}, Drawing: ${productForm.drawingNo}`);
+  const { itemId, salesOrderId, status, productForm, materials, components, operations, scrap, source, costing } = bomData;
+  console.log(`[createBOMRequest] ItemID: ${itemId}, SOID: ${salesOrderId}, Status: ${status}, Source: ${source}, Drawing: ${productForm.drawingNo}`);
   
   const { itemCode, itemGroup, uom, revision, description, isActive, isDefault, quantity, drawingNo, drawing_id } = productForm;
   const bom_cost = costing?.costPerUnit || 0;
+  const finalStatus = status || 'Active';
 
   const connection = await pool.getConnection();
   try {
@@ -322,7 +323,7 @@ const createBOMRequest = async (bomData) => {
       // Quotation quantity is always the Design quantity. Sales never redefines quantity at quotation stage.
       await connection.execute(
         `UPDATE sales_order_items 
-         SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
+         SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, status = ?
          WHERE id = ?`,
         [
           safeItemCode, 
@@ -336,6 +337,7 @@ const createBOMRequest = async (bomData) => {
           drawingNo || null, 
           drawing_id || null, 
           bom_cost,
+          finalStatus === 'Draft' ? 'DRAFT' : 'PENDING',
           itemId
         ]
       );
@@ -357,7 +359,7 @@ const createBOMRequest = async (bomData) => {
         targetItemId = existingItems[0].id;
         await connection.execute(
           `UPDATE sales_order_items 
-           SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?
+           SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, status = ?
            WHERE id = ?`,
           [
             safeItemCode, 
@@ -371,6 +373,7 @@ const createBOMRequest = async (bomData) => {
             drawingNo || null, 
             drawing_id || null, 
             bom_cost,
+            finalStatus === 'Draft' ? 'DRAFT' : 'PENDING',
             targetItemId
           ]
         );
@@ -382,8 +385,8 @@ const createBOMRequest = async (bomData) => {
       } else {
         const [result] = await connection.execute(
           `INSERT INTO sales_order_items 
-           (sales_order_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (sales_order_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             salesOrderId,
             safeItemCode,
@@ -397,7 +400,8 @@ const createBOMRequest = async (bomData) => {
             quantity || 0,
             drawingNo || null,
             drawing_id || null,
-            bom_cost
+            bom_cost,
+            finalStatus === 'Draft' ? 'DRAFT' : 'PENDING'
           ]
         );
         targetItemId = result.insertId;
@@ -580,16 +584,20 @@ const getApprovedBOMs = async () => {
       so.id as sales_order_id,
       soi.created_at
     FROM sales_order_items soi
-    JOIN sales_orders so ON soi.sales_order_id = so.id
-    JOIN companies c ON so.company_id = c.id
-    WHERE so.status IN ('BOM_SUBMITTED', 'BOM_Approved ', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED')
-    AND (
-      EXISTS (SELECT 1 FROM sales_order_item_materials WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL) OR (drawing_no = soi.drawing_no AND sales_order_item_id IS NULL AND item_code IS NULL))
-      OR EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL) OR (drawing_no = soi.drawing_no AND sales_order_item_id IS NULL AND item_code IS NULL))
-      OR EXISTS (SELECT 1 FROM sales_order_item_operations WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL) OR (drawing_no = soi.drawing_no AND sales_order_item_id IS NULL AND item_code IS NULL))
-      OR EXISTS (SELECT 1 FROM sales_order_item_scrap WHERE sales_order_item_id = soi.id OR (item_code = soi.item_code AND sales_order_item_id IS NULL) OR (drawing_no = soi.drawing_no AND sales_order_item_id IS NULL AND item_code IS NULL))
+    LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
+    LEFT JOIN companies c ON so.company_id = c.id
+    WHERE (
+      TRIM(IFNULL(so.status, '')) IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved', 'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY')
+      OR soi.status IN ('DRAFT', 'PENDING')
+      OR soi.sales_order_id IS NULL
     )
-    ORDER BY soi.created_at DESC
+    AND (
+      soi.bom_cost > 0
+      OR EXISTS (SELECT 1 FROM sales_order_item_materials WHERE sales_order_item_id = soi.id)
+      OR EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id)
+      OR EXISTS (SELECT 1 FROM sales_order_item_operations WHERE sales_order_item_id = soi.id)
+    )
+    ORDER BY (CASE WHEN soi.bom_cost > 0 THEN 1 ELSE 2 END) ASC, soi.created_at DESC
   `);
   return rows;
 };

@@ -9,7 +9,7 @@ const listWorkOrders = async () => {
      FROM work_orders wo
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
-     ORDER BY CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.created_at DESC`
+     ORDER BY IFNULL(wo.plan_id, 0) DESC, IFNULL(wo.source_fg, wo.item_code) ASC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.created_at DESC`
   );
   return rows;
 };
@@ -70,18 +70,19 @@ const createWorkOrdersFromPlan = async (planId) => {
 
       // Ensure we have a valid sales_order_id if available
       const effectiveSalesOrderId = plan.sales_order_id || (itemData.sales_order_id) || null;
+      const sourceFg = itemData.source_fg || (sourceType === 'FG' ? itemCode : null);
 
       const woNumber = await generateWoNumber(connection);
       
       const [result] = await connection.execute(
         `INSERT INTO work_orders 
          (wo_number, plan_id, production_plan_item_id, parent_wo_id, sales_order_id, sales_order_item_id, 
-          item_code, item_name, bom_no, source_type, quantity, start_date, end_date, status, priority)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
+          item_code, item_name, bom_no, source_type, source_fg, quantity, start_date, end_date, status, priority)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?)`,
         [
           woNumber, planId, productionPlanItemId, parentId,
           effectiveSalesOrderId, salesOrderItemId,
-          itemCode, itemName, bomNo, sourceType, quantity,
+          itemCode, itemName, bomNo, sourceType, sourceFg, quantity,
           startDate, endDate, plan.production_priority || 'NORMAL'
         ]
       );

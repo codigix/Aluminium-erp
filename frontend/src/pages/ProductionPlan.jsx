@@ -641,10 +641,9 @@ const ProductionPlan = () => {
   };
 
   const calculatePlanDetails = () => {
-    // Collect all materials from all items (already exploded from backend)
+    // 1. Collect all materials
     const allMaterials = newPlan.items.flatMap(item => 
       (item.materials || []).map(mat => {
-        // The backend returns required_qty per unit if called with multiplier 1
         const baseQty = parseFloat(mat.required_qty || mat.qty_per_pc || 0);
         return {
           ...mat,
@@ -656,11 +655,8 @@ const ProductionPlan = () => {
       })
     );
 
-    // Filter by category for display sections
-    const coreMaterials = allMaterials.filter(m => m.material_category === 'CORE');
-    const explodedMaterials = allMaterials.filter(m => m.material_category === 'EXPLODED');
-
-    const subAssembliesToDisplay = isViewing 
+    // 2. Collect all potential sub-assemblies (components)
+    const rawComponents = isViewing 
       ? (newPlan.subAssemblies || []) 
       : newPlan.items.flatMap(item => (item.components || []).map(comp => {
           const baseQty = parseFloat(comp.quantity || 0);
@@ -678,6 +674,45 @@ const ProductionPlan = () => {
           };
         }));
 
+    // 3. Separate real Sub-Assemblies from Consumables (Item Code starts with CON-)
+    const subAssembliesToDisplay = rawComponents.filter(c => {
+      const code = (c.itemCode || c.item_code || '').toUpperCase();
+      return !code.startsWith('CON-');
+    });
+
+    const componentsAsMaterials = rawComponents.filter(c => {
+      const code = (c.itemCode || c.item_code || '').toUpperCase();
+      return code.startsWith('CON-');
+    }).map(c => ({
+      material_name: c.description || c.item_name || 'Consumable',
+      description: c.description || 'Consumable item from BOM',
+      required_qty: isViewing ? (c.required_qty || c.plannedQty) : c.plannedQty,
+      design_qty: isViewing ? (c.design_qty || c.designQty) : c.designQty,
+      uom: c.unit || c.uom || 'Nos',
+      warehouse: c.targetWarehouse || c.warehouse || 'Store - NC',
+      material_category: 'EXPLODED',
+      bom_ref: c.bomNo || c.bom_no || '-',
+      item_code: c.itemCode || c.item_code,
+      totalDesignQty: c.designQty || 0,
+      totalPlannedQty: c.plannedQty || 0,
+      bom_no: c.bomNo || '-',
+      source_fg: c.source_fg || '-'
+    }));
+
+    // 4. Combine into final Material list
+    let materialsToDisplay = isViewing ? (newPlan.materials || []) : allMaterials;
+    
+    // Merge consumables from components into materials if not already present
+    componentsAsMaterials.forEach(cam => {
+      const codeMatch = (m) => (m.item_code || m.itemCode) === cam.item_code;
+      if (!materialsToDisplay.some(codeMatch)) {
+        materialsToDisplay.push(cam);
+      }
+    });
+
+    const coreMaterials = materialsToDisplay.filter(m => m.material_category === 'CORE');
+    const explodedMaterials = materialsToDisplay.filter(m => m.material_category === 'EXPLODED');
+
     const operationsToDisplay = isViewing 
       ? (newPlan.operations || []).map(op => ({
           ...op,
@@ -694,8 +729,6 @@ const ProductionPlan = () => {
           base_hour: op.base_hour ?? op.base_time ?? op.cycle_time_min ?? 0,
           source_fg: item.itemCode
         })));
-
-    const materialsToDisplay = isViewing ? (newPlan.materials || []) : allMaterials;
 
     return { 
       materialsToDisplay, 
@@ -1163,6 +1196,57 @@ const ProductionPlan = () => {
                     {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'CORE') : coreMaterials).length === 0 && (
                       <tr>
                         <td colSpan="5" className="px-4 py-8 text-center text-slate-400 italic text-xs">No core materials required</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Exploded Components / Consumables */}
+            <div>
+              <div className="flex items-center gap-2  mb-4">
+                <div className="w-2 h-2 bg-rose-500 rounded "></div>
+                <h3 className="text-[10px]  text-rose-600  tracking-widest uppercase">Exploded Components</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-lefttext-xs  text-slate-400   border-b border-slate-100">
+                    <tr>
+                      <th className="p-2  ">Component Specification</th>
+                      <th className="p-2   text-right">Design Qty</th>
+                      <th className="p-2   text-right">Planned Qty</th>
+                      <th className="p-2  ">Source Assembly</th>
+                      <th className="p-2  ">BOM Ref</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).map((mat, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="p-2 ">
+                          <div className=" text-slate-800 text-xs">{mat.material_name || mat.materialName}</div>
+                          <div className="text-[10px] text-slate-400">{mat.item_code || mat.itemCode}</div>
+                        </td>
+                        <td className="p-2  text-right  text-slate-700">
+                          {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
+                        </td>
+                        <td className="p-2  text-right">
+                          <div className=" text-rose-600">
+                            {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
+                          </div>
+                          <div className="text-[9px] text-slate-400  ">{isViewing ? mat.uom : (mat.uom || mat.unit)}</div>
+                        </td>
+                        <td className="p-2 ">
+                          <div className="text-[10px] text-slate-500 ">{mat.source_assembly || mat.sourceFg || '-'}</div>
+                        </td>
+                        <td className="p-2 ">
+                          <span className="text-[10px] text-slate-400 ">{isViewing ? mat.bom_ref : mat.bom_no}</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="px-4 py-8 text-center text-slate-400 italic text-xs">No exploded components available</td>
                       </tr>
                     )}
                   </tbody>
