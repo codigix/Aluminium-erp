@@ -1,0 +1,10 @@
+      <DrawingPreviewModal 
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        drawing={previewDrawing}
+      />
+    </div>
+  );
+};
+
+export default DesignOrders;
