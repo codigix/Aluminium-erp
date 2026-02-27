@@ -98,12 +98,47 @@ const shareWithDesign = async (id) => {
     let companyId;
     if (companies.length > 0) {
       companyId = companies[0].id;
+      // Sync metadata if existing company
+      if (drawing.gstin || drawing.customer_type) {
+        await connection.execute(
+          'UPDATE companies SET gstin = COALESCE(?, gstin), customer_type = COALESCE(?, customer_type) WHERE id = ?',
+          [drawing.gstin || null, drawing.customer_type || null, companyId]
+        );
+      }
     } else {
       const [companyResult] = await connection.execute(
-        'INSERT INTO companies (company_name, company_code, status) VALUES (?, ?, ?)',
-        [drawing.client_name, drawing.client_name.replace(/\s+/g, '_').toUpperCase(), 'ACTIVE']
+        'INSERT INTO companies (company_name, company_code, status, gstin, customer_type) VALUES (?, ?, ?, ?, ?)',
+        [drawing.client_name, drawing.client_name.replace(/\s+/g, '_').toUpperCase(), 'ACTIVE', drawing.gstin || null, drawing.customer_type || null]
       );
       companyId = companyResult.insertId;
+    }
+    
+    // Sync Address (Billing)
+    if (drawing.city || drawing.state || drawing.billing_address) {
+      const [existingAddr] = await connection.query(
+        'SELECT id FROM company_addresses WHERE company_id = ? AND address_type = "BILLING" LIMIT 1',
+        [companyId]
+      );
+      if (existingAddr.length === 0) {
+        await connection.execute(
+          'INSERT INTO company_addresses (company_id, address_type, line1, city, state) VALUES (?, ?, ?, ?, ?)',
+          [companyId, 'BILLING', drawing.billing_address || 'Reference Address', drawing.city || 'NA', drawing.state || 'NA']
+        );
+      }
+    }
+    
+    // Sync Address (Shipping)
+    if (drawing.shipping_address) {
+      const [existingAddr] = await connection.query(
+        'SELECT id FROM company_addresses WHERE company_id = ? AND address_type = "SHIPPING" LIMIT 1',
+        [companyId]
+      );
+      if (existingAddr.length === 0) {
+        await connection.execute(
+          'INSERT INTO company_addresses (company_id, address_type, line1, city, state) VALUES (?, ?, ?, ?, ?)',
+          [companyId, 'SHIPPING', drawing.shipping_address, drawing.city || 'NA', drawing.state || 'NA']
+        );
+      }
     }
     
     if (drawing.email || drawing.phone || drawing.contact_person) {
@@ -119,6 +154,21 @@ const shareWithDesign = async (id) => {
         );
       }
     }
+
+    // 5. Create Sales Order for Design Review
+    const [soResult] = await connection.execute(
+      `INSERT INTO sales_orders (customer_po_id, company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [null, companyId, `Design Review - Drawing ${drawing.drawing_no} for ${drawing.client_name}`, 1, 'NORMAL', 'CREATED', 'DESIGN_ENG', 0]
+    );
+    const salesOrderId = soResult.insertId;
+
+    // 6. Create Sales Order Item
+    await connection.execute(
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, quantity, unit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [salesOrderId, drawing.drawing_no, drawing.id, drawing.revision || '0', drawing.file_path, drawing.description || 'Customer Drawing', drawing.qty || 1, 'NOS']
+    );
 
     await connection.commit();
   } catch (error) {
@@ -159,7 +209,13 @@ const updateDrawing = async (id, data) => {
     emailAddress,
     qty,
     remarks,
-    drawingNo
+    drawingNo,
+    customerType,
+    gstin,
+    city,
+    state,
+    billingAddress,
+    shippingAddress
   } = data;
 
   // 1. Update customer_drawings
@@ -177,6 +233,12 @@ const updateDrawing = async (id, data) => {
   if (qty !== undefined) { updates.push('qty = ?'); params.push(qty); }
   if (remarks !== undefined) { updates.push('remarks = ?'); params.push(remarks); }
   if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
+  if (customerType !== undefined) { updates.push('customer_type = ?'); params.push(customerType); }
+  if (gstin !== undefined) { updates.push('gstin = ?'); params.push(gstin); }
+  if (city !== undefined) { updates.push('city = ?'); params.push(city); }
+  if (state !== undefined) { updates.push('state = ?'); params.push(state); }
+  if (billingAddress !== undefined) { updates.push('billing_address = ?'); params.push(billingAddress); }
+  if (shippingAddress !== undefined) { updates.push('shipping_address = ?'); params.push(shippingAddress); }
 
   if (updates.length === 0) return;
 
@@ -264,12 +326,51 @@ const shareDrawingsBulk = async (ids) => {
       let companyId;
       if (companies.length > 0) {
         companyId = companies[0].id;
+        // Sync metadata if existing company from first drawing that has it
+        const withMeta = clientDrawings.find(d => d.gstin || d.customer_type);
+        if (withMeta) {
+          await connection.execute(
+            'UPDATE companies SET gstin = COALESCE(?, gstin), customer_type = COALESCE(?, customer_type) WHERE id = ?',
+            [withMeta.gstin || null, withMeta.customer_type || null, companyId]
+          );
+        }
       } else {
+        const withMeta = clientDrawings.find(d => d.gstin || d.customer_type) || clientDrawings[0];
         const [companyResult] = await connection.execute(
-          'INSERT INTO companies (company_name, company_code, status) VALUES (?, ?, ?)',
-          [clientName, clientName.replace(/\s+/g, '_').toUpperCase(), 'ACTIVE']
+          'INSERT INTO companies (company_name, company_code, status, gstin, customer_type) VALUES (?, ?, ?, ?, ?)',
+          [clientName, clientName.replace(/\s+/g, '_').toUpperCase(), 'ACTIVE', withMeta.gstin || null, withMeta.customer_type || null]
         );
         companyId = companyResult.insertId;
+      }
+      
+      // Sync Address (Billing) from first drawing that has it
+      const withBilling = clientDrawings.find(d => d.city || d.state || d.billing_address);
+      if (withBilling) {
+        const [existingAddr] = await connection.query(
+          'SELECT id FROM company_addresses WHERE company_id = ? AND address_type = "BILLING" LIMIT 1',
+          [companyId]
+        );
+        if (existingAddr.length === 0) {
+          await connection.execute(
+            'INSERT INTO company_addresses (company_id, address_type, line1, city, state) VALUES (?, ?, ?, ?, ?)',
+            [companyId, 'BILLING', withBilling.billing_address || 'Reference Address', withBilling.city || 'NA', withBilling.state || 'NA']
+          );
+        }
+      }
+      
+      // Sync Address (Shipping)
+      const withShipping = clientDrawings.find(d => d.shipping_address);
+      if (withShipping) {
+        const [existingAddr] = await connection.query(
+          'SELECT id FROM company_addresses WHERE company_id = ? AND address_type = "SHIPPING" LIMIT 1',
+          [companyId]
+        );
+        if (existingAddr.length === 0) {
+          await connection.execute(
+            'INSERT INTO company_addresses (company_id, address_type, line1, city, state) VALUES (?, ?, ?, ?, ?)',
+            [companyId, 'SHIPPING', withShipping.shipping_address, withShipping.city || 'NA', withShipping.state || 'NA']
+          );
+        }
       }
       
       // 4. Handle primary contact from first drawing that has contact info

@@ -336,7 +336,7 @@ const CustomerDrawing = () => {
   };
 
   useEffect(() => {
-    fetchDrawings();
+    fetchDrawings(searchTerm);
     fetchCompanies();
     fetchRequirements();
   }, []);
@@ -461,6 +461,55 @@ const CustomerDrawing = () => {
       successToast('Customer drawing updated successfully');
       setShowEditModal(false);
       fetchDrawings(searchTerm);
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const handleEditAndSendToDesign = async (e) => {
+    e.preventDefault();
+    try {
+      setSaveLoading(true);
+      const token = localStorage.getItem('authToken');
+      const formData = new FormData();
+      formData.append('id', editData.id);
+      formData.append('drawingNo', editData.drawing_no);
+      formData.append('revisionNo', editData.revision_no);
+      formData.append('description', editData.description);
+      formData.append('clientName', editData.client_name);
+      formData.append('contactPerson', editData.contact_person);
+      formData.append('phoneNumber', editData.phone);
+      formData.append('emailAddress', editData.email);
+      formData.append('customerType', editData.customer_type);
+      formData.append('gstin', editData.gstin);
+      formData.append('city', editData.city);
+      formData.append('state', editData.state);
+      formData.append('billingAddress', editData.billing_address);
+      formData.append('shippingAddress', editData.shipping_address);
+      formData.append('qty', editData.qty);
+      formData.append('remarks', editData.remarks);
+
+      if (editData.drawing_pdf) {
+        formData.append('drawing_pdf', editData.drawing_pdf);
+      }
+
+      const response = await fetch(`${API_BASE}/drawings/${editData.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Failed to update drawing');
+      
+      // Share with design
+      await handleShareWithDesign(editData.id);
+      
+      setShowEditModal(false);
     } catch (error) {
       console.error(error);
       errorToast(error.message);
@@ -637,7 +686,7 @@ const CustomerDrawing = () => {
       const isExcelUpload = isExcel && savedDrawing.count;
 
       if (sendToDesign && drawingId) {
-        await shareDrawingWithDesign(drawingId);
+        await handleShareWithDesign(drawingId);
       } else if (isExcelUpload && sendToDesign) {
         await sendBulkUploadedToDesign(newDrawing.client_name, savedDrawing.count);
       }
@@ -683,7 +732,7 @@ const CustomerDrawing = () => {
           warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
         }
       }
-      fetchDrawings();
+      fetchDrawings(searchTerm);
       fetchRequirements();
     } catch (error) {
       errorToast(error.message);
@@ -724,7 +773,7 @@ const CustomerDrawing = () => {
         successToast(`All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`);
         setLastUploadedDrawings([]);
         setShowFormModal(false);
-        fetchDrawings();
+        fetchDrawings(searchTerm);
         fetchRequirements();
       }
     } catch (error) {
@@ -761,34 +810,13 @@ const CustomerDrawing = () => {
         setLoading(true);
         await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.id));
         successToast(`All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer as a single request`);
-        fetchDrawings();
+        fetchDrawings(searchTerm);
         fetchRequirements();
       } catch (error) {
         errorToast(error.message);
       } finally {
         setLoading(false);
       }
-    }
-  };
-
-  const shareDrawingWithDesign = async (drawingId) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/drawings/${drawingId}/share`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Share failed');
-      
-      successToast('Drawing saved and sent to Design Engineer for review and approval');
-      fetchDrawings();
-      fetchRequirements();
-    } catch (error) {
-      console.error(error);
-      errorToast(error.message);
     }
   };
 
@@ -825,7 +853,7 @@ const CustomerDrawing = () => {
           setShowFormModal(false);
         }
       }
-      fetchDrawings();
+      fetchDrawings(searchTerm);
       fetchRequirements();
     } catch (error) {
       errorToast(error.message);
@@ -877,7 +905,7 @@ const CustomerDrawing = () => {
         });
         if (!response.ok) throw new Error('Delete failed');
         successToast('Drawing has been deleted.');
-        fetchDrawings();
+        fetchDrawings(searchTerm);
       } catch (error) {
         errorToast(error.message);
       }
@@ -915,10 +943,10 @@ const CustomerDrawing = () => {
 
         if (failed.length === 0) {
           successToast(`All drawings for ${clientName} have been deleted.`);
-          fetchDrawings();
+          fetchDrawings(searchTerm);
         } else {
           warningToast(`${failed.length} drawings failed to delete.`);
-          fetchDrawings();
+          fetchDrawings(searchTerm);
         }
       } catch (error) {
         errorToast(error.message);
@@ -977,7 +1005,7 @@ const CustomerDrawing = () => {
               </button>
               <button 
                 type="button"
-                onClick={() => { setSearchTerm(''); fetchDrawings(); }}
+                onClick={() => { setSearchTerm(''); fetchDrawings(''); }}
                 className="px-3 py-2 bg-white text-slate-600 rounded  text-xs  hover:bg-slate-50 border border-slate-300 transition-colors"
               >
                 Reset
@@ -1199,13 +1227,6 @@ const CustomerDrawing = () => {
                                       title="Edit"
                                     >
                                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                    </button>
-                                    <button 
-                                      onClick={() => handleViewRevisions(drawing)}
-                                      className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded transition-all"
-                                      title="Revisions"
-                                    >
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                     </button>
                                     <button 
                                       onClick={() => handleDelete(drawing.id)}
@@ -1452,14 +1473,26 @@ const CustomerDrawing = () => {
               Close
             </button>
             {modalMode === 'edit' && (
-              <button 
-                type="submit"
-                disabled={saveLoading}
-                className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-              >
-                {saveLoading && <Loader2 className="w-3 h-3 animate-spin" />}
-                Save Changes
-              </button>
+              <>
+                <button 
+                  type="button"
+                  onClick={handleEditAndSendToDesign}
+                  disabled={saveLoading}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {saveLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                  <Send className="w-3 h-3" />
+                  Save & Send to Design
+                </button>
+                <button 
+                  type="submit"
+                  disabled={saveLoading}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {saveLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Save Changes
+                </button>
+              </>
             )}
           </div>
         </form>
