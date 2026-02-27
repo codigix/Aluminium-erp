@@ -416,12 +416,12 @@ const BOMCreation = () => {
                               </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleSendForApproval(client); }}
-                                className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 rounded  hover:bg-emerald-100 transition-all"
-                                title="Send to BOM Approval"
+                                className="px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-md hover:bg-blue-100 transition-all flex items-center gap-1.5"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                 </svg>
+                                BOM Approval
                               </button>
                             </div>
                           </td>
