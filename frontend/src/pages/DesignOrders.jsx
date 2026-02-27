@@ -74,11 +74,186 @@ const DesignOrders = () => {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [isEditingMaterial, setIsEditingMaterial] = useState(false);
   const [editingMaterialId, setEditingMaterialId] = useState(null);
+  const [materialSubTab, setMaterialSubTab] = useState('add'); // 'add' or 'groups'
   const [modalSearchTerm, setModalSearchTerm] = useState('');
+  const [itemGroups, setItemGroups] = useState([
+    { id: 1, name: 'Raw Material', code: 'RM', status: 'Active' },
+    { id: 2, name: 'SFG', code: 'SFG', status: 'Active' },
+    { id: 3, name: 'FG', code: 'FG', status: 'Active' },
+    { id: 4, name: 'Sub Assembly', code: 'SA', status: 'Active' },
+    { id: 5, name: 'Consumable', code: 'CON', status: 'Active' }
+  ]);
+  const [groupFormData, setGroupFormData] = useState({ name: '', code: '', status: 'Active' });
+  const [isEditingGroup, setIsEditingGroup] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
+
+  const handleGroupSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setIsSubmittingGroup(true);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      if (isEditingGroup) {
+        setItemGroups(prev => prev.map(g => g.id === editingGroupId ? { ...g, ...groupFormData } : g));
+        successToast('Item group updated successfully');
+      } else {
+        const newGroup = {
+          id: Date.now(),
+          ...groupFormData
+        };
+        setItemGroups(prev => [...prev, newGroup]);
+        successToast('Item group added successfully');
+      }
+      setGroupFormData({ name: '', code: '', status: 'Active' });
+      setIsEditingGroup(false);
+      setEditingGroupId(null);
+    } catch (error) {
+      errorToast('Failed to save item group');
+    } finally {
+      setIsSubmittingGroup(false);
+    }
+  };
+
+  const handleEditGroup = (group) => {
+    setGroupFormData({ name: group.name, code: group.code, status: group.status });
+    setIsEditingGroup(true);
+    setEditingGroupId(group.id);
+  };
+
+  const handleDeleteGroup = (id) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: "You want to delete this item group?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setItemGroups(prev => prev.filter(g => g.id !== id));
+        successToast('Item group deleted');
+      }
+    });
+  };
 
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
+
+  const renderItemGroups = () => {
+    return (
+      <div className="p-8 space-y-8 animate-in fade-in duration-300">
+        {/* Add/Edit Group Form */}
+        <div className="bg-slate-50 p-6 rounded border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-6 text-slate-800">
+            <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded text-xs font-bold">+</span>
+            <h4 className="text-sm font-semibold">{isEditingGroup ? 'Edit Item Group' : 'Add New Item Group'}</h4>
+          </div>
+          <form onSubmit={handleGroupSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Group Name *</label>
+              <input 
+                type="text" 
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                placeholder="e.g. Raw Material"
+                value={groupFormData.name}
+                onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Code *</label>
+              <input 
+                type="text" 
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                placeholder="e.g. RM"
+                value={groupFormData.code}
+                onChange={(e) => setGroupFormData({...groupFormData, code: e.target.value})}
+                required
+              />
+            </div>
+            <div className="flex gap-3">
+              <button 
+                type="submit" 
+                disabled={isSubmittingGroup}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+              >
+                {isSubmittingGroup ? 'Saving...' : (isEditingGroup ? 'Update Group' : 'Add Group')}
+              </button>
+              {isEditingGroup && (
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setIsEditingGroup(false);
+                    setGroupFormData({ name: '', code: '', status: 'Active' });
+                  }}
+                  className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded text-xs hover:bg-slate-50 transition-all"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* Groups List */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-indigo-500 rounded"></span>
+              Item Groups Master
+            </h4>
+          </div>
+          <div className="overflow-hidden border border-slate-200 rounded shadow-sm">
+            <table className="w-full text-left border-collapse bg-white">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Group Name</th>
+                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Code</th>
+                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Status</th>
+                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {itemGroups.map((group) => (
+                  <tr key={group.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4 text-xs font-medium text-slate-700">{group.name}</td>
+                    <td className="p-4 text-xs text-slate-600">
+                      <span className="px-2 py-1 bg-slate-100 rounded text-[10px] font-bold">{group.code}</span>
+                    </td>
+                    <td className="p-4 text-xs">
+                      <span className="px-2 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded text-[10px]">
+                        {group.status}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button 
+                          onClick={() => handleEditGroup(group)}
+                          className="p-1.5 text-amber-500 hover:bg-amber-50 rounded transition-all"
+                        >
+                          ✏️
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteGroup(group.id)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const handlePreview = (item) => {
     setPreviewDrawing(item);
@@ -87,347 +262,374 @@ const DesignOrders = () => {
 
   const renderMaterialForm = () => {
     return (
-      <div className="bg-white rounded border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300 mb-6">
-        <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+      <div className="bg-white rounded border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300 mb-6 shadow-sm">
+        {/* Sub-Header with Back Button and Title */}
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
           <button 
             onClick={() => setShowAddMaterialModal(false)}
-            className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 transition-colors px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium shadow-sm"
+            className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 transition-all px-3 py-2 bg-white border border-slate-200 rounded text-xs font-semibold shadow-sm"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to Tasks
           </button>
-          <h3 className="text-lg text-slate-800 flex items-center gap-2">
-            <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded text-xs">📦</span>
-            {isEditingMaterial ? 'Edit Material / Item' : 'Add New Material / Item'}
-          </h3>
-          <div className="w-[100px]"></div> {/* Spacer to keep title centered if needed, or just leave it */}
+          <div className="flex items-center gap-3">
+            <span className="p-2 bg-emerald-100 text-emerald-600 rounded-lg text-sm">📦</span>
+            <h3 className="text-base font-bold text-slate-800 tracking-tight">
+              {isEditingMaterial ? 'Edit Material / Item' : 'Add New Material / Item'}
+            </h3>
+          </div>
+          <div className="w-[120px]"></div>
         </div>
 
-        <form onSubmit={handleMaterialSubmit} className="p-8 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Row 1 */}
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Item Code *</label>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  className="flex-1 p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                  placeholder="ITM-0001"
-                  value={materialFormData.itemCode}
-                  onChange={(e) => setMaterialFormData({...materialFormData, itemCode: e.target.value})}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const code = await fetchNextItemCode(materialFormData.itemName, materialFormData.itemGroup);
-                    if (code) setMaterialFormData(prev => ({ ...prev, itemCode: code }));
-                  }}
-                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-xs   transition-all border border-slate-200"
-                  title="Generate Next Code"
-                >
-                  🔄
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Item Name *</label>
-              <input 
-                type="text" 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                placeholder="Enter item name"
-                value={materialFormData.itemName}
-                onChange={(e) => setMaterialFormData({...materialFormData, itemName: e.target.value})}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Item Group *</label>
-              <select 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                value={materialFormData.itemGroup}
-                onChange={(e) => setMaterialFormData({...materialFormData, itemGroup: e.target.value})}
-                required
-              >
-                <option value="">Select item group</option>
-                <option value="Raw Material">Raw Material</option>
-                <option value="SFG">SFG</option>
-                <option value="FG">FG</option>
-                <option value="Sub Assembly">Sub Assembly</option>
-                <option value="Consumable">Consumable</option>
-              </select>
-            </div>
-
-            {/* Row 2 */}
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Default UOM *</label>
-              <select 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                value={materialFormData.defaultUom}
-                onChange={(e) => setMaterialFormData({...materialFormData, defaultUom: e.target.value})}
-                required
-              >
-                <option value="Nos">Nos</option>
-                <option value="Kg">Kg</option>
-                <option value="Mtr">Mtr</option>
-                <option value="Set">Set</option>
-                <option value="Ltr">Litre (Ltr)</option>
-                <option value="ml">Millilitre (ml)</option>
-                <option value="m³">Cubic Meter (m³)</option>
-                <option value="mm">Millimeter (mm)</option>
-                <option value="ft">Feet (ft)</option>
-                <option value="in">Inch (in)</option>
-                <option value="g">Gram (g)</option>
-                <option value="Ton">Ton</option>
-                <option value="MT">Metric Ton (MT)</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Valuation Rate</label>
-              <input 
-                type="number" 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                value={materialFormData.valuationRate}
-                onChange={(e) => setMaterialFormData({...materialFormData, valuationRate: e.target.value})}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">No. of Cavity (for mould items)</label>
-              <input 
-                type="number" 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                value={materialFormData.noOfCavity}
-                onChange={(e) => setMaterialFormData({...materialFormData, noOfCavity: e.target.value})}
-              />
-            </div>
-
-            {/* Row 3 */}
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Weight per Unit</label>
-              <input 
-                type="number" 
-                step="0.001"
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                placeholder="0.00"
-                value={materialFormData.weightPerUnit}
-                onChange={(e) => setMaterialFormData({...materialFormData, weightPerUnit: e.target.value})}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Weight UOM</label>
-              <select 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                value={materialFormData.weightUom}
-                onChange={(e) => setMaterialFormData({...materialFormData, weightUom: e.target.value})}
-              >
-                <option value="">Select weight UOM</option>
-                <option value="Kg">Kg</option>
-                <option value="g">Gram (g)</option>
-                <option value="Ltr">Litre (Ltr)</option>
-                <option value="ml">Millilitre (ml)</option>
-                <option value="Ton">Ton</option>
-                <option value="MT">Metric Ton (MT)</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Drawing No (Optional)</label>
-              <input 
-                type="text" 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                placeholder="Enter drawing number"
-                value={materialFormData.drawingNo}
-                onChange={(e) => setMaterialFormData({...materialFormData, drawingNo: e.target.value})}
-              />
-            </div>
-
-            {/* Row 4 */}
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Revision (Optional)</label>
-              <input 
-                type="text" 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                placeholder="Enter revision"
-                value={materialFormData.revision}
-                onChange={(e) => setMaterialFormData({...materialFormData, revision: e.target.value})}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500  ">Material Grade (Optional)</label>
-              <input 
-                type="text" 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                placeholder="Enter material grade"
-                value={materialFormData.materialGrade}
-                onChange={(e) => setMaterialFormData({...materialFormData, materialGrade: e.target.value})}
-              />
-            </div>
+        {/* Tab Navigation */}
+        <div className="px-8 border-b border-slate-100 bg-white">
+          <div className="flex gap-8">
+            <button
+              onClick={() => setMaterialSubTab('add')}
+              className={`py-4 text-xs font-bold transition-all relative ${materialSubTab === 'add' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              Add Material
+              {materialSubTab === 'add' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
+            </button>
+            <button
+              onClick={() => setMaterialSubTab('groups')}
+              className={`py-4 text-xs font-bold transition-all relative ${materialSubTab === 'groups' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              Item Groups
+              {materialSubTab === 'groups' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
+            </button>
           </div>
+        </div>
 
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6 border-t border-slate-100">
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <button 
-                type="button"
-                onClick={handleClearMaterialForm}
-                className="p-2.5 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all border border-slate-200"
-              >
-                Clear Form
-              </button>
-              <button 
-                type="button"
-                className="p-2.5 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
-              >
-                Generate EAN Barcode
-              </button>
-            </div>
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              <button 
-                type="button"
-                onClick={() => setShowAddMaterialModal(false)}
-                className="flex-1 md:flex-none p-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all"
-              >
-                Cancel
-              </button>
-              <button 
-                type="submit"
-                disabled={isSubmittingMaterial}
-                className="flex-1 md:flex-none px-10 py-2.5 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
-              >
-                {isSubmittingMaterial ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded  animate-spin"></div>
-                    {isEditingMaterial ? 'Updating...' : 'Saving...'}
-                  </>
-                ) : (isEditingMaterial ? 'Update Material' : 'Save Material')}
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {/* Items List Section */}
-        <div className="px-8 pb-8">
-          <div className="border-t border-slate-100 pt-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-              <h4 className="text-sm  text-slate-700 flex items-center gap-2 ">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded "></span>
-                {materialFormData.drawingNo ? `Materials for Drawing: ${materialFormData.drawingNo}` : 'Recently Added Materials'}
-              </h4>
-              <div className="flex items-center gap-2  w-full md:w-auto">
-                <div className="relative flex-1 md:w-64">
-                  <input
-                    type="text"
-                    placeholder="Search items or drawing..."
-                    className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                    value={modalSearchTerm}
-                    onChange={(e) => setModalSearchTerm(e.target.value)}
-                  />
-                  <svg className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+        {materialSubTab === 'add' ? (
+          <>
+            <form onSubmit={handleMaterialSubmit} className="p-8 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Row 1 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Item Code *</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      className="flex-1 p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                      placeholder="ITM-0001"
+                      value={materialFormData.itemCode}
+                      onChange={(e) => setMaterialFormData({...materialFormData, itemCode: e.target.value})}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const code = await fetchNextItemCode(materialFormData.itemName, materialFormData.itemGroup);
+                        if (code) setMaterialFormData(prev => ({ ...prev, itemCode: code }));
+                      }}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-xs   transition-all border border-slate-200"
+                      title="Generate Next Code"
+                    >
+                      🔄
+                    </button>
+                  </div>
                 </div>
-                {materialFormData.drawingNo && (
-                  <button
-                    type="button"
-                    onClick={() => setModalSearchTerm(materialFormData.drawingNo)}
-                    className="px-3 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded text-xs   hover:bg-blue-100 transition-all whitespace-nowrap"
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Item Name *</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    placeholder="Enter item name"
+                    value={materialFormData.itemName}
+                    onChange={(e) => setMaterialFormData({...materialFormData, itemName: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Item Group *</label>
+                  <select 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    value={materialFormData.itemGroup}
+                    onChange={(e) => setMaterialFormData({...materialFormData, itemGroup: e.target.value})}
+                    required
                   >
-                    This Drawing
+                    <option value="">Select item group</option>
+                    {itemGroups.map(group => (
+                      <option key={group.id} value={group.name}>{group.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Row 2 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Default UOM *</label>
+                  <select 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    value={materialFormData.defaultUom}
+                    onChange={(e) => setMaterialFormData({...materialFormData, defaultUom: e.target.value})}
+                    required
+                  >
+                    <option value="Nos">Nos</option>
+                    <option value="Kg">Kg</option>
+                    <option value="Mtr">Mtr</option>
+                    <option value="Set">Set</option>
+                    <option value="Ltr">Litre (Ltr)</option>
+                    <option value="ml">Millilitre (ml)</option>
+                    <option value="m³">Cubic Meter (m³)</option>
+                    <option value="mm">Millimeter (mm)</option>
+                    <option value="ft">Feet (ft)</option>
+                    <option value="in">Inch (in)</option>
+                    <option value="g">Gram (g)</option>
+                    <option value="Ton">Ton</option>
+                    <option value="MT">Metric Ton (MT)</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Valuation Rate</label>
+                  <input 
+                    type="number" 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    value={materialFormData.valuationRate}
+                    onChange={(e) => setMaterialFormData({...materialFormData, valuationRate: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">No. of Cavity (for mould items)</label>
+                  <input 
+                    type="number" 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    value={materialFormData.noOfCavity}
+                    onChange={(e) => setMaterialFormData({...materialFormData, noOfCavity: e.target.value})}
+                  />
+                </div>
+
+                {/* Row 3 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Weight per Unit</label>
+                  <input 
+                    type="number" 
+                    step="0.001"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    placeholder="0.00"
+                    value={materialFormData.weightPerUnit}
+                    onChange={(e) => setMaterialFormData({...materialFormData, weightPerUnit: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Weight UOM</label>
+                  <select 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    value={materialFormData.weightUom}
+                    onChange={(e) => setMaterialFormData({...materialFormData, weightUom: e.target.value})}
+                  >
+                    <option value="">Select weight UOM</option>
+                    <option value="Kg">Kg</option>
+                    <option value="g">Gram (g)</option>
+                    <option value="Ltr">Litre (Ltr)</option>
+                    <option value="ml">Millilitre (ml)</option>
+                    <option value="Ton">Ton</option>
+                    <option value="MT">Metric Ton (MT)</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Drawing No (Optional)</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    placeholder="Enter drawing number"
+                    value={materialFormData.drawingNo}
+                    onChange={(e) => setMaterialFormData({...materialFormData, drawingNo: e.target.value})}
+                  />
+                </div>
+
+                {/* Row 4 */}
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Revision (Optional)</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    placeholder="Enter revision"
+                    value={materialFormData.revision}
+                    onChange={(e) => setMaterialFormData({...materialFormData, revision: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs  text-slate-500  ">Material Grade (Optional)</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                    placeholder="Enter material grade"
+                    value={materialFormData.materialGrade}
+                    onChange={(e) => setMaterialFormData({...materialFormData, materialGrade: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6 border-t border-slate-100">
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                  <button 
+                    type="button"
+                    onClick={handleClearMaterialForm}
+                    className="p-2.5 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all border border-slate-200"
+                  >
+                    Clear Form
                   </button>
-                )}
+                  <button 
+                    type="button"
+                    className="p-2.5 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
+                  >
+                    Generate EAN Barcode
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <button 
+                    type="button"
+                    onClick={() => setShowAddMaterialModal(false)}
+                    className="flex-1 md:flex-none p-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmittingMaterial}
+                    className="flex-1 md:flex-none px-10 py-2.5 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingMaterial ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded  animate-spin"></div>
+                        {isEditingMaterial ? 'Updating...' : 'Saving...'}
+                      </>
+                    ) : (isEditingMaterial ? 'Update Material' : 'Save Material')}
+                  </button>
+                </div>
               </div>
-            </div>
-            
-            <div className="overflow-hidden border border-slate-200 rounded ">
-              <div className="overflow-x-auto max-h-[400px]">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-50 sticky top-0 z-10">
-                    <tr>
-                      <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Item Code</th>
-                      <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Material Name</th>
-                      <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Group</th>
-                      <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">UOM</th>
-                      <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-center">Valuation Rate</th>
-                      <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-center">Weight/Unit</th>
-                      <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Drawing No</th>
-                      <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {itemsLoading ? (
-                      <tr>
-                        <td colSpan="8" className="px-4 py-8 text-center text-slate-400 text-xs italic">
-                          Loading materials...
-                        </td>
-                      </tr>
-                    ) : itemsList.length === 0 ? (
-                      <tr>
-                        <td colSpan="8" className="px-4 py-8 text-center text-slate-400 text-xs italic">
-                          No materials found
-                        </td>
-                      </tr>
-                    ) : (
-                      [...itemsList]
-                        .filter(item => {
-                          const search = modalSearchTerm.toLowerCase();
-                          return (
-                            item.item_code?.toLowerCase().includes(search) ||
-                            item.material_name?.toLowerCase().includes(search) ||
-                            item.drawing_no?.toLowerCase().includes(search)
-                          );
-                        })
-                        .sort((a, b) => b.id - a.id)
-                        .map((item) => {
-                          const isCurrentDrawing = materialFormData.drawingNo && item.drawing_no === materialFormData.drawingNo;
-                          return (
-                            <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
-                              <td className="p-2  text-xs  text-slate-700">
-                                {item.item_code}
-                                {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px]  ">Current Drg</span>}
-                              </td>
-                              <td className="p-2  text-xs text-slate-600">{item.material_name}</td>
-                              <td className="p-2  text-xs text-slate-600">
-                                <span className="p-1  bg-slate-100 text-slate-600 rounded text-[10px]">{item.material_type}</span>
-                              </td>
-                              <td className="p-2  text-xs text-slate-600">{item.unit}</td>
-                              <td className="p-2  text-xs text-slate-600 text-center">₹{parseFloat(item.valuation_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                              <td className="p-2  text-xs text-slate-600 text-center">{parseFloat(item.weight_per_unit || 0).toFixed(3)} {item.weight_uom}</td>
-                              <td className="p-2  text-xs text-slate-600">{item.drawing_no || '—'}</td>
-                              <td className="p-2  text-right">
-                                <div className="flex justify-end gap-1">
-                                  <button 
-                                    onClick={() => handleCopyMaterial(item)}
-                                    className="p-1 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                    title="Copy Details"
-                                  >
-                                    📋
-                                  </button>
-                                  <button 
-                                    onClick={() => handleEditMaterialInModal(item)}
-                                    className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
-                                    title="Edit"
-                                  >
-                                    ✏️
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeleteMaterialInModal(item.id)}
-                                    className="p-1 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                                    title="Delete"
-                                  >
-                                    🗑️
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
+            </form>
+
+            {/* Items List Section */}
+            <div className="px-8 pb-8 animate-in fade-in duration-300">
+              <div className="border-t border-slate-100 pt-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                  <h4 className="text-sm  text-slate-700 flex items-center gap-2 ">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded "></span>
+                    {materialFormData.drawingNo ? `Materials for Drawing: ${materialFormData.drawingNo}` : 'Recently Added Materials'}
+                  </h4>
+                  <div className="flex items-center gap-2  w-full md:w-auto">
+                    <div className="relative flex-1 md:w-64">
+                      <input
+                        type="text"
+                        placeholder="Search items or drawing..."
+                        className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                        value={modalSearchTerm}
+                        onChange={(e) => setModalSearchTerm(e.target.value)}
+                      />
+                      <svg className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                    {materialFormData.drawingNo && (
+                      <button
+                        type="button"
+                        onClick={() => setModalSearchTerm(materialFormData.drawingNo)}
+                        className="px-3 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded text-xs   hover:bg-blue-100 transition-all whitespace-nowrap"
+                      >
+                        This Drawing
+                      </button>
                     )}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
+                
+                <div className="overflow-hidden border border-slate-200 rounded ">
+                  <div className="overflow-x-auto max-h-[400px]">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-slate-50 sticky top-0 z-10">
+                        <tr>
+                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Item Code</th>
+                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Material Name</th>
+                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Group</th>
+                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">UOM</th>
+                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-center">Valuation Rate</th>
+                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-center">Weight/Unit</th>
+                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Drawing No</th>
+                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {itemsLoading ? (
+                          <tr>
+                            <td colSpan="8" className="px-4 py-8 text-center text-slate-400 text-xs italic">
+                              Loading materials...
+                            </td>
+                          </tr>
+                        ) : itemsList.length === 0 ? (
+                          <tr>
+                            <td colSpan="8" className="px-4 py-8 text-center text-slate-400 text-xs italic">
+                              No materials found
+                            </td>
+                          </tr>
+                        ) : (
+                          [...itemsList]
+                            .filter(item => {
+                              const search = modalSearchTerm.toLowerCase();
+                              return (
+                                item.item_code?.toLowerCase().includes(search) ||
+                                item.material_name?.toLowerCase().includes(search) ||
+                                item.drawing_no?.toLowerCase().includes(search)
+                              );
+                            })
+                            .sort((a, b) => b.id - a.id)
+                            .map((item) => {
+                              const isCurrentDrawing = materialFormData.drawingNo && item.drawing_no === materialFormData.drawingNo;
+                              return (
+                                <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
+                                  <td className="p-2  text-xs  text-slate-700">
+                                    {item.item_code}
+                                    {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px]  ">Current Drg</span>}
+                                  </td>
+                                  <td className="p-2  text-xs text-slate-600">{item.material_name}</td>
+                                  <td className="p-2  text-xs text-slate-600">
+                                    <span className="p-1  bg-slate-100 text-slate-600 rounded text-[10px]">{item.material_type}</span>
+                                  </td>
+                                  <td className="p-2  text-xs text-slate-600">{item.unit}</td>
+                                  <td className="p-2  text-xs text-slate-600 text-center">₹{parseFloat(item.valuation_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td className="p-2  text-xs text-slate-600 text-center">{parseFloat(item.weight_per_unit || 0).toFixed(3)} {item.weight_uom}</td>
+                                  <td className="p-2  text-xs text-slate-600">{item.drawing_no || '—'}</td>
+                                  <td className="p-2  text-right">
+                                    <div className="flex justify-end gap-1">
+                                      <button 
+                                        onClick={() => handleCopyMaterial(item)}
+                                        className="p-1 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                        title="Copy Details"
+                                      >
+                                        📋
+                                      </button>
+                                      <button 
+                                        onClick={() => handleEditMaterialInModal(item)}
+                                        className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
+                                        title="Edit"
+                                      >
+                                        ✏️
+                                      </button>
+                                      <button 
+                                        onClick={() => handleDeleteMaterialInModal(item.id)}
+                                        className="p-1 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                        title="Delete"
+                                      >
+                                        🗑️
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </>
+        ) : (
+          renderItemGroups()
+        )}
       </div>
     );
   };
