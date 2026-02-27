@@ -22,7 +22,8 @@ const WorkOrder = () => {
   const navigate = useNavigate();
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [previewDrawing, setPreviewDrawing] = useState(null);
+  const [viewingWorkOrder, setViewingWorkOrder] = useState(null);
+  const [woViewTab, setWoViewTab] = useState('foundation');
 
   useEffect(() => {
     fetchWorkOrders();
@@ -115,33 +116,7 @@ const WorkOrder = () => {
       sortable: true,
       render: (val) => <StatusBadge status={val} />
     },
-    {
-      label: 'Actions',
-      key: 'id',
-      className: 'text-right',
-      render: (_, row) => (
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button 
-            onClick={() => setPreviewDrawing({
-              item_code: row.item_code,
-              description: row.description
-            })}
-            className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" 
-            title="Preview Drawing"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          </button>
-          <button className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-          </button>
-        </div>
-      )
-    }
+
   ];
 
   const handleDelete = async (id) => {
@@ -295,19 +270,6 @@ const WorkOrder = () => {
                       <td className="px-4 py-2.5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button 
-                            onClick={() => setPreviewDrawing({
-                              item_code: wo.item_code,
-                              description: wo.item_name || wo.item_code
-                            })}
-                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
-                            title="Preview Drawing"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-                          <button 
                             onClick={() => navigate(`/job-card?filter_work_order=${wo.wo_number}`)}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
                             title="Track Production"
@@ -378,11 +340,253 @@ const WorkOrder = () => {
         </Card>
       </div>
 
-      <DrawingPreviewModal 
-        isOpen={!!previewDrawing}
-        onClose={() => setPreviewDrawing(null)}
-        drawing={previewDrawing}
-      />
+      {/* Work Order Record View Modal */}
+      <Modal
+        isOpen={!!viewingWorkOrder}
+        onClose={() => setViewingWorkOrder(null)}
+        title="Work Order Record"
+        maxWidth="max-w-6xl"
+      >
+        {viewingWorkOrder && (
+          <div className="space-y-6">
+            {/* Header with Status */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">{viewingWorkOrder.wo_number}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{viewingWorkOrder.project_name} • {formatDisplayDate(viewingWorkOrder.created_at)}</p>
+                </div>
+              </div>
+              <span className={`px-4 py-2 rounded-full text-sm font-semibold ${
+                viewingWorkOrder.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' :
+                viewingWorkOrder.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
+                'bg-slate-100 text-slate-700'
+              }`}>
+                {viewingWorkOrder.status}
+              </span>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 border-b border-slate-200">
+              {[
+                { id: 'foundation', label: '📋 Foundation', icon: true },
+                { id: 'timeline', label: '📅 Timeline', icon: true },
+                { id: 'operations', label: '⚙️ Operations', icon: true },
+                { id: 'inventory', label: '📦 Inventory', icon: true },
+                { id: 'report', label: '📊 Daily Report', icon: true }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setWoViewTab(tab.id)}
+                  className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+                    woViewTab === tab.id
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            <div className="space-y-6">
+              {woViewTab === 'foundation' && (
+                <>
+                  {/* Foundation Setup */}
+                  <div className="border border-slate-200 rounded-lg p-5">
+                    <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <span>01</span>
+                      Foundation Setup
+                    </h4>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Target Item to Manufacture</label>
+                        <p className="text-sm font-semibold text-slate-900 mt-2">{viewingWorkOrder.item_name || 'N/A'}</p>
+                        <p className="text-xs text-slate-400">{viewingWorkOrder.item_code}</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Bill of Materials (BOM)</label>
+                        <p className="text-sm font-semibold text-slate-900 mt-2">BOM-{viewingWorkOrder.bom_no || 'NA'}</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Quantity to Produce</label>
+                        <p className="text-sm font-semibold text-slate-900 mt-2">{viewingWorkOrder.quantity || 0} <span className="text-slate-400">UNIT</span></p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Priority Level</label>
+                        <p className="text-sm font-semibold text-slate-900 mt-2">{viewingWorkOrder.priority || 'Normal'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sales Order Reference */}
+                  <div className="border border-slate-200 rounded-lg p-5">
+                    <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Sales Order Reference</label>
+                    <p className="text-sm font-semibold text-slate-900 mt-2">{viewingWorkOrder.project_name || 'N/A'}</p>
+                  </div>
+                </>
+              )}
+
+              {woViewTab === 'timeline' && (
+                <>
+                  <div className="border border-slate-200 rounded-lg p-5">
+                    <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <span>02</span>
+                      Production Timeline
+                    </h4>
+                    <div className="grid grid-cols-3 gap-6">
+                      <div>
+                        <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Planned Start Date</label>
+                        <p className="text-sm font-semibold text-slate-900 mt-2">{formatDisplayDate(viewingWorkOrder.start_date)}</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Planned Completion Date</label>
+                        <p className="text-sm font-semibold text-slate-900 mt-2">{formatDisplayDate(viewingWorkOrder.end_date)}</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Delivery Commitment</label>
+                        <p className="text-sm font-semibold text-amber-600 mt-2">Pending Schedule</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Efficiency Projection */}
+                  <div className="border border-slate-200 rounded-lg p-5">
+                    <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <span>🎯</span>
+                      Efficiency Projection
+                    </h4>
+                    <p className="text-3xl font-bold text-slate-900">0%</p>
+                    <p className="text-xs text-slate-400 mt-2">Predicted production efficiency based on workstation load.</p>
+                  </div>
+                </>
+              )}
+
+              {woViewTab === 'operations' && (
+                <>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <div className="bg-slate-50 px-5 py-3 border-b border-slate-200">
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <span>03</span>
+                        Operation Sequence
+                      </h4>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Phase</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Assignment</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Status</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Time & Cost</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Progress</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-slate-100 hover:bg-slate-50">
+                            <td className="px-4 py-2">
+                              <span className="text-slate-900 font-semibold">No operations defined yet</span>
+                            </td>
+                            <td colSpan="4" className="px-4 py-2 text-center text-slate-500">Create job cards from this work order to define operations</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {woViewTab === 'inventory' && (
+                <>
+                  <div className="border border-slate-200 rounded-lg p-5">
+                    <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <span>04</span>
+                      Required Inventory
+                    </h4>
+                    <p className="text-sm text-slate-500">Material requirements will be displayed based on the BOM.</p>
+                  </div>
+
+                  {/* Inventory Advisory */}
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-5">
+                    <div className="flex gap-3">
+                      <span className="text-xl">ℹ️</span>
+                      <div>
+                        <h5 className="font-semibold text-indigo-900 mb-1">Inventory Advisory</h5>
+                        <p className="text-sm text-indigo-700">System tracks real-time material transfers. Ensure all raw materials are transferred from "Stores" to "Production" before consumption.</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {woViewTab === 'report' && (
+                <>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <div className="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <span>05</span>
+                        Daily Production History
+                      </h4>
+                      <button className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700">
+                        📥 Export CSV
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Date</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Shift</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Operation</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Operator</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Produced</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Accepted</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Rejected</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">Downtime</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="text-center text-slate-500 py-8">
+                            <td colSpan="8" className="px-4 py-8">
+                              No production logs found for this work order yet.
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center pt-4 border-t border-slate-200">
+              <button
+                onClick={() => setViewingWorkOrder(null)}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-semibold"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setViewingWorkOrder(null);
+                  handleEdit(viewingWorkOrder.id);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm"
+              >
+                <Edit2 className="w-4 h-4" />
+                Edit Work Order
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+
     </div>
   );
 };
