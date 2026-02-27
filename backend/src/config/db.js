@@ -2146,10 +2146,41 @@ const ensureReturnsTable = async () => {
   }
 };
 
+const ensureItemGroupsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS item_groups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(120) NOT NULL UNIQUE,
+        status ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Seed initial data if table is empty
+    const [rows] = await connection.query('SELECT COUNT(*) as count FROM item_groups');
+    if (rows[0].count === 0) {
+      await connection.query(`
+        INSERT INTO item_groups (name) VALUES 
+        ('Raw Material'), ('SFG'), ('FG'), ('Sub Assembly'), ('Consumable')
+      `);
+      console.log('Item Groups seeded');
+    }
+    console.log('Item Groups table synchronized');
+  } catch (error) {
+    console.error('Item Groups table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
   await ensureSeed();
+  await ensureItemGroupsTable();
   await ensureVendorColumns();
   await ensureCustomerPoColumns();
   await ensurePurchaseOrderItemColumns();

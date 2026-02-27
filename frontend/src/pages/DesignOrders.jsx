@@ -76,48 +76,64 @@ const DesignOrders = () => {
   const [editingMaterialId, setEditingMaterialId] = useState(null);
   const [materialSubTab, setMaterialSubTab] = useState('add'); // 'add' or 'groups'
   const [modalSearchTerm, setModalSearchTerm] = useState('');
-  const [itemGroups, setItemGroups] = useState([
-    { id: 1, name: 'Raw Material', code: 'RM', status: 'Active' },
-    { id: 2, name: 'SFG', code: 'SFG', status: 'Active' },
-    { id: 3, name: 'FG', code: 'FG', status: 'Active' },
-    { id: 4, name: 'Sub Assembly', code: 'SA', status: 'Active' },
-    { id: 5, name: 'Consumable', code: 'CON', status: 'Active' }
-  ]);
-  const [groupFormData, setGroupFormData] = useState({ name: '', code: '', status: 'Active' });
+  const [itemGroups, setItemGroups] = useState([]);
+  const [groupFormData, setGroupFormData] = useState({ name: '', status: 'Active' });
   const [isEditingGroup, setIsEditingGroup] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
+
+  const fetchItemGroups = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/item-groups`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setItemGroups(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch item groups:', error);
+    }
+  };
 
   const handleGroupSubmit = async (e) => {
     e.preventDefault();
     try {
       setIsSubmittingGroup(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const token = localStorage.getItem('authToken');
       
-      if (isEditingGroup) {
-        setItemGroups(prev => prev.map(g => g.id === editingGroupId ? { ...g, ...groupFormData } : g));
-        successToast('Item group updated successfully');
-      } else {
-        const newGroup = {
-          id: Date.now(),
-          ...groupFormData
-        };
-        setItemGroups(prev => [...prev, newGroup]);
-        successToast('Item group added successfully');
-      }
-      setGroupFormData({ name: '', code: '', status: 'Active' });
+      const url = isEditingGroup 
+        ? `${API_BASE}/item-groups/${editingGroupId}`
+        : `${API_BASE}/item-groups`;
+        
+      const method = isEditingGroup ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(groupFormData)
+      });
+      
+      if (!response.ok) throw new Error('Failed to save item group');
+      
+      successToast(isEditingGroup ? 'Item group updated successfully' : 'Item group added successfully');
+      fetchItemGroups();
+      setGroupFormData({ name: '', status: 'Active' });
       setIsEditingGroup(false);
       setEditingGroupId(null);
     } catch (error) {
-      errorToast('Failed to save item group');
+      errorToast(error.message);
     } finally {
       setIsSubmittingGroup(false);
     }
   };
 
   const handleEditGroup = (group) => {
-    setGroupFormData({ name: group.name, code: group.code, status: group.status });
+    setGroupFormData({ name: group.name, status: group.status });
     setIsEditingGroup(true);
     setEditingGroupId(group.id);
   };
@@ -131,10 +147,20 @@ const DesignOrders = () => {
       confirmButtonColor: '#ef4444',
       cancelButtonColor: '#64748b',
       confirmButtonText: 'Yes, delete it!'
-    }).then((result) => {
+    }).then(async (result) => {
       if (result.isConfirmed) {
-        setItemGroups(prev => prev.filter(g => g.id !== id));
-        successToast('Item group deleted');
+        try {
+          const token = localStorage.getItem('authToken');
+          const response = await fetch(`${API_BASE}/item-groups/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!response.ok) throw new Error('Failed to delete item group');
+          successToast('Item group deleted');
+          fetchItemGroups();
+        } catch (error) {
+          errorToast(error.message);
+        }
       }
     });
   };
@@ -152,7 +178,7 @@ const DesignOrders = () => {
             <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded text-xs font-bold">+</span>
             <h4 className="text-sm font-semibold">{isEditingGroup ? 'Edit Item Group' : 'Add New Item Group'}</h4>
           </div>
-          <form onSubmit={handleGroupSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+          <form onSubmit={handleGroupSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Group Name *</label>
               <input 
@@ -161,17 +187,6 @@ const DesignOrders = () => {
                 placeholder="e.g. Raw Material"
                 value={groupFormData.name}
                 onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Code *</label>
-              <input 
-                type="text" 
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                placeholder="e.g. RM"
-                value={groupFormData.code}
-                onChange={(e) => setGroupFormData({...groupFormData, code: e.target.value})}
                 required
               />
             </div>
@@ -188,7 +203,7 @@ const DesignOrders = () => {
                   type="button" 
                   onClick={() => {
                     setIsEditingGroup(false);
-                    setGroupFormData({ name: '', code: '', status: 'Active' });
+                    setGroupFormData({ name: '', status: 'Active' });
                   }}
                   className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded text-xs hover:bg-slate-50 transition-all"
                 >
@@ -212,7 +227,6 @@ const DesignOrders = () => {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Group Name</th>
-                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Code</th>
                   <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Status</th>
                   <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200 text-right">Actions</th>
                 </tr>
@@ -221,9 +235,6 @@ const DesignOrders = () => {
                 {itemGroups.map((group) => (
                   <tr key={group.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 text-xs font-medium text-slate-700">{group.name}</td>
-                    <td className="p-4 text-xs text-slate-600">
-                      <span className="px-2 py-1 bg-slate-100 rounded text-[10px] font-bold">{group.code}</span>
-                    </td>
                     <td className="p-4 text-xs">
                       <span className="px-2 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded text-[10px]">
                         {group.status}
@@ -723,6 +734,7 @@ const DesignOrders = () => {
   useEffect(() => {
     fetchOrders();
     fetchIncomingOrders();
+    fetchItemGroups();
   }, []);
 
   useEffect(() => {

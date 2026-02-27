@@ -120,6 +120,7 @@ const BOMFormPage = () => {
   const [operationsList, setOperationsList] = useState([]);
   const [stockItems, setStockItems] = useState([]);
   const [approvedBOMs, setApprovedBOMs] = useState([]);
+  const [itemGroups, setItemGroups] = useState([]);
   const [bomData, setBomData] = useState({
     materials: [],
     components: [],
@@ -456,6 +457,7 @@ const BOMFormPage = () => {
     // Priority 3: Other groups
     if (name.includes('tool') || ig.includes('tool') || t.includes('tool')) return 'Tooling';
     if (name.includes('service') || ig.includes('service') || t.includes('service')) return 'Service';
+    if (name.includes('pm') || ig.includes('pm') || t.includes('pm') || name.includes('packing') || ig.includes('packing') || t.includes('packing')) return 'PM';
     if (name.includes('raw') || ig.includes('raw') || t.includes('raw')) return 'Raw Material';
     
     return 'Raw Material';
@@ -465,9 +467,25 @@ const BOMFormPage = () => {
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
+  const fetchItemGroups = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/item-groups`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setItemGroups(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch item groups:', error);
+    }
+  }, []);
+
   const fetchData = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
+      fetchItemGroups();
       const token = localStorage.getItem('authToken');
 
       // Fetch Stock Items (Raw Materials and Producible items like FG/SFG)
@@ -1665,14 +1683,25 @@ const BOMFormPage = () => {
                         placeholder="Select material..."
                         options={stockItems
                           .filter(item => {
+                            // FG and Sub-assembly check
+                            const itemCode = (item.item_code || "").toUpperCase();
+                            const type = (item.material_type || "").toLowerCase();
+                            
+                            if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-")) return false;
+                            if (type.includes("finished") || type.includes("assembly") || type.includes("sub")) return false;
+
                             // Type Filter
-                            const type = (item.material_type || '').toLowerCase();
                             const targetGroup = (materialForm.itemGroup || '').toLowerCase();
 
-                            // Always apply group filter unless showAllDrawings is true (Global Search)
-                            // Actually, even in Global Search, we should probably respect the group to avoid "other design items"
-                            if (targetGroup === 'raw material' || targetGroup === 'consumable') {
-                              if (!type.includes('raw') && !type.includes('consumable')) return false;
+                            // Filter by group logic
+                            if (targetGroup === 'raw material') {
+                              // For Raw Material selection, allow everything EXCEPT sub-assemblies/SFG/FG
+                              // PM and other miscellaneous items are often considered raw materials for BOM
+                              if (type.includes('sub assembly') || type.includes('semi') || type.includes('sfg') || type.includes('finished') || type.includes('assembly')) return false;
+                            } else if (targetGroup === 'consumable') {
+                              if (!type.includes('consumable')) return false;
+                            } else if (targetGroup === 'pm') {
+                              if (!type.includes('pm') && !type.includes('packing')) return false;
                             } else if (targetGroup === 'sub assembly' || targetGroup === 'sfg') {
                               if (!type.includes('sub assembly') && !type.includes('semi') && !type.includes('sfg')) return false;
                             } else if (targetGroup === 'tooling') {
@@ -1737,12 +1766,10 @@ const BOMFormPage = () => {
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Item Group</label>
                       <select className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.itemGroup} onChange={(e) => setMaterialForm({ ...materialForm, itemGroup: e.target.value })}>
-                        <option value="Raw Material">Raw Material</option>
-                        <option value="SFG">SFG</option>
-                        <option value="Sub Assembly">Sub Assembly</option>
-                        <option value="Consumable">Consumable</option>
-                        <option value="Tooling">Tooling</option>
-                        <option value="Service">Service</option>
+                        <option value="">Select Group</option>
+                        {itemGroups.map(group => (
+                          <option key={group.id} value={group.name}>{group.name}</option>
+                        ))}
                       </select>
                     </div>
 
