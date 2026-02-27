@@ -5,6 +5,7 @@ const salesOrderController = require('../controllers/salesOrderController');
 const { authorize } = require('../middleware/authMiddleware');
 
 router.get('/approved-drawings', authorize(['ORDER_VIEW']), salesOrderController.getApprovedDrawings);
+router.get('/bom-approval-history', authorize(['ORDER_VIEW']), salesOrderController.getBOMApprovalHistory);
 router.get('/incoming', authorize(['ORDER_VIEW']), salesOrderController.getIncomingOrders);
 router.get('/:id', authorize(['ORDER_VIEW']), salesOrderController.getSalesOrderById);
 router.put('/:id', authorize(['ORDER_EDIT']), salesOrderController.updateSalesOrder);

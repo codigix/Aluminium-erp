@@ -423,7 +423,7 @@ const updateSalesOrder = async (id, orderData) => {
   }
 };
 
-const updateSalesOrderStatus = async (salesOrderId, status) => {
+const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remarks = null) => {
   let department = null;
   if (status === 'BOM_Approved ') {
     department = 'PROCUREMENT';
@@ -431,10 +431,33 @@ const updateSalesOrderStatus = async (salesOrderId, status) => {
     department = 'DESIGN_ENG'; // Stay in design for approval
   }
 
-  if (department) {
-    await pool.execute('UPDATE sales_orders SET status = ?, current_department = ? WHERE id = ?', [status, department, salesOrderId]);
-  } else {
-    await pool.execute('UPDATE sales_orders SET status = ? WHERE id = ?', [status, salesOrderId]);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    if (department) {
+      await connection.execute('UPDATE sales_orders SET status = ?, current_department = ? WHERE id = ?', [status, department, salesOrderId]);
+    } else {
+      await connection.execute('UPDATE sales_orders SET status = ? WHERE id = ?', [status, salesOrderId]);
+    }
+
+    // Log to BOM approval history if it's a BOM action
+    if (status === 'BOM_Approved ' || status === 'REJECTED_BOM') {
+      const action = status === 'BOM_Approved ' ? 'APPROVED' : 'REJECTED';
+      if (userId) {
+        await connection.execute(
+          'INSERT INTO bom_approval_history (sales_order_id, user_id, action, remarks) VALUES (?, ?, ?, ?)',
+          [salesOrderId, userId, action, remarks]
+        );
+      }
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 };
 
@@ -1049,6 +1072,19 @@ const deleteSalesOrder = async (salesOrderId) => {
   await pool.execute('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
 };
 
+const getBOMApprovalHistory = async () => {
+  const [rows] = await pool.query(
+    `SELECT bah.*, so.project_name, c.company_name, cp.po_number, u.username as approver_name
+     FROM bom_approval_history bah
+     JOIN sales_orders so ON bah.sales_order_id = so.id
+     JOIN companies c ON so.company_id = c.id
+     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
+     JOIN users u ON bah.user_id = u.id
+     ORDER BY bah.created_at DESC`
+  );
+  return rows;
+};
+
 const getSalesOrderItem = async itemId => {
   const [items] = await pool.query(
     `SELECT soi.*, so.project_name, c.company_name, cp.po_number,
@@ -1195,6 +1231,7 @@ module.exports = {
   bulkApproveDesigns,
   bulkRejectDesigns,
   getApprovedDrawings,
+  getBOMApprovalHistory,
   getOrderTimeline,
   getSalesOrderItem,
   updateSalesOrderItem,

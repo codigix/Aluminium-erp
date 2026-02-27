@@ -10,6 +10,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const BOMApproval = () => {
   const [orders, setOrders] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'history'
   
@@ -22,6 +23,52 @@ const BOMApproval = () => {
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/bom-approval-history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch approval history');
+      const data = await response.json();
+      setHistory(data);
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchOrders = useCallback(async () => {
+    if (activeTab === 'history') {
+      return fetchHistory();
+    }
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      const data = await response.json();
+      
+      setOrders(data.filter(order => order.status === 'BOM_SUBMITTED'));
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, fetchHistory]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   const handlePreviewByNo = async (drawingNo) => {
     if (!drawingNo || drawingNo === 'N/A') {
@@ -49,37 +96,6 @@ const BOMApproval = () => {
         errorToast('Failed to fetch drawing info');
     }
   };
-
-  const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch orders');
-      const data = await response.json();
-      
-      if (activeTab === 'pending') {
-        setOrders(data.filter(order => order.status === 'BOM_SUBMITTED'));
-      } else {
-        setOrders(data.filter(order => 
-          ['BOM_Approved ', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION'].includes(order.status)
-        ));
-      }
-    } catch (error) {
-      console.error(error);
-      errorToast(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
 
   const handleViewBOM = async (order) => {
     try {
@@ -174,35 +190,47 @@ const BOMApproval = () => {
               <tr>
                 <th className="p-2 text-left text-xs  text-slate-500 ">PO / SO Ref</th>
                 <th className="p-2 text-left text-xs  text-slate-500 ">Customer / Project</th>
-                <th className="p-2 text-left text-xs  text-slate-500 ">Status</th>
+                {activeTab === 'history' && <th className="p-2 text-left text-xs  text-slate-500 ">Approver</th>}
+                <th className="p-2 text-left text-xs  text-slate-500 ">{activeTab === 'history' ? 'Approval Date' : 'Status'}</th>
                 <th className="p-2 text-right text-xs  text-slate-500 ">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
               {loading ? (
-                <tr><td colSpan="4" className="px-6 py-10 text-center text-slate-500">Loading BOMs...</td></tr>
-              ) : orders.length === 0 ? (
-                <tr><td colSpan="4" className="p-6 text-center text-slate-400">No {activeTab === 'pending' ? 'pending' : 'approved'} BOMs found</td></tr>
+                <tr><td colSpan={activeTab === 'history' ? "5" : "4"} className="px-6 py-10 text-center text-slate-500">Loading BOMs...</td></tr>
+              ) : (activeTab === 'pending' ? orders : history).length === 0 ? (
+                <tr><td colSpan={activeTab === 'history' ? "5" : "4"} className="p-6 text-center text-slate-400">No {activeTab === 'pending' ? 'pending' : 'approved'} BOMs found</td></tr>
               ) : (
-                orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                (activeTab === 'pending' ? orders : history).map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm  text-slate-900">{order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : `SO-${order.id}`)}</div>
+                      <div className="text-sm  text-slate-900">{item.po_number || (item.customer_po_id ? `PO-${item.customer_po_id}` : `SO-${item.id || item.sales_order_id}`)}</div>
                       <div className="text-[10px] text-slate-500">Sales Order Ref</div>
                     </td>
                     <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm  text-slate-900">{order.company_name}</div>
-                      <div className="text-xs text-slate-500">{order.project_name}</div>
+                      <div className="text-sm  text-slate-900">{item.company_name}</div>
+                      <div className="text-xs text-slate-500">{item.project_name}</div>
                     </td>
-                    <td className="p-2 whitespace-nowrap text-center">
-                      <span className={`px-2 py-1 rounded text-xs     ${order.status === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {order.status.replace(/_/g, ' ')}
-                      </span>
+                    {activeTab === 'history' && (
+                      <td className="p-2 whitespace-nowrap">
+                        <div className="text-sm text-slate-700">{item.approver_name}</div>
+                      </td>
+                    )}
+                    <td className="p-2 whitespace-nowrap text-left">
+                      {activeTab === 'history' ? (
+                        <div className="text-xs text-slate-600">
+                          {new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      ) : (
+                        <span className={`px-2 py-1 rounded text-xs     ${item.status === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {item.status.replace(/_/g, ' ')}
+                        </span>
+                      )}
                     </td>
                     <td className="p-2 whitespace-nowrap text-right text-sm ">
                       <div className="flex justify-center gap-2">
                         <button 
-                          onClick={() => handleViewBOM(order)}
+                          onClick={() => handleViewBOM(activeTab === 'history' ? { id: item.sales_order_id, ...item } : item)}
                           className="p-1.5 rounded  border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
                           title="View Details"
                         >
@@ -210,7 +238,7 @@ const BOMApproval = () => {
                         </button>
                         {activeTab === 'pending' && (
                           <button 
-                            onClick={() => handleApproveBOM(order.id)}
+                            onClick={() => handleApproveBOM(item.id)}
                             className="p-1.5 rounded  border border-slate-200 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
                             title="Approve"
                           >
