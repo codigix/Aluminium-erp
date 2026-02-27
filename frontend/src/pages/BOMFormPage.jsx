@@ -73,15 +73,15 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
             {(qty / cumulativeLossFactor).toFixed(actualType === 'material' ? 4 : 2)} {item.uom}
           </span>
         </td>
-        <td className="p-2  text-left text-xs text-slate-600">₹{rate.toFixed(2)}</td>
-        <td className="p-2  text-left text-xs text-slate-600">
+        <td className="p-2  text-center text-xs text-slate-600">₹{rate.toFixed(2)}</td>
+        <td className="p-2  text-center text-xs text-slate-600">
           {item.warehouse || '—'}
           {item.item_group && <div className="text-[9px] text-blue-500 ">{item.item_group}</div>}
         </td>
-        <td className="p-2  text-left text-xs text-slate-600">
+        <td className="p-2  text-center text-xs text-slate-600">
           {actualType === 'component' ? `${itemLossPercent.toFixed(2)}%` : (item.operation || '—')}
         </td>
-        <td className="p-2  text-left text-xs  text-slate-900 ">
+        <td className="p-2  text-center text-xs  text-slate-900 ">
           ₹{netCost.toFixed(2)}
         </td>
         {!isReadOnly && (
@@ -1586,12 +1586,12 @@ const BOMFormPage = () => {
                   <table className="min-w-full divide-y divide-slate-100 bg-white">
                     <thead className="bg-slate-50/50">
                       <tr>
-                        <th className="p-2  text-lefttext-xs   text-slate-400 ">Component / Assembly</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Qty / UOM</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Rate (₹)</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Loss %</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Net Amount</th>
-                        {!isReadOnly && <th className="p-2  text-righttext-xs   text-slate-400 ">Actions</th>}
+                        <th className="p-2  text-left text-xs   text-slate-400 ">Component / Assembly</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Qty / UOM</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Loss %</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Net Amount</th>
+                        {!isReadOnly && <th className="p-2  text-right text-xs   text-slate-400 ">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -1831,13 +1831,13 @@ const BOMFormPage = () => {
                   <table className="min-w-full divide-y divide-slate-100 bg-white">
                     <thead className="bg-slate-50/50">
                       <tr>
-                        <th className="p-2  text-lefttext-xs   text-slate-400 ">Item Details</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Qty / UOM</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Rate (₹)</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Warehouse</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Operation</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Total</th>
-                        {!isReadOnly && <th className="p-2  text-righttext-xs   text-slate-400 ">Actions</th>}
+                        <th className="p-2  text-left text-xs   text-slate-400 ">Item Details</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Qty / UOM</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Warehouse</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Operation</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Total</th>
+                        {!isReadOnly && <th className="p-2  text-right text-xs   text-slate-400 ">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
