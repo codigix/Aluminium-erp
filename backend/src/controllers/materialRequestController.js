@@ -9,7 +9,7 @@ const materialRequestController = {
         (
           SELECT CASE 
             WHEN COUNT(*) = 0 THEN 'available'
-            WHEN COUNT(*) = SUM(CASE WHEN (SELECT SUM(current_balance) FROM stock_balance WHERE item_code = mri.item_code) >= COALESCE(NULLIF(mri.design_qty, 0), mri.quantity) THEN 1 ELSE 0 END) THEN 'available'
+            WHEN COUNT(*) = SUM(CASE WHEN (SELECT SUM(current_balance) FROM stock_balance WHERE item_code = mri.item_code) >= COALESCE(NULLIF(mri.quantity, 0), mri.design_qty, 0) THEN 1 ELSE 0 END) THEN 'available'
             ELSE 'unavailable'
           END
           FROM material_request_items mri
@@ -92,7 +92,7 @@ const materialRequestController = {
         item.current_stock = matchingWh ? parseFloat(matchingWh.current_stock) : 0;
         
         // An item is "Available" if total stock >= required quantity
-        const requiredQty = parseFloat(item.design_qty || item.quantity || 0);
+        const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
         item.fulfillment_source = totalStock >= requiredQty ? 'STOCK' : 'PURCHASE';
         
         if (item.fulfillment_source === 'PURCHASE') {
