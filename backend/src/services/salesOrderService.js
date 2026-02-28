@@ -8,7 +8,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   }
   
   const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
@@ -30,6 +30,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
       [order.id]
     );
     order.items = items;
+    order.client = order.company_name; // Add client alias for frontend
   }
   
   return rows;
@@ -37,7 +38,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
 
 const getSalesOrderById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
@@ -53,6 +54,7 @@ const getSalesOrderById = async (id) => {
   
   if (rows.length === 0) return null;
   const order = rows[0];
+  order.client = order.company_name;
 
   const [items] = await pool.query(
     'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
@@ -83,7 +85,7 @@ const getIncomingOrders = async (departmentCode) => {
     whereClause = `so.current_department = '${departmentCode}'`;
   }
   
-  const query = `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
+  const query = `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
             sb.material_type as item_group,
@@ -103,6 +105,12 @@ const getIncomingOrders = async (departmentCode) => {
   const [rows] = await pool.query(query);
   console.log(`[getIncomingOrders-service] Query returned ${rows.length} rows for department "${departmentCode}"`);
   console.log(`[getIncomingOrders-service] Raw rows:`, rows);
+  
+  // Add client alias for each row
+  rows.forEach(row => {
+    row.client = row.company_name;
+  });
+  
   return rows;
 };
 
@@ -114,6 +122,7 @@ const createSalesOrder = async (orderData) => {
     drawingRequired = 0, 
     productionPriority = 'NORMAL', 
     targetDispatchDate, 
+    delivery_date, // Added delivery_date alias
     items,
     cgst_rate = 0,
     sgst_rate = 0,
@@ -124,6 +133,9 @@ const createSalesOrder = async (orderData) => {
     quotation_id = null,
     source_type = 'DIRECT'
   } = orderData;
+
+  // Use either targetDispatchDate or delivery_date
+  const finalTargetDispatchDate = targetDispatchDate || delivery_date;
 
   // Ensure customerPoId is a valid positive integer or null
   // We use Number() and check for truthiness to handle strings like "null", "undefined", or 0
@@ -155,7 +167,7 @@ const createSalesOrder = async (orderData) => {
         projectName || null, 
         drawingRequired, 
         productionPriority, 
-        targetDispatchDate || null, 
+        finalTargetDispatchDate || null, 
         status,
         cgst_rate,
         sgst_rate,
@@ -316,6 +328,7 @@ const updateSalesOrder = async (id, orderData) => {
     drawingRequired, 
     productionPriority, 
     targetDispatchDate, 
+    delivery_date, // Added delivery_date alias
     items,
     cgst_rate,
     sgst_rate,
@@ -326,6 +339,8 @@ const updateSalesOrder = async (id, orderData) => {
     quotation_id = null,
     source_type = 'DIRECT'
   } = orderData;
+
+  const finalTargetDispatchDate = targetDispatchDate || delivery_date;
 
   // Ensure customerPoId is a valid positive integer or null
   let validatedPoId = null;
@@ -365,7 +380,7 @@ const updateSalesOrder = async (id, orderData) => {
         projectName || null, 
         drawingRequired || 0, 
         productionPriority || 'NORMAL', 
-        targetDispatchDate || null, 
+        finalTargetDispatchDate || null, 
         status || null,
         cgst_rate || 0,
         sgst_rate || 0,

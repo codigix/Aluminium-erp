@@ -402,7 +402,11 @@ const getPurchaseOrders = async (filters = {}) => {
       mr.mr_number,
       COUNT(poi.id) as items_count,
       IFNULL(SUM(poi.quantity), 0) as total_quantity,
-      IFNULL(SUM(poi.accepted_quantity), 0) as accepted_quantity
+      (SELECT IFNULL(SUM(gi.accepted_qty), 0) 
+       FROM grn_items gi 
+       JOIN purchase_order_items poi2 ON gi.po_item_id = poi2.id 
+       WHERE poi2.purchase_order_id = po.id 
+       AND gi.status IN ('RECEIVED', 'EXCESS_ACCEPTED', 'Approved ', 'APPROVED', 'PASSED', 'ACCEPTED', 'SHORTAGE')) as accepted_quantity
     FROM purchase_orders po
     LEFT JOIN vendors v ON v.id = po.vendor_id
     LEFT JOIN material_requests mr ON mr.id = po.mr_id
@@ -1008,7 +1012,7 @@ const sendPurchaseOrderEmail = async (poId, emailData) => {
     
     await pool.execute(
       'UPDATE purchase_orders SET status = ? WHERE id = ?',
-      ['Sent ', poId]
+      ['SENT', poId]
     );
 
     return {

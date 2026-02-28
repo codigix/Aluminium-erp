@@ -401,7 +401,7 @@ const updateQC = async (qcId, updates) => {
 
       let grnStatus = 'PENDING';
       if (currentStatus === 'PASSED' || currentStatus === 'ACCEPTED') {
-        grnStatus = 'Approved ';
+        grnStatus = 'APPROVED';
       } else if (currentStatus === 'FAILED') {
         grnStatus = 'REJECTED';
       } else if (currentStatus === 'SHORTAGE') {
@@ -420,7 +420,7 @@ const updateQC = async (qcId, updates) => {
         for (const item of grnItems) {
           await connection.execute(
             'UPDATE grn_items SET status = ? WHERE id = ?',
-            ['Approved ', item.id]
+            ['APPROVED', item.id]
           );
         }
       } else if (currentStatus === 'FAILED' || currentStatus === 'REJECTED') {
