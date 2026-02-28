@@ -109,18 +109,41 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
   const handleEditQC = (qc) => {
     setSelectedQC(qc);
+    const items = (qc.items_detail || []).map(item => ({
+      ...item,
+      accepted_qty: item.accepted_qty || item.received_qty || 0,
+      rejected_qty: item.rejected_qty || 0,
+      remarks: item.remarks || ''
+    }));
+
+    // Calculate initial status based on items
+    let hasShortageOverage = false;
+
+    items.forEach(item => {
+      const ordQty = parseFloat(item.ordered_qty || 0);
+      const accQty = parseFloat(item.accepted_qty || 0);
+      
+      const discrepancy = Math.abs(ordQty - accQty);
+
+      if (discrepancy > 0.001) {
+        hasShortageOverage = true;
+      }
+    });
+
+    let overallStatus = qc.status || 'PENDING';
+    if (hasShortageOverage) {
+      overallStatus = 'IN_PROGRESS';
+    } else if (overallStatus !== 'PENDING') {
+      overallStatus = 'PASSED';
+    }
+
     setEditFormData({
-      status: qc.status || 'PENDING',
+      status: overallStatus,
       remarks: qc.remarks || '',
       defects: qc.defects || '',
-      passQuantity: qc.pass_quantity || qc.accepted_quantity || 0,
-      failQuantity: qc.fail_quantity || 0,
-      items: (qc.items_detail || []).map(item => ({
-        ...item,
-        accepted_qty: item.accepted_qty || item.received_qty || 0,
-        rejected_qty: item.rejected_qty || 0,
-        remarks: item.remarks || ''
-      }))
+      passQuantity: items.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0),
+      failQuantity: items.reduce((sum, item) => sum + (parseFloat(item.rejected_qty) || 0), 0),
+      items: items
     });
     setShowEditModal(true);
   };
@@ -130,18 +153,39 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     const qty = parseFloat(value) || 0;
     newItems[idx].accepted_qty = qty;
     
-    // Auto-calculate rejected quantity (Shortage)
+    // Auto-calculate rejected quantity (Discrepancy with Invoice)
     const received = parseFloat(newItems[idx].received_qty) || 0;
     const poQty = parseFloat(newItems[idx].ordered_qty || 0);
     newItems[idx].rejected_qty = Math.max(0, received - qty);
     
     // Update item status based on qty
-    if (qty < poQty) {
+    if (qty < poQty - 0.001) {
       newItems[idx].status = 'SHORTAGE';
-    } else if (qty > poQty) {
+    } else if (qty > poQty + 0.001) {
       newItems[idx].status = 'OVERAGE';
     } else {
       newItems[idx].status = 'AVAILABLE';
+    }
+    
+    // Calculate Overall Status based on Items
+    let hasShortageOverage = false;
+
+    newItems.forEach(item => {
+      const ordQty = parseFloat(item.ordered_qty || 0);
+      const accQty = parseFloat(item.accepted_qty || 0);
+      
+      const discrepancy = Math.abs(ordQty - accQty);
+
+      if (discrepancy > 0.001) {
+        hasShortageOverage = true;
+      }
+    });
+
+    let overallStatus = 'PASSED';
+    if (hasShortageOverage) {
+      overallStatus = 'IN_PROGRESS';
+    } else {
+      overallStatus = 'PASSED';
     }
     
     const totalAccepted = newItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
@@ -150,6 +194,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     setEditFormData({
       ...editFormData,
       items: newItems,
+      status: overallStatus,
       passQuantity: totalAccepted,
       failQuantity: totalRejected
     });
@@ -574,15 +619,6 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               >
                 <Database className="w-3.5 h-3.5" />
               </button>
-              {activeTab === 'final' && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleCreateShipment(row); }} 
-                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors bg-white border border-slate-100"
-                  title="Create Shipment"
-                >
-                  <Truck className="w-3.5 h-3.5" />
-                </button>
-              )}
             </>
           )}
           <button onClick={(e) => { e.stopPropagation(); handleDeleteQC(row.id); }} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded  transition-colors bg-white border border-slate-100" title="Delete">
@@ -963,15 +999,15 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                           </td>
                           <td className="px-4 py-4 text-center whitespace-nowrap">
                             {shortage > 0 ? (
-                              <span className="inline-flex items-center gap-1 p-2  rounded  bg-rose-50 text-rose-600 border border-rose-100text-xs  font-black   ">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-rose-50 text-rose-600 border border-rose-100 text-[9px]  font-black   ">
                                 SHORTAGE ✅
                               </span>
                             ) : overage > 0 ? (
-                              <span className="inline-flex items-center gap-1 p-2  rounded  bg-orange-50 text-orange-600 border border-orange-100text-xs  font-black   ">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-orange-50 text-orange-600 border border-orange-100 text-[9px]  font-black   ">
                                 OVERAGE ✅
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 p-2  rounded  bg-emerald-50 text-emerald-600 border border-emerald-100text-xs  font-black   ">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-emerald-50 text-emerald-600 border border-emerald-100 text-[9px]  font-black   ">
                                 AVAILABLE ✅
                               </span>
                             )}
