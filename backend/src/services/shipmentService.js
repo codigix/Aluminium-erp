@@ -83,7 +83,12 @@ const getShipmentOrderById = async (id) => {
       so.project_name,
       COALESCE(c_so.company_name, c.company_name) as customer_name, 
       cp.po_number as customer_po_number, 
-      s.status as shipment_status
+      s.status as shipment_status,
+      s.customer_name as snapshot_customer_name,
+      s.customer_phone as snapshot_customer_phone,
+      s.customer_email as snapshot_customer_email,
+      s.shipping_address as snapshot_shipping_address,
+      s.billing_address as snapshot_billing_address
     FROM shipment_orders s
     LEFT JOIN sales_orders so ON s.sales_order_id = so.id
     LEFT JOIN companies c_so ON so.company_id = c_so.id

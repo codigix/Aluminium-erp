@@ -97,12 +97,21 @@ const createShipmentOrder = async (salesOrderId) => {
         so.id,
         so.company_id, 
         c.company_name,
+        ct.email as customer_email,
+        ct.phone as customer_phone,
+        (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = so.company_id AND address_type = 'SHIPPING' LIMIT 1) as shipping_address,
+        (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = so.company_id AND address_type = 'BILLING' LIMIT 1) as billing_address,
         so.target_dispatch_date, 
         so.production_priority, 
         so.status,
         'SALES_ORDER' as source_table
       FROM sales_orders so
       LEFT JOIN companies c ON so.company_id = c.id
+      LEFT JOIN (
+        SELECT company_id, email, phone,
+               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+        FROM contacts
+      ) ct ON ct.company_id = so.company_id AND ct.rn = 1
       WHERE so.id = ?`,
       [salesOrderId]
     );
@@ -116,12 +125,21 @@ const createShipmentOrder = async (salesOrderId) => {
           o.order_no,
           o.client_id as company_id,
           c.company_name,
+          ct.email as customer_email,
+          ct.phone as customer_phone,
+          (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = o.client_id AND address_type = 'SHIPPING' LIMIT 1) as shipping_address,
+          (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = o.client_id AND address_type = 'BILLING' LIMIT 1) as billing_address,
           o.delivery_date as target_dispatch_date,
           'NORMAL' as production_priority,
           o.status,
           'ORDERS' as source_table
         FROM orders o
         LEFT JOIN companies c ON o.client_id = c.id
+        LEFT JOIN (
+          SELECT company_id, email, phone,
+                 ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+          FROM contacts
+        ) ct ON ct.company_id = o.client_id AND ct.rn = 1
         WHERE o.id = ?`,
         [salesOrderId]
       );
@@ -170,9 +188,24 @@ const createShipmentOrder = async (salesOrderId) => {
 
     // 4. Create Shipment Order
     await connection.execute(
-      `INSERT INTO shipment_orders (shipment_code, sales_order_id, customer_id, customer_name, dispatch_target_date, priority, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
-      [shipmentCode, salesOrderId, order?.company_id || null, order?.company_name || null, order?.target_dispatch_date || null, order?.production_priority || 'NORMAL']
+      `INSERT INTO shipment_orders (
+        shipment_code, sales_order_id, customer_id, customer_name, 
+        customer_phone, customer_email, shipping_address, billing_address,
+        dispatch_target_date, priority, status
+      )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
+      [
+        shipmentCode, 
+        salesOrderId, 
+        order?.company_id || null, 
+        order?.company_name || null, 
+        order?.customer_phone || null,
+        order?.customer_email || null,
+        order?.shipping_address || null,
+        order?.billing_address || null,
+        order?.target_dispatch_date || null, 
+        order?.production_priority || 'NORMAL'
+      ]
     );
 
     // 5. Update Order Status to READY_FOR_SHIPMENT if not already
