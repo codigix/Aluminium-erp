@@ -133,7 +133,7 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
     query += " WHERE UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')";
   }
 
-  query += ' ORDER BY transaction_date DESC';
+  query += ' ORDER BY transaction_date DESC, id DESC';
 
   const [ledger] = await pool.query(query, params);
   return ledger;
@@ -176,7 +176,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
     query += " WHERE UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY') ";
   }
 
-  query += ` GROUP BY item_code ORDER BY id DESC `;
+  query += ` GROUP BY item_code ORDER BY last_updated DESC `;
 
   const [balances] = await pool.query(query, params);
 
@@ -201,7 +201,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       received_qty: details.received_qty,
       accepted_qty: details.accepted_qty,
       issued_qty: details.issued_qty,
-      current_balance: details.current_balance,
+      current_balance: parseFloat(balance.current_balance || 0), // Use calculated sum from stock_balance table
       unit: balance.unit || 'NOS',
       valuation_rate: balance.valuation_rate,
       selling_rate: balance.selling_rate,
@@ -222,7 +222,9 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
 
 const getStockBalanceByItem = async (itemCode) => {
   const [balance] = await pool.query(`
-    SELECT id, item_code, item_description, material_name, material_type, unit, drawing_no, drawing_id, last_updated FROM stock_balance WHERE item_code = ?
+    SELECT id, item_code, item_description, material_name, material_type, unit, current_balance, drawing_no, drawing_id, last_updated 
+    FROM stock_balance 
+    WHERE item_code = ?
   `, [itemCode]);
 
   if (balance.length === 0) {
@@ -249,7 +251,7 @@ const getStockBalanceByItem = async (itemCode) => {
     received_qty: details.received_qty,
     accepted_qty: details.accepted_qty,
     issued_qty: details.issued_qty,
-    current_balance: details.current_balance,
+    current_balance: parseFloat(balance[0].current_balance || 0),
     unit: balance[0].unit || 'NOS',
     last_updated: balance[0].last_updated
   };
@@ -393,12 +395,18 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
     const ledgerId = (await useConnection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
 
-    // Recalculate balance from ledger for accuracy (consolidated)
-    const details = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection);
-    newBalance = details.current_balance;
+    // Recalculate balances for accuracy
+    const globalDetails = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection);
+    const globalBalance = globalDetails.current_balance;
+    
+    let warehouseBalance = globalBalance;
+    if (warehouse && warehouse !== 'ALL') {
+      const whDetails = await calculateBalanceDetailsFromLedger(itemCode, warehouse, useConnection);
+      warehouseBalance = whDetails.current_balance;
+    }
 
-    // Update the ledger entry with the correct balance_after
-    await useConnection.execute('UPDATE stock_ledger SET balance_after = ? WHERE id = ?', [newBalance, ledgerId]);
+    // Update the ledger entry with the correct global balance_after
+    await useConnection.execute('UPDATE stock_ledger SET balance_after = ? WHERE id = ?', [globalBalance, ledgerId]);
 
     // Use Upsert (INSERT ... ON DUPLICATE KEY UPDATE) for reliability
     // This handles both new warehouse records and updates to existing ones
@@ -418,7 +426,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       matType, 
       warehouse, 
       options.unit || existingBalance?.unit || 'NOS', 
-      newBalance, // We use the absolute balance from ledger
+      warehouseBalance, // Use warehouse-specific balance
       valuationRate,
       options.remarks || options.description || existingBalance?.item_description || null
     ]);
