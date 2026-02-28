@@ -195,6 +195,7 @@ const POMaterialRequest = () => {
 
       fetchRequests();
       setShowViewModal(false);
+      navigate(`/quotations?mr=${mr.id}`);
 
     } catch (error) {
       console.error('Error initiating RFQ:', error);
@@ -417,6 +418,7 @@ const POMaterialRequest = () => {
         ...formData.items, 
         { 
           ...currentItem, 
+          design_qty: currentItem.quantity, // Set design_qty same as quantity initially
           item_name: selectedItem?.name || currentItem.item_code,
           item_type: selectedItem?.material_type || 'Raw Material'
         }

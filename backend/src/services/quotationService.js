@@ -542,12 +542,14 @@ const generateQuotationPDF = async (quotationId) => {
       <table>
         <thead>
           <tr>
-            <th style="width: 20%">Drawing No</th>
-            <th style="width: 25%">Material Name</th>
-            <th style="width: 15%">Type</th>
-            <th style="width: 10%">Design Qty</th>
+            <th style="width: 25%">Drawing No</th>
+            <th style="width: 40%">Material Name</th>
+            <th style="width: 20%">Type</th>
+            <th style="width: 15%">Design Qty</th>
+            {{^isRFQ}}
             <th style="width: 15%">Rate (₹)</th>
             <th style="width: 15%">Amount</th>
+            {{/isRFQ}}
           </tr>
         </thead>
         <tbody>
@@ -557,11 +559,14 @@ const generateQuotationPDF = async (quotationId) => {
             <td>{{material_name}}</td>
             <td>{{material_type}}</td>
             <td>{{quantity}} {{unit}}</td>
+            {{^isRFQ}}
             <td>{{unit_rate}}</td>
             <td>{{amount}}</td>
+            {{/isRFQ}}
           </tr>
           {{/items}}
         </tbody>
+        {{^isRFQ}}
         <tfoot style="background: #f8fafc; font-weight: bold;">
           <tr>
             <td colspan="5" style="text-align: right; padding: 8px 8px;">Subtotal:</td>
@@ -580,6 +585,7 @@ const generateQuotationPDF = async (quotationId) => {
             <td style="padding: 12px 8px; font-size: 14px; color: #2563eb;">₹{{grand_total}}</td>
           </tr>
         </tfoot>
+        {{/isRFQ}}
       </table>
 
       {{#notes}}
@@ -601,6 +607,7 @@ const generateQuotationPDF = async (quotationId) => {
 
   const viewData = {
     ...quotation,
+    isRFQ: ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING'].includes(quotation.status),
     created_at: formatDate(quotation.created_at),
     valid_until: formatDate(quotation.valid_until),
     vendor_name: vendor?.vendor_name || 'N/A',

@@ -51,6 +51,15 @@ const formatCurrency = (value) => {
   }).format(value);
 };
 
+const getCorrectMaterialType = (itemCode, currentType) => {
+  const code = (itemCode || '').toUpperCase().trim();
+  if (code.startsWith('RM-')) return 'RAW_MATERIAL';
+  if (code.startsWith('CON-')) return 'CONSUMABLE';
+  if (code.startsWith('MRO-')) return 'MRO';
+  if (code.startsWith('BOU-')) return 'BOUGHT_OUT';
+  return currentType || 'RAW_MATERIAL';
+};
+
 const daysValid = (validUntil) => {
   if (!validUntil) return null;
   const today = new Date();
@@ -150,6 +159,17 @@ const Quotations = () => {
     fetchSalesOrders();
     fetchMaterialRequests();
   }, []);
+
+  useEffect(() => {
+    const mrId = searchParams.get('mr');
+    if (mrId) {
+      // Auto open create modal for this MR
+      handleSalesOrderChange({ target: { value: `MR-${mrId}` } });
+      setShowCreateModal(true);
+      // Clean up the URL
+      setSearchParams({});
+    }
+  }, [searchParams, materialRequests]);
 
   const fetchQuotations = async () => {
     try {
@@ -295,8 +315,9 @@ const Quotations = () => {
             .map(item => ({
             drawing_no: item.item_code || '—',
             material_name: item.name || item.item_description || '',
-            material_type: item.material_type || '',
-            design_qty: parseFloat(item.design_qty) || parseFloat(item.quantity) || 0,
+            material_type: getCorrectMaterialType(item.item_code || item.drawing_no, item.material_type),
+            design_qty: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0, // Prefer requested quantity
+            planned_qty: parseFloat(item.design_qty) || 0, // Keep actual design qty as planned_qty
             quantity: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0,
             uom: item.uom || 'NOS',
             unit_rate: item.unit_rate || item.rate || 0
@@ -351,8 +372,9 @@ const Quotations = () => {
             return {
               drawing_no: req.drawing_no || '—',
               material_name: req.material_name || '',
-              material_type: req.material_type || '',
-              design_qty: finalQty,
+              material_type: getCorrectMaterialType(req.drawing_no || req.item_code, req.material_type),
+              design_qty: finalQty, // Show shortage/requested qty as "Design Qty" to match MR view
+              planned_qty: totalRequired, // Keep total required as reference
               quantity: finalQty,
               uom: req.uom || 'NOS',
               unit_rate: parseFloat(req.rate || req.unit_rate) || 0
@@ -380,6 +402,10 @@ const Quotations = () => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
     
+    if (field === 'drawing_no' || field === 'item_code') {
+      newItems[index].material_type = getCorrectMaterialType(value, newItems[index].material_type);
+    }
+
     // Always sync quantity with design_qty if it's the one being changed
     if (field === 'design_qty') {
       newItems[index].quantity = value;
@@ -439,8 +465,13 @@ const Quotations = () => {
             ...recordData,
             vendorId,
             quotationId: quotation.id,
-            items: filteredItems,
-            amount: detailedQuotation.total_amount || 0,
+            items: filteredItems.map(item => ({
+                ...item,
+                unit_rate: 0,
+                amount: 0,
+                material_type: getCorrectMaterialType(item.item_code || item.drawing_no, item.material_type)
+            })),
+            amount: 0,
             validUntil: detailedQuotation.valid_until ? new Date(detailedQuotation.valid_until).toISOString().split('T')[0] : '',
             notes: `Response to ${quotation.quote_number}`,
             received_pdf_path: detailedQuotation.received_pdf_path
@@ -465,6 +496,10 @@ const Quotations = () => {
     const newItems = [...recordData.items];
     newItems[index][field] = value;
     
+    if (field === 'drawing_no' || field === 'item_code') {
+      newItems[index].material_type = getCorrectMaterialType(value, newItems[index].material_type);
+    }
+
     // Recalculate item amount
     if (field === 'quantity' || field === 'unit_rate' || field === 'design_qty') {
       // Always sync quantity with design_qty if it's the one being changed
@@ -944,13 +979,20 @@ const Quotations = () => {
   const openRecordModal = (q) => {
     const projectId = q.mr_id ? `MR-${q.mr_id}` : (q.sales_order_id ? String(q.sales_order_id) : '');
     
+    // When recording response, start with zero rates
+    const freshItems = (q.items || []).map(item => ({
+      ...item,
+      unit_rate: 0,
+      amount: 0
+    }));
+
     setRecordData({
       projectId: projectId,
       vendorId: String(q.vendor_id),
       quotationId: q.id,
-      amount: q.total_amount || 0,
+      amount: 0,
       validUntil: q.valid_until ? new Date(q.valid_until).toISOString().split('T')[0] : '',
-      items: q.items || [],
+      items: freshItems,
       notes: q.notes || `Response to ${q.quote_number}`,
       recordFile: null
     });
@@ -1009,7 +1051,7 @@ const Quotations = () => {
     const mappedItems = (quotation.items || []).map(item => ({
       drawing_no: item.drawing_no || item.item_code || '',
       material_name: item.material_name || '',
-      material_type: item.material_type || '',
+      material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
       design_qty: item.design_qty || item.quantity || 0,
       quantity: item.quantity || 0,
       uom: item.unit || 'NOS',
@@ -1056,8 +1098,8 @@ const Quotations = () => {
   const displayQuotations = useMemo(() => {
     return quotations.filter(q => {
       const isTabMatch = activeTab === 'sent' 
-        ? true 
-        : ['RECEIVED', 'REVIEWED', 'PENDING', 'EMAIL_RECEIVED'].includes(q.status);
+        ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING'].includes(q.status)
+        : ['RECEIVED', 'REVIEWED', 'CLOSED'].includes(q.status);
       const matchesStatus = filterStatus === 'All Quotations' || q.status === filterStatus;
       return isTabMatch && matchesStatus;
     });
@@ -1490,17 +1532,15 @@ const Quotations = () => {
                     ) : (
                       <div className="space-y-2">
                           <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100text-xs   text-slate-500  ">
-                            <div className="col-span-2">Drawing No</div>
-                            <div className="col-span-3">Material Name</div>
+                            <div className="col-span-3">Drawing No</div>
+                            <div className="col-span-5">Material Name</div>
                             <div className="col-span-2">Type</div>
                             <div className="col-span-1 text-center">Design Qty</div>
-                            <div className="col-span-2 text-center">Rate (₹)</div>
-                            <div className="col-span-1 text-right">Amount</div>
                             <div className="col-span-1"></div>
                           </div>
                           {formData.items.map((item, idx) => (
                             <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                              <div className="col-span-2 relative">
+                              <div className="col-span-3 relative">
                                 <input
                                   type="text"
                                   placeholder="Drawing No"
@@ -1524,7 +1564,7 @@ const Quotations = () => {
                                 placeholder="Material Name"
                                 value={item.material_name}
                                 onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
-                                className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="col-span-5 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                               <input
                                 type="text"
@@ -1536,20 +1576,10 @@ const Quotations = () => {
                               <input
                                 type="number"
                                 placeholder="Design"
-                                value={item.design_qty}
+                                value={item.quantity || item.design_qty || 0}
                                 onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
                                 className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              <input
-                                type="number"
-                                placeholder="Rate"
-                                value={item.unit_rate}
-                                onChange={(e) => handleItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
-                                className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                            <div className="col-span-1 text-right text-xs  text-slate-700">
-                              {formatCurrency((item.design_qty || 0) * (item.unit_rate || 0))}
-                            </div>
                             <div className="col-span-1 flex justify-center">
                               <button
                                 type="button"
@@ -1575,24 +1605,6 @@ const Quotations = () => {
                       className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       rows="3"
                     />
-                  </div>
-
-                  {/* Summary Section for Request Quote */}
-                  <div className="bg-slate-50 p-4 rounded  border border-slate-200">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs text-slate-500">
-                        <span>Subtotal:</span>
-                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.design_qty || 0) * (item.unit_rate || 0)), 0))}</span>
-                      </div>
-                      <div className="flex justify-between text-xs text-slate-500">
-                        <span>GST (18%):</span>
-                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.design_qty || 0) * (item.unit_rate || 0)), 0) * 0.18)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
-                        <span>Grand Total:</span>
-                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + ((item.design_qty || 0) * (item.unit_rate || 0)), 0) * 1.18)}</span>
-                      </div>
-                    </div>
                   </div>
                 </>
               ) : (
@@ -1647,15 +1659,15 @@ const Quotations = () => {
                     <div className="grid grid-cols-3 gap-2">
                         <div className="bg-slate-50 p-2 rounded  border border-slate-200">
                         <label className="block text-[9px]  text-slate-500   mb-1  ">Subtotal</label>
-                        <div className="text-sm  text-slate-700">{formatCurrency(recordData.amount)}</div>
+                        <div className="text-sm  text-slate-700">{recordData.amount > 0 ? formatCurrency(recordData.amount) : '—'}</div>
                         </div>
                         <div className="bg-slate-50 p-2 rounded  border border-slate-200">
                         <label className="block text-[9px]  text-slate-500   mb-1  ">GST (18%)</label>
-                        <div className="text-sm  text-slate-700">{formatCurrency(recordData.amount * 0.18)}</div>
+                        <div className="text-sm  text-slate-700">{recordData.amount > 0 ? formatCurrency(recordData.amount * 0.18) : '—'}</div>
                         </div>
                         <div className="bg-blue-50 p-2 rounded  border border-blue-200">
                         <label className="block text-[9px]  text-blue-500   mb-1  ">Total</label>
-                        <div className="text-base font-black text-blue-900">{formatCurrency(recordData.amount * 1.18)}</div>
+                        <div className="text-base font-black text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</div>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -1775,7 +1787,7 @@ const Quotations = () => {
                                 <td className="px-3 py-2">
                                   <input
                                     type="number"
-                                    value={item.design_qty || 0}
+                                    value={item.quantity || item.design_qty || 0}
                                     onChange={(e) => handleRecordItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center"
                                     placeholder="0.00"
@@ -1784,14 +1796,16 @@ const Quotations = () => {
                                 <td className="px-3 py-2">
                                   <input
                                     type="number"
-                                    value={item.unit_rate || 0}
+                                    value={item.unit_rate || ''}
                                     onChange={(e) => handleRecordItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
                                     className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500"
                                     placeholder="0"
                                   />
                                 </td>
                                 <td className="px-3 py-2 text-right  text-slate-700">
-                                  {formatCurrency((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0))}
+                                  {((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0)) > 0 
+                                    ? formatCurrency((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0)) 
+                                    : '—'}
                                 </td>
                                 <td className="px-3 py-2 text-center">
                                   <button
@@ -1813,15 +1827,15 @@ const Quotations = () => {
                       <div className="mt-4 p-4 bg-blue-50 rounded  flex flex-col gap-2 border border-blue-100">
                         <div className="flex justify-between items-center text-xs text-blue-600">
                           <span>Subtotal</span>
-                          <span>{formatCurrency(recordData.amount)}</span>
+                          <span>{recordData.amount > 0 ? formatCurrency(recordData.amount) : '—'}</span>
                         </div>
                         <div className="flex justify-between items-center text-xs text-emerald-600  border-t border-blue-100 pt-2">
                           <span>GST (18%)</span>
-                          <span>+ {formatCurrency(recordData.amount * 0.18)}</span>
+                          <span>{recordData.amount > 0 ? `+ ${formatCurrency(recordData.amount * 0.18)}` : '—'}</span>
                         </div>
                         <div className="flex justify-between items-center border-t-2 border-blue-200 pt-2">
                           <span className="text-sm font-black text-blue-800  ">Grand Total</span>
-                          <span className="text-2xl font-black text-blue-900">{formatCurrency(recordData.amount * 1.18)}</span>
+                          <span className="text-2xl font-black text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</span>
                         </div>
                       </div>
                     )}
@@ -2001,76 +2015,143 @@ const Quotations = () => {
                 ) : (
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100text-xs   text-slate-500  tracking-wide">
-                      <div className="col-span-2">Drawing No</div>
-                      <div className="col-span-3">Material Name</div>
-                      <div className="col-span-2">Type</div>
-                      <div className="col-span-1 text-center">Design Qty</div>
-                      <div className="col-span-2 text-center">Rate (₹)</div>
-                      <div className="col-span-1 text-right">Amount</div>
-                      <div className="col-span-1"></div>
+                      {activeTab === 'sent' ? (
+                        <>
+                          <div className="col-span-3">Drawing No</div>
+                          <div className="col-span-5">Material Name</div>
+                          <div className="col-span-2">Type</div>
+                          <div className="col-span-1 text-center">Design Qty</div>
+                          <div className="col-span-1"></div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="col-span-2">Drawing No</div>
+                          <div className="col-span-3">Material Name</div>
+                          <div className="col-span-2">Type</div>
+                          <div className="col-span-1 text-center">Design Qty</div>
+                          <div className="col-span-2 text-center">Rate (₹)</div>
+                          <div className="col-span-1 text-right">Amount</div>
+                          <div className="col-span-1"></div>
+                        </>
+                      )}
                     </div>
                     {editFormData.items.map((item, idx) => (
                       <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                        <input
-                          type="text"
-                          placeholder="Drawing No"
-                          value={item.drawing_no}
-                          onChange={(e) => {
-                            const newItems = [...editFormData.items];
-                            newItems[idx].drawing_no = e.target.value;
-                            setEditFormData({...editFormData, items: newItems});
-                          }}
-                          className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Material Name"
-                          value={item.material_name}
-                          onChange={(e) => {
-                            const newItems = [...editFormData.items];
-                            newItems[idx].material_name = e.target.value;
-                            setEditFormData({...editFormData, items: newItems});
-                          }}
-                          className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Type"
-                          value={item.material_type}
-                          onChange={(e) => {
-                            const newItems = [...editFormData.items];
-                            newItems[idx].material_type = e.target.value;
-                            setEditFormData({...editFormData, items: newItems});
-                          }}
-                          className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Design"
-                          value={item.design_qty}
-                          onChange={(e) => {
-                            const newItems = [...editFormData.items];
-                            const val = parseFloat(e.target.value) || 0;
-                            newItems[idx].design_qty = val;
-                            newItems[idx].quantity = val;
-                            setEditFormData({...editFormData, items: newItems});
-                          }}
-                          className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Rate"
-                          value={item.unit_rate}
-                          onChange={(e) => {
-                            const newItems = [...editFormData.items];
-                            newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
-                            setEditFormData({...editFormData, items: newItems});
-                          }}
-                          className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <div className="col-span-1 text-right text-xs  text-slate-700">
-                          {formatCurrency((item.design_qty || item.quantity || 0) * (item.unit_rate || 0))}
-                        </div>
+                        {activeTab === 'sent' ? (
+                          <>
+                            <input
+                              type="text"
+                              placeholder="Drawing No"
+                              value={item.drawing_no}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                newItems[idx].drawing_no = e.target.value;
+                                newItems[idx].material_type = getCorrectMaterialType(e.target.value, newItems[idx].material_type);
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Material Name"
+                              value={item.material_name}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                newItems[idx].material_name = e.target.value;
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-5 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Type"
+                              value={item.material_type}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                newItems[idx].material_type = e.target.value;
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="number"
+                              placeholder="Design"
+                              value={item.quantity || item.design_qty || 0}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                const val = parseFloat(e.target.value) || 0;
+                                newItems[idx].design_qty = val;
+                                newItems[idx].quantity = val;
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="text"
+                              placeholder="Drawing No"
+                              value={item.drawing_no}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                newItems[idx].drawing_no = e.target.value;
+                                newItems[idx].material_type = getCorrectMaterialType(e.target.value, newItems[idx].material_type);
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Material Name"
+                              value={item.material_name}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                newItems[idx].material_name = e.target.value;
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Type"
+                              value={item.material_type}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                newItems[idx].material_type = e.target.value;
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="number"
+                              placeholder="Design"
+                              value={item.quantity || item.design_qty || 0}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                const val = parseFloat(e.target.value) || 0;
+                                newItems[idx].design_qty = val;
+                                newItems[idx].quantity = val;
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="number"
+                              placeholder="Rate"
+                              value={item.unit_rate}
+                              onChange={(e) => {
+                                const newItems = [...editFormData.items];
+                                newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
+                                setEditFormData({...editFormData, items: newItems});
+                              }}
+                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <div className="col-span-1 text-right text-xs  text-slate-700">
+                              {formatCurrency((item.design_qty || item.quantity || 0) * (item.unit_rate || 0))}
+                            </div>
+                          </>
+                        )}
                         <div className="col-span-1 flex justify-center">
                           <button
                             type="button"
@@ -2120,6 +2201,7 @@ const Quotations = () => {
               <thead>
                 <tr className="bg-slate-50">
                   <th className="p-3 border text-left text-xs  text-slate-600 sticky left-0 bg-slate-50 z-10">Item / Drawing No.</th>
+                  <th className="p-3 border text-center text-xs  text-slate-600 bg-slate-50">Design Qty</th>
                   {compareData.map((q, idx) => (
                     <th key={idx} className="p-3 border text-center text-xs  text-slate-800 bg-indigo-50/50" colSpan="2">
                       <div className="flex flex-col gap-1">
@@ -2131,6 +2213,7 @@ const Quotations = () => {
                 </tr>
                 <tr className="bg-slate-50/50text-xs    text-slate-400">
                   <th className="p-2 border sticky left-0 bg-slate-50/50 z-10"></th>
+                  <th className="p-2 border"></th>
                   {compareData.map((_, idx) => (
                     <React.Fragment key={idx}>
                       <th className="p-2 border text-right">Unit Rate</th>
@@ -2151,6 +2234,9 @@ const Quotations = () => {
                           <span className="text-[10px] text-slate-400 font-normal">{firstItem?.material_name}</span>
                         </div>
                       </td>
+                      <td className="p-3 border text-center text-slate-600 font-medium">
+                        {Number(firstItem?.quantity || firstItem?.design_qty || 0).toFixed(3)}
+                      </td>
                       {compareData.map((q, qIdx) => {
                         const item = (q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
                         return (
@@ -2170,7 +2256,7 @@ const Quotations = () => {
               </tbody>
               <tfoot>
                 <tr className="bg-slate-50 ">
-                  <td className="p-4 border text-right sticky left-0 bg-slate-50 z-10">GRAND TOTAL</td>
+                  <td className="p-4 border text-right sticky left-0 bg-slate-50 z-10" colSpan="2">GRAND TOTAL</td>
                   {compareData.map((q, idx) => (
                     <td key={idx} className="p-4 border text-right text-indigo-700 text-sm" colSpan="2">
                       {formatCurrency(q.total_amount)}
@@ -2178,7 +2264,7 @@ const Quotations = () => {
                   ))}
                 </tr>
                 <tr>
-                  <td className="p-4 border text-right sticky left-0 bg-white z-10">Actions</td>
+                  <td className="p-4 border text-right sticky left-0 bg-white z-10" colSpan="2">Actions</td>
                   {compareData.map((q, idx) => (
                     <td key={idx} className="p-4 border text-center" colSpan="2">
                       <button

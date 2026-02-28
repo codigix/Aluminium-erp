@@ -51,7 +51,8 @@ const getPOReceiptById = async (receiptId) => {
   const receipt = rows[0];
 
   const [items] = await pool.query(
-    `SELECT pri.*, poi.item_code, poi.description, poi.material_name, poi.material_type, poi.unit, poi.quantity as expected_quantity,
+    `SELECT pri.*, poi.item_code, poi.description, poi.material_name, poi.material_type, poi.unit, 
+            poi.design_qty, poi.quantity as expected_quantity,
             poi.unit_rate, poi.cgst_amount, poi.sgst_amount, poi.total_amount as po_item_total
      FROM po_receipt_items pri
      LEFT JOIN purchase_order_items poi ON poi.id = pri.po_item_id

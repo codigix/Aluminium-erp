@@ -894,6 +894,7 @@ const POReceipts = () => {
                   <thead className="bg-slate-50/50">
                     <tr className="text-[10px] font-black text-slate-400  tracking-widest border-b border-slate-200">
                       <th className="p-2 ">Item</th>
+                      <th className="p-2  text-center">Design Qty</th>
                       <th className="p-2  text-right">Received Qty</th>
                       <th className="p-2  text-right">Unit</th>
                     </tr>
@@ -905,8 +906,11 @@ const POReceipts = () => {
                           <div className="text-xs font-black text-slate-900">{item.item_code}</div>
                           <div className="text-[10px] text-slate-500   mt-0.5 tracking-tight">{item.material_name || item.description}</div>
                         </td>
+                        <td className="p-2  text-center font-black text-slate-500 text-xs">
+                          {parseFloat(item.design_qty || item.expected_quantity || 0).toFixed(3)}
+                        </td>
                         <td className="p-2  text-right font-black text-slate-900 text-xs">
-                          {parseFloat(item.received_quantity || 0).toFixed(4)}
+                          {parseFloat(item.received_quantity || 0).toFixed(3)}
                         </td>
                         <td className="p-2  text-right">
                           <span className="text-[10px] font-black text-slate-400  tracking-widest bg-slate-100 px-2 py-1 rounded  border border-slate-200">
