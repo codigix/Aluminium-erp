@@ -16,7 +16,7 @@ export const Card = ({ id, title, subtitle, action, children, className = '' }) 
   </div>
 )
 
-export const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true, disabled = false }) => {
+export const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true, disabled = false, openUpwards = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
@@ -68,13 +68,13 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
           onFocus={() => !disabled && setIsOpen(true)}
           disabled={disabled}
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2text-xs  text-slate-400 pointer-events-none">
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
           {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </div>
       </div>
       
       {isOpen && !disabled && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded  shadow-xl max-h-60 flex flex-col overflow-hidden">
+        <div className={`absolute z-[100] w-full bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           <div className="overflow-y-auto flex-1">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => (

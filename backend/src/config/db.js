@@ -1737,6 +1737,47 @@ const ensureOrdersTable = async () => {
   }
 };
 
+const ensureOutwardChallanTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS outward_challans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        challan_number VARCHAR(50) UNIQUE NOT NULL,
+        job_card_id INT NOT NULL,
+        work_order_id INT NOT NULL,
+        vendor_id INT NOT NULL,
+        operation_name VARCHAR(255),
+        planned_qty DECIMAL(12, 3),
+        dispatch_qty DECIMAL(12, 3),
+        expected_return_date DATE,
+        notes TEXT,
+        status ENUM('PENDING', 'RECEIVED', 'CANCELLED') DEFAULT 'PENDING',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE,
+        FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS outward_challan_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        challan_id INT NOT NULL,
+        item_code VARCHAR(120),
+        required_qty DECIMAL(12, 3),
+        release_qty DECIMAL(12, 3),
+        FOREIGN KEY (challan_id) REFERENCES outward_challans(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Outward Challan tables synchronized');
+  } catch (error) {
+    console.error('Outward Challan table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureDeliveryChallansTable = async () => {
   let connection;
   try {
@@ -2222,6 +2263,7 @@ const bootstrapDatabase = async () => {
   await ensureQuotationCommunicationTable();
   await ensureOrdersTable();
   await ensureDeliveryChallansTable();
+  await ensureOutwardChallanTables();
   await ensureReturnsTable();
 };
 

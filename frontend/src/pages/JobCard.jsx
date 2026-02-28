@@ -4,9 +4,9 @@ import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../comp
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   ClipboardList, Activity, CheckCircle, TrendingUp, 
-  Play, Check, Edit2, Trash2, Search, Filter,
+  Play, Check, Edit2, Trash2, Search, Filter, Plus, X,
   Clock, Package, User, Monitor, AlertCircle, ChevronDown, ChevronRight,
-  DollarSign, Zap, Eye
+  DollarSign, Zap, Eye, Truck
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -23,9 +23,34 @@ const JobCard = () => {
   const [selectedWO, setSelectedWO] = useState(null);
   const [operations, setOperations] = useState([]);
   const [workstations, setWorkstations] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [items, setItems] = useState([]);
+  const [drawings, setDrawings] = useState([]);
   const [previewDrawing, setPreviewDrawing] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedWOs, setExpandedWOs] = useState(new Set());
+  const [isOutwardModalOpen, setIsOutwardModalOpen] = useState(false);
+  const [isInwardModalOpen, setIsInwardModalOpen] = useState(false);
+  const [selectedJCOutward, setSelectedJCOutward] = useState(null);
+
+  const [inwardFormData, setInwardFormData] = useState({
+    receivedQty: 0,
+    acceptedQty: 0,
+    rejectedQty: 0,
+    scrapQty: 0,
+    remarks: '',
+    receivedDate: new Date().toISOString().split('T')[0]
+  });
+
+  const [outwardFormData, setOutwardFormData] = useState({
+    vendorId: '',
+    operationName: '',
+    plannedQty: 0,
+    expectedReturnDate: '',
+    dispatchQty: 0,
+    dispatchNotes: '',
+    materialItems: []
+  });
 
   const [formData, setFormData] = useState({
     jcNumber: '',
@@ -58,6 +83,9 @@ const JobCard = () => {
     fetchOperations();
     fetchWorkstations();
     fetchUsers();
+    fetchVendors();
+    fetchItems();
+    fetchDrawings();
 
     const filterWO = searchParams.get('filter_work_order');
     if (filterWO) {
@@ -151,6 +179,89 @@ const JobCard = () => {
       console.error('Error fetching users:', error);
     }
   };
+
+  const fetchVendors = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/vendors`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Fetched vendors:', data);
+        setVendors(data);
+      } else {
+        console.error('Failed to fetch vendors:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching vendors:', error);
+    }
+  };
+
+  const fetchItems = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/items?includeAll=true`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Fetched items:', data);
+        setItems(data);
+      } else {
+        console.error('Failed to fetch items:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching items:', error);
+    }
+  };
+
+  const fetchDrawings = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Fetched drawings:', data);
+        setDrawings(data);
+      } else {
+        console.error('Failed to fetch drawings:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching drawings:', error);
+    }
+  };
+
+  const combinedItems = useMemo(() => {
+    const itemOptions = items.map(i => ({ 
+      value: i.item_code, 
+      label: i.item_code, 
+      itemName: i.material_name || i.item_description,
+      type: 'Stock'
+    }));
+
+    const drawingOptions = drawings.map(d => ({
+      value: d.drawing_no,
+      label: d.drawing_no,
+      itemName: d.description || d.client_name,
+      type: 'Drawing'
+    }));
+
+    // Filter out duplicates (if any item_code matches drawing_no)
+    const seen = new Set();
+    const result = [];
+
+    [...itemOptions, ...drawingOptions].forEach(opt => {
+      if (!seen.has(opt.value)) {
+        seen.add(opt.value);
+        result.push(opt);
+      }
+    });
+
+    return result;
+  }, [items, drawings]);
 
   const toggleWO = (woId) => {
     const id = String(woId);
@@ -341,6 +452,20 @@ const JobCard = () => {
     setIsProgressModalOpen(true);
   };
 
+  const handleOutwardChallan = (jc) => {
+    setSelectedJCOutward(jc);
+    setOutwardFormData({
+      vendorId: '',
+      operationName: jc.operation_name || '',
+      plannedQty: jc.planned_qty || 0,
+      expectedReturnDate: '',
+      dispatchQty: jc.planned_qty || 0,
+      dispatchNotes: '',
+      materialItems: []
+    });
+    setIsOutwardModalOpen(true);
+  };
+
   const handleUpdateStatus = async (id, status) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -477,6 +602,73 @@ const JobCard = () => {
     });
     setSelectedWO(null);
     setIsModalOpen(true);
+  };
+
+  const handleCreateOutwardChallan = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/outward-challans`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...outwardFormData,
+          jobCardId: selectedJCOutward.id,
+          workOrderId: selectedJCOutward.work_order_id
+        })
+      });
+
+      if (response.ok) {
+        successToast('Outward Challan created successfully');
+        setIsOutwardModalOpen(false);
+        fetchJobCards();
+      } else {
+        errorToast('Failed to create outward challan');
+      }
+    } catch (error) {
+      console.error('Error creating outward challan:', error);
+      errorToast('Error creating outward challan');
+    }
+  };
+
+  const handleVendorInward = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      // We will reuse the quality-logs endpoint to record the receipt and inspection from vendor
+      const response = await fetch(`${API_BASE}/job-cards/${selectedJCOutward.id}/quality-logs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          checkDate: inwardFormData.receivedDate,
+          shift: 'SHIFT_A',
+          inspectedQty: inwardFormData.receivedQty,
+          acceptedQty: inwardFormData.acceptedQty,
+          rejectedQty: inwardFormData.rejectedQty,
+          scrapQty: inwardFormData.scrapQty,
+          rejectionReason: inwardFormData.remarks,
+          notes: `Vendor Receipt from ${selectedJCOutward.outward_challan_no}`,
+          status: 'Approved '
+        })
+      });
+
+      if (response.ok) {
+        // Also update the job card status to completed if everything is received
+        await handleUpdateStatus(selectedJCOutward.id, 'COMPLETED');
+        successToast('Vendor Receipt recorded successfully');
+        setIsInwardModalOpen(false);
+        fetchJobCards();
+      } else {
+        errorToast('Failed to record vendor receipt');
+      }
+    } catch (error) {
+      console.error('Error recording vendor receipt:', error);
+      errorToast('Error recording vendor receipt');
+    }
   };
 
   const handleDelete = async (id) => {
@@ -647,7 +839,7 @@ const JobCard = () => {
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">ID</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[140px]">ID</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operation</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Execution Type</th>
@@ -662,18 +854,20 @@ const JobCard = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredJobCards.map((jc) => (
                 <tr key={jc.id} className="group hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-2.5">
-                    <span className="text-[11px] font-bold text-indigo-600">
-                      {jc.job_card_no}
-                    </span>
-                    <div className="text-[9px] text-slate-400 mt-0.5">
-                      WO: {jc.wo_number}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-indigo-600">
+                        {jc.job_card_no}
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">
+                        WO: {jc.wo_number}
+                      </span>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-3">
                     <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-slate-900">{jc.operation_name}</span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">{jc.item_name}</span>
+                      <span className="text-xs font-bold text-slate-900">{jc.operation_name}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5 leading-tight">{jc.item_name}</span>
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
@@ -685,8 +879,8 @@ const JobCard = () => {
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className={`text-[11px] font-medium ${jc.workstation_name === 'Subcontract' ? 'text-purple-600' : 'text-blue-600'}`}>
-                      {jc.workstation_name === 'Subcontract' ? 'Subcontract' : 'In-house'}
+                    <span className={`text-[11px] font-medium ${jc.outward_challan_id ? 'text-amber-600' : 'text-blue-600'}`}>
+                      {jc.outward_challan_id ? 'Subcontract' : 'In-house'}
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
@@ -705,13 +899,13 @@ const JobCard = () => {
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="text-[11px] text-slate-600">
-                      {jc.workstation_name || 'N/A'}
+                    <span className={`text-[11px] ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-600'}`}>
+                      {jc.outward_challan_id ? 'Subcontract' : (jc.workstation_name || 'N/A')}
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="text-[11px] text-slate-600">
-                      {jc.operator_name || 'Unassigned'}
+                    <span className={`text-[11px] ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-600'}`}>
+                      {jc.outward_challan_id ? 'N/A' : (jc.operator_name || 'Unassigned')}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
@@ -739,6 +933,31 @@ const JobCard = () => {
                           title="Log Progress"
                         >
                           <Zap className="w-3.5 h-3.5 fill-indigo-600" />
+                        </button>
+                      )}
+                      {jc.outward_challan_id ? (
+                        <button 
+                          onClick={() => {
+                            setSelectedJCOutward(jc);
+                            setInwardFormData(prev => ({
+                              ...prev,
+                              receivedQty: jc.dispatch_qty || jc.planned_qty,
+                              acceptedQty: jc.dispatch_qty || jc.planned_qty
+                            }));
+                            setIsInwardModalOpen(true);
+                          }}
+                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                          title="Vendor Receipt (Inward)"
+                        >
+                          <Package className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleOutwardChallan(jc)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                          title="Outward Challan"
+                        >
+                          <Truck className="w-3.5 h-3.5" />
                         </button>
                       )}
                       <button 
@@ -1046,7 +1265,7 @@ const JobCard = () => {
                   onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
                   className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2text-xs   text-slate-400  tracking-widest">Unit</span>
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 tracking-widest">Unit</span>
               </div>
             </FormControl>
           </div>
@@ -1489,6 +1708,287 @@ const JobCard = () => {
             >
               <CheckCircle className="w-5 h-5" />
               Complete Production
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal 
+        isOpen={isOutwardModalOpen} 
+        onClose={() => setIsOutwardModalOpen(false)} 
+        title="Outward Challan"
+        size="2xl"
+      >
+        <div className="p-1 space-y-6">
+          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-100">
+            <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Dispatch Job Card {selectedJCOutward?.job_card_no} to Vendor</h3>
+              <p className="text-xs text-slate-500">Create an outward challan for subcontracted operations</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormControl label="Operation">
+              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-700">
+                {outwardFormData.operationName}
+              </div>
+            </FormControl>
+            <FormControl label="Quantity">
+              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-700">
+                {outwardFormData.plannedQty} units
+              </div>
+            </FormControl>
+          </div>
+
+          <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-4 space-y-4">
+            <div className="flex items-center gap-2 text-amber-800">
+              <User className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">Assign Vendor</span>
+            </div>
+            <SearchableSelect
+              options={vendors.map(v => ({ value: v.id, label: v.vendor_name, category: v.category }))}
+              value={outwardFormData.vendorId}
+              onChange={(e) => setOutwardFormData({ ...outwardFormData, vendorId: e.target.value })}
+              placeholder="Search and select vendor..."
+              subLabelField="category"
+              allowCustom={false}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-slate-700">
+                <ClipboardList className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Required Material Release</span>
+              </div>
+              <button 
+                onClick={() => setOutwardFormData({
+                  ...outwardFormData,
+                  materialItems: [...outwardFormData.materialItems, { itemCode: '', requiredQty: 0, releaseQty: 0 }]
+                })}
+                className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 uppercase tracking-widest px-2 py-1 bg-indigo-50 rounded"
+              >
+                <Plus className="w-3 h-3" /> Add Item
+              </button>
+            </div>
+            
+            <div className="border border-slate-100 rounded-lg">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider">Item Code</th>
+                    <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-center">Required Qty</th>
+                    <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-center">Release Qty</th>
+                    <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {outwardFormData.materialItems.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="px-3 py-4 text-center text-slate-400 italic">No materials added</td>
+                    </tr>
+                  ) : (
+                    outwardFormData.materialItems.map((item, idx) => (
+                      <tr key={idx}>
+                        <td className="px-2 py-1.5 min-w-[200px]">
+                          <SearchableSelect
+                            options={combinedItems}
+                            value={item.itemCode}
+                            onChange={(e) => {
+                              const newItems = [...outwardFormData.materialItems];
+                              newItems[idx].itemCode = e.target.value;
+                              setOutwardFormData({ ...outwardFormData, materialItems: newItems });
+                            }}
+                            placeholder="Select Item..."
+                            subLabelField="itemName"
+                            allowCustom={false}
+                            openUpwards={idx >= 1}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <input 
+                            type="number" 
+                            className="w-20 px-2 py-1 border border-slate-200 rounded text-center outline-none focus:border-indigo-500"
+                            value={item.requiredQty}
+                            onChange={(e) => {
+                              const newItems = [...outwardFormData.materialItems];
+                              newItems[idx].requiredQty = e.target.value;
+                              setOutwardFormData({ ...outwardFormData, materialItems: newItems });
+                            }}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <input 
+                            type="number" 
+                            className="w-20 px-2 py-1 bg-indigo-50 border border-indigo-100 rounded text-center text-indigo-600 outline-none"
+                            value={item.releaseQty}
+                            onChange={(e) => {
+                              const newItems = [...outwardFormData.materialItems];
+                              newItems[idx].releaseQty = e.target.value;
+                              setOutwardFormData({ ...outwardFormData, materialItems: newItems });
+                            }}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 text-right">
+                          <button 
+                            onClick={() => {
+                              const newItems = outwardFormData.materialItems.filter((_, i) => i !== idx);
+                              setOutwardFormData({ ...outwardFormData, materialItems: newItems });
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormControl label="Expected Return Date">
+              <div className="relative">
+                <input 
+                  type="date" 
+                  value={outwardFormData.expectedReturnDate}
+                  onChange={(e) => setOutwardFormData({ ...outwardFormData, expectedReturnDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+                />
+              </div>
+            </FormControl>
+            <FormControl label="Dispatch Quantity">
+              <div className="relative">
+                <input 
+                  type="number" 
+                  value={outwardFormData.dispatchQty}
+                  onChange={(e) => setOutwardFormData({ ...outwardFormData, dispatchQty: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+                />
+                <span className="absolute right-3 top-2 text-[10px] text-slate-400 font-bold">Units</span>
+              </div>
+            </FormControl>
+          </div>
+
+          <FormControl label="Dispatch Notes">
+            <textarea 
+              rows="2"
+              placeholder="Any specific instructions for the vendor..."
+              value={outwardFormData.dispatchNotes}
+              onChange={(e) => setOutwardFormData({ ...outwardFormData, dispatchNotes: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 resize-none"
+            />
+          </FormControl>
+
+          <div className="flex justify-end items-center gap-3 pt-4 border-t border-slate-100">
+            <button
+              onClick={() => setIsOutwardModalOpen(false)}
+              className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateOutwardChallan}
+              className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Create Outward Challan
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal 
+        isOpen={isInwardModalOpen} 
+        onClose={() => setIsInwardModalOpen(false)} 
+        title="Vendor Receipt (Inward)"
+        size="xl"
+      >
+        <div className="p-1 space-y-6">
+          <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Receive Job Card {selectedJCOutward?.job_card_no} from Vendor</h3>
+              <p className="text-xs text-slate-500">Challan No: {selectedJCOutward?.outward_challan_no}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormControl label="Received Date">
+              <input 
+                type="date" 
+                value={inwardFormData.receivedDate}
+                onChange={(e) => setInwardFormData({ ...inwardFormData, receivedDate: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500"
+              />
+            </FormControl>
+            <FormControl label="Received Quantity">
+              <input 
+                type="number" 
+                value={inwardFormData.receivedQty}
+                onChange={(e) => setInwardFormData({ ...inwardFormData, receivedQty: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500"
+              />
+            </FormControl>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormControl label="Accepted Qty">
+              <input 
+                type="number" 
+                value={inwardFormData.acceptedQty}
+                onChange={(e) => setInwardFormData({ ...inwardFormData, acceptedQty: e.target.value })}
+                className="w-full px-3 py-2 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-700 outline-none"
+              />
+            </FormControl>
+            <FormControl label="Rejected Qty">
+              <input 
+                type="number" 
+                value={inwardFormData.rejectedQty}
+                onChange={(e) => setInwardFormData({ ...inwardFormData, rejectedQty: e.target.value })}
+                className="w-full px-3 py-2 bg-rose-50 border border-rose-100 rounded text-xs text-rose-700 outline-none"
+              />
+            </FormControl>
+            <FormControl label="Scrap Qty">
+              <input 
+                type="number" 
+                value={inwardFormData.scrapQty}
+                onChange={(e) => setInwardFormData({ ...inwardFormData, scrapQty: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 outline-none"
+              />
+            </FormControl>
+          </div>
+
+          <FormControl label="Remarks / Rejection Reason">
+            <textarea 
+              rows="2"
+              placeholder="Enter receipt notes or rejection reasons..."
+              value={inwardFormData.remarks}
+              onChange={(e) => setInwardFormData({ ...inwardFormData, remarks: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 resize-none"
+            />
+          </FormControl>
+
+          <div className="flex justify-end items-center gap-3 pt-4 border-t border-slate-100">
+            <button
+              onClick={() => setIsInwardModalOpen(false)}
+              className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleVendorInward}
+              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-100"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Complete Receipt
             </button>
           </div>
         </div>

@@ -106,7 +106,9 @@ const DEPARTMENT_ACCESS_RULES = {
       'STATUS_CHANGE',
       'PROD_VIEW', 'PROD_MANAGE',
       'DESIGN_VIEW',
-      'BOM_VIEW'
+      'BOM_VIEW',
+      'VENDOR_VIEW',
+      'STOCK_VIEW'
     ]
   },
 

@@ -41,6 +41,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const finalQCRoutes = require('./routes/finalQCRoutes');
 const shipmentRoutes = require('./routes/shipmentRoutes');
 const deliveryChallanRoutes = require('./routes/deliveryChallanRoutes');
+const outwardChallanRoutes = require('./routes/outwardChallanRoutes');
 const customerPaymentRoutes = require('./routes/customerPaymentRoutes');
 const bankAccountRoutes = require('./routes/bankAccountRoutes');
 const itemGroupRoutes = require('./routes/itemGroupRoutes');
@@ -132,6 +133,7 @@ privateRouter.use('/item-groups', itemGroupRoutes);
 privateRouter.use('/final-qc', finalQCRoutes);
 privateRouter.use('/shipments', shipmentRoutes);
 privateRouter.use('/delivery-challans', deliveryChallanRoutes);
+privateRouter.use('/outward-challans', outwardChallanRoutes);
 privateRouter.use('/dashboard', dashboardRoutes);
 
 const apiRouter = express.Router();

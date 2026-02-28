@@ -30,7 +30,8 @@ WHERE r.code = 'PROD_MGR' AND p.code IN (
   'COMPANY_VIEW',
   'DASHBOARD_VIEW',
   'STATUS_CHANGE',
-  'PROD_VIEW', 'PROD_MANAGE', 'BOM_VIEW'
+  'PROD_VIEW', 'PROD_MANAGE', 'BOM_VIEW',
+  'VENDOR_VIEW', 'STOCK_VIEW', 'DESIGN_VIEW'
 );
 
 INSERT IGNORE INTO role_permissions (role_id, permission_id) 

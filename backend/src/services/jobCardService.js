@@ -7,13 +7,15 @@ const listJobCards = async () => {
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
             COALESCE(o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
-            w.workstation_name, u.username as operator_name, soi.status as item_status
+            w.workstation_name, u.username as operator_name, soi.status as item_status,
+            oc.id as outward_challan_id, oc.challan_number as outward_challan_no, oc.dispatch_qty
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
+     LEFT JOIN outward_challans oc ON jc.id = oc.job_card_id
      ORDER BY jc.created_at DESC`
   );
   return rows;
