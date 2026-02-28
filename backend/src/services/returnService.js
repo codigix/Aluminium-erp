@@ -35,7 +35,14 @@ const getReturnById = async (id) => {
   const returnData = rows[0];
 
   const [items] = await pool.query(`
-    SELECT * FROM shipment_return_items WHERE return_id = ?
+    SELECT 
+      ri.*,
+      sb.material_type,
+      COALESCE(sb.material_name, ri.item_code) as item_name
+    FROM shipment_return_items ri
+    LEFT JOIN stock_balance sb ON ri.item_code = sb.item_code
+    WHERE ri.return_id = ?
+    AND (sb.material_type = 'FG' OR ri.item_code LIKE 'FG-%')
   `, [id]);
   
   returnData.items = items;

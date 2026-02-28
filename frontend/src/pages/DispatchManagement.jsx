@@ -583,6 +583,10 @@ const DispatchManagement = ({ apiRequest }) => {
                       <p className="text-[10px] text-slate-400 font-bold uppercase">Driver Contact</p>
                       <p className="text-sm font-bold text-slate-900">{selectedItem.driver_contact || 'N/A'}</p>
                     </div>
+                    <div className="space-y-1 col-span-2">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Driver Email</p>
+                      <p className="text-sm font-bold text-slate-900">{selectedItem.driver_email || 'N/A'}</p>
+                    </div>
                   </div>
                 </div>
               </div>

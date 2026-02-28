@@ -221,17 +221,7 @@ const CustomerPO = ({
                                   </table>
                                 </div>
                                 <div className="mt-3 flex justify-end gap-3">
-                                  {['PENDING', 'Sent '].includes(group.status) && (
-                                    <button
-                                      onClick={() => onSendToDesign(group.quotes.filter(q => q.status !== 'REJECTED'))}
-                                      className="px-4 py-1.5 bg-indigo-600 text-white rounded  text-[0.65rem]  hover:bg-indigo-700 transition-colors   flex items-center gap-2 "
-                                    >
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                      </svg>
-                                      Create Quotation & Send to Design
-                                    </button>
-                                  )}
+                                  {/* Button hidden as requested */}
                                 </div>
                               </td>
                             </tr>

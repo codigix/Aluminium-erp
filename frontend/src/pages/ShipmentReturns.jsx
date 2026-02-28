@@ -343,27 +343,37 @@ const ShipmentReturns = ({ apiRequest }) => {
                       <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
                         <Package className="w-4 h-4" />
                       </div>
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Returned Items</h4>
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Returned Items (FG Only)</h4>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
                       <table className="w-full text-left">
                         <thead className="bg-slate-50">
                           <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                            <th className="px-6 py-4">Item Code</th>
+                            <th className="px-6 py-4">Item Details</th>
                             <th className="px-6 py-4 text-center">Returned Qty</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                          {selectedReturn.items?.map((item, idx) => (
+                          {selectedReturn.items?.filter(item => item.material_type === 'FG').map((item, idx) => (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
                               <td className="px-6 py-4">
-                                <span className="font-bold text-slate-900 text-xs">{item.item_code}</span>
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-slate-900 text-xs">{item.item_name || 'FG Item'}</span>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase">{item.item_code}</span>
+                                </div>
                               </td>
                               <td className="px-6 py-4 text-center font-bold text-slate-700 text-xs">
                                 {parseFloat(item.quantity).toFixed(3)}
                               </td>
                             </tr>
                           ))}
+                          {selectedReturn.items?.filter(item => item.material_type === 'FG').length === 0 && (
+                            <tr>
+                              <td colSpan="2" className="px-6 py-8 text-center text-slate-400 text-xs italic">
+                                No Finished Goods (FG) found in this return.
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>

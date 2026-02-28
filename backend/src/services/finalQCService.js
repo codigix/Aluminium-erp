@@ -32,7 +32,6 @@ const completeFinalQC = async (salesOrderId, inspectionData) => {
 
     // 2. If PASSED, auto-create Shipment Order
     if (status === 'PASSED') {
-      // Check if shipment order already exists for this sales order to avoid duplicates
       const [existingShipment] = await connection.query(
         'SELECT id FROM shipment_orders WHERE sales_order_id = ?',
         [salesOrderId]
@@ -44,9 +43,18 @@ const completeFinalQC = async (salesOrderId, inspectionData) => {
             so.company_id, 
             c.company_name,
             so.target_dispatch_date, 
-            so.production_priority 
+            so.production_priority,
+            ct.email as customer_email,
+            ct.phone as customer_phone,
+            (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = so.company_id AND address_type = 'SHIPPING' LIMIT 1) as shipping_address,
+            (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = so.company_id AND address_type = 'BILLING' LIMIT 1) as billing_address
           FROM sales_orders so
           LEFT JOIN companies c ON so.company_id = c.id
+          LEFT JOIN (
+            SELECT company_id, email, phone,
+                   ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+            FROM contacts
+          ) ct ON ct.company_id = so.company_id AND ct.rn = 1
           WHERE so.id = ?`,
           [salesOrderId]
         );
@@ -58,9 +66,24 @@ const completeFinalQC = async (salesOrderId, inspectionData) => {
         const shipmentCode = `SHP-${year}${month}-SO${String(salesOrderId).padStart(4, '0')}`;
         
         await connection.execute(
-          `INSERT INTO shipment_orders (shipment_code, sales_order_id, customer_id, customer_name, dispatch_target_date, priority, status)
-           VALUES (?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
-          [shipmentCode, salesOrderId, order?.company_id || null, order?.company_name || null, order?.target_dispatch_date || null, order?.production_priority || 'NORMAL']
+          `INSERT INTO shipment_orders (
+            shipment_code, sales_order_id, customer_id, customer_name, 
+            customer_phone, customer_email, shipping_address, billing_address,
+            dispatch_target_date, priority, status
+          )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
+          [
+            shipmentCode, 
+            salesOrderId, 
+            order?.company_id || null, 
+            order?.company_name || null,
+            order?.customer_phone || null,
+            order?.customer_email || null,
+            order?.shipping_address || null,
+            order?.billing_address || null,
+            order?.target_dispatch_date || null, 
+            order?.production_priority || 'NORMAL'
+          ]
         );
       }
     }

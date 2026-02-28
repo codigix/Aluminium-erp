@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 const { postInventoryFromDispatch } = require('./inventoryPostingService');
 const { addStockLedgerEntry } = require('./stockService');
+const emailService = require('../utils/emailService');
+const puppeteer = require('puppeteer');
 
 const getShipmentOrders = async () => {
   const [rows] = await pool.query(`
@@ -21,6 +23,7 @@ const getShipmentOrders = async () => {
       s.vehicle_number,
       s.driver_name,
       s.driver_contact,
+      s.driver_email,
       s.estimated_delivery_date,
       s.packing_status,
       s.customer_name as snapshot_customer_name,
@@ -282,6 +285,33 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
           [challanId, item.item_code || item.drawing_no || 'UNKNOWN', item.description || '', item.quantity, item.unit || 'NOS']
         );
       }
+
+      // 5. Trigger DISPATCHED Email
+      // We do this after commit or here? Better after commit to be safe, but we need connection data.
+      // Let's gather data and send after commit.
+      connection._emailToTrigger = { 
+        status: 'DISPATCHED', 
+        shipment,
+        challan: {
+          challan_number: challanNumber,
+          shipment_code: shipment.shipment_code,
+          dispatch_time: new Date(),
+          customer_name: shipment.customer_name,
+          snapshot_customer_name: shipment.customer_name,
+          snapshot_customer_phone: shipment.customer_phone,
+          snapshot_customer_email: shipment.customer_email,
+          snapshot_shipping_address: shipment.shipping_address,
+          snapshot_billing_address: shipment.billing_address,
+          transporter: shipment.transporter,
+          vehicle_number: shipment.vehicle_number,
+          driver_name: shipment.driver_name,
+          driver_contact: shipment.driver_contact,
+          items: items
+        }
+      };
+
+    } else if (status === 'OUT_FOR_DELIVERY') {
+      connection._emailToTrigger = { status: 'OUT_FOR_DELIVERY', shipment };
     } else if (status === 'DELIVERED') {
        // Logic for auto-creating Delivery Challan could go here
        // For now just update the date
@@ -289,9 +319,46 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
          'UPDATE shipment_orders SET actual_delivery_date = NOW(), updated_at = NOW() WHERE id = ?',
          [shipmentOrderId]
        );
+       connection._emailToTrigger = { status: 'DELIVERED', shipment };
     }
 
     await connection.commit();
+
+    // 6. Async Email Sending (Outside transaction)
+    if (connection._emailToTrigger) {
+      const { status: emailStatus, shipment: sData, challan } = connection._emailToTrigger;
+      
+      (async () => {
+        try {
+          let attachments = [];
+          if (emailStatus === 'DISPATCHED' && challan) {
+            const html = emailService.generateChallanHTML(challan);
+            const browser = await puppeteer.launch({
+              headless: 'new',
+              args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            });
+            const page = await browser.newPage();
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            const pdfBuffer = await page.pdf({ 
+              format: 'A4', 
+              printBackground: true,
+              margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' }
+            });
+            await browser.close();
+            
+            attachments.push({
+              filename: `Delivery_Challan_${challan.challan_number}.pdf`,
+              content: pdfBuffer
+            });
+          }
+
+          await emailService.sendShipmentStatusEmail(sData, emailStatus, attachments);
+        } catch (err) {
+          console.error('[Shipment Service] Post-status email trigger failed:', err);
+        }
+      })();
+    }
+
     return { success: true, status };
   } catch (error) {
     await connection.rollback();
@@ -308,6 +375,7 @@ const updateShipmentPlanning = async (id, planningData) => {
     vehicle_number,
     driver_name,
     driver_contact,
+    driver_email,
     estimated_delivery_date,
     packing_status,
     status,
@@ -325,6 +393,7 @@ const updateShipmentPlanning = async (id, planningData) => {
       vehicle_number = ?,
       driver_name = ?,
       driver_contact = ?,
+      driver_email = ?,
       estimated_delivery_date = ?,
       packing_status = ?,
       status = COALESCE(?, status),
@@ -341,6 +410,7 @@ const updateShipmentPlanning = async (id, planningData) => {
       vehicle_number || null,
       driver_name || null,
       driver_contact || null,
+      driver_email || null,
       estimated_delivery_date || null,
       packing_status || 'PENDING',
       status || null,

@@ -418,7 +418,8 @@ const CustomerDrawing = () => {
   };
 
   const handlePreview = (drawing) => {
-    handleEdit(drawing, 'view');
+    setPreviewDrawing(drawing);
+    setShowPreviewModal(true);
   };
 
   const handleSave = async (e) => {

@@ -46,7 +46,8 @@ const DrawingMaster = () => {
   const [previewDrawing, setPreviewDrawing] = useState(null);
 
   const handlePreview = (drawing) => {
-    handleEdit(drawing, 'view');
+    setPreviewDrawing(drawing);
+    setShowPreviewModal(true);
   };
 
   const fetchDrawings = async (search = '') => {

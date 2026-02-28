@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, StatusBadge, Modal, FormControl } from '../components/ui.jsx';
-import { Package, Search, Truck, Calendar, User, Phone, CheckCircle, Clock, Save, XCircle, Eye, ListTodo, Filter, Download } from 'lucide-react';
+import { Package, Search, Truck, Calendar, User, Phone, Mail as MailIcon, CheckCircle, Clock, Save, XCircle, Eye, ListTodo, Filter, Download } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -24,6 +24,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
     vehicle_number: '',
     driver_name: '',
     driver_contact: '',
+    driver_email: '',
     estimated_delivery_date: '',
     packing_status: 'PENDING',
     special_instructions: '',
@@ -84,6 +85,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
       vehicle_number: shipment.vehicle_number || '',
       driver_name: shipment.driver_name || '',
       driver_contact: shipment.driver_contact || '',
+      driver_email: shipment.driver_email || '',
       estimated_delivery_date: shipment.estimated_delivery_date ? new Date(shipment.estimated_delivery_date).toISOString().split('T')[0] : '',
       packing_status: shipment.packing_status || 'PENDING',
       special_instructions: shipment.special_instructions || '',
@@ -94,7 +96,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
       billing_address: shipment.snapshot_billing_address || ''
     });
 
-    if (!shipment.snapshot_customer_name && shipment.customer_id) {
+    if ((!shipment.snapshot_customer_name || !shipment.snapshot_shipping_address || !shipment.snapshot_customer_phone) && shipment.customer_id) {
       fetchCustomerDetails(shipment.customer_id);
     }
     
@@ -442,6 +444,19 @@ const ShipmentPlanning = ({ apiRequest }) => {
                   className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={planningForm.driver_contact}
                   onChange={(e) => setPlanningForm({...planningForm, driver_contact: e.target.value})}
+                />
+              </div>
+            </FormControl>
+
+            <FormControl label="Driver Email">
+              <div className="relative">
+                <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="email"
+                  placeholder="Enter driver email"
+                  className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={planningForm.driver_email}
+                  onChange={(e) => setPlanningForm({...planningForm, driver_email: e.target.value})}
                 />
               </div>
             </FormControl>
