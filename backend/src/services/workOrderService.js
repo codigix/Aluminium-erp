@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const bomService = require('./bomService');
+const jobCardService = require('./jobCardService');
 
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
@@ -207,7 +208,14 @@ const getWorkOrderById = async (id) => {
      WHERE wo.id = ?`,
     [id]
   );
-  return rows[0];
+  
+  if (rows.length > 0) {
+    const workOrder = rows[0];
+    workOrder.productionHistory = await jobCardService.getProductionHistoryByWorkOrderId(id);
+    return workOrder;
+  }
+  
+  return null;
 };
 
 const generateJobCardNo = async (connection) => {

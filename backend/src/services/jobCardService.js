@@ -434,6 +434,26 @@ const getDowntimeLogs = async (jobCardId) => {
   return rows;
 };
 
+const getProductionHistoryByWorkOrderId = async (workOrderId) => {
+  const [rows] = await pool.query(
+    `SELECT 
+      tl.log_date as date,
+      tl.shift,
+      u.username as operator,
+      tl.produced_qty as produced,
+      (SELECT SUM(TIMESTAMPDIFF(MINUTE, start_time, end_time)) 
+       FROM job_card_downtime_logs 
+       WHERE job_card_id = tl.job_card_id AND downtime_date = tl.log_date AND shift = tl.shift) as downtime
+     FROM job_card_time_logs tl
+     JOIN job_cards jc ON tl.job_card_id = jc.id
+     LEFT JOIN users u ON tl.operator_id = u.id
+     WHERE jc.work_order_id = ?
+     ORDER BY tl.log_date DESC, tl.shift DESC`,
+    [workOrderId]
+  );
+  return rows;
+};
+
 const addDowntimeLog = async (data) => {
   const { jobCardId, day, downtimeDate, shift, downtimeType, startTime, endTime, remarks } = data;
   const connection = await pool.getConnection();
@@ -577,6 +597,7 @@ module.exports = {
   updateTimeLog,
   deleteTimeLog,
   getQualityLogs,
+  getProductionHistoryByWorkOrderId,
   addQualityLog,
   updateQualityLog,
   deleteQualityLog,
