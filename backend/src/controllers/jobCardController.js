@@ -69,10 +69,28 @@ const addTimeLog = async (req, res) => {
   }
 };
 
+const updateTimeLog = async (req, res) => {
+  try {
+    await jobCardService.updateTimeLog(req.params.logId, { ...req.body, jobCardId: req.params.id });
+    res.json({ message: 'Time log updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const addQualityLog = async (req, res) => {
   try {
     const id = await jobCardService.addQualityLog({ ...req.body, jobCardId: req.params.id });
     res.status(201).json({ id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const updateQualityLog = async (req, res) => {
+  try {
+    await jobCardService.updateQualityLog(req.params.logId, { ...req.body, jobCardId: req.params.id });
+    res.json({ message: 'Quality log updated' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -87,6 +105,33 @@ const addDowntimeLog = async (req, res) => {
   }
 };
 
+const deleteTimeLog = async (req, res) => {
+  try {
+    await jobCardService.deleteTimeLog(req.params.logId);
+    res.json({ message: 'Time log deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const deleteQualityLog = async (req, res) => {
+  try {
+    await jobCardService.deleteQualityLog(req.params.logId);
+    res.json({ message: 'Quality log deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const deleteDowntimeLog = async (req, res) => {
+  try {
+    await jobCardService.deleteDowntimeLog(req.params.logId);
+    res.json({ message: 'Downtime log deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -95,6 +140,11 @@ module.exports = {
   deleteJobCard,
   getJobCardLogs,
   addTimeLog,
+  updateTimeLog,
+  deleteTimeLog,
   addQualityLog,
-  addDowntimeLog
+  updateQualityLog,
+  deleteQualityLog,
+  addDowntimeLog,
+  deleteDowntimeLog
 };

@@ -5,8 +5,9 @@ import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   ClipboardList, Activity, CheckCircle, TrendingUp, 
   Play, Check, Edit2, Trash2, Search, Filter, Plus, X,
-  Clock, Package, User, Monitor, AlertCircle, ChevronDown, ChevronRight,
-  DollarSign, Zap, Eye, Truck
+  Clock, Package, User, Monitor, AlertCircle, ChevronDown, ChevronRight, ChevronLeft,
+  DollarSign, Zap, Eye, Truck, Box, Target, Layers, ArrowRight, FileText, History,
+  AlertTriangle, Download, BarChart2, ShieldCheck, Info, Save
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -26,6 +27,7 @@ const JobCard = () => {
   const [vendors, setVendors] = useState([]);
   const [items, setItems] = useState([]);
   const [drawings, setDrawings] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [previewDrawing, setPreviewDrawing] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedWOs, setExpandedWOs] = useState(new Set());
@@ -62,6 +64,15 @@ const JobCard = () => {
     remarks: ''
   });
 
+  const formatLocalTime = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return isoString;
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
   const calculateEfficiency = (jc) => {
     if (!jc || !jc.start_time || jc.status === 'PENDING') return 0;
     const startTime = new Date(jc.start_time);
@@ -86,12 +97,28 @@ const JobCard = () => {
     fetchVendors();
     fetchItems();
     fetchDrawings();
+    fetchWarehouses();
 
     const filterWO = searchParams.get('filter_work_order');
     if (filterWO) {
       setSearchQuery(filterWO);
     }
   }, []);
+
+  const fetchWarehouses = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/warehouses`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setWarehouses(data);
+      }
+    } catch (error) {
+      console.error('Error fetching warehouses:', error);
+    }
+  };
 
   const fetchJobCards = async () => {
     try {
@@ -362,6 +389,7 @@ const JobCard = () => {
   }, [jobCards]);
 
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [showProductionEntry, setShowProductionEntry] = useState(false);
   const [selectedJC, setSelectedJC] = useState(null);
 
   useEffect(() => {
@@ -402,9 +430,12 @@ const JobCard = () => {
     operatorId: '',
     workstationId: '',
     shift: 'SHIFT_A',
-    startTime: '',
-    endTime: '',
-    producedQty: 0
+    startTime: '08:00',
+    startAMPM: 'AM',
+    endTime: '08:00',
+    endAMPM: 'PM',
+    producedQty: 0,
+    day: 1
   });
 
   const [qualityLogForm, setQualityLogForm] = useState({
@@ -416,17 +447,129 @@ const JobCard = () => {
     scrapQty: 0,
     rejectionReason: '',
     notes: '',
-    status: 'PENDING'
+    status: 'PENDING',
+    day: 1
   });
+
+  const calculateISODuration = (startISO, endISO) => {
+    if (!startISO || !endISO) return 0;
+    const start = new Date(startISO);
+    const end = new Date(endISO);
+    let diff = Math.round((end - start) / (1000 * 60));
+    if (diff <= 0) diff += 24 * 60; 
+    return diff;
+  };
+
+  const calculateTotalMins = (start, startAMPM, end, endAMPM) => {
+    try {
+      if (!start || !end) return 0;
+      
+      const parseTime = (timeStr, ampm) => {
+        let [hours, minutes] = timeStr.split(':').map(Number);
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+        return hours * 60 + minutes;
+      };
+
+      const startMins = parseTime(start, startAMPM);
+      const endMins = parseTime(end, endAMPM);
+      
+      let diff = endMins - startMins;
+      if (diff <= 0) diff += 24 * 60; // Handle overnight shift or same time
+      return diff;
+    } catch (e) {
+      return 0;
+    }
+  };
 
   const [downtimeLogForm, setDowntimeLogForm] = useState({
     downtimeDate: new Date().toISOString().slice(0, 10),
     shift: 'SHIFT_A',
     downtimeType: '',
-    startTime: '',
-    endTime: '',
-    remarks: ''
+    startTime: '08:00',
+    startAMPM: 'AM',
+    endTime: '08:00',
+    endAMPM: 'PM',
+    remarks: '',
+    day: 1
   });
+
+  const [viewingTimeLog, setViewingTimeLog] = useState(null);
+  const [editingTimeLogId, setEditingTimeLogId] = useState(null);
+  const [editTimeLogForm, setEditTimeLogForm] = useState({
+    day: 1,
+    logDate: '',
+    shift: '',
+    operatorId: '',
+    startTime: '',
+    startAMPM: 'AM',
+    endTime: '',
+    endAMPM: 'PM',
+    producedQty: 0
+  });
+
+  const [nextStageForm, setNextStageForm] = useState({
+    nextOperationId: '',
+    assignOperatorId: '',
+    targetWarehouseId: '',
+    executionMode: 'In-house'
+  });
+  const [viewingQualityLog, setViewingQualityLog] = useState(null);
+  const [editingQualityLogId, setEditingQualityLogId] = useState(null);
+  const [editQualityLogForm, setEditQualityLogForm] = useState({
+    day: 1,
+    checkDate: '',
+    shift: '',
+    inspectedQty: 0,
+    acceptedQty: 0,
+    rejectedQty: 0,
+    scrapQty: 0,
+    rejectionReason: '',
+    notes: '',
+    status: 'PENDING'
+  });
+
+  const handleDayChange = (type, val) => {
+    if (!selectedJC) return;
+    const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || new Date();
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    const newDate = new Date(startDate);
+    newDate.setDate(startDate.getDate() + (parseInt(val) - 1));
+    const formattedDate = newDate.toISOString().slice(0, 10);
+
+    if (type === 'time') {
+      setTimeLogForm(prev => ({ ...prev, day: val, logDate: formattedDate }));
+    } else if (type === 'quality') {
+      setQualityLogForm(prev => ({ ...prev, day: val, checkDate: formattedDate }));
+    } else if (type === 'downtime') {
+      setDowntimeLogForm(prev => ({ ...prev, day: val, downtimeDate: formattedDate }));
+    }
+  };
+
+  const handleDateChange = (type, val) => {
+    if (!selectedJC) return;
+    
+    let diffDays = 1;
+    if (selectedJC.actual_start_date) {
+      const startDate = new Date(selectedJC.actual_start_date);
+      startDate.setHours(0, 0, 0, 0);
+      const logDate = new Date(val);
+      logDate.setHours(0, 0, 0, 0);
+      diffDays = Math.floor((logDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    } else {
+      // If no actual start date yet, this is Day 1
+      diffDays = 1;
+    }
+
+    if (type === 'time') {
+      setTimeLogForm(prev => ({ ...prev, logDate: val, day: diffDays }));
+    } else if (type === 'quality') {
+      setQualityLogForm(prev => ({ ...prev, checkDate: val, day: diffDays }));
+    } else if (type === 'downtime') {
+      setDowntimeLogForm(prev => ({ ...prev, downtimeDate: val, day: diffDays }));
+    }
+  };
 
   const handleLogProgress = async (jc) => {
     setSelectedJC(jc);
@@ -440,16 +583,1189 @@ const JobCard = () => {
     });
     
     // Pre-fill forms
+    const today = new Date().toISOString().split('T')[0];
+    let diffDays = 1;
+    if (jc.actual_start_date) {
+      const startDate = new Date(jc.actual_start_date);
+      startDate.setHours(0, 0, 0, 0);
+      const logDate = new Date(today);
+      logDate.setHours(0, 0, 0, 0);
+      diffDays = Math.floor((logDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    } else {
+      diffDays = 1;
+    }
+
     setTimeLogForm(prev => ({ 
       ...prev, 
+      logDate: today,
+      day: diffDays,
       operatorId: jc.assigned_to || '', 
       workstationId: jc.workstation_id || '',
-      producedQty: 0
+      producedQty: 0,
+      startTime: '08:00',
+      startAMPM: 'AM',
+      endTime: '08:00',
+      endAMPM: 'PM'
     }));
-    setQualityLogForm(prev => ({ ...prev, inspectedQty: 0, acceptedQty: 0, rejectedQty: 0, scrapQty: 0 }));
-    setDowntimeLogForm(prev => ({ ...prev, downtimeType: '', remarks: '' }));
+    setQualityLogForm(prev => ({ ...prev, checkDate: today, day: diffDays, shift: 'SHIFT_A', inspectedQty: 0, acceptedQty: 0, rejectedQty: 0, scrapQty: 0 }));
+    setDowntimeLogForm(prev => ({ ...prev, downtimeDate: today, day: diffDays, shift: 'SHIFT_A', startTime: '08:00', startAMPM: 'AM', endTime: '08:00', endAMPM: 'PM', downtimeType: '', remarks: '' }));
     
-    setIsProgressModalOpen(true);
+    setShowProductionEntry(true);
+  };
+
+  const handleEditTimeLog = (log) => {
+    const start24 = formatLocalTime(log.start_time);
+    const end24 = formatLocalTime(log.end_time);
+    
+    const to12h = (time24) => {
+      if (!time24) return { time: '08:00', ampm: 'AM' };
+      let [h, m] = time24.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      return { time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`, ampm };
+    };
+
+    const start = to12h(start24);
+    const end = to12h(end24);
+
+    const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || new Date();
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    const logDate = new Date(log.log_date);
+    logDate.setHours(0, 0, 0, 0);
+    const diffDays = Math.floor((logDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+    setEditingTimeLogId(log.id);
+    setEditTimeLogForm({
+      day: diffDays,
+      logDate: log.log_date.slice(0, 10),
+      shift: log.shift,
+      operatorId: log.operator_id,
+      startTime: start.time,
+      startAMPM: start.ampm,
+      endTime: end.time,
+      endAMPM: end.ampm,
+      producedQty: log.produced_qty
+    });
+  };
+
+  const handleEditQualityLog = (log) => {
+    const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || new Date();
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    const checkDate = new Date(log.check_date);
+    checkDate.setHours(0, 0, 0, 0);
+    const diffDays = Math.floor((checkDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+    setEditingQualityLogId(log.id);
+    setEditQualityLogForm({
+      day: diffDays,
+      checkDate: log.check_date.slice(0, 10),
+      shift: log.shift,
+      inspectedQty: log.inspected_qty,
+      acceptedQty: log.accepted_qty,
+      rejectedQty: log.rejected_qty,
+      scrapQty: log.scrap_qty,
+      rejectionReason: log.rejection_reason || '',
+      notes: log.notes || '',
+      status: log.status
+    });
+  };
+
+  const renderProductionEntry = () => {
+    if (!selectedJC) return null;
+    
+    const balanceWip = parseFloat(selectedJC.planned_qty || 0) - parseFloat(selectedJC.accepted_qty || 0);
+
+    return (
+      <div className="space-y-8 pb-12">
+        {/* New Header UI */}
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-slate-900">Production Entry</h1>
+              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-bold uppercase tracking-wider border border-amber-100">
+                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+                {selectedJC.status || 'In-Progress'}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-xs font-medium text-slate-500">{selectedJC.job_card_no}</span>
+              <span className="text-slate-300">•</span>
+              <span className="text-xs font-medium text-slate-500">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowProductionEntry(false)}
+            className="flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:text-slate-900 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span className="text-xs font-bold uppercase tracking-widest">Back</span>
+          </button>
+        </div>
+
+        {/* Target Item Summary */}
+        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100">
+                <Box className="w-6 h-6 text-slate-400" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Target Item</p>
+                <h3 className="text-sm font-bold text-slate-900">{selectedJC.item_name}</h3>
+                <p className="text-[11px] font-medium text-slate-500 mt-0.5">{selectedJC.drawing_no || 'S-BASEFRAMEASSEMBLY'}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-10">
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Planned</p>
+                <p className="text-sm font-bold text-slate-900">
+                  {selectedJC.planned_qty} <span className="text-[10px] font-medium text-slate-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Produced</p>
+                <p className="text-sm font-bold text-slate-900">
+                  {selectedJC.produced_qty || 0} <span className="text-[10px] font-medium text-slate-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Accepted</p>
+                <p className="text-sm font-bold text-emerald-600">
+                  {selectedJC.accepted_qty || 0} <span className="text-[10px] font-medium text-emerald-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 text-indigo-400">Transferred</p>
+                <p className="text-sm font-bold text-indigo-600">
+                  {selectedJC.transferred_qty || 0} <span className="text-[10px] font-medium text-indigo-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1.5">Balance WIP</p>
+                <p className="text-sm font-bold text-amber-600">
+                  {balanceWip.toFixed(2)} <span className="text-[10px] font-medium text-amber-400">Units</span>
+                </p>
+              </div>
+              <div className="text-right border-l border-slate-100 pl-8">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Current Op</p>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
+                  <p className="text-sm font-bold text-indigo-600">{selectedJC.operation_name}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Efficiency, Quality Yield, Productivity Row */}
+        <div className="grid grid-cols-3 gap-6">
+          <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
+            <div className="w-10 h-10 bg-rose-50 rounded-lg flex items-center justify-center text-rose-500">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-bold text-slate-900">{calculateEfficiency(selectedJC)}%</span>
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">0 / 0 MIN</span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Efficiency</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
+            <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center text-amber-500">
+              <Target className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-bold text-slate-900">
+                  {selectedJC.planned_qty > 0 ? Math.round(((selectedJC.accepted_qty || 0) / selectedJC.planned_qty) * 100) : 0}%
+                </span>
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Acceptance Rate</span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Quality Yield</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-500">
+              <BarChart2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-bold text-slate-900">0</span>
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Units Per Hour</span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Productivity</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Sections */}
+        <div className="space-y-12 mt-12">
+          {/* 1. Add Time Log Section */}
+          <section className="space-y-6">
+            <div className="flex items-center gap-3 px-1">
+              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                <Plus className="w-4 h-4" />
+              </div>
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Add Time Log</h2>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+                  <FormControl label="Day & Date" required>
+                    <div className="flex items-center gap-1">
+                      <input 
+                        type="number" 
+                        value={timeLogForm.day} 
+                        onChange={e => setTimeLogForm({...timeLogForm, day: e.target.value})} 
+                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 font-bold" 
+                      />
+                      <input 
+                        type="date" 
+                        value={timeLogForm.logDate} 
+                        onChange={e => handleDateChange('time', e.target.value)} 
+                        className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" 
+                      />
+                    </div>
+                  </FormControl>
+                  <FormControl label="Operator" required>
+                    <SearchableSelect
+                      options={users.map(u => ({ value: u.id, label: u.username }))}
+                      value={timeLogForm.operatorId}
+                      onChange={(e) => setTimeLogForm({ ...timeLogForm, operatorId: e.target.value })}
+                      placeholder="Select Operator..."
+                    />
+                  </FormControl>
+                  <FormControl label="Workstation" required>
+                    <SearchableSelect
+                      options={workstations.map(w => ({ value: w.id, label: w.workstation_name }))}
+                      value={timeLogForm.workstationId}
+                      onChange={(e) => setTimeLogForm({ ...timeLogForm, workstationId: e.target.value })}
+                      placeholder="Select Machine..."
+                    />
+                  </FormControl>
+                  <FormControl label="Shift" required>
+                    <div className="flex items-center gap-1">
+                      <select value={timeLogForm.shift} onChange={e => setTimeLogForm({...timeLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
+                        <option value="SHIFT_A">A</option>
+                        <option value="SHIFT_B">B</option>
+                        <option value="SHIFT_C">C</option>
+                      </select>
+                      <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </FormControl>
+                  <FormControl label="Produce Qty" required>
+                    <div className="relative">
+                      <input type="number" value={timeLogForm.producedQty} onChange={e => setTimeLogForm({...timeLogForm, producedQty: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">Units</span>
+                    </div>
+                  </FormControl>
+                </div>
+
+                <div className="flex items-end gap-6">
+                  <div className="flex-1 grid grid-cols-2 gap-4">
+                    <FormControl label="Production Period" required>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded px-3 py-2 focus-within:border-indigo-500">
+                          <input 
+                            type="time" 
+                            value={timeLogForm.startTime} 
+                            onChange={e => setTimeLogForm({...timeLogForm, startTime: e.target.value})} 
+                            className="flex-1 text-xs outline-none" 
+                          />
+                          <select 
+                            value={timeLogForm.startAMPM} 
+                            onChange={e => setTimeLogForm({...timeLogForm, startAMPM: e.target.value})}
+                            className="text-[10px] font-bold text-slate-400 outline-none ml-1 bg-transparent cursor-pointer"
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
+                        <ChevronRight className="w-3 h-3 text-slate-300" />
+                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded px-3 py-2 focus-within:border-indigo-500">
+                          <input 
+                            type="time" 
+                            value={timeLogForm.endTime} 
+                            onChange={e => setTimeLogForm({...timeLogForm, endTime: e.target.value})} 
+                            className="flex-1 text-xs outline-none" 
+                          />
+                          <select 
+                            value={timeLogForm.endAMPM} 
+                            onChange={e => setTimeLogForm({...timeLogForm, endAMPM: e.target.value})}
+                            className="text-[10px] font-bold text-slate-400 outline-none ml-1 bg-transparent cursor-pointer"
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
+                      </div>
+                    </FormControl>
+                    <FormControl label="Total Mins" required>
+                      <input 
+                        type="number" 
+                        value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM)} 
+                        readOnly 
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none font-bold text-slate-600" 
+                      />
+                    </FormControl>
+                  </div>
+                  <button 
+                    onClick={() => addTimeLog(timeLogForm)}
+                    className="px-10 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
+                  >
+                    <Monitor className="w-4 h-4" />
+                    Record Time
+                  </button>
+                </div>
+
+                <div className="mt-12 overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="border-b border-slate-100">
+                      <tr>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Day</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date / Shift</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Operator</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Time Interval</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Produced Qty</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {logs.timeLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
+                        </tr>
+                      ) : (
+                        logs.timeLogs.map((log, index) => {
+                          const isEditing = editingTimeLogId === log.id;
+                          const day = log.day || '-';
+
+                          if (isEditing) {
+                            return (
+                              <tr key={log.id} className="bg-indigo-50/30">
+                                <td className="px-4 py-3">
+                                  <input 
+                                    type="number" 
+                                    value={editTimeLogForm.day} 
+                                    className="w-12 px-1 py-1 border rounded text-[10px]" 
+                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, day: e.target.value})}
+                                  />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <input 
+                                    type="date" 
+                                    value={editTimeLogForm.logDate} 
+                                    className="block w-full px-1 py-1 border rounded text-[10px] mb-1" 
+                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, logDate: e.target.value})}
+                                  />
+                                  <select 
+                                    value={editTimeLogForm.shift} 
+                                    className="w-full px-1 py-1 border rounded text-[10px]"
+                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, shift: e.target.value})}
+                                  >
+                                    <option value="SHIFT_A">A</option>
+                                    <option value="SHIFT_B">B</option>
+                                  </select>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <select 
+                                    value={editTimeLogForm.operatorId} 
+                                    className="w-full px-1 py-1 border rounded text-[10px]"
+                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, operatorId: e.target.value})}
+                                  >
+                                    {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                                  </select>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-1 justify-center">
+                                    <input type="time" value={editTimeLogForm.startTime} className="w-16 px-1 py-1 border rounded text-[10px]" onChange={e => setEditTimeLogForm({...editTimeLogForm, startTime: e.target.value})} />
+                                    <select value={editTimeLogForm.startAMPM} className="px-1 py-1 border rounded text-[10px]" onChange={e => setEditTimeLogForm({...editTimeLogForm, startAMPM: e.target.value})}>
+                                      <option value="AM">AM</option><option value="PM">PM</option>
+                                    </select>
+                                    <ChevronRight className="w-3 h-3 text-slate-300" />
+                                    <input type="time" value={editTimeLogForm.endTime} className="w-16 px-1 py-1 border rounded text-[10px]" onChange={e => setEditTimeLogForm({...editTimeLogForm, endTime: e.target.value})} />
+                                    <select value={editTimeLogForm.endAMPM} className="px-1 py-1 border rounded text-[10px]" onChange={e => setEditTimeLogForm({...editTimeLogForm, endAMPM: e.target.value})}>
+                                      <option value="AM">AM</option><option value="PM">PM</option>
+                                    </select>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <input 
+                                    type="number" 
+                                    value={editTimeLogForm.producedQty} 
+                                    className="w-full px-1 py-1 border rounded text-[10px] text-right font-bold" 
+                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, producedQty: e.target.value})}
+                                  />
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => updateTimeLog(log.id, editTimeLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Save className="w-4 h-4" /></button>
+                                    <button onClick={() => setEditingTimeLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-colors"><X className="w-4 h-4" /></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return (
+                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-3">
+                                <span className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                  {day}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="font-bold text-slate-700">{new Date(log.log_date).toLocaleDateString('en-GB')}</div>
+                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{log.shift}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center text-[10px] font-bold text-slate-600">
+                                    {log.operator_name?.[0]}
+                                  </div>
+                                  <span className="font-medium text-slate-600">{log.operator_name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="font-medium text-slate-600">{formatLocalTime(log.start_time)} - {formatLocalTime(log.end_time)}</div>
+                                <div className="text-[10px] text-indigo-500 font-bold">{calculateISODuration(log.start_time, log.end_time)} mins</div>
+                              </td>
+                              <td className="px-4 py-3 text-right font-bold text-indigo-600 uppercase tracking-wider">
+                                {parseFloat(log.produced_qty).toFixed(3)} UNITS
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button onClick={() => setViewingTimeLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"><Eye className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleEditTimeLog(log)} className="p-1.5 text-slate-400 hover:text-amber-600 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => deleteTimeLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <span>Rows per page:</span>
+                    <select className="bg-transparent outline-none cursor-pointer">
+                      <option>10</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Page 1 of {Math.ceil(logs.timeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.timeLogs.length} total)</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
+                      <button className="px-4 py-1 border border-slate-200 rounded text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-colors">Next</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 2. Quality & Rejection Entry Section */}
+          <section className="space-y-6">
+            <div className="flex items-center gap-3 px-1">
+              <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Quality & Rejection Entry</h2>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-7 gap-4 mb-6 border-b border-slate-50 pb-6">
+                  <FormControl label="Day & Date" required>
+                    <div className="flex items-center gap-1">
+                      <input 
+                        type="number" 
+                        value={qualityLogForm.day} 
+                        onChange={e => setQualityLogForm({...qualityLogForm, day: e.target.value})} 
+                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 font-bold" 
+                      />
+                      <input 
+                        type="date" 
+                        value={qualityLogForm.checkDate} 
+                        onChange={e => handleDateChange('quality', e.target.value)} 
+                        className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500" 
+                      />
+                    </div>
+                  </FormControl>
+                  <FormControl label="Shift" required>
+                    <div className="flex items-center gap-1">
+                      <select value={qualityLogForm.shift} onChange={e => setQualityLogForm({...qualityLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 appearance-none">
+                        <option value="SHIFT_A">A</option>
+                      </select>
+                      <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </FormControl>
+                  <FormControl label="Produce Qty" required>
+                    <input type="number" value={qualityLogForm.inspectedQty} onChange={e => setQualityLogForm({...qualityLogForm, inspectedQty: e.target.value})} className="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded text-xs outline-none font-bold text-indigo-600" />
+                  </FormControl>
+                  <FormControl label="Rejection Reason">
+                    <select value={qualityLogForm.rejectionReason} onChange={e => setQualityLogForm({...qualityLogForm, rejectionReason: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500">
+                      <option value="">Select Reason</option>
+                      <option value="Size/Dimension Error">Size/Dimension Error</option>
+                      <option value="Surface Finish Poor">Surface Finish Poor</option>
+                      <option value="Material Defect">Material Defect</option>
+                      <option value="Machining Error">Machining Error</option>
+                      <option value="Assembly Issue">Assembly Issue</option>
+                      <option value="Quality Check Failed">Quality Check Failed</option>
+                      <option value="Damage in Handling">Damage in Handling</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </FormControl>
+                  <FormControl label="Accepted" required>
+                    <input type="number" value={qualityLogForm.acceptedQty} onChange={e => setQualityLogForm({...qualityLogForm, acceptedQty: e.target.value})} className="w-full px-3 py-2 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-600 outline-none font-bold" />
+                  </FormControl>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                      Rejected <span className="text-slate-300 font-normal capitalize">(Scrap)</span> <span className="text-rose-400 font-bold">*</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input type="number" value={qualityLogForm.rejectedQty} onChange={e => setQualityLogForm({...qualityLogForm, rejectedQty: e.target.value})} className="flex-1 px-3 py-2 bg-rose-50 border border-rose-100 rounded text-xs text-rose-600 outline-none font-bold" />
+                      <input type="number" readOnly value={qualityLogForm.scrapQty} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none font-bold text-slate-400" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-6 pt-2">
+                  <div className="flex-1">
+                    <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                      <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-amber-800 tracking-tight">Quality Gate Active</p>
+                        <p className="text-[10px] text-amber-700 leading-relaxed mt-0.5">
+                          Only <span className="font-bold uppercase tracking-widest text-[9px] px-1 bg-amber-100 rounded-sm">Approved</span> quality inspection records contribute to the <span className="font-bold">Accepted Quantity</span> of this job card. Pending records will block the progression to subsequent operations.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => addQualityLog({...qualityLogForm, status: 'PENDING'})}
+                    className="px-10 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-100 flex items-center gap-2 h-[38px]"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Entry
+                  </button>
+                </div>
+
+                <div className="mt-12 overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="border-b border-slate-100">
+                      <tr>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Day</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date / Shift</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Status</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Notes</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Accepted</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Rejected</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Scrap</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {logs.qualityLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
+                        </tr>
+                      ) : (
+                        logs.qualityLogs.map((log, index) => {
+                          const isEditing = editingQualityLogId === log.id;
+                          const day = log.day || '-';
+
+                          if (isEditing) {
+                            return (
+                              <tr key={log.id} className="bg-emerald-50/30">
+                                <td className="px-4 py-3">
+                                  <input 
+                                    type="number" 
+                                    value={editQualityLogForm.day} 
+                                    className="w-12 px-1 py-1 border rounded text-[10px]" 
+                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, day: e.target.value})}
+                                  />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <input 
+                                    type="date" 
+                                    value={editQualityLogForm.checkDate} 
+                                    className="block w-full px-1 py-1 border rounded text-[10px] mb-1" 
+                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, checkDate: e.target.value})}
+                                  />
+                                  <select 
+                                    value={editQualityLogForm.shift} 
+                                    className="w-full px-1 py-1 border rounded text-[10px]"
+                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, shift: e.target.value})}
+                                  >
+                                    <option value="SHIFT_A">A</option>
+                                    <option value="SHIFT_B">B</option>
+                                  </select>
+                                </td>
+                                <td className="px-4 py-3" colSpan="2">
+                                  <input 
+                                    type="text" 
+                                    placeholder="Notes..."
+                                    value={editQualityLogForm.notes || ''} 
+                                    className="w-full px-1 py-1 border rounded text-[10px]" 
+                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, notes: e.target.value})}
+                                  />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <input 
+                                    type="number" 
+                                    value={editQualityLogForm.acceptedQty} 
+                                    className="w-full px-1 py-1 border rounded text-[10px] text-emerald-600 font-bold text-center" 
+                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, acceptedQty: e.target.value})}
+                                  />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <input 
+                                    type="number" 
+                                    value={editQualityLogForm.rejectedQty} 
+                                    className="w-full px-1 py-1 border rounded text-[10px] text-rose-600 font-bold text-center" 
+                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, rejectedQty: e.target.value})}
+                                  />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <input 
+                                    type="number" 
+                                    value={editQualityLogForm.scrapQty} 
+                                    className="w-full px-1 py-1 border rounded text-[10px] text-slate-600 font-bold text-center" 
+                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, scrapQty: e.target.value})}
+                                  />
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => updateQualityLog(log.id, editQualityLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Save className="w-4 h-4" /></button>
+                                    <button onClick={() => setEditingQualityLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-colors"><X className="w-4 h-4" /></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return (
+                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-3">
+                                <span className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                  {day}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="font-bold text-slate-700">{new Date(log.check_date).toLocaleDateString('en-GB')}</div>
+                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{log.shift}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                  log.status?.trim() === 'APPROVED' 
+                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                                    : 'bg-amber-50 text-amber-600 border-amber-100'
+                                }`}>
+                                  <Clock className="w-2.5 h-2.5 mr-1" />
+                                  {log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Pending Approval'}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold border ${
+                                  (log.rejected_qty > 0 || log.scrap_qty > 0)
+                                    ? 'bg-rose-50 text-rose-600 border-rose-100'
+                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                }`}>
+                                  <span className="mr-1 opacity-60">
+                                    {(log.rejected_qty > 0 || log.scrap_qty > 0) ? 'Rejected' : 'Passed'}
+                                  </span> 
+                                  {log.rejection_reason || log.notes || 'No notes'}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center font-bold text-emerald-600">
+                                {parseFloat(log.accepted_qty).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-center font-bold text-rose-600">
+                                {parseFloat(log.rejected_qty).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-center font-bold text-slate-600">
+                                {parseFloat(log.scrap_qty).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button onClick={() => setViewingQualityLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleEditQualityLog(log)} className="p-1.5 text-slate-400 hover:text-amber-600 transition-colors" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
+                                  <button 
+                                    onClick={() => updateQualityLog(log.id, { status: 'APPROVED' })} 
+                                    disabled={log.status?.trim() === 'APPROVED'}
+                                    className={`p-1.5 rounded transition-colors ${
+                                      log.status?.trim() === 'APPROVED' ? 'text-emerald-500 cursor-default' : 'text-slate-400 hover:text-emerald-600'
+                                    }`}
+                                    title={log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Verify'}
+                                  >
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => deleteQualityLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <span>Rows per page:</span>
+                    <select className="bg-transparent outline-none cursor-pointer">
+                      <option>10</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Page 1 of {Math.ceil(logs.qualityLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.qualityLogs.length} total)</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
+                      <button className="px-4 py-1 border border-slate-200 rounded text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-colors">Next</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 3. Operational Downtime Section */}
+          <section className="space-y-6">
+            <div className="flex items-center gap-3 px-1">
+              <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Operational Downtime</h2>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6 border-b border-slate-50 pb-6">
+                  <FormControl label="Day & Date" required>
+                    <div className="flex items-center gap-1">
+                      <input 
+                        type="number" 
+                        value={downtimeLogForm.day} 
+                        onChange={e => setDowntimeLogForm({...downtimeLogForm, day: e.target.value})} 
+                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 font-bold" 
+                      />
+                      <input 
+                        type="date" 
+                        value={downtimeLogForm.downtimeDate} 
+                        onChange={e => handleDateChange('downtime', e.target.value)} 
+                        className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500" 
+                      />
+                    </div>
+                  </FormControl>
+                  <FormControl label="Shift" required>
+                    <div className="flex items-center gap-1">
+                      <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({...downtimeLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
+                        <option value="SHIFT_A">A</option>
+                      </select>
+                      <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </FormControl>
+                  <FormControl label="Downtime Type" required>
+                    <select value={downtimeLogForm.downtimeType} onChange={e => setDowntimeLogForm({...downtimeLogForm, downtimeType: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500">
+                      <option value="">Select Type</option>
+                      <option value="Planned Downtime">Planned Downtime</option>
+                      <option value="Unplanned Downtime">Unplanned Downtime</option>
+                      <option value="Breakdown">Breakdown</option>
+                    </select>
+                  </FormControl>
+                  <FormControl label="Start Time" required>
+                    <div className="flex items-center bg-white border border-slate-200 rounded px-3 py-2 focus-within:border-amber-500">
+                      <input 
+                        type="time" 
+                        value={downtimeLogForm.startTime} 
+                        onChange={e => setDowntimeLogForm({...downtimeLogForm, startTime: e.target.value})} 
+                        className="flex-1 text-xs outline-none" 
+                      />
+                      <select 
+                        value={downtimeLogForm.startAMPM} 
+                        onChange={e => setDowntimeLogForm({...downtimeLogForm, startAMPM: e.target.value})}
+                        className="text-[10px] font-bold text-amber-600 outline-none ml-1 bg-transparent cursor-pointer"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  </FormControl>
+                  <FormControl label="End Time" required>
+                    <div className="flex items-center bg-white border border-slate-200 rounded px-3 py-2 focus-within:border-amber-500">
+                      <input 
+                        type="time" 
+                        value={downtimeLogForm.endTime} 
+                        onChange={e => setDowntimeLogForm({...downtimeLogForm, endTime: e.target.value})} 
+                        className="flex-1 text-xs outline-none" 
+                      />
+                      <select 
+                        value={downtimeLogForm.endAMPM} 
+                        onChange={e => setDowntimeLogForm({...downtimeLogForm, endAMPM: e.target.value})}
+                        className="text-[10px] font-bold text-amber-600 outline-none ml-1 bg-transparent cursor-pointer"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  </FormControl>
+                  <FormControl label="Total Mins">
+                    <input 
+                      type="number" 
+                      readOnly 
+                      value={calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM)} 
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none font-bold text-slate-400" 
+                    />
+                  </FormControl>
+                </div>
+                
+                <div className="flex justify-end">
+                  <button 
+                    onClick={() => addDowntimeLog(downtimeLogForm)}
+                    className="px-10 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 h-[38px]"
+                  >
+                    <Clock className="w-4 h-4" />
+                    Record Downtime
+                  </button>
+                </div>
+
+                <div className="mt-12 overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="border-b border-slate-100">
+                      <tr>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Day</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date / Shift</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Category / Reason</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Interval</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Duration</th>
+                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {logs.downtimeLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
+                        </tr>
+                      ) : (
+                        logs.downtimeLogs.map((log, index) => (
+                          <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-3">
+                              <span className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                {log.day || '-'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-bold text-slate-700">{new Date(log.downtime_date).toLocaleDateString('en-GB')}</div>
+                              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{log.shift}</div>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-amber-600 uppercase tracking-wider">{log.downtime_type}</td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="font-medium text-slate-600">{formatLocalTime(log.start_time)} - {formatLocalTime(log.end_time)}</div>
+                              <div className="text-[10px] text-amber-500 font-bold">{calculateISODuration(log.start_time, log.end_time)} mins</div>
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold text-slate-700">
+                              {calculateISODuration(log.start_time, log.end_time)} Min
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button onClick={() => deleteDowntimeLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <span>Rows per page:</span>
+                    <select className="bg-transparent outline-none cursor-pointer">
+                      <option>10</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Page 1 of {Math.ceil(logs.downtimeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.downtimeLogs.length} total)</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
+                      <button className="px-4 py-1 border border-slate-200 rounded text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-colors">Next</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 4. Next Stage Configuration Section */}
+          <section className="space-y-6">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                  <Play className="w-4 h-4" />
+                </div>
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Next Stage Configuration</h2>
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold uppercase border border-emerald-100">Active</span>
+              </div>
+              <div className="flex items-center gap-6">
+                <button 
+                  onClick={handleReadyForDispatch}
+                  disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
+                  className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+                    logs.qualityLogs.some(log => log.status !== 'APPROVED')
+                      ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                      : 'bg-white border-emerald-100 text-emerald-600 shadow-sm hover:bg-emerald-50'
+                  }`}
+                  title={logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'Approve all quality records to proceed' : 'Mark Ready'}
+                >
+                  <CheckCircle className={`w-4 h-4 ${logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'text-slate-200' : 'text-emerald-500'}`} />
+                  <span className="text-xs font-bold uppercase tracking-widest">Ready for Dispatch</span>
+                </button>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Transferred so far:</p>
+                  <p className="text-sm font-bold text-slate-700">{(selectedJC.transferred_qty || 0).toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400 italic px-1">Specify destination and operational parameters for the next manufacturing phase</p>
+
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <FormControl label="Next Operation" required>
+                  <SearchableSelect
+                    options={operations.map(o => ({ value: o.id, label: o.operation_name }))}
+                    value={nextStageForm.nextOperationId}
+                    onChange={(val) => setNextStageForm({ ...nextStageForm, nextOperationId: val })}
+                    placeholder="Welding"
+                  />
+                </FormControl>
+                <FormControl label="Assign Operator">
+                  <SearchableSelect
+                    options={users.map(u => ({ value: u.id, label: u.username }))}
+                    value={nextStageForm.assignOperatorId}
+                    onChange={(val) => setNextStageForm({ ...nextStageForm, assignOperatorId: val })}
+                    placeholder="Search Operator..."
+                  />
+                </FormControl>
+                <FormControl label="Target Warehouse" required>
+                  <SearchableSelect
+                    options={warehouses.map(w => ({ value: w.id, label: w.warehouse_name }))}
+                    value={nextStageForm.targetWarehouseId}
+                    onChange={(val) => setNextStageForm({ ...nextStageForm, targetWarehouseId: val })}
+                    placeholder="Select Destination"
+                  />
+                </FormControl>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Execution Mode:</label>
+                  <div className="flex items-center gap-2 p-1 bg-slate-50 rounded-lg w-fit">
+                    <button 
+                      onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'In-house' })}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all ${nextStageForm.executionMode === 'In-house' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-full ${nextStageForm.executionMode === 'In-house' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
+                      In-house
+                    </button>
+                    <button 
+                      onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'Outsource' })}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all ${nextStageForm.executionMode === 'Outsource' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-full ${nextStageForm.executionMode === 'Outsource' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
+                      Outsource
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 5. Daily Production Report Section */}
+          <section className="space-y-6">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                  <ClipboardList className="w-4 h-4" />
+                </div>
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Daily Production Report</h2>
+              </div>
+              <button 
+                onClick={handleDownloadReport}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100"
+              >
+                <Download className="w-4 h-4" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Download CSV</span>
+              </button>
+            </div>
+            
+            <p className="text-[11px] text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
+
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-12 flex items-center justify-center bg-slate-50/20">
+                {logs.timeLogs.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No data available</p>
+                ) : (
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date</th>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Shift</th>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Produced</th>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Operator</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {logs.timeLogs.slice(0, 10).map(log => (
+                          <tr key={log.id}>
+                            <td className="px-4 py-3 font-medium text-slate-700">{new Date(log.log_date).toLocaleDateString('en-GB')}</td>
+                            <td className="px-4 py-3 text-slate-600">{log.shift}</td>
+                            <td className="px-4 py-3 font-bold text-indigo-600">{parseFloat(log.produced_qty).toFixed(3)}</td>
+                            <td className="px-4 py-3 text-slate-600">{log.operator_name}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <span>Rows per page:</span>
+                  <select className="bg-transparent outline-none cursor-pointer">
+                    <option>10</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-6">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Page 1 of {Math.ceil(logs.timeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.timeLogs.length} total)</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
+                    <button className="px-4 py-1 border border-slate-200 rounded text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-colors">Next</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* View Time Log Modal */}
+        <Modal
+          isOpen={!!viewingTimeLog}
+          onClose={() => setViewingTimeLog(null)}
+          title="View Time Log"
+          maxWidth="max-w-xl"
+        >
+          {viewingTimeLog && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date & Shift</p>
+                  <p className="text-sm font-bold text-slate-700">
+                    {new Date(viewingTimeLog.log_date).toLocaleDateString('en-GB')} - {viewingTimeLog.shift}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Operator</p>
+                  <p className="text-sm font-bold text-slate-700">{viewingTimeLog.operator_name}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Time Interval</p>
+                  <p className="text-sm font-bold text-slate-700">
+                    {viewingTimeLog.start_time?.slice(11, 16)} - {viewingTimeLog.end_time?.slice(11, 16)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Produced Quantity</p>
+                  <p className="text-sm font-bold text-indigo-600">
+                    {parseFloat(viewingTimeLog.produced_qty).toFixed(3)} Units
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end pt-4 border-t border-slate-50">
+                <button
+                  onClick={() => setViewingTimeLog(null)}
+                  className="px-6 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
+        {/* View Quality Log Modal */}
+        <Modal
+          isOpen={!!viewingQualityLog}
+          onClose={() => setViewingQualityLog(null)}
+          title="View Quality Log"
+          maxWidth="max-w-xl"
+        >
+          {viewingQualityLog && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date & Shift</p>
+                  <p className="text-sm font-bold text-slate-700">
+                    {new Date(viewingQualityLog.check_date).toLocaleDateString('en-GB')} - {viewingQualityLog.shift}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Inspected Quantity</p>
+                  <p className="text-sm font-bold text-slate-700">{viewingQualityLog.inspected_qty} Units</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Accepted Quantity</p>
+                  <p className="text-sm font-bold text-emerald-600">{viewingQualityLog.accepted_qty} Units</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Rejected Quantity</p>
+                  <p className="text-sm font-bold text-rose-600">{viewingQualityLog.rejected_qty} Units</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Rejection Reason</p>
+                  <p className="text-sm font-medium text-slate-600">{viewingQualityLog.rejection_reason || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex justify-end pt-4 border-t border-slate-50">
+                <button
+                  onClick={() => setViewingQualityLog(null)}
+                  className="px-6 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      </div>
+    );
   };
 
   const handleOutwardChallan = (jc) => {
@@ -466,15 +1782,116 @@ const JobCard = () => {
     setIsOutwardModalOpen(true);
   };
 
-  const handleUpdateStatus = async (id, status) => {
+  const handleReadyForDispatch = async () => {
+    try {
+      // Check if all quality logs are approved
+      const hasPendingQuality = logs.qualityLogs.some(log => log.status !== 'APPROVED');
+      if (hasPendingQuality) {
+        errorToast('All quality inspection records must be Approved before proceeding to the next stage.');
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: 'Ready for Dispatch?',
+        text: "This will mark the current operation as complete and prepare for the next stage.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Mark Ready'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        // Update status to COMPLETED
+        const response = await fetch(`${API_BASE}/job-cards/${selectedJC.id}/progress`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ 
+            status: 'COMPLETED',
+            endTime: new Date().toISOString().slice(0, 19).replace('T', ' ')
+          })
+        });
+
+        if (response.ok) {
+          successToast('Job Card marked as COMPLETED');
+          setShowProductionEntry(false);
+          fetchJobCards();
+        } else {
+          errorToast('Failed to update status');
+        }
+      }
+    } catch (error) {
+      errorToast('Failed to mark ready for dispatch');
+    }
+  };
+
+  const handleDownloadReport = () => {
+    if (!selectedJC || logs.timeLogs.length === 0) {
+      errorToast('No data available to download');
+      return;
+    }
+
+    const headers = ['Day', 'Date', 'Shift', 'Operator', 'Produced Qty'];
+    const csvData = logs.timeLogs.map((log, index) => [
+      index + 1,
+      new Date(log.log_date).toLocaleDateString('en-GB'),
+      log.shift,
+      log.operator_name,
+      log.produced_qty
+    ]);
+
+    const csvContent = [headers, ...csvData].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Production_Report_${selectedJC.job_card_no}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    successToast('Report downloaded successfully');
+  };
+
+  const addTimeLog = async (logData) => {
+    if (!logData.operatorId || !logData.workstationId) {
+      errorToast('Please select Operator and Workstation');
+      return;
+    }
+    if (logData.producedQty <= 0) {
+      errorToast('Please enter Produce Quantity');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('authToken');
-      const payload = { status };
-      if (status === 'IN_PROGRESS') payload.startTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      if (status === 'COMPLETED') payload.endTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      
+      const formatTime = (time, ampm) => {
+        if (!time) return '00:00:00';
+        let [hours, minutes] = time.split(':').map(Number);
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+      };
 
-      const response = await fetch(`${API_BASE}/job-cards/${id}/progress`, {
-        method: 'PATCH',
+      const payload = {
+        jobCardId: selectedJC.id, // Explicitly include jcId just in case
+        day: logData.day,
+        logDate: logData.logDate,
+        operatorId: logData.operatorId,
+        workstationId: logData.workstationId,
+        shift: logData.shift,
+        startTime: formatTime(logData.startTime, logData.startAMPM),
+        endTime: formatTime(logData.endTime, logData.endAMPM),
+        producedQty: logData.producedQty
+      };
+
+      const response = await fetch(`${API_BASE}/job-cards/${selectedJC.id}/time-logs`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -483,30 +1900,17 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        successToast(`Job Card status: ${status}`);
-        setIsProgressModalOpen(false);
-        fetchJobCards();
-      }
-    } catch (error) {
-      errorToast('Failed to update status');
-    }
-  };
-
-  const addTimeLog = async (logData) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/job-cards/${selectedJC.id}/time-logs`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(logData)
-      });
-      if (response.ok) {
         successToast('Time log recorded');
         await fetchLogs(selectedJC.id);
         fetchJobCards();
+        // Reset form but keep Day and Date
+        setTimeLogForm(prev => ({
+          ...prev,
+          producedQty: 0
+        }));
+      } else {
+        const error = await response.json();
+        errorToast(error.message || 'Failed to record time log');
       }
     } catch (error) {
       errorToast('Failed to record time log');
@@ -528,29 +1932,222 @@ const JobCard = () => {
         successToast('Quality log recorded');
         await fetchLogs(selectedJC.id);
         fetchJobCards();
+        setQualityLogForm(prev => ({
+          ...prev,
+          inspectedQty: 0,
+          acceptedQty: 0,
+          rejectedQty: 0,
+          scrapQty: 0
+        }));
       }
     } catch (error) {
       errorToast('Failed to record quality log');
     }
   };
 
-  const addDowntimeLog = async (logData) => {
+  const deleteTimeLog = async (logId) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: "You won't be able to revert this!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/job-cards/time-logs/${logId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          successToast('Time log deleted');
+          await fetchLogs(selectedJC.id);
+          fetchJobCards();
+        } else {
+          errorToast('Failed to delete time log');
+        }
+      }
+    } catch (error) {
+      errorToast('Failed to delete time log');
+    }
+  };
+
+  const updateTimeLog = async (logId, logData) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/job-cards/${selectedJC.id}/downtime-logs`, {
-        method: 'POST',
+      
+      const formatTime = (time, ampm) => {
+        if (!time) return '00:00:00';
+        let [hours, minutes] = time.split(':').map(Number);
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+      };
+
+      const payload = {
+        day: logData.day,
+        logDate: logData.logDate,
+        operatorId: logData.operatorId,
+        shift: logData.shift,
+        startTime: formatTime(logData.startTime, logData.startAMPM),
+        endTime: formatTime(logData.endTime, logData.endAMPM),
+        producedQty: logData.producedQty
+      };
+
+      const response = await fetch(`${API_BASE}/job-cards/time-logs/${logId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        successToast('Time log updated');
+        setEditingTimeLogId(null);
+        await fetchLogs(selectedJC.id);
+        fetchJobCards();
+      } else {
+        errorToast('Failed to update time log');
+      }
+    } catch (error) {
+      errorToast('Failed to update time log');
+    }
+  };
+
+  const updateQualityLog = async (logId, logData) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/job-cards/quality-logs/${logId}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(logData)
       });
+
+      if (response.ok) {
+        successToast('Quality log updated');
+        setEditingQualityLogId(null);
+        await fetchLogs(selectedJC.id);
+        fetchJobCards();
+      } else {
+        errorToast('Failed to update quality log');
+      }
+    } catch (error) {
+      errorToast('Failed to update quality log');
+    }
+  };
+
+  const deleteQualityLog = async (logId) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: "You won't be able to revert this!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/job-cards/quality-logs/${logId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          successToast('Quality log deleted');
+          await fetchLogs(selectedJC.id);
+          fetchJobCards();
+        } else {
+          errorToast('Failed to delete quality log');
+        }
+      }
+    } catch (error) {
+      errorToast('Failed to delete quality log');
+    }
+  };
+
+  const addDowntimeLog = async (logData) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      
+      const formatTime = (time, ampm) => {
+        if (!time) return '00:00:00';
+        let [hours, minutes] = time.split(':').map(Number);
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+      };
+
+      const payload = {
+        ...logData,
+        startTime: formatTime(logData.startTime, logData.startAMPM),
+        endTime: formatTime(logData.endTime, logData.endAMPM)
+      };
+
+      const response = await fetch(`${API_BASE}/job-cards/${selectedJC.id}/downtime-logs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
       if (response.ok) {
         successToast('Downtime log recorded');
         await fetchLogs(selectedJC.id);
+        // Reset form but keep Day and Date
+        setDowntimeLogForm(prev => ({
+          ...prev,
+          remarks: ''
+        }));
+      } else {
+        const error = await response.json();
+        errorToast(error.message || 'Failed to record downtime log');
       }
     } catch (error) {
       errorToast('Failed to record downtime log');
+    }
+  };
+
+  const deleteDowntimeLog = async (logId) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: "You won't be able to revert this!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/job-cards/downtime-logs/${logId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          successToast('Downtime log deleted');
+          await fetchLogs(selectedJC.id);
+        } else {
+          errorToast('Failed to delete downtime log');
+        }
+      }
+    } catch (error) {
+      errorToast('Failed to delete downtime log');
     }
   };
 
@@ -652,7 +2249,7 @@ const JobCard = () => {
           scrapQty: inwardFormData.scrapQty,
           rejectionReason: inwardFormData.remarks,
           notes: `Vendor Receipt from ${selectedJCOutward.outward_challan_no}`,
-          status: 'Approved '
+          status: 'APPROVED'
         })
       });
 
@@ -750,7 +2347,9 @@ const JobCard = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 space-y-6">
-      {/* Header Section */}
+      {!showProductionEntry ? (
+        <>
+          {/* Header Section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100">
@@ -1022,6 +2621,10 @@ const JobCard = () => {
           </div>
         </div>
       </Card>
+        </>
+      ) : (
+        renderProductionEntry()
+      )}
 
       {/* Job Card View Modal */}
       <Modal
@@ -1297,422 +2900,7 @@ const JobCard = () => {
         </form>
       </Modal>
 
-      <Modal
-        isOpen={isProgressModalOpen}
-        onClose={() => setIsProgressModalOpen(false)}
-        title={`Production Entry - ${selectedJC?.job_card_no}`}
-        maxWidth="max-w-6xl"
-      >
-        <div className="space-y-6">
-          {/* Header Dashboard info */}
-          <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h3 className="text-lg  text-slate-900">{selectedJC?.item_name || 'Target Item'}</h3>
-                  <span className="p-1  bg-amber-100 text-amber-700 roundedtext-xs    ">
-                    {selectedJC?.status || 'IN_PROGRESS'}
-                  </span>
-                </div>
-                <p className="text-xs  text-slate-400  tracking-widest">{selectedJC?.drawing_no || 'SA-MOUNTINGCLAMPASSEMBLY'}</p>
-              </div>
-              <div className="flex gap-8">
-                <div className="text-right">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Planned</p>
-                  <p className="text-sm  text-slate-900">{selectedJC?.planned_qty} <span className="text-slate-400 ">Units</span></p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Produced</p>
-                  <p className="text-sm  text-indigo-600">{Number(selectedJC?.produced_qty || 0).toFixed(2)} <span className="text-slate-400 ">Units</span></p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Accepted</p>
-                  <p className="text-sm  text-emerald-600">{Number(selectedJC?.accepted_qty || 0).toFixed(2)} <span className="text-slate-400 ">Units</span></p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Current Op</p>
-                  <p className="text-sm  text-indigo-600 flex items-center gap-1 justify-end">
-                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded  animate-pulse"></span>
-                    {selectedJC?.operation_name}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-6">
-              <div className="bg-white p-4 rounded  border border-slate-100 flex items-center gap-4">
-                <div className="w-10 h-10 bg-amber-50 rounded  flex items-center justify-center text-amber-600">
-                  <Zap className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 ">
-                    <span className="text-lg  text-slate-900">{calculateEfficiency(selectedJC)}%</span>
-                    <span className="text-[10px]  text-slate-400  tracking-widest">78.00 / 100 MIN</span>
-                  </div>
-                  <p className="text-[10px]  text-slate-400  tracking-widest mt-0.5">Efficiency</p>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded  border border-slate-100 flex items-center gap-4">
-                <div className="w-10 h-10 bg-emerald-50 rounded  flex items-center justify-center text-emerald-600">
-                  <CheckCircle className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 ">
-                    <span className="text-lg  text-slate-900">
-                      {selectedJC?.planned_qty > 0 ? Math.round(((selectedJC?.accepted_qty || 0) / selectedJC.planned_qty) * 100) : 0}%
-                    </span>
-                    <span className="text-[10px]  text-slate-400  tracking-widest">Acceptance Rate</span>
-                  </div>
-                  <p className="text-[10px]  text-slate-400  tracking-widest mt-0.5">Quality Yield</p>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded  border border-slate-100 flex items-center gap-4">
-                <div className="w-10 h-10 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 ">
-                    <span className="text-lg  text-slate-900">5.6</span>
-                    <span className="text-[10px]  text-slate-400  tracking-widest">Units Per Hour</span>
-                  </div>
-                  <p className="text-[10px]  text-slate-400  tracking-widest mt-0.5">Productivity</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded  w-fit">
-            {[
-              { id: 'time', label: 'Time Logs', icon: Clock },
-              { id: 'quality', label: 'Quality Check', icon: CheckCircle },
-              { id: 'downtime', label: 'Downtime Logs', icon: AlertCircle },
-              { id: 'next', label: 'Next Operation', icon: Play },
-              { id: 'report', label: 'Daily Report', icon: ClipboardList }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2  p-2  rounded  text-xs  transition-all ${
-                  activeTab === tab.id ? 'bg-white text-indigo-600 ' : 'text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content */}
-          <div className="min-h-[400px]">
-            {activeTab === 'time' && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="bg-white rounded  border border-slate-100 overflow-hidden">
-                  <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
-                    <h4 className="text-sm  text-slate-900 flex items-center gap-2 ">
-                      <Clock className="w-4 h-4 text-indigo-600" />
-                      Add Time Log
-                    </h4>
-                  </div>
-                  <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                      <FormControl label="Day & Date">
-                        <input type="date" value={timeLogForm.logDate} onChange={e => setTimeLogForm({...timeLogForm, logDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none" />
-                      </FormControl>
-                      <FormControl label="Operator">
-                        <select value={timeLogForm.operatorId} onChange={e => setTimeLogForm({...timeLogForm, operatorId: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none">
-                          <option value="">Select Operator</option>
-                          {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-                        </select>
-                      </FormControl>
-                      <FormControl label="Workstation">
-                        <select value={timeLogForm.workstationId} onChange={e => setTimeLogForm({...timeLogForm, workstationId: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none">
-                          <option value="">Select Machine</option>
-                          {workstations.map(w => <option key={w.id} value={w.id}>{w.workstation_name}</option>)}
-                        </select>
-                      </FormControl>
-                      <FormControl label="Shift">
-                        <select value={timeLogForm.shift} onChange={e => setTimeLogForm({...timeLogForm, shift: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none">
-                          <option value="SHIFT_A">Shift A</option>
-                          <option value="SHIFT_B">Shift B</option>
-                          <option value="SHIFT_C">Shift C</option>
-                        </select>
-                      </FormControl>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                      <FormControl label="Production Period">
-                        <div className="flex items-center gap-2 ">
-                          <input type="time" value={timeLogForm.startTime} onChange={e => setTimeLogForm({...timeLogForm, startTime: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none" />
-                          <span className="text-slate-400">to</span>
-                          <input type="time" value={timeLogForm.endTime} onChange={e => setTimeLogForm({...timeLogForm, endTime: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none" />
-                        </div>
-                      </FormControl>
-                      <FormControl label="Produce Qty">
-                        <input type="number" value={timeLogForm.producedQty} onChange={e => setTimeLogForm({...timeLogForm, producedQty: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none" />
-                      </FormControl>
-                      <button 
-                        onClick={() => addTimeLog(timeLogForm)}
-                        className="col-span-1 p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all  text-xs  tracking-widest h-[38px] flex items-center justify-center gap-2"
-                      >
-                        <Monitor className="w-4 h-4" />
-                        Record Time
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Log Table */}
-                <div className="bg-white rounded  border border-slate-100 overflow-hidden">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Day</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Date / Shift</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Operator</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-center">Time Interval</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-right">Produced Qty</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {logs.timeLogs.map(log => (
-                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="p-2  text-xs  text-slate-900">{new Date(log.log_date).toLocaleDateString(undefined, {weekday: 'short'})}</td>
-                          <td className="p-2 ">
-                            <div className="text-xs  text-slate-900">{new Date(log.log_date).toLocaleDateString()}</div>
-                            <div className="text-[10px]  text-slate-400  tracking-widest">{log.shift}</div>
-                          </td>
-                          <td className="p-2 ">
-                            <div className="flex items-center gap-2 ">
-                              <div className="w-6 h-6 bg-slate-100 rounded  flex items-center justify-centertext-xs   text-slate-600">
-                                {log.operator_name?.[0]}
-                              </div>
-                              <span className="text-xs  text-slate-600">{log.operator_name}</span>
-                            </div>
-                          </td>
-                          <td className="p-2  text-center">
-                            <div className="flex items-center justify-center gap-2 text-xs  text-slate-600">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" />
-                              {log.start_time?.slice(11, 16)} - {log.end_time?.slice(11, 16)}
-                            </div>
-                          </td>
-                          <td className="p-2  text-right">
-                            <span className="text-xs  text-indigo-600">{log.produced_qty} UNITS</span>
-                          </td>
-                          <td className="p-2  text-right">
-                            <button className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'quality' && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="bg-white rounded  border border-slate-100 overflow-hidden">
-                  <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
-                    <h4 className="text-sm  text-slate-900 flex items-center gap-2 ">
-                      <CheckCircle className="w-4 h-4 text-emerald-600" />
-                      Quality & Rejection Entry
-                    </h4>
-                  </div>
-                  <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-                      <FormControl label="Day & Date">
-                        <input type="date" value={qualityLogForm.checkDate} onChange={e => setQualityLogForm({...qualityLogForm, checkDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none" />
-                      </FormControl>
-                      <FormControl label="Shift">
-                        <select value={qualityLogForm.shift} onChange={e => setQualityLogForm({...qualityLogForm, shift: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none">
-                          <option value="SHIFT_A">Shift A</option>
-                          <option value="SHIFT_B">Shift B</option>
-                          <option value="SHIFT_C">Shift C</option>
-                        </select>
-                      </FormControl>
-                      <FormControl label="Produce Qty">
-                        <input type="number" value={qualityLogForm.inspectedQty} onChange={e => setQualityLogForm({...qualityLogForm, inspectedQty: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded  text-xs  outline-none" />
-                      </FormControl>
-                      <FormControl label="Rejection Reason">
-                        <select value={qualityLogForm.rejectionReason} onChange={e => setQualityLogForm({...qualityLogForm, rejectionReason: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none">
-                          <option value="">Select Reason</option>
-                          <option value="Dimensional Deviation">Dimensional Deviation</option>
-                          <option value="Surface Defect">Surface Defect</option>
-                          <option value="Material Flaw">Material Flaw</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </FormControl>
-                      <div className="flex gap-2">
-                        <FormControl label="Accepted">
-                          <input type="number" value={qualityLogForm.acceptedQty} onChange={e => setQualityLogForm({...qualityLogForm, acceptedQty: e.target.value})} className="w-full px-3 py-2 bg-emerald-50 border border-emerald-100 rounded  text-xs  text-emerald-600 outline-none" />
-                        </FormControl>
-                        <FormControl label="Rejected">
-                          <input type="number" value={qualityLogForm.rejectedQty} onChange={e => setQualityLogForm({...qualityLogForm, rejectedQty: e.target.value})} className="w-full px-3 py-2 bg-rose-50 border border-rose-100 rounded  text-xs  text-rose-600 outline-none" />
-                        </FormControl>
-                      </div>
-                    </div>
-                    <div className="flex justify-end pt-2">
-                      <button 
-                        onClick={() => addQualityLog({...qualityLogForm, status: 'Approved '})}
-                        className="px-8 py-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 transition-all  text-xs  tracking-widest flex items-center gap-2 "
-                      >
-                        <Check className="w-4 h-4" />
-                        Save Entry
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded  border border-slate-100 overflow-hidden">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Date / Shift</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Inspection Status</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Quality Notes</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-center">Accepted</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-center">Rejected</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-center">Scrap</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {logs.qualityLogs.map(log => (
-                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="p-2 ">
-                            <div className="text-xs  text-slate-900">{new Date(log.check_date).toLocaleDateString()}</div>
-                            <div className="text-[10px]  text-slate-400  tracking-widest">{log.shift}</div>
-                          </td>
-                          <td className="p-2 ">
-                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 roundedtext-xs     flex items-center gap-1 w-fit">
-                              <CheckCircle className="w-3 h-3" />
-                              {log.status}
-                            </span>
-                          </td>
-                          <td className="p-2 ">
-                            <div className="text-xs  text-rose-600  tracking-tight">{log.rejection_reason || 'PASSED'}</div>
-                            <div className="text-[10px]  text-slate-400">{log.notes || 'Standard Inspection'}</div>
-                          </td>
-                          <td className="p-2  text-center text-xs  text-slate-900">{log.accepted_qty}</td>
-                          <td className="p-2  text-center text-xs  text-rose-600">{log.rejected_qty}</td>
-                          <td className="p-2  text-center text-xs  text-slate-400">{log.scrap_qty}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'downtime' && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="bg-white rounded  border border-slate-100 overflow-hidden">
-                  <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
-                    <h4 className="text-sm  text-slate-900 flex items-center gap-2 ">
-                      <AlertCircle className="w-4 h-4 text-amber-600" />
-                      Operational Downtime
-                    </h4>
-                  </div>
-                  <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                      <FormControl label="Day & Date">
-                        <input type="date" value={downtimeLogForm.downtimeDate} onChange={e => setDowntimeLogForm({...downtimeLogForm, downtimeDate: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none" />
-                      </FormControl>
-                      <FormControl label="Shift">
-                        <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({...downtimeLogForm, shift: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none">
-                          <option value="SHIFT_A">Shift A</option>
-                          <option value="SHIFT_B">Shift B</option>
-                          <option value="SHIFT_C">Shift C</option>
-                        </select>
-                      </FormControl>
-                      <FormControl label="Downtime Type">
-                        <select value={downtimeLogForm.downtimeType} onChange={e => setDowntimeLogForm({...downtimeLogForm, downtimeType: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none">
-                          <option value="">Select Type</option>
-                          <option value="Breakdown">Breakdown</option>
-                          <option value="Maintenance">Maintenance</option>
-                          <option value="Setup">Setup</option>
-                          <option value="Material Shortage">Material Shortage</option>
-                          <option value="Power Failure">Power Failure</option>
-                        </select>
-                      </FormControl>
-                      <FormControl label="Time Interval">
-                        <div className="flex items-center gap-2 ">
-                          <input type="time" value={downtimeLogForm.startTime} onChange={e => setDowntimeLogForm({...downtimeLogForm, startTime: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none" />
-                          <span className="text-slate-400">to</span>
-                          <input type="time" value={downtimeLogForm.endTime} onChange={e => setDowntimeLogForm({...downtimeLogForm, endTime: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded  text-xs  outline-none" />
-                        </div>
-                      </FormControl>
-                    </div>
-                    <div className="flex justify-end mt-4">
-                      <button 
-                        onClick={() => addDowntimeLog(downtimeLogForm)}
-                        className="px-8 py-2 bg-amber-600 text-white rounded  hover:bg-amber-700 transition-all  text-xs  tracking-widest flex items-center gap-2 "
-                      >
-                        <Clock className="w-4 h-4" />
-                        Record Downtime
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-white rounded  border border-slate-100 overflow-hidden">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Day</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Date / Shift</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest">Category / Reason</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-center">Interval</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-right">Duration</th>
-                        <th className="px-6 py-3text-xs   text-slate-400  tracking-widest text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {logs.downtimeLogs.map(log => (
-                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="p-2  text-xs  text-slate-900">{new Date(log.downtime_date).toLocaleDateString(undefined, {weekday: 'short'})}</td>
-                          <td className="p-2 ">
-                            <div className="text-xs  text-slate-900">{new Date(log.downtime_date).toLocaleDateString()}</div>
-                            <div className="text-[10px]  text-slate-400  tracking-widest">{log.shift}</div>
-                          </td>
-                          <td className="p-2  text-xs  text-amber-600">{log.downtime_type}</td>
-                          <td className="p-2  text-center text-xs  text-slate-600">{log.start_time?.slice(11, 16)} - {log.end_time?.slice(11, 16)}</td>
-                          <td className="p-2  text-right text-xs  text-slate-900">30 Min</td>
-                          <td className="p-2  text-right">
-                            <button className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-between items-center pt-6 border-t border-slate-100">
-             <button
-              type="button"
-              onClick={() => setIsProgressModalOpen(false)}
-              className="p-2.5 text-xs  text-slate-500 hover:text-slate-700 transition-colors  tracking-widest"
-            >
-              Back
-            </button>
-            <button
-              onClick={() => handleUpdateStatus(selectedJC.id, 'COMPLETED')}
-              className="px-8 py-2.5 bg-emerald-600 text-white rounded  hover:bg-emerald-700 transition-all  text-sm shadow-lg shadow-emerald-100  tracking-widest flex items-center gap-2 "
-            >
-              <CheckCircle className="w-5 h-5" />
-              Complete Production
-            </button>
-          </div>
-        </div>
-      </Modal>
-
+      {/* Existing Modals */}
       <Modal 
         isOpen={isOutwardModalOpen} 
         onClose={() => setIsOutwardModalOpen(false)} 

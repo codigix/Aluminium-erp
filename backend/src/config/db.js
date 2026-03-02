@@ -50,6 +50,7 @@ const ensureJobCardColumns = async () => {
       CREATE TABLE IF NOT EXISTS job_card_time_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         job_card_id INT NOT NULL,
+        day INT DEFAULT 1,
         log_date DATE NOT NULL,
         operator_id INT,
         workstation_id INT,
@@ -73,7 +74,7 @@ const ensureJobCardColumns = async () => {
         rejected_qty DECIMAL(12, 3) DEFAULT 0,
         scrap_qty DECIMAL(12, 3) DEFAULT 0,
         rejection_reason TEXT,
-        status ENUM('PENDING', 'Approved ', 'REJECTED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
@@ -84,6 +85,7 @@ const ensureJobCardColumns = async () => {
       CREATE TABLE IF NOT EXISTS job_card_downtime_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         job_card_id INT NOT NULL,
+        day INT DEFAULT 1,
         downtime_date DATE NOT NULL,
         shift VARCHAR(20),
         downtime_type VARCHAR(100),
@@ -1505,6 +1507,7 @@ const ensureWorkOrderTables = async () => {
         produced_qty DECIMAL(12, 3) DEFAULT 0,
         accepted_qty DECIMAL(12, 3) DEFAULT 0,
         rejected_qty DECIMAL(12, 3) DEFAULT 0,
+        actual_start_date DATE NULL,
         start_time TIMESTAMP NULL,
         end_time TIMESTAMP NULL,
         status ENUM('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT',
@@ -1523,9 +1526,14 @@ const ensureWorkOrderTables = async () => {
     const existingJcCols = new Set(jcCols.map(c => c.Field));
     if (!existingJcCols.has('job_card_no')) await connection.query('ALTER TABLE job_cards ADD COLUMN job_card_no VARCHAR(50) UNIQUE AFTER id');
     if (!existingJcCols.has('accepted_qty')) await connection.query('ALTER TABLE job_cards ADD COLUMN accepted_qty DECIMAL(12, 3) DEFAULT 0 AFTER produced_qty');
+    if (!existingJcCols.has('actual_start_date')) await connection.query('ALTER TABLE job_cards ADD COLUMN actual_start_date DATE NULL AFTER rejected_qty');
     
     // Update status enum if necessary
     await connection.query("ALTER TABLE job_cards MODIFY COLUMN status ENUM('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT'");
+
+    const [timeLogCols] = await connection.query('SHOW COLUMNS FROM job_card_time_logs');
+    const existingTimeLogCols = new Set(timeLogCols.map(c => c.Field));
+    if (!existingTimeLogCols.has('day')) await connection.query('ALTER TABLE job_card_time_logs ADD COLUMN day INT DEFAULT 1 AFTER job_card_id');
 
     console.log('Work Order and Job Card tables synchronized');
 
