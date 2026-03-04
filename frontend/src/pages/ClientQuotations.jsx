@@ -210,7 +210,7 @@ const ClientQuotations = () => {
           initialPrices[clientName] = {};
         }
         const fgItems = (order.items || []).filter(item => 
-          (item.item_group === 'FG' || item.item_type === 'FG' || !item.item_group) && (item.status === 'REJECTED' || Number(item.bom_cost) >= 0)
+          (item.item_group === 'FG' || item.item_type === 'FG' || item.item_type === 'SA' || item.item_type === 'SFG' || !item.item_group) && (item.status === 'REJECTED' || Number(item.bom_cost) >= 0)
         );
         order.items = fgItems;
         grouped[clientName].orders.push(order);
