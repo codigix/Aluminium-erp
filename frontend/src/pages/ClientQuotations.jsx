@@ -196,6 +196,8 @@ const ClientQuotations = () => {
       
       const grouped = {};
       const initialPrices = {};
+      const initialProfits = {};
+      const initialGst = {};
       data.forEach(order => {
         const clientName = order.company_name || 'Unassigned';
         if (!grouped[clientName]) {
@@ -210,6 +212,8 @@ const ClientQuotations = () => {
             orders: []
           };
           initialPrices[clientName] = {};
+          initialProfits[clientName] = {};
+          initialGst[clientName] = {};
         }
         const fgItems = (order.items || []).filter(item => 
           (item.item_group === 'FG' || item.item_type === 'FG' || !item.item_group) && (item.status === 'REJECTED' || Number(item.bom_cost) >= 0)
@@ -220,8 +224,11 @@ const ClientQuotations = () => {
         // Initialize prices from items
         if (order.items) {
           order.items.forEach(item => {
+            const margin = Number(order.profit_margin) || 0;
+            initialProfits[clientName][item.id] = margin;
+            initialGst[clientName][item.id] = 18;
+
             if (item.bom_cost && Number(item.bom_cost) > 0) {
-              const margin = Number(order.profit_margin) || 0;
               const calculatedPrice = Number(item.bom_cost) * (1 + margin / 100);
               initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
             } else if (item.rate && Number(item.rate) > 0) {
@@ -232,6 +239,8 @@ const ClientQuotations = () => {
       });
       setGroupedByClient(grouped);
       setQuotePricesMap(prev => ({ ...prev, ...initialPrices }));
+      setProfitMap(prev => ({ ...prev, ...initialProfits }));
+      setGstMap(prev => ({ ...prev, ...initialGst }));
     } catch (error) {
       console.error(error);
       errorToast(error.message);
@@ -386,12 +395,60 @@ const ClientQuotations = () => {
     }
   };
 
-  const handlePriceChange = (clientName, itemId, price) => {
+  const handlePriceChange = (clientName, item, price) => {
+    const rate = parseFloat(price) || 0;
+    const bomCost = parseFloat(item.bom_cost) || 0;
+    
+    let profit = 0;
+    if (bomCost > 0) {
+      profit = ((rate / bomCost) - 1) * 100;
+    }
+
     setQuotePricesMap(prev => ({
       ...prev,
       [clientName]: {
         ...prev[clientName],
-        [itemId]: price
+        [item.id]: price
+      }
+    }));
+
+    setProfitMap(prev => ({
+      ...prev,
+      [clientName]: {
+        ...prev[clientName],
+        [item.id]: profit.toFixed(2)
+      }
+    }));
+  };
+
+  const handleProfitChange = (clientName, item, profitVal) => {
+    const profit = parseFloat(profitVal) || 0;
+    const bomCost = parseFloat(item.bom_cost) || 0;
+    const newRate = (bomCost * (1 + profit / 100)).toFixed(2);
+    
+    setProfitMap(prev => ({
+      ...prev,
+      [clientName]: {
+        ...prev[clientName],
+        [item.id]: profitVal
+      }
+    }));
+    
+    setQuotePricesMap(prev => ({
+      ...prev,
+      [clientName]: {
+        ...prev[clientName],
+        [item.id]: newRate
+      }
+    }));
+  };
+
+  const handleGstChange = (clientName, itemId, gstVal) => {
+    setGstMap(prev => ({
+      ...prev,
+      [clientName]: {
+        ...prev[clientName],
+        [itemId]: gstVal
       }
     }));
   };
@@ -532,6 +589,7 @@ const ClientQuotations = () => {
     if (!clientData) return 0;
     
     const prices = quotePricesMap[clientName] || {};
+    const gsts = gstMap[clientName] || {};
     let total = 0;
     
     clientData.orders.forEach(order => {
@@ -539,7 +597,9 @@ const ClientQuotations = () => {
         order.items.forEach(item => {
           if (item.status !== 'REJECTED') {
             const price = parseFloat(prices[item.id]) || 0;
-            total += price * (parseFloat(item.design_qty) || 0);
+            const gst = parseFloat(gsts[item.id]) || 18;
+            const qty = parseFloat(item.design_qty) || 0;
+            total += price * qty * (1 + gst / 100);
           }
         });
       }
@@ -876,7 +936,9 @@ const ClientQuotations = () => {
                                           <th className="p-2 text-left text-xs  text-slate-700 ">Qty</th>
                                           <th className="p-2 text-left text-xs  text-slate-700 ">Unit</th>
                                           <th className="p-2 text-left text-xs  text-slate-700 ">BOM Cost</th>
-                                          <th className="p-2 text-left text-xs  text-slate-700 ">Unit Rate (₹)</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 w-24">Profit %</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 w-32">Unit Rate (₹)</th>
+                                          <th className="p-2 text-left text-xs  text-slate-700 w-24">GST %</th>
                                           <th className="p-2 text-right text-xs  text-slate-700 pr-4">Quote Price (₹)</th>
                                         </tr>
                                       </thead>
@@ -913,6 +975,20 @@ const ClientQuotations = () => {
                                               <td className="p-2 text-xs text-slate-600">
                                                 {item.bom_cost ? `₹${Number(item.bom_cost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
                                               </td>
+                                              <td className="p-2">
+                                                <input
+                                                  type="text"
+                                                  inputMode="decimal"
+                                                  value={profitMap[clientName]?.[item.id] || '0'}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+                                                      handleProfitChange(clientName, item, val);
+                                                    }
+                                                  }}
+                                                  className="w-16 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                                />
+                                              </td>
                                               <td className="p-2 text-right">
                                                 {item.status === 'REJECTED' ? (
                                                   <span className="text-red-600  text-[10px]  pr-4">Rejected</span>
@@ -925,15 +1001,29 @@ const ClientQuotations = () => {
                                                     onChange={(e) => {
                                                       const val = e.target.value;
                                                       if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                        handlePriceChange(clientName, item.id, val);
+                                                        handlePriceChange(clientName, item, val);
                                                       }
                                                     }}
                                                     className="w-24 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                                   />
                                                 )}
                                               </td>
+                                              <td className="p-2">
+                                                <input
+                                                  type="text"
+                                                  inputMode="decimal"
+                                                  value={gstMap[clientName]?.[item.id] || '18'}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                      handleGstChange(clientName, item.id, val);
+                                                    }
+                                                  }}
+                                                  className="w-16 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                                />
+                                              </td>
                                               <td className="p-2 text-right text-xs  text-slate-900 pr-4">
-                                                ₹{((parseFloat(quotePricesMap[clientName]?.[item.id]) || 0) * (parseFloat(item.design_qty) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                ₹{((parseFloat(quotePricesMap[clientName]?.[item.id]) || 0) * (parseFloat(item.design_qty) || 0) * (1 + (parseFloat(gstMap[clientName]?.[item.id]) || 18) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                               </td>
                                             </tr>
                                           ))
