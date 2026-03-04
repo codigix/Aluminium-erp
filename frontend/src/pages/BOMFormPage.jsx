@@ -319,123 +319,6 @@ const BOMFormPage = () => {
     return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
   }, [stockItems, approvedDrawings, approvedBOMs, showAllDrawings, selectedItem, productForm.itemCode, productForm.drawingNo, productForm.itemGroup]);
 
-  const productOptions = useMemo(() => {
-    const options = [];
-    const seen = new Set();
-    
-    // Combine both sources
-    const allItems = [
-      ...approvedDrawings.map(item => ({
-        label: (item.material_name || item.description || '').replace(/\s*\($/, ''),
-        value: `order_${item.id}`,
-        id: item.id,
-        item_code: item.item_code,
-        source: 'order',
-        drawing_no: item.drawing_no,
-        item_group: item.item_group || item.material_type,
-        subLabel: `[${item.item_group || 'Item'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-      })),
-      ...stockItems.map(item => ({
-        label: (item.material_name || '').replace(/\s*\($/, ''),
-        value: `stock_${item.id}`,
-        id: item.id,
-        item_code: item.item_code,
-        source: 'stock',
-        drawing_no: item.drawing_no,
-        item_group: item.material_type,
-        subLabel: `[${item.material_type || 'Stock'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-      }))
-    ];
-
-    allItems.forEach(opt => {
-      const group = (opt.item_group || '').toLowerCase();
-      const isFinishedOrSub = group.includes('finished') || 
-                            group.includes('sub') || 
-                            group.includes('assembly') || 
-                            group === 'fg' || 
-                            group === 'sfg' ||
-                            group === 'sub-assembly' ||
-                            group === 'semi finished' ||
-                            group === 'semi-finished';
-
-      if (!isFinishedOrSub) return;
-
-      if (drawingFilter) {
-        const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
-        const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
-        if (cleanOptDwg !== cleanFilterDwg) return;
-      }
-
-      // Deduplicate by item_code first
-      if (seen.has(opt.item_code)) return;
-      
-      // Also deduplicate by label + drawing if they are identical (to handle the "double" issue in screenshot)
-      const labelDrawingKey = `${opt.label}|${opt.drawing_no || 'N/A'}`;
-      if (seen.has(labelDrawingKey)) return;
-
-      options.push(opt);
-      seen.add(opt.item_code);
-      seen.add(labelDrawingKey);
-    });
-
-    return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
-  }, [approvedDrawings, stockItems, drawingFilter]);
-
-  const itemCodeOptions = useMemo(() => {
-    const options = [];
-    const seen = new Set();
-
-    const allItems = [
-      ...approvedDrawings.map(item => ({
-        label: item.item_code,
-        value: `order_${item.id}`,
-        id: item.id,
-        item_code: item.item_code,
-        source: 'order',
-        drawing_no: item.drawing_no,
-        item_group: item.item_group || item.material_type,
-        subLabel: `${(item.material_name || item.description || '').replace(/\s*\($/, '')} [${item.item_group || 'Item'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-      })),
-      ...stockItems.map(item => ({
-        label: item.item_code,
-        value: `stock_${item.id}`,
-        id: item.id,
-        item_code: item.item_code,
-        source: 'stock',
-        drawing_no: item.drawing_no,
-        item_group: item.material_type,
-        subLabel: `${(item.material_name || '').replace(/\s*\($/, '')} [${item.material_type || 'Stock'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
-      }))
-    ];
-
-    allItems.forEach(opt => {
-      const group = (opt.item_group || '').toLowerCase();
-      const isFinishedOrSub = group.includes('finished') || 
-                            group.includes('sub') || 
-                            group.includes('assembly') || 
-                            group === 'fg' || 
-                            group === 'sfg' ||
-                            group === 'sub-assembly' ||
-                            group === 'semi finished' ||
-                            group === 'semi-finished';
-
-      if (!isFinishedOrSub) return;
-
-      if (drawingFilter) {
-        const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
-        const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
-        if (cleanOptDwg !== cleanFilterDwg) return;
-      }
-
-      if (seen.has(opt.item_code)) return;
-      
-      options.push(opt);
-      seen.add(opt.item_code);
-    });
-
-    return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
-  }, [approvedDrawings, stockItems, drawingFilter]);
-
   const location = useLocation();
 
   const isReadOnly = useMemo(() => {
@@ -1344,7 +1227,49 @@ const BOMFormPage = () => {
                   ) : (
                     <SearchableSelect
                       placeholder="Select Product"
-                      options={productOptions}
+                      options={[
+                        ...approvedDrawings.map(item => {
+                          const cleanName = (item.material_name || item.description || '').replace(/\s*\($/, '');
+                          return {
+                            label: cleanName,
+                            value: `order_${item.id}`,
+                            id: item.id,
+                            source: 'order',
+                            drawing_no: item.drawing_no,
+                            item_group: item.item_group || item.material_type,
+                            subLabel: `[${item.item_group || 'Item'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                          };
+                        }),
+                        ...stockItems.map(item => {
+                          const cleanName = (item.material_name || '').replace(/\s*\($/, '');
+                          return {
+                            label: cleanName,
+                            value: `stock_${item.id}`,
+                            id: item.id,
+                            source: 'stock',
+                            drawing_no: item.drawing_no,
+                            item_group: item.material_type,
+                            subLabel: `[${item.material_type || 'Stock'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                          };
+                        })
+                      ].filter(opt => {
+                        const group = (opt.item_group || '').toLowerCase();
+                        const isFinishedOrSub = group.includes('finished') || 
+                                              group.includes('sub') || 
+                                              group.includes('assembly') || 
+                                              group === 'fg' || 
+                                              group === 'sfg' ||
+                                              group === 'sub-assembly' ||
+                                              group === 'semi finished' ||
+                                              group === 'semi-finished';
+
+                        if (drawingFilter) {
+                          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
+                          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
+                          return cleanOptDwg === cleanFilterDwg && isFinishedOrSub;
+                        }
+                        return isFinishedOrSub;
+                      })}
                       value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
                       onChange={(e) => {
                         const [source, id] = e.target.value.split('_');
@@ -1380,7 +1305,49 @@ const BOMFormPage = () => {
                   ) : (
                     <SearchableSelect
                       placeholder="Select Item Code"
-                      options={itemCodeOptions}
+                      options={[
+                        ...approvedDrawings.map(item => {
+                          const cleanName = (item.material_name || item.description || '').replace(/\s*\($/, '');
+                          return {
+                            label: item.item_code,
+                            value: `order_${item.id}`,
+                            id: item.id,
+                            source: 'order',
+                            drawing_no: item.drawing_no,
+                            item_group: item.item_group || item.material_type,
+                            subLabel: `${cleanName} [${item.item_group || 'Item'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                          };
+                        }),
+                        ...stockItems.map(item => {
+                          const cleanName = (item.material_name || '').replace(/\s*\($/, '');
+                          return {
+                            label: item.item_code,
+                            value: `stock_${item.id}`,
+                            id: item.id,
+                            source: 'stock',
+                            drawing_no: item.drawing_no,
+                            item_group: item.material_type,
+                            subLabel: `${cleanName} [${item.material_type || 'Stock'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
+                          };
+                        })
+                      ].filter(opt => {
+                        const group = (opt.item_group || '').toLowerCase();
+                        const isFinishedOrSub = group.includes('finished') || 
+                                              group.includes('sub') || 
+                                              group.includes('assembly') || 
+                                              group === 'fg' || 
+                                              group === 'sfg' ||
+                                              group === 'sub-assembly' ||
+                                              group === 'semi finished' ||
+                                              group === 'semi-finished';
+
+                        if (drawingFilter) {
+                          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
+                          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
+                          return cleanOptDwg === cleanFilterDwg && isFinishedOrSub;
+                        }
+                        return isFinishedOrSub;
+                      })}
                       value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
                       onChange={(e) => {
                         const [source, id] = e.target.value.split('_');
@@ -1801,24 +1768,12 @@ const BOMFormPage = () => {
                           const bomInfo = item ? approvedBOMs.find(b => b.item_code === item.item_code) : null;
                           const bomCost = bomInfo ? parseFloat(bomInfo.bom_cost) : 0;
 
-                          const suggestedGroup = item ? getMaterialItemGroupFromType(item) : materialForm.itemGroup;
-                          const bestGroup = itemGroups.find(g => g.name.toLowerCase() === suggestedGroup.toLowerCase())?.name || suggestedGroup;
-
-                          const rawUom = item ? (item.unit || item.uom || 'Kg') : materialForm.uom;
-                          let finalUom = rawUom;
-                          
-                          // Normalization for common UOMs to match select options
-                          const uomLower = rawUom.toLowerCase();
-                          if (uomLower.includes('kg') || uomLower.includes('kilo')) finalUom = 'Kg';
-                          else if (uomLower.includes('nos') || uomLower.includes('pcs') || uomLower.includes('piece')) finalUom = 'Nos';
-                          else if (uomLower.includes('mtr') || uomLower.includes('meter')) finalUom = 'Mtr';
-
                           setMaterialForm({
                             ...materialForm,
                             materialName: item ? item.material_name : e.target.value,
-                            itemGroup: bestGroup,
+                            itemGroup: item ? getMaterialItemGroupFromType(item) : materialForm.itemGroup,
                             rate: item ? (bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0))) : materialForm.rate,
-                            uom: finalUom,
+                            uom: item ? (item.unit || 'Kg') : materialForm.uom,
                             description: item ? item.material_name : materialForm.description
                           });
                         }}
@@ -1834,7 +1789,6 @@ const BOMFormPage = () => {
                     <div className="md:col-span-1 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">UOM</label>
                       <select className="w-full px-2 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.uom} onChange={(e) => setMaterialForm({ ...materialForm, uom: e.target.value })}>
-                        {['Kg', 'Nos', 'Mtr'].includes(materialForm.uom) ? null : <option value={materialForm.uom}>{materialForm.uom}</option>}
                         <option value="Kg">Kg</option>
                         <option value="Nos">Nos</option>
                         <option value="Mtr">Mtr</option>
@@ -1845,9 +1799,6 @@ const BOMFormPage = () => {
                       <label className="text-xs  text-slate-500 ml-1">Item Group</label>
                       <select className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.itemGroup} onChange={(e) => setMaterialForm({ ...materialForm, itemGroup: e.target.value })}>
                         <option value="">Select Group</option>
-                        {materialForm.itemGroup && !itemGroups.some(g => g.name === materialForm.itemGroup) && (
-                          <option value={materialForm.itemGroup}>{materialForm.itemGroup}</option>
-                        )}
                         {itemGroups.map(group => (
                           <option key={group.id} value={group.name}>{group.name}</option>
                         ))}
