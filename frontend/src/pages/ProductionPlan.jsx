@@ -642,37 +642,99 @@ const ProductionPlan = () => {
 
   const calculatePlanDetails = () => {
     // 1. Collect all materials
-    const allMaterials = newPlan.items.flatMap(item => 
-      (item.materials || []).map(mat => {
-        const baseQty = parseFloat(mat.required_qty || mat.qty_per_pc || 0);
-        return {
-          ...mat,
-          totalDesignQty: newPlan.targetQuantity || 0,
-          totalPlannedQty: baseQty * (newPlan.targetQuantity || 1),
-          bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
-          source_fg: item.itemCode
-        };
-      })
-    );
+    const consolidatedMaterialsMap = new Map();
+    const processedMaterialSOItems = new Set();
+
+    newPlan.items.forEach(item => {
+      const soItemId = item.salesOrderItemId;
+      
+      (item.materials || []).forEach(mat => {
+        const itemCode = mat.item_code || mat.material_code || mat.itemCode || '';
+        const matName = mat.material_name || mat.materialName || mat.item || '';
+        const matCat = mat.material_category || ((mat.depth <= 1) ? 'CORE' : 'EXPLODED');
+        
+        const baseQty = parseFloat(mat.qty_per_pc || mat.required_qty || 0);
+        const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
+        
+        // Use a key that represents the material identity
+        const mKey = `${itemCode}-${matName}`;
+        
+        // If this is a CORE material and we've already processed this Sales Order Item's core materials,
+        // we might be double-counting the same FG-level materials from different sub-assemblies.
+        const soItemMaterialKey = `${soItemId}-${mKey}`;
+
+        if (consolidatedMaterialsMap.has(mKey)) {
+          const existing = consolidatedMaterialsMap.get(mKey);
+          
+          // Logic: If same material comes from same SO Item multiple times (via different plan items),
+          // it's likely a shared material that shouldn't be summed again.
+          if (!processedMaterialSOItems.has(soItemMaterialKey)) {
+            const plannedQty = baseQty * itemPlannedQty;
+            existing.totalPlannedQty += plannedQty;
+            existing.required_qty = (parseFloat(existing.required_qty) || 0) + plannedQty;
+            processedMaterialSOItems.add(soItemMaterialKey);
+          }
+          
+          if (matCat === 'CORE') existing.material_category = 'CORE';
+        } else {
+          const plannedQty = baseQty * itemPlannedQty;
+          consolidatedMaterialsMap.set(mKey, {
+            ...mat,
+            item_code: itemCode,
+            material_name: matName,
+            material_category: matCat,
+            totalDesignQty: newPlan.targetQuantity || 0,
+            totalPlannedQty: plannedQty,
+            required_qty: plannedQty,
+            bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
+            source_fg: item.itemCode
+          });
+          processedMaterialSOItems.add(soItemMaterialKey);
+        }
+      });
+    });
+    const allMaterials = Array.from(consolidatedMaterialsMap.values());
 
     // 2. Collect all potential sub-assemblies (components)
-    const rawComponents = isViewing 
-      ? (newPlan.subAssemblies || []) 
-      : newPlan.items.flatMap(item => (item.components || []).map(comp => {
+    const consolidatedComponentsMap = new Map();
+    if (isViewing) {
+      (newPlan.subAssemblies || []).forEach(sa => {
+        const key = sa.item_code || sa.itemCode;
+        consolidatedComponentsMap.set(key, sa);
+      });
+    } else {
+      newPlan.items.forEach(item => {
+        (item.components || []).forEach(comp => {
           const baseQty = parseFloat(comp.quantity || 0);
-          const totalQty = baseQty * (newPlan.targetQuantity || 1);
-          return {
-            ...comp,
-            itemCode: comp.item_code || comp.component_code,
-            bomNo: comp.bom_no || 'BOM-SUB',
-            designQty: newPlan.targetQuantity || 0,
-            plannedQty: totalQty,
-            parentDesignQty: newPlan.targetQuantity || 1,
-            parentPlannedQty: newPlan.targetQuantity || 1,
-            requiredQty: totalQty,
-            source_fg: item.itemCode
-          };
-        }));
+          const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
+          const totalQty = baseQty * itemPlannedQty;
+          const itemCode = comp.item_code || comp.component_code;
+          const key = itemCode;
+
+          if (consolidatedComponentsMap.has(key)) {
+            const existing = consolidatedComponentsMap.get(key);
+            existing.plannedQty += totalQty;
+            existing.requiredQty += totalQty;
+            existing.required_qty += totalQty;
+          } else {
+            consolidatedComponentsMap.set(key, {
+              ...comp,
+              itemCode: itemCode,
+              item_code: itemCode,
+              bomNo: comp.bom_no || 'BOM-SUB',
+              designQty: itemPlannedQty,
+              plannedQty: totalQty,
+              parentDesignQty: itemPlannedQty,
+              parentPlannedQty: itemPlannedQty,
+              requiredQty: totalQty,
+              required_qty: totalQty,
+              source_fg: item.itemCode
+            });
+          }
+        });
+      });
+    }
+    const rawComponents = Array.from(consolidatedComponentsMap.values());
 
     // 3. Separate real Sub-Assemblies from Consumables (Item Code starts with CON-)
     const subAssembliesToDisplay = rawComponents.filter(c => {

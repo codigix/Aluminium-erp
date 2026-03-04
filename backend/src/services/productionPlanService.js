@@ -812,13 +812,17 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
       const source_assembly = depth === 0 ? null : itemCode;
       
-      const mKey = `${m.material_name}-${m.material_code || ''}-${material_category}-${source_assembly || ''}`;
+      const mKey = `${m.material_name}-${m.material_code || ''}`;
       const existing = materialMap.get(mKey);
       const reqQty = (m.qty_per_pc || 0) * qtyMultiplier;
 
       if (existing) {
         existing.required_qty += reqQty;
         existing.totalRequiredQty += reqQty;
+        // Prioritize CORE category
+        if (material_category === 'CORE') {
+          existing.material_category = 'CORE';
+        }
       } else {
         materialMap.set(mKey, {
           ...m,
