@@ -323,8 +323,24 @@ const BOMFormPage = () => {
     const options = [];
     const seen = new Set();
     
-    // Combine both sources
-    const allItems = [
+    const rawItems = [];
+
+    // 1. Put selected item FIRST to ensure it wins deduplication and bypasses filters
+    if (selectedItem) {
+      rawItems.push({
+        label: (selectedItem.material_name || selectedItem.description || '').replace(/\s*\($/, ''),
+        value: `${selectedItem.source || 'order'}_${selectedItem.id}`,
+        id: selectedItem.id,
+        item_code: selectedItem.item_code || selectedItem.itemCode,
+        source: selectedItem.source || 'order',
+        drawing_no: selectedItem.drawing_no,
+        item_group: selectedItem.item_group || selectedItem.material_type,
+        subLabel: `[${selectedItem.item_group || 'Item'}] • ${selectedItem.item_code || selectedItem.itemCode} ${selectedItem.drawing_no && selectedItem.drawing_no !== 'N/A' ? `• Drg: ${selectedItem.drawing_no}` : ''}`
+      });
+    }
+
+    // 2. Add other items
+    rawItems.push(
       ...approvedDrawings.map(item => ({
         label: (item.material_name || item.description || '').replace(/\s*\($/, ''),
         value: `order_${item.id}`,
@@ -345,47 +361,67 @@ const BOMFormPage = () => {
         item_group: item.material_type,
         subLabel: `[${item.material_type || 'Stock'}] • ${item.item_code} ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
       }))
-    ];
+    );
 
-    allItems.forEach(opt => {
-      const group = (opt.item_group || '').toLowerCase();
-      const isFinishedOrSub = group.includes('finished') || 
-                            group.includes('sub') || 
-                            group.includes('assembly') || 
-                            group === 'fg' || 
-                            group === 'sfg' ||
-                            group === 'sub-assembly' ||
-                            group === 'semi finished' ||
-                            group === 'semi-finished';
-
-      if (!isFinishedOrSub) return;
-
-      if (drawingFilter) {
-        const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
-        const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
-        if (cleanOptDwg !== cleanFilterDwg) return;
-      }
-
-      // Deduplicate by item_code first
-      if (seen.has(opt.item_code)) return;
+    rawItems.forEach(opt => {
+      const isSelected = selectedItem && String(opt.id) === String(selectedItem.id) && opt.source === (selectedItem.source || 'order');
       
-      // Also deduplicate by label + drawing if they are identical (to handle the "double" issue in screenshot)
-      const labelDrawingKey = `${opt.label}|${opt.drawing_no || 'N/A'}`;
-      if (seen.has(labelDrawingKey)) return;
+      if (!isSelected) {
+        const group = (opt.item_group || '').toLowerCase();
+        const isFinishedOrSub = group.includes('finished') || 
+                              group.includes('sub') || 
+                              group.includes('assembly') || 
+                              group === 'fg' || 
+                              group === 'sfg' ||
+                              group === 'sub-assembly' ||
+                              group === 'semi finished' ||
+                              group === 'semi-finished';
+
+        if (!isFinishedOrSub) return;
+
+        if (drawingFilter) {
+          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
+          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
+          if (cleanOptDwg !== cleanFilterDwg) return;
+        }
+
+        // Deduplicate by item_code first for non-selected items
+        if (seen.has(opt.item_code)) return;
+        
+        // Also deduplicate by label + drawing if they are identical (to handle the "double" issue in screenshot)
+        const labelDrawingKey = `${opt.label}|${opt.drawing_no || 'N/A'}`;
+        if (seen.has(labelDrawingKey)) return;
+      }
 
       options.push(opt);
       seen.add(opt.item_code);
+      const labelDrawingKey = `${opt.label}|${opt.drawing_no || 'N/A'}`;
       seen.add(labelDrawingKey);
     });
 
     return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
-  }, [approvedDrawings, stockItems, drawingFilter]);
+  }, [approvedDrawings, stockItems, drawingFilter, selectedItem]);
 
   const itemCodeOptions = useMemo(() => {
     const options = [];
     const seen = new Set();
 
-    const allItems = [
+    const rawItems = [];
+
+    if (selectedItem) {
+      rawItems.push({
+        label: selectedItem.item_code || selectedItem.itemCode,
+        value: `${selectedItem.source || 'order'}_${selectedItem.id}`,
+        id: selectedItem.id,
+        item_code: selectedItem.item_code || selectedItem.itemCode,
+        source: selectedItem.source || 'order',
+        drawing_no: selectedItem.drawing_no,
+        item_group: selectedItem.item_group || selectedItem.material_type,
+        subLabel: `${(selectedItem.material_name || selectedItem.description || '').replace(/\s*\($/, '')} [${selectedItem.item_group || 'Item'}] ${selectedItem.drawing_no && selectedItem.drawing_no !== 'N/A' ? `• Drg: ${selectedItem.drawing_no}` : ''}`
+      });
+    }
+
+    rawItems.push(
       ...approvedDrawings.map(item => ({
         label: item.item_code,
         value: `order_${item.id}`,
@@ -406,35 +442,39 @@ const BOMFormPage = () => {
         item_group: item.material_type,
         subLabel: `${(item.material_name || '').replace(/\s*\($/, '')} [${item.material_type || 'Stock'}] ${item.drawing_no && item.drawing_no !== 'N/A' ? `• Drg: ${item.drawing_no}` : ''}`
       }))
-    ];
+    );
 
-    allItems.forEach(opt => {
-      const group = (opt.item_group || '').toLowerCase();
-      const isFinishedOrSub = group.includes('finished') || 
-                            group.includes('sub') || 
-                            group.includes('assembly') || 
-                            group === 'fg' || 
-                            group === 'sfg' ||
-                            group === 'sub-assembly' ||
-                            group === 'semi finished' ||
-                            group === 'semi-finished';
+    rawItems.forEach(opt => {
+      const isSelected = selectedItem && String(opt.id) === String(selectedItem.id) && opt.source === (selectedItem.source || 'order');
 
-      if (!isFinishedOrSub) return;
+      if (!isSelected) {
+        const group = (opt.item_group || '').toLowerCase();
+        const isFinishedOrSub = group.includes('finished') || 
+                              group.includes('sub') || 
+                              group.includes('assembly') || 
+                              group === 'fg' || 
+                              group === 'sfg' ||
+                              group === 'sub-assembly' ||
+                              group === 'semi finished' ||
+                              group === 'semi-finished';
 
-      if (drawingFilter) {
-        const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
-        const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
-        if (cleanOptDwg !== cleanFilterDwg) return;
+        if (!isFinishedOrSub) return;
+
+        if (drawingFilter) {
+          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
+          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
+          if (cleanOptDwg !== cleanFilterDwg) return;
+        }
+
+        if (seen.has(opt.item_code)) return;
       }
 
-      if (seen.has(opt.item_code)) return;
-      
       options.push(opt);
       seen.add(opt.item_code);
     });
 
     return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
-  }, [approvedDrawings, stockItems, drawingFilter]);
+  }, [approvedDrawings, stockItems, drawingFilter, selectedItem]);
 
   const location = useLocation();
 
