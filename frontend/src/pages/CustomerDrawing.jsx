@@ -1476,16 +1476,6 @@ const CustomerDrawing = () => {
             {modalMode === 'edit' && (
               <>
                 <button 
-                  type="button"
-                  onClick={handleEditAndSendToDesign}
-                  disabled={saveLoading}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-                >
-                  {saveLoading && <Loader2 className="w-3 h-3 animate-spin" />}
-                  <Send className="w-3 h-3" />
-                  Save & Send to Design
-                </button>
-                <button 
                   type="submit"
                   disabled={saveLoading}
                   className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"

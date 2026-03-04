@@ -38,6 +38,8 @@ const ClientQuotations = () => {
   const [expandedClientName, setExpandedClientName] = useState(null);
   const [expandedSentKey, setExpandedSentKey] = useState(null);
   const [quotePricesMap, setQuotePricesMap] = useState({});
+  const [profitMap, setProfitMap] = useState({});
+  const [gstMap, setGstMap] = useState({});
   const [sendingClientName, setSendingClientName] = useState(null);
   const [editingSentAmounts, setEditingSentAmounts] = useState({});
   const [savingSentAmount, setSavingSentAmount] = useState(null);
