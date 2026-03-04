@@ -23,7 +23,7 @@ async function checkApprovedDrawings() {
       JOIN companies c ON so.company_id = c.id 
       JOIN sales_order_items soi ON soi.sales_order_id = so.id 
       LEFT JOIN design_orders do ON do.sales_order_id = so.id
-      WHERE soi.status = 'APPROVED'
+      WHERE soi.status = 'Approved '
     `);
     console.table(rows);
 

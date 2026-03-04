@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const grnService = require('../services/grnService');
+const grnItemService = require('../services/grnItemService');
+const generatePoPdf = require('../utils/generatePoPdf');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.get('/stats', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
@@ -9,6 +11,37 @@ router.get('/stats', authenticate, authorize(['GRN_VIEW']), async (req, res) => 
     res.json(stats);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.get('/:grnId/pdf', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
+  try {
+    const { grnId } = req.params;
+    const grn = await grnService.getGRNWithDetails(grnId);
+    
+    if (!grn) {
+      return res.status(404).json({ message: 'GRN not found' });
+    }
+
+    const items = await grnItemService.getGRNItemsByGrnId(grnId);
+    
+    const pdfPath = await generatePoPdf({
+      type: 'grn',
+      grn,
+      items
+    });
+
+    res.download(pdfPath, `GRN_${String(grn.id).padStart(4, '0')}.pdf`, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: 'Failed to download PDF' });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 

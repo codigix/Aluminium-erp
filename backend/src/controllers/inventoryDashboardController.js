@@ -27,6 +27,15 @@ const getLowStockItems = async (req, res, next) => {
   }
 };
 
+const getMaterialRequests = async (req, res, next) => {
+  try {
+    const mrs = await inventoryDashboardService.getMaterialRequests();
+    res.json(mrs);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getQCPendingItems = async (req, res, next) => {
   try {
     const items = await inventoryDashboardService.getQCPendingItems();
@@ -36,9 +45,20 @@ const getQCPendingItems = async (req, res, next) => {
   }
 };
 
+const getSummaryMetrics = async (req, res, next) => {
+  try {
+    const stats = await inventoryDashboardService.getSummaryMetrics();
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getIncomingOrders,
   getPendingGRNs,
   getLowStockItems,
-  getQCPendingItems
+  getMaterialRequests,
+  getQCPendingItems,
+  getSummaryMetrics
 };

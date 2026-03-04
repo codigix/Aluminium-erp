@@ -6,11 +6,22 @@ const listProductionPlans = async () => {
     `SELECT pp.*, u.username as creator_name, 
             COALESCE(o.order_no, o_direct.order_no) as order_no, 
             COALESCE(so.project_name, c_direct.company_name) as project_name,
-            COALESCE(soi.item_code, oi.item_code) as item_code, 
-            COALESCE(soi.description, oi.description) as item_description,
+            COALESCE(ppi.item_code, 
+              CASE 
+                WHEN o_direct.id IS NOT NULL THEN oi.item_code 
+                ELSE COALESCE(soi.item_code, oi.item_code) 
+              END
+            ) as item_code, 
+            COALESCE(ppi.description,
+              CASE 
+                WHEN o_direct.id IS NOT NULL THEN oi.description 
+                ELSE COALESCE(soi.description, oi.description) 
+              END
+            ) as item_description,
             (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id) as wo_count,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id) as total_ops,
-            (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops
+            (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops,
+            (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
      LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
@@ -20,8 +31,13 @@ const listProductionPlans = async () => {
      ) o ON o.quotation_id = so.id
      LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
      LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
-     LEFT JOIN sales_order_items soi ON pp.bom_no = soi.id
-     LEFT JOIN order_items oi ON pp.bom_no = oi.id
+     LEFT JOIN (
+       SELECT plan_id, item_code, description, sales_order_item_id, sales_order_id
+       FROM production_plan_items 
+       WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+     ) ppi ON pp.id = ppi.plan_id
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id
+     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
      ORDER BY pp.created_at DESC`
   );
   return rows;
@@ -29,9 +45,19 @@ const listProductionPlans = async () => {
 
 const getProductionPlanById = async (id) => {
   const [plans] = await pool.query(
-    `SELECT pp.*, u.username as creator_name
+    `SELECT pp.*, u.username as creator_name,
+            COALESCE(o_direct.order_no) as order_no,
+            COALESCE(ppi_first.item_code) as item_code,
+            COALESCE(ppi_first.description) as item_description,
+            (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
+     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
+     LEFT JOIN (
+       SELECT plan_id, item_code, description 
+       FROM production_plan_items 
+       WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+     ) ppi_first ON pp.id = ppi_first.plan_id
      WHERE pp.id = ?`,
     [id]
   );
@@ -43,23 +69,36 @@ const getProductionPlanById = async (id) => {
   const [items] = await pool.query(
     `SELECT ppi.*, 
             COALESCE(so.project_name, c_direct.company_name) as project_name, 
-            COALESCE(soi.item_code, oi.item_code) as item_code, 
-            COALESCE(soi.description, oi.description) as description, 
-            COALESCE(soi.drawing_no, oi.drawing_no) as drawing_no, 
+            COALESCE(ppi.item_code, 
+              CASE 
+                WHEN o_direct.id IS NOT NULL THEN oi.item_code 
+                ELSE COALESCE(soi.item_code, oi.item_code) 
+              END
+            ) as item_code, 
+            COALESCE(ppi.description, 
+              CASE 
+                WHEN o_direct.id IS NOT NULL THEN oi.description 
+                ELSE COALESCE(soi.description, oi.description) 
+              END
+            ) as description, 
+            CASE 
+              WHEN o_direct.id IS NOT NULL THEN oi.drawing_no 
+              ELSE COALESCE(soi.drawing_no, oi.drawing_no) 
+            END as drawing_no, 
             w.workstation_name,
             COALESCE(ppi.design_qty, soi.quantity, oi.quantity) as design_qty, 
             COALESCE(ppi.uom, soi.unit, 'Nos') as uom,
             COALESCE(o.order_no, o_direct.order_no) as order_no
      FROM production_plan_items ppi
      LEFT JOIN sales_orders so ON ppi.sales_order_id = so.id
-     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id
+     LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id AND ppi.item_code = soi.item_code
+     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id AND ppi.item_code = oi.item_code
      LEFT JOIN workstations w ON ppi.workstation_id = w.id
      LEFT JOIN (
        SELECT quotation_id, order_no FROM orders 
        WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
      ) o ON o.quotation_id = so.id
-     LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
      LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      WHERE ppi.plan_id = ?`,
     [id]
@@ -138,17 +177,19 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const item of finishedGoods) {
         await connection.execute(
           `INSERT INTO production_plan_items 
-           (plan_id, sales_order_id, sales_order_item_id, item_code, bom_no, design_qty, uom, planned_qty, warehouse, planned_start_date, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+           (plan_id, sales_order_id, sales_order_item_id, item_code, description, bom_no, design_qty, uom, planned_qty, rate, warehouse, planned_start_date, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
           [
             planId,
             item.salesOrderId || finalSalesOrderId,
             item.salesOrderItemId || null,
             item.itemCode || null,
+            item.description || item.item_description || null,
             item.bomNo || finalBomNo,
             item.designQty || finalTargetQty || 0,
             item.uom || 'Nos',
             item.plannedQty || finalTargetQty || 0,
+            item.rate || 0,
             item.warehouse || null,
             item.plannedStartDate || safeStartDate || null
           ]
@@ -179,12 +220,15 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const sa of subAssemblies) {
         await connection.execute(
           `INSERT INTO production_plan_sub_assemblies 
-           (plan_id, item_code, required_qty, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, description, design_qty, required_qty, rate, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             sa.itemCode || sa.subAssemblyItemCode || sa.item_code || null,
+            sa.description || sa.item_description || sa.name || null,
+            sa.designQty || finalTargetQty || 0,
             sa.requiredQty || 0,
+            sa.rate || 0,
             sa.bomNo || sa.bom_no || null,
             sa.targetWarehouse || sa.target_warehouse || null,
             sa.scheduledDate || sa.scheduled_date || safeStartDate || null,
@@ -204,18 +248,20 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, required_qty, uom, warehouse, bom_ref, source_assembly, material_category, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            mat.itemCode || mat.item || null,
-            mat.materialName || mat.item || null,
-            mat.requiredQty || 0,
+            mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
+            mat.materialName || mat.material_name || mat.item || null,
+            mat.designQty || finalTargetQty || 0,
+            mat.requiredQty || mat.required_qty || 0,
+            mat.rate || 0,
             mat.uom || mat.unit || 'Nos',
             mat.warehouse || null,
-            mat.bomRef || null,
-            mat.sourceAssembly || null,
-            mat.category || (mat.sourceAssembly ? 'EXPLODED' : 'CORE'),
+            mat.bomRef || mat.bom_ref || null,
+            mat.sourceAssembly || mat.source_assembly || null,
+            mat.category || mat.material_category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
             mat.status || '--'
           ]
         );
@@ -307,17 +353,19 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const item of items) {
         await connection.execute(
           `INSERT INTO production_plan_items 
-           (plan_id, sales_order_id, sales_order_item_id, item_code, bom_no, design_qty, uom, planned_qty, warehouse, planned_start_date, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, sales_order_id, sales_order_item_id, item_code, description, bom_no, design_qty, uom, planned_qty, rate, warehouse, planned_start_date, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             item.salesOrderId || finalSalesOrderId,
             item.salesOrderItemId || null,
             item.itemCode || null,
+            item.description || item.item_description || null,
             item.bomNo || finalBomNo,
             item.designQty || finalTargetQty || 0,
             item.uom || 'Nos',
             item.plannedQty || finalTargetQty || 0,
+            item.rate || 0,
             item.warehouse || null,
             item.plannedStartDate || safeStartDate || null,
             item.status || 'PENDING'
@@ -331,12 +379,15 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const sa of subAssemblies) {
         await connection.execute(
           `INSERT INTO production_plan_sub_assemblies 
-           (plan_id, item_code, required_qty, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, description, design_qty, required_qty, rate, bom_no, target_warehouse, scheduled_date, manufacturing_type, source_fg)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             sa.itemCode || sa.subAssemblyItemCode || sa.item_code || null,
+            sa.description || sa.item_description || sa.name || null,
+            sa.designQty || finalTargetQty || 0,
             sa.requiredQty || 0,
+            sa.rate || 0,
             sa.bomNo || sa.bom_no || null,
             sa.targetWarehouse || sa.target_warehouse || null,
             sa.scheduledDate || sa.scheduled_date || safeStartDate || null,
@@ -356,18 +407,20 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, required_qty, uom, warehouse, bom_ref, source_assembly, material_category, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            mat.itemCode || mat.item || null,
-            mat.materialName || mat.item || null,
-            mat.requiredQty || 0,
+            mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
+            mat.materialName || mat.material_name || mat.item || null,
+            mat.designQty || finalTargetQty || 0,
+            mat.requiredQty || mat.required_qty || 0,
+            mat.rate || 0,
             mat.uom || mat.unit || 'Nos',
             mat.warehouse || null,
-            mat.bomRef || null,
-            mat.sourceAssembly || null,
-            mat.materialCategory || mat.material_category || mat.category || (mat.sourceAssembly ? 'EXPLODED' : 'CORE'),
+            mat.bomRef || mat.bom_ref || null,
+            mat.sourceAssembly || mat.source_assembly || null,
+            mat.materialCategory || mat.material_category || mat.category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
             mat.status || '--'
           ]
         );
@@ -528,11 +581,11 @@ const getSalesOrderFullDetails = async (id) => {
               COALESCE(planned.already_planned_qty, 0) as already_planned_qty
        FROM order_items oi
        LEFT JOIN (
-         SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+         SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
          FROM production_plan_items 
          WHERE status != 'CANCELLED'
-         GROUP BY sales_order_item_id
-       ) planned ON oi.id = planned.sales_order_item_id
+         GROUP BY sales_order_id, sales_order_item_id
+       ) planned ON oi.order_id = planned.sales_order_id AND oi.id = planned.sales_order_item_id
        WHERE oi.order_id = ?`,
       [id]
     );
@@ -575,14 +628,14 @@ const getSalesOrderFullDetails = async (id) => {
      FROM (
        SELECT *, ROW_NUMBER() OVER (PARTITION BY sales_order_id, drawing_no ORDER BY id DESC) as rn
        FROM sales_order_items
-       WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG'))
+       WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'Assembly'))
      ) soi
      LEFT JOIN (
-       SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
+       SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
        FROM production_plan_items 
        WHERE status != 'CANCELLED'
-       GROUP BY sales_order_item_id
-     ) planned ON soi.id = planned.sales_order_item_id
+       GROUP BY sales_order_id, sales_order_item_id
+     ) planned ON soi.sales_order_id = planned.sales_order_id AND soi.id = planned.sales_order_item_id
      WHERE soi.rn = 1`,
     [id]
   );
@@ -617,22 +670,21 @@ const generatePlanCode = async () => {
 };
 
 const getItemBOMDetails = async (salesOrderItemId) => {
-  // Try to fetch the item details from sales_order_items first
+  // Try to fetch the item details from order_items first (new system)
   let [items] = await pool.query(
-    'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ?',
+    'SELECT id, item_code, drawing_no FROM order_items WHERE id = ?',
     [salesOrderItemId]
   );
 
-  let soItemIdForLookup = salesOrderItemId;
+  let soItemIdForLookup = null;
 
-  // If not found, try order_items (the new system)
+  // If not found in order_items, try sales_order_items (the old system)
   if (items.length === 0) {
     [items] = await pool.query(
-      'SELECT id, item_code, drawing_no FROM order_items WHERE id = ?',
+      'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ?',
       [salesOrderItemId]
     );
-    // For order_items, we don't have SO-specific records yet
-    soItemIdForLookup = null; 
+    soItemIdForLookup = items.length > 0 ? salesOrderItemId : null;
   }
 
   if (items.length === 0) return null;
@@ -656,6 +708,26 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     parentType = 'FG'
   ) => {
     const currentIdentity = `${itemCode}-${drawingNo || ''}`;
+
+    if (soItemId && depth === 0) {
+      // Safety check: Ensure soItemId actually refers to an item with matching identity
+      // This prevents ID clashes between order_items and sales_order_items
+      const [check] = await pool.query(
+        'SELECT item_code, drawing_no FROM sales_order_items WHERE id = ?',
+        [soItemId]
+      );
+      if (check.length > 0) {
+        const matches = (check[0].item_code === itemCode) || 
+                        (check[0].drawing_no === drawingNo && check[0].drawing_no !== null);
+        if (!matches) {
+          console.warn(`[explodeBOM] Identity mismatch for soItemId ${soItemId}. Expected ${itemCode}/${drawingNo}, found ${check[0].item_code}/${check[0].drawing_no}. Disregarding soItemId.`);
+          soItemId = null;
+        }
+      } else {
+        soItemId = null;
+      }
+    }
+
     const bomContextKey = `${currentIdentity}-${soItemId || 'MASTER'}-${parentId || 'TOP'}`;
 
     if (processedBOMs.has(bomContextKey)) return { materials: [], components: [], operations: [] };
@@ -736,10 +808,9 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     // Process Materials
     materials.forEach(m => {
-      // Logic fix: level 0 (FG) is CORE, everything else is EXPLODED
-      const isFG = depth === 0;
-      const material_category = isFG ? 'CORE' : 'EXPLODED';
-      const source_assembly = isFG ? null : itemCode;
+      // level 0 (FG) and level 1 (direct sub-assemblies) are considered CORE for primary list
+      const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
+      const source_assembly = depth === 0 ? null : itemCode;
       
       const mKey = `${m.material_name}-${m.material_code || ''}-${material_category}-${source_assembly || ''}`;
       const existing = materialMap.get(mKey);
@@ -755,6 +826,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           required_qty: reqQty,
           totalRequiredQty: reqQty,
           source_assembly,
+          rate: m.rate || 0,
           bom_ref: m.bom_no || drawingNo || 'BOM-REF'
         });
       }
@@ -766,7 +838,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         ...o,
         source_item: itemCode,
         itemCode: itemCode,
-        base_time: o.base_hour || o.base_time || (o.cycle_time_min ? (parseFloat(o.cycle_time_min) / 60).toFixed(2) : 1)
+        base_time: o.cycle_time_min || o.base_time || (o.base_hour ? (parseFloat(o.base_hour) * 60).toFixed(2) : 1)
       }));
       
       // Store in global flat map
@@ -838,6 +910,8 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     return {
       materials: materials.map(m => ({
         ...m,
+        item_code: m.material_code || m.item_code || m.itemCode || null,
+        material_name: m.material_name || m.name || null,
         qty_per_pc: m.qty_per_pc || 0,
         required_qty: (m.qty_per_pc || 0) * qtyMultiplier
       })),
@@ -853,6 +927,336 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     components: Array.from(componentMap.values()),
     operations: Array.from(operationMap.values()).flat()
   };
+};
+
+const getMaterialRequestItemsForPlan = async (planId) => {
+  const [plans] = await pool.query(
+    'SELECT * FROM production_plans WHERE id = ?',
+    [planId]
+  );
+
+  if (plans.length === 0) {
+    throw new Error('Production Plan not found');
+  }
+
+  const plan = plans[0];
+  const planCode = plan.plan_code;
+  const aggregatedMap = new Map();
+
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists) => {
+    if (!itemCode && !name) return;
+    
+    const code = (itemCode || name).trim();
+    const key = code.toUpperCase();
+    
+    const mapItemType = (code, cat) => {
+      const materialCategories = ['CORE', 'EXPLODED', 'RAW_MATERIAL', 'COMPONENT'];
+      if (materialCategories.includes(String(cat).toUpperCase())) return 'RAW_MATERIAL';
+
+      const c = (code || '').toUpperCase();
+      if (c.startsWith('RM-')) return 'RAW_MATERIAL';
+      if (c.startsWith('SA-')) return 'SUB_ASSEMBLY';
+      if (c.startsWith('FG-')) return 'FG';
+      
+      if (cat === 'FG') return 'FG';
+      if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
+      return 'RAW_MATERIAL';
+    };
+
+    if (aggregatedMap.has(key)) {
+      const existing = aggregatedMap.get(key);
+      existing.quantity += Number(qty);
+      existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
+      // Ensure inventory is updated if the new source has a higher value (e.g. from fulfilled MR)
+      if (Number(currentBalance) > existing.inventory) {
+        existing.inventory = Number(currentBalance);
+        existing.is_fulfilled = isFulfilled || existing.is_fulfilled;
+        existing.request_exists = requestExists || existing.request_exists;
+      }
+      if (existing.item_type !== 'RAW_MATERIAL') {
+        const newType = mapItemType(code, category);
+        if (newType === 'RAW_MATERIAL') existing.item_type = 'RAW_MATERIAL';
+      }
+      if (rate && !existing.unit_rate) existing.unit_rate = rate;
+    } else {
+      aggregatedMap.set(key, {
+        item_code: code,
+        quantity: Number(qty),
+        design_qty: Number(designQty || 0),
+        uom: uom || 'Nos',
+        material_name: name || code,
+        warehouse: warehouse,
+        item_type: mapItemType(code, category),
+        unit_rate: rate || 0,
+        inventory: Math.max(0, Number(currentBalance || 0)),
+        is_fulfilled: !!isFulfilled,
+        request_exists: !!requestExists
+      });
+    }
+  };
+
+  // Step 1: Add Materials (ONLY materials should be in Material Request)
+  const [materials] = await pool.query(`
+    SELECT ppm.*, 
+           COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
+           COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
+           COALESCE(actual_sb.current_balance, 0) as current_balance,
+           COALESCE(issued.issued_qty, 0) as issued_qty,
+           COALESCE(mr_data.status_rank, 0) as status_rank
+    FROM production_plan_materials ppm
+    LEFT JOIN (
+        SELECT 
+            material_name, 
+            MAX(item_code) as item_code, 
+            MAX(valuation_rate) as valuation_rate, 
+            SUM(current_balance) as current_balance
+        FROM stock_balance 
+        GROUP BY material_name
+    ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+    LEFT JOIN (
+        SELECT 
+            mii.item_code, 
+            mii.material_name,
+            SUM(mii.quantity) as issued_qty
+        FROM material_issue_items mii
+        JOIN material_issues mi ON mii.issue_id = mi.id
+        JOIN work_orders wo ON mi.work_order_id = wo.id
+        WHERE wo.plan_id = ?
+        GROUP BY mii.item_code, mii.material_name
+    ) issued ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
+    LEFT JOIN (
+        SELECT 
+            LOWER(TRIM(mri.item_code)) as join_item_code,
+            LOWER(TRIM(mri.item_name)) as join_item_name,
+            MAX(CASE mr.status 
+                WHEN 'COMPLETED' THEN 5
+                WHEN 'FULFILLED' THEN 4
+                WHEN 'Fulfilled' THEN 4
+                WHEN 'PROCESSING' THEN 3
+                WHEN 'Approved ' THEN 2
+                WHEN 'DRAFT' THEN 1
+                ELSE 0 END) as status_rank
+        FROM material_requests mr
+        JOIN material_request_items mri ON mr.id = mri.mr_id
+        WHERE mr.plan_id = ? OR mr.notes LIKE ?
+        GROUP BY join_item_code, join_item_name
+    ) mr_data ON (
+        (ppm.item_code IS NOT NULL AND LOWER(TRIM(ppm.item_code)) = mr_data.join_item_code) OR 
+        (ppm.material_name IS NOT NULL AND LOWER(TRIM(ppm.material_name)) = mr_data.join_item_name)
+    )
+    WHERE ppm.plan_id = ?
+  `, [planId, planId, `%${planCode}%`, planId]);
+
+  for (const mat of materials) {
+    const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
+    if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
+    
+    // If material request is fulfilled or completed, show full quantity as available
+    const isFulfilled = (mat.status_rank || 0) >= 4;
+    const requestExists = (mat.status_rank || 0) > 0;
+    const effectiveInventory = isFulfilled 
+      ? Math.max(Number(mat.required_qty), Number(mat.current_balance) + Number(mat.issued_qty))
+      : Number(mat.current_balance) + Number(mat.issued_qty);
+    
+    addToMap(
+      mat.actual_item_code, 
+      mat.required_qty, 
+      mat.uom, 
+      mat.material_name, 
+      mat.warehouse, 
+      'RAW_MATERIAL', 
+      mat.rate || mat.stock_rate || 0, 
+      mat.design_qty, 
+      effectiveInventory,
+      isFulfilled,
+      requestExists
+    );
+  }
+
+  return {
+    plan_code: plan.plan_code,
+    start_date: plan.start_date,
+    items: Array.from(aggregatedMap.values())
+  };
+};
+
+const createMaterialRequestFromPlan = async (planId, userId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Fetch Plan Details
+    const [plans] = await connection.query(
+      'SELECT * FROM production_plans WHERE id = ?',
+      [planId]
+    );
+
+    if (plans.length === 0) {
+      throw new Error('Production Plan not found');
+    }
+
+    const plan = plans[0];
+
+    // Check if an MR already exists for this plan to avoid duplicates
+    const [existingMrs] = await connection.query(
+      "SELECT id FROM material_requests WHERE notes LIKE ?",
+      [`%Generated from Production Plan ${plan.plan_code}%`]
+    );
+    
+    if (existingMrs.length > 0) {
+      throw new Error(`A Material Request already exists for Production Plan ${plan.plan_code}`);
+    }
+
+    // 2. Aggregate only materials into a single map
+    const aggregatedMap = new Map();
+
+    const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty) => {
+      if (!itemCode && !name) return;
+      
+      const code = (itemCode || name).trim();
+      const key = code.toUpperCase();
+      
+      if (aggregatedMap.has(key)) {
+        const existing = aggregatedMap.get(key);
+        existing.quantity += Number(qty);
+        existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
+      } else {
+        aggregatedMap.set(key, {
+          item_code: code,
+          quantity: Number(qty),
+          design_qty: Number(designQty || 0),
+          uom: uom || 'Nos',
+          material_name: name || code,
+          warehouse: warehouse,
+          item_type: 'RAW_MATERIAL', // Only materials are requested
+          unit_rate: rate || 0
+        });
+      }
+    };
+
+    // Step 1: Add Materials (Skip FG and SA as per requirement)
+    const [materials] = await connection.query(`
+      SELECT ppm.*, 
+             COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
+             COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
+             COALESCE(actual_sb.current_balance, 0) as current_balance,
+             COALESCE(issued.issued_qty, 0) as issued_qty
+      FROM production_plan_materials ppm
+      LEFT JOIN (
+        SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate, SUM(current_balance) as current_balance
+        FROM stock_balance 
+        GROUP BY material_name
+      ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+      LEFT JOIN (
+        SELECT 
+            mii.item_code, 
+            mii.material_name,
+            SUM(mii.quantity) as issued_qty
+        FROM material_issue_items mii
+        JOIN material_issues mi ON mii.issue_id = mi.id
+        JOIN work_orders wo ON mi.work_order_id = wo.id
+        WHERE wo.plan_id = ?
+        GROUP BY mii.item_code, mii.material_name
+      ) issued ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
+      WHERE ppm.plan_id = ?
+    `, [planId, planId]);
+
+    for (const mat of materials) {
+      const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
+      if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
+
+      const effectiveRate = mat.rate || mat.stock_rate || 0;
+      
+      // Calculate deficit: required - (available + issued)
+      const availableTotal = Number(mat.current_balance) + Number(mat.issued_qty);
+      const shortage = Math.max(0, Number(mat.required_qty) - availableTotal);
+      
+      // Only add to MR if there's a shortage
+      if (shortage > 0) {
+        addToMap(mat.actual_item_code, shortage, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
+      }
+    }
+
+    if (aggregatedMap.size === 0) {
+      throw new Error('No materials found in this Production Plan to request');
+    }
+
+    const aggregatedItems = Array.from(aggregatedMap.values());
+
+    // 4. Generate MR Number
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const [lastMrResult] = await connection.query(
+      'SELECT mr_number FROM material_requests WHERE mr_number LIKE ? ORDER BY id DESC LIMIT 1',
+      [`MR-${dateStr}-%`]
+    );
+
+    let nextNum = 1;
+    if (lastMrResult.length > 0) {
+      const lastMrNum = lastMrResult[0].mr_number;
+      const parts = lastMrNum.split('-');
+      const lastSeq = parseInt(parts[parts.length - 1]);
+      if (!isNaN(lastSeq)) {
+        nextNum = lastSeq + 1;
+      }
+    }
+    const mrNumber = `MR-${dateStr}-${nextNum.toString().padStart(3, '0')}`;
+
+    // 5. Create Material Request Header
+    const [mrResult] = await connection.execute(
+      `INSERT INTO material_requests (
+        mr_number, department, requested_by, required_by, 
+        purpose, status, notes, source_warehouse, plan_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        mrNumber,
+        'Production',
+        userId,
+        plan.start_date || new Date(),
+        'Purchase Request',
+        'DRAFT',
+        `Generated from Production Plan ${plan.plan_code}`,
+        'Consumables Store',
+        planId
+      ]
+    );
+
+    const mrId = mrResult.insertId;
+
+    // 6. Create Material Request Items
+    for (const item of aggregatedItems) {
+      await connection.execute(
+        `INSERT INTO material_request_items (
+          mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          mrId,
+          item.item_code,
+          item.material_name,
+          item.item_type,
+          item.design_qty || 0,
+          item.quantity,
+          item.unit_rate || 0,
+          item.uom,
+          item.warehouse
+        ]
+      );
+    }
+
+    // 7. Update Plan Materials Status
+    await connection.execute(
+      "UPDATE production_plan_materials SET status = 'SUBMITTED' WHERE plan_id = ?",
+      [planId]
+    );
+
+    await connection.commit();
+    return { id: mrId, mr_number: mrNumber, message: 'Material Request created successfully' };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const deleteProductionPlan = async (id) => {
@@ -888,5 +1292,7 @@ module.exports = {
   getSalesOrderFullDetails,
   generatePlanCode,
   getItemBOMDetails,
-  deleteProductionPlan
+  deleteProductionPlan,
+  createMaterialRequestFromPlan,
+  getMaterialRequestItemsForPlan
 };

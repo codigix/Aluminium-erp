@@ -40,17 +40,17 @@ const CompanyMaster = ({
             <p className="text-xs text-slate-500">Create a reusable master for downstream ERP flows.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={onToggleCreatePanel} className="px-5 py-2 rounded-2xl border border-slate-200 text-sm  text-slate-600 hover:border-slate-300">
+            <button type="button" onClick={onToggleCreatePanel} className="px-5 py-2 rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300">
               Discard
             </button>
-            <button type="submit" className="px-6 py-2.5 rounded-2xl bg-slate-900 text-white text-sm  shadow-sm hover:bg-slate-800 disabled:opacity-60" disabled={loading}>
+            <button type="submit" className="p-2.5 rounded  bg-slate-900 text-white text-sm   hover:bg-slate-800 disabled:opacity-60" disabled={loading}>
               {loading ? 'Saving...' : 'Save Company'}
             </button>
           </div>
         </div>
         <div className="px-8 pb-8 pt-6 space-y-3">
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200/70 p-5 space-y-5">
+            <div className="rounded  border border-slate-200/70 p-5 space-y-5">
               <div>
                 <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">General</p>
                 <h3 className="text-md text-slate-900 text-xs">Company Profile</h3>
@@ -77,7 +77,7 @@ const CompanyMaster = ({
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200/70 p-5 space-y-5">
+            <div className="rounded  border border-slate-200/70 p-5 space-y-5">
               <div>
                 <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">Compliance</p>
                 <h3 className="text-md text-slate-900 text-xs">Registration Numbers</h3>
@@ -97,7 +97,7 @@ const CompanyMaster = ({
               </div>
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200/70 p-5 space-y-5">
+          <div className="rounded  border border-slate-200/70 p-5 space-y-5">
             <div>
               <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">Commercial</p>
               <h3 className="text-md text-slate-900 text-xs">Terms & Policies</h3>
@@ -122,7 +122,7 @@ const CompanyMaster = ({
               </FormControl>
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200/70 p-5">
+          <div className="rounded  border border-slate-200/70 p-5">
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-3">
                 <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">Billing Address</p>
@@ -180,38 +180,38 @@ const CompanyMaster = ({
                   <td className="p-2 text-slate-600 align-middle text-xs">{getCompanyCity(company)}</td>
                   <td className="p-2 align-middle"><StatusBadge status={company.status} /></td>
                   <td className="p-2 align-middle">
-                    <div className="flex justify-end gap-2 flex-wrap">
+                    <div className="flex justify-center gap-2 flex-wrap">
                       <button
                         type="button"
-                        className="px-3 py-1.5 rounded-2xl border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
+                        className="p-2 .5 rounded  border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
                         onClick={() => onOpenContactDrawer(company)}
                       >
                         Contacts
                       </button>
                       <button
                         type="button"
-                        className="px-3 py-1.5 rounded-2xl border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
+                        className="p-2 .5 rounded  border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
                         onClick={() => onViewCompany(company)}
                       >
                         View
                       </button>
                       <button
                         type="button"
-                        className="px-3 py-1.5 rounded-2xl border border-indigo-200 text-xs  text-indigo-600 hover:border-indigo-300"
+                        className="p-2 .5 rounded  border border-indigo-200 text-xs  text-indigo-600 hover:border-indigo-300"
                         onClick={() => onEditCompany(company)}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
-                        className="px-3 py-1.5 rounded-2xl border border-amber-200 text-xs  text-amber-600 hover:border-amber-300"
+                        className="p-2 .5 rounded  border border-amber-200 text-xs  text-amber-600 hover:border-amber-300"
                         onClick={() => onToggleStatus(company)}
                       >
                         {(company.status || 'ACTIVE') === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                       </button>
                       <button
                         type="button"
-                        className="px-3 py-1.5 rounded-2xl border border-rose-200 text-xs  text-rose-600 hover:border-rose-300"
+                        className="p-2 .5 rounded  border border-rose-200 text-xs  text-rose-600 hover:border-rose-300"
                         onClick={() => onDeleteCompany(company)}
                       >
                         Delete

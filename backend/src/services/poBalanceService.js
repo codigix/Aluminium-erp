@@ -17,7 +17,7 @@ const calculateItemBalance = async (poItemId) => {
       poi.unit,
       poi.unit_rate,
       poi.amount,
-      COALESCE(SUM(CASE WHEN gi.status IN ('RECEIVED', 'EXCESS_ACCEPTED') THEN gi.accepted_qty ELSE 0 END), 0) as total_accepted_qty,
+      COALESCE(SUM(CASE WHEN gi.status IN ('RECEIVED', 'EXCESS_ACCEPTED', 'Approved ', 'APPROVED', 'PASSED', 'ACCEPTED', 'SHORTAGE') THEN gi.accepted_qty ELSE 0 END), 0) as total_accepted_qty,
       COALESCE(SUM(CASE WHEN gi.status = 'REJECTED' THEN gi.rejected_qty ELSE 0 END), 0) as total_rejected_qty,
       COALESCE(SUM(CASE WHEN gi.status = 'SHORT_RECEIPT' THEN gi.shortage_qty ELSE 0 END), 0) as total_shortage_qty
     FROM purchase_order_items poi
@@ -58,7 +58,7 @@ const calculatePOBalance = async (poId) => {
       poi.description,
       poi.quantity as po_qty,
       poi.unit,
-      COALESCE(SUM(CASE WHEN gi.status IN ('RECEIVED', 'EXCESS_ACCEPTED') THEN gi.accepted_qty ELSE 0 END), 0) as total_accepted_qty,
+      COALESCE(SUM(CASE WHEN gi.status IN ('RECEIVED', 'EXCESS_ACCEPTED', 'Approved ', 'APPROVED', 'PASSED', 'ACCEPTED', 'SHORTAGE') THEN gi.accepted_qty ELSE 0 END), 0) as total_accepted_qty,
       COALESCE(SUM(CASE WHEN gi.status = 'REJECTED' THEN gi.rejected_qty ELSE 0 END), 0) as total_rejected_qty
     FROM purchase_order_items poi
     LEFT JOIN grn_items gi ON poi.id = gi.po_item_id

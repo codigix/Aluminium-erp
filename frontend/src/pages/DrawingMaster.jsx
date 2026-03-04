@@ -3,8 +3,9 @@ import { Card, Modal, FormControl, DataTable, Badge } from '../components/ui.jsx
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { Eye, Edit, Trash2, History, Search } from 'lucide-react';
 
-const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : '');
 
 const DrawingMaster = () => {
   const [drawings, setDrawings] = useState([]);
@@ -17,11 +18,26 @@ const DrawingMaster = () => {
   
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
+  const [modalMode, setModalMode] = useState('edit');
   const [editData, setEditData] = useState({
+    id: '',
     drawing_no: '',
     revision_no: '',
     description: '',
-    drawing_pdf: null
+    client_name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    customer_type: '',
+    gstin: '',
+    city: '',
+    state: '',
+    billing_address: '',
+    shipping_address: '',
+    qty: 1,
+    remarks: '',
+    drawing_pdf: null,
+    file_path: ''
   });
   const [saveLoading, setSaveLoading] = useState(false);
   
@@ -61,8 +77,25 @@ const DrawingMaster = () => {
     fetchDrawings(searchTerm);
   };
 
+  const [companies, setCompanies] = useState([]);
+
+  const fetchCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/companies`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch companies');
+      const data = await response.json();
+      setCompanies(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     fetchDrawings();
+    fetchCompanies();
   }, []);
 
   const fetchRevisions = async (drawingNo) => {
@@ -92,13 +125,13 @@ const DrawingMaster = () => {
     { 
       label: 'Drawing No', 
       key: 'drawing_no',
-      render: (val) => <span className="font-medium text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     { 
       label: 'Latest Rev', 
       key: 'revision_no',
       render: (val) => (
-        <Badge variant="indigo" className="font-mono">
+        <Badge variant="indigo" className=" ">
           {val || '0'}
         </Badge>
       )
@@ -133,13 +166,10 @@ const DrawingMaster = () => {
       render: (val, row) => val ? (
         <button 
           onClick={() => handlePreview(row)}
-          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors mx-auto block"
+          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors mx-auto block"
           title="Preview Drawing"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
+          <Eye className="w-5 h-5" />
         </button>
       ) : <span className="text-slate-300">—</span>
     },
@@ -148,24 +178,20 @@ const DrawingMaster = () => {
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-center gap-2">
           <button 
             onClick={() => handleEdit(row)}
-            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
             title="Edit Drawing"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
+            <Edit className="w-4 h-4" />
           </button>
           <button 
             onClick={() => handleDelete(row)}
-            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded  transition-colors"
             title="Delete Drawing"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )
@@ -178,12 +204,10 @@ const DrawingMaster = () => {
     const isLoading = revisionsLoading[row.drawing_no];
 
     return (
-      <div className="bg-slate-50/50 p-4 rounded-lg border border-slate-100 m-2">
+      <div className="bg-slate-50/50 p-4 rounded  border border-slate-100 m-2">
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs  text-slate-700  tracking-wider flex items-center gap-2">
-            <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <h4 className="text-xs  text-slate-700   flex items-center gap-2 ">
+            <History className="w-4 h-4 text-indigo-500" />
             Revision History
           </h4>
         </div>
@@ -193,39 +217,36 @@ const DrawingMaster = () => {
         ) : revisions.length === 0 ? (
           <div className="py-4 text-left text-xs text-slate-400 italic">No previous revisions recorded</div>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded  border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-4 py-2 text-left text-[10px]  text-slate-500 ">Rev</th>
-                  <th className="px-4 py-2 text-left text-[10px]  text-slate-500 ">Date</th>
-                  <th className="px-4 py-2 text-left text-[10px]  text-slate-500 ">Description</th>
-                  <th className="px-4 py-2 text-right text-[10px]  text-slate-500 ">File</th>
+                  <th className="p-2  text-lefttext-xs   text-slate-500 ">Rev</th>
+                  <th className="p-2  text-lefttext-xs   text-slate-500 ">Date</th>
+                  <th className="p-2  text-lefttext-xs   text-slate-500 ">Description</th>
+                  <th className="p-2  text-righttext-xs   text-slate-500 ">File</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {revisions.map((rev, i) => (
                   <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-2 whitespace-nowrap text-xs font-mono font-medium text-indigo-600">
+                    <td className="p-2  whitespace-nowrap text-xs    text-indigo-600">
                       {rev.revision_no || '0'}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-600">
+                    <td className="p-2  whitespace-nowrap text-xs text-slate-600">
                       {new Date(rev.created_at).toLocaleDateString('en-IN')}
                     </td>
-                    <td className="px-4 py-2 text-xs text-slate-500 max-w-xs truncate">
+                    <td className="p-2  text-xs text-slate-500 max-w-xs truncate">
                       {rev.description}
                     </td>
-                    <td className="px-4 py-2 text-right">
+                    <td className="p-2  text-right">
                       {rev.drawing_pdf ? (
                         <button 
                           onClick={() => handlePreview({ ...rev, drawing_no: row.drawing_no })}
                           className="text-indigo-600 hover:text-indigo-900 transition-colors inline-block"
                           title="Preview Revision"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
+                          <Eye className="w-4 h-4" />
                         </button>
                       ) : <span className="text-slate-300">—</span>}
                     </td>
@@ -239,13 +260,40 @@ const DrawingMaster = () => {
     );
   };
 
-  const handleEdit = (drawing) => {
+  const handleEdit = (drawing, mode = 'edit') => {
+    const company = companies.find(c => c.company_name === drawing.client_name);
+    
+    let billingAddressLine = '';
+    let shippingAddressLine = '';
+    
+    if (company) {
+      const billingAddress = company.addresses?.find(a => a.address_type === 'BILLING');
+      const shippingAddress = company.addresses?.find(a => a.address_type === 'SHIPPING');
+      billingAddressLine = billingAddress ? `${billingAddress.line1}${billingAddress.line2 ? ', ' + billingAddress.line2 : ''}, ${billingAddress.city}, ${billingAddress.state} ${billingAddress.pincode}` : '';
+      shippingAddressLine = shippingAddress ? `${shippingAddress.line1}${shippingAddress.line2 ? ', ' + shippingAddress.line2 : ''}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}` : '';
+    }
+
     setEditData({
+      id: drawing.id,
       drawing_no: drawing.drawing_no,
-      revision_no: drawing.revision_no || '0',
+      revision_no: drawing.revision || drawing.revision_no || '0',
       description: drawing.description || '',
-      drawing_pdf: null
+      client_name: drawing.client_name,
+      contact_person: drawing.contact_person || (company ? company.contact_person : ''),
+      phone: drawing.phone || (company ? company.contact_mobile : ''),
+      email: drawing.email || (company ? company.contact_email : ''),
+      customer_type: drawing.customer_type || (company ? company.customer_type : ''),
+      gstin: drawing.gstin || (company ? company.gstin : ''),
+      city: drawing.city || (company ? (company.addresses?.find(a => a.address_type === 'BILLING')?.city || '') : ''),
+      state: drawing.state || (company ? (company.addresses?.find(a => a.address_type === 'BILLING')?.state || '') : ''),
+      billing_address: drawing.billing_address || billingAddressLine,
+      shipping_address: drawing.shipping_address || shippingAddressLine,
+      qty: drawing.qty || 1,
+      remarks: drawing.remarks || '',
+      drawing_pdf: null,
+      file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
+    setModalMode(mode);
     setShowEditModal(true);
   };
 
@@ -255,15 +303,32 @@ const DrawingMaster = () => {
       setSaveLoading(true);
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
+      formData.append('id', editData.id);
+      formData.append('drawingNo', editData.drawing_no);
       formData.append('revisionNo', editData.revision_no);
       formData.append('description', editData.description);
+      formData.append('clientName', editData.client_name);
+      formData.append('contactPerson', editData.contact_person);
+      formData.append('phoneNumber', editData.phone);
+      formData.append('emailAddress', editData.email);
+      formData.append('customerType', editData.customer_type);
+      formData.append('gstin', editData.gstin);
+      formData.append('city', editData.city);
+      formData.append('state', editData.state);
+      formData.append('billingAddress', editData.billing_address);
+      formData.append('shippingAddress', editData.shipping_address);
+      formData.append('qty', editData.qty);
+      formData.append('remarks', editData.remarks);
+
       if (editData.drawing_pdf) {
         formData.append('drawing_pdf', editData.drawing_pdf);
       }
 
-      const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(editData.drawing_no)}`, {
+      const response = await fetch(`${API_BASE}/drawings/${editData.id}`, {
         method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData
       });
 
@@ -300,7 +365,7 @@ const DrawingMaster = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(drawing.drawing_no)}`, {
+        const response = await fetch(`${API_BASE}/drawings/${drawing.id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -320,31 +385,29 @@ const DrawingMaster = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-xl text-slate-900">Drawing Master</h1>
-          <p className="text-xs text-slate-500 font-medium">Central repository for all engineering drawings and revisions</p>
+          <p className="text-xs text-slate-500 ">Central repository for all engineering drawings and revisions</p>
         </div>
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative">
             <input 
               type="text" 
               placeholder="Search Drawing No, PO or Desc..." 
-              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-72 transition-all shadow-sm"
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded  text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-72 transition-all "
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
           </div>
           <button 
             type="submit"
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 transition-all shadow-sm"
+            className="p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all "
           >
             Search
           </button>
           <button 
             type="button"
             onClick={() => { setSearchTerm(''); fetchDrawings(); }}
-            className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs  hover:bg-slate-200 transition-all"
+            className="p-2  bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all"
           >
             Reset
           </button>
@@ -359,51 +422,242 @@ const DrawingMaster = () => {
       />
 
       <Modal
-        isOpen={showEditModal}
+        isOpen={showEditModal} 
         onClose={() => setShowEditModal(false)}
-        title={`Edit Drawing: ${editData.drawing_no}`}
+        title={modalMode === 'view' ? 'View Drawing Details' : 'Edit Drawing'}
+        size="4xl"
       >
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormControl label="Revision No">
+        <form onSubmit={handleSave} className="space-y-4 pb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded  border border-slate-200">
+            {/* Client Info Section */}
+            <div className="lg:col-span-1">
+              <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
               <input 
-                type="text" 
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                value={editData.revision_no}
-                onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
+                type="text"
+                readOnly
+                className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600"
+                value={editData.client_name}
               />
-            </FormControl>
+            </div>
+
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Contact Person</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Contact person name"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.contact_person}
+                onChange={(e) => setEditData({...editData, contact_person: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Phone</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Phone number"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.phone}
+                onChange={(e) => setEditData({...editData, phone: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Email</label>
+              <input 
+                type="email"
+                disabled={modalMode === 'view'}
+                placeholder="Email address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.email}
+                onChange={(e) => setEditData({...editData, email: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Type</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Customer type"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.customer_type}
+                onChange={(e) => setEditData({...editData, customer_type: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">GSTIN</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="GST number"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.gstin}
+                onChange={(e) => setEditData({...editData, gstin: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">City</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="City"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.city}
+                onChange={(e) => setEditData({...editData, city: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">State</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="State"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.state}
+                onChange={(e) => setEditData({...editData, state: e.target.value})}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs  text-slate-700 mb-1">Billing Address</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Billing address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.billing_address}
+                onChange={(e) => setEditData({...editData, billing_address: e.target.value})}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs  text-slate-700 mb-1">Shipping Address</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Shipping address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.shipping_address}
+                onChange={(e) => setEditData({...editData, shipping_address: e.target.value})}
+              />
+            </div>
           </div>
-          <FormControl label="Description">
-            <textarea 
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-h-[100px] transition-all"
-              value={editData.description}
-              onChange={(e) => setEditData({...editData, description: e.target.value})}
-            />
-          </FormControl>
-          <FormControl label="Upload PDF">
-            <input 
-              type="file" 
-              accept=".pdf"
-              className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file: file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all"
-              onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
-            />
-          </FormControl>
-          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
-            <button 
+
+          {/* Drawing Details Section */}
+          <div className="mt-4">
+            <h3 className="text-xs  text-slate-700 mb-2">Drawing Details</h3>
+            <div className="bg-slate-50 p-4 rounded border border-slate-200 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-slate-700 mb-1">Drawing # *</label>
+                  <input 
+                    type="text"
+                    readOnly
+                    className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600"
+                    value={editData.drawing_no}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-700 mb-1">Revision</label>
+                  <input 
+                    type="text"
+                    disabled={modalMode === 'view'}
+                    className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    value={editData.revision_no}
+                    onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-700 mb-1">Qty</label>
+                  <input 
+                    type="number"
+                    disabled={modalMode === 'view'}
+                    className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    value={editData.qty}
+                    onChange={(e) => setEditData({...editData, qty: parseInt(e.target.value) || 0})}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-700 mb-1">Description</label>
+                <textarea 
+                  disabled={modalMode === 'view'}
+                  className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                  value={editData.description}
+                  onChange={(e) => setEditData({...editData, description: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-700 mb-1">Remarks</label>
+                <textarea 
+                  disabled={modalMode === 'view'}
+                  className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                  value={editData.remarks}
+                  onChange={(e) => setEditData({...editData, remarks: e.target.value})}
+                />
+              </div>
+
+              {modalMode === 'edit' && (
+                <div>
+                  <label className="block text-xs text-slate-700 mb-1">Update PDF File</label>
+                  <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-4 hover:border-indigo-400 transition-colors bg-white cursor-pointer relative">
+                    <input 
+                      type="file" 
+                      accept=".pdf"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
+                    />
+                    <div className="text-center">
+                      <svg className="mx-auto h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                      <p className="mt-1 text-xs text-slate-500">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click to update PDF'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {editData.file_path && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs text-slate-500">Current File:</span>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      handlePreview({ ...editData, drawing_pdf: editData.file_path });
+                    }}
+                    className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
+                  >
+                    <Eye className="w-3 h-3" />
+                    View Current PDF
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <button
               type="button"
               onClick={() => setShowEditModal(false)}
-              className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs  hover:bg-slate-50 transition-all"
+              className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
-            <button 
-              type="submit"
-              disabled={saveLoading}
-              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50"
-            >
-              {saveLoading ? 'Saving...' : 'Save Changes'}
-            </button>
+            {modalMode === 'edit' && (
+              <button
+                type="submit"
+                disabled={saveLoading}
+                className="px-6 py-2 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-indigo-200"
+              >
+                {saveLoading ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded animate-spin"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+                    Save
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </form>
       </Modal>

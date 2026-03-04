@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const qcService = require('../services/qcInspectionsService');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
+const upload = require('../middleware/upload');
+const stockEntryService = require('../services/stockEntryService');
 
 router.get('/stats', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
@@ -12,10 +14,28 @@ router.get('/stats', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   }
 });
 
+router.get('/reports', authenticate, authorize(['QC_VIEW']), async (req, res) => {
+  try {
+    const reports = await qcService.getQCReports();
+    res.json(reports);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 router.get('/', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
     const qcs = await qcService.getAllQCs();
     res.json(qcs);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.get('/rejections', authenticate, authorize(['QC_VIEW']), async (req, res) => {
+  try {
+    const items = await qcService.getRejectedItems();
+    res.json(items);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
   }
@@ -56,7 +76,8 @@ router.patch('/items/:qcItemId', authenticate, authorize(['QC_EDIT']), async (re
 router.post('/', authenticate, authorize(['QC_CREATE']), async (req, res) => {
   try {
     const { grnId, inspectionDate, passQuantity, failQuantity, defects, remarks } = req.body;
-    const qc = await qcService.createQC(grnId, inspectionDate, passQuantity, failQuantity, defects, remarks);
+    const qcId = await qcService.createQC(grnId, inspectionDate, passQuantity, failQuantity, defects, remarks);
+    const qc = await qcService.getQCWithDetails(qcId);
     res.status(201).json(qc);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
@@ -75,6 +96,51 @@ router.patch('/:qcId', authenticate, authorize(['QC_EDIT']), async (req, res) =>
 router.delete('/:qcId', authenticate, authorize(['QC_EDIT']), async (req, res) => {
   try {
     const result = await qcService.deleteQC(req.params.qcId);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.post('/:qcId/send-email', authenticate, authorize(['QC_EDIT']), async (req, res) => {
+  try {
+    const result = await qcService.sendQCAlertEmail(req.params.qcId, req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.post('/:qcId/invoice', authenticate, authorize(['QC_EDIT']), upload.single('invoice'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const invoiceUrl = `uploads/${req.file.filename}`;
+    const result = await qcService.updateQCInvoice(req.params.qcId, invoiceUrl);
+    res.json({ message: 'Invoice uploaded successfully', data: result });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (req, res) => {
+  try {
+    const qc = await qcService.getQCWithDetails(req.params.qcId);
+    if (!qc) {
+      return res.status(404).json({ message: 'QC Inspection not found' });
+    }
+    
+    const result = await stockEntryService.autoCreateStockEntryFromGRN(qc.grn_id, req.user.id);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.post('/:qcId/create-shipment', authenticate, authorize(['QC_EDIT']), async (req, res) => {
+  try {
+    const result = await qcService.createShipmentFromQC(req.params.qcId);
     res.json(result);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });

@@ -10,7 +10,7 @@ router.post('/share/bulk', authorize(['DESIGN_MANAGE']), drawingController.share
 router.post('/:id/share', authorize(['DESIGN_MANAGE']), drawingController.shareDrawing);
 router.delete('/:id', authorize(['DESIGN_MANAGE']), drawingController.deleteDrawing);
 router.get('/:drawingNo/revisions', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.getDrawingRevisions);
-router.patch('/:drawingNo', authorize(['DESIGN_MANAGE']), upload.single('drawing_pdf'), drawingController.updateDrawing);
+router.patch('/:id', authorize(['DESIGN_MANAGE']), upload.single('drawing_pdf'), drawingController.updateDrawing);
 router.patch('/items/:itemId', authorize(['DESIGN_MANAGE']), upload.single('drawing_pdf'), drawingController.updateItemDrawing);
 
 module.exports = router;

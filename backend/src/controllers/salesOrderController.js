@@ -63,7 +63,9 @@ const createSalesOrder = async (req, res, next) => {
 
 const updateSalesOrderStatus = async (req, res, next) => {
   try {
-    await salesOrderService.updateSalesOrderStatus(req.params.id, req.body.status);
+    const { status, remarks } = req.body;
+    const userId = req.user?.id;
+    await salesOrderService.updateSalesOrderStatus(req.params.id, status, userId, remarks);
     res.json({ message: 'Sales order status updated' });
   } catch (error) {
     next(error);
@@ -188,6 +190,15 @@ const getSalesOrderItem = async (req, res, next) => {
   }
 };
 
+const getBOMApprovalHistory = async (req, res, next) => {
+  try {
+    const rows = await salesOrderService.getBOMApprovalHistory();
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const generateSalesOrderPDF = async (req, res, next) => {
   try {
     const pdf = await salesOrderService.generateSalesOrderPDF(req.params.id);
@@ -255,6 +266,7 @@ module.exports = {
   bulkApproveDesigns,
   bulkRejectDesigns,
   getApprovedDrawings,
+  getBOMApprovalHistory,
   getOrderTimeline,
   getSalesOrderItem,
   updateSalesOrderItem,

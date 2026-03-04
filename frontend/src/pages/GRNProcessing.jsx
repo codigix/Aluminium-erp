@@ -1,24 +1,69 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, DataTable, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast } from '../utils/toast';
+import { 
+  ShieldCheck, 
+  LayoutGrid, 
+  List, 
+  RefreshCw, 
+  Search, 
+  Filter, 
+  Columns, 
+  Download, 
+  Plus, 
+  Clock, 
+  CheckCircle2, 
+  XCircle, 
+  Package, 
+  FileText, 
+  Printer, 
+  Eye,
+  Inbox
+} from 'lucide-react';
 
-const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const itemStatusColors = {
-  APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  Approved : 'bg-emerald-50 text-emerald-700 border-emerald-200',
   SHORTAGE: 'bg-amber-50 text-amber-700 border-amber-200',
   OVERAGE: 'bg-orange-50 text-orange-700 border-orange-200',
-  PENDING: 'bg-slate-50 text-slate-700 border-slate-200'
+  PENDING: 'bg-slate-50 text-slate-700 border-slate-200',
+  RECEIVED: 'bg-blue-50 text-blue-700 border-blue-200',
+  COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  REJECTED: 'bg-rose-50 text-rose-700 border-rose-200'
 };
+
+const StatCard = ({ label, value, icon: Icon, colorClass, iconBg }) => (
+  <div className="bg-white p-4 rounded  border border-slate-200  flex flex-col gap-3 min-w-[140px]">
+    <div className={`w-10 h-10 rounded  ${iconBg} flex items-center justify-center ${colorClass}`}>
+      <Icon className="w-5 h-5" />
+    </div>
+    <div>
+      <p className="text-[10px]  text-slate-500   ">{label}</p>
+      <p className="text-xl text-slate-900 leading-tight">{value}</p>
+    </div>
+  </div>
+);
 
 const GRNProcessing = () => {
   const [grns, setGrns] = useState([]);
+  const [stats, setStats] = useState({
+    totalGrns: 0,
+    pendingGrns: 0,
+    qcReview: 0,
+    awaitingStorage: 0,
+    completed: 0,
+    rejected: 0
+  });
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [expandedItems, setExpandedItems] = useState({});
-  const [itemsLoading, setItemsLoading] = useState({});
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedGRNForView, setSelectedGRNForView] = useState(null);
   const [user, setUser] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('list');
 
   const [formData, setFormData] = useState({
     poId: '',
@@ -43,13 +88,41 @@ const GRNProcessing = () => {
         fetchGRNs();
         fetchPurchaseOrders();
         fetchPOReceipts();
+        fetchStats();
       }
     } else {
       fetchGRNs();
       fetchPurchaseOrders();
       fetchPOReceipts();
+      fetchStats();
     }
   }, []);
+
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/grns/stats`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Map backend stats to UI labels
+        setStats({
+          totalGrns: data.totalGrns || 0,
+          pendingGrns: data.pendingGrns || 0,
+          qcReview: data.receivedGrns || 0, // Received but not yet approved
+          awaitingStorage: 0, // We don't have this status yet, placeholder
+          completed: data.approvedGrns || 0,
+          rejected: data.rejectedGrns || 0
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching GRN stats:', error);
+    }
+  };
 
   const fetchPOReceipts = async () => {
     try {
@@ -69,97 +142,7 @@ const GRNProcessing = () => {
     }
   };
 
-  const fetchGRNs = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/grns`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
 
-      if (response.status === 404) {
-        setGrns([]);
-        return;
-      }
-
-      if (!response.ok) throw new Error('Failed to fetch GRNs');
-      const data = await response.json();
-      setGrns(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching GRNs:', error);
-      setGrns([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchGrnItems = async (grnId) => {
-    try {
-      setItemsLoading(prev => ({ ...prev, [grnId]: true }));
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/grn-items/${grnId}/details`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch GRN items');
-      const data = await response.json();
-      setExpandedItems(prev => ({ ...prev, [grnId]: Array.isArray(data.items) ? data.items : [] }));
-    } catch (error) {
-      console.error('Error fetching GRN items:', error);
-      errorToast('Failed to load GRN items');
-    } finally {
-      setItemsLoading(prev => ({ ...prev, [grnId]: false }));
-    }
-  };
-
-  const fetchGrnItemsIfNeeded = useCallback((grnId) => {
-    if (!expandedItems[grnId] && !itemsLoading[grnId]) {
-      fetchGrnItems(grnId);
-    }
-  }, [expandedItems, itemsLoading]);
-
-  const handleDeleteItem = async (itemId, grnId) => {
-    const confirmDelete = await Swal.fire({
-      title: 'Delete Item?',
-      text: 'This action cannot be undone',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#ef4444',
-      confirmButtonText: 'Delete',
-      cancelButtonColor: '#64748b'
-    });
-
-    if (!confirmDelete.isConfirmed) return;
-
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/grn-items/${itemId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to delete item');
-      
-      setExpandedItems(prev => ({
-        ...prev,
-        [grnId]: prev[grnId].filter(item => item.id !== itemId)
-      }));
-      successToast('Item removed from GRN');
-      fetchGRNs();
-    } catch (error) {
-      console.error('Error deleting item:', error);
-      errorToast('Failed to delete item');
-    }
-  };
 
   const fetchPurchaseOrders = async () => {
     try {
@@ -235,7 +218,6 @@ const GRNProcessing = () => {
         const updatedItemData = { ...itemData };
         
         (receipt.items || []).forEach(item => {
-          // item here is from po_receipt_items which has po_item_id
           if (updatedItemData[item.po_item_id]) {
             updatedItemData[item.po_item_id].acceptedQty = item.received_quantity;
           }
@@ -252,37 +234,22 @@ const GRNProcessing = () => {
 
   const validateItemInput = (poItemId, accepted) => {
     const errors = [];
-
     if (!accepted && accepted !== 0) {
       errors.push('Accepted Qty required');
     }
-
     if (parseInt(accepted) < 0) {
       errors.push('Accepted Qty cannot be negative');
     }
-
     return errors;
   };
 
   const getItemStatus = (poQty, acceptedQty) => {
     const po = Number(poQty);
     const accepted = Number(acceptedQty);
-    
-    if (accepted === po) return 'APPROVED';
+    if (accepted === po) return 'Approved ';
     if (accepted < po) return 'SHORTAGE';
     if (accepted > po) return 'OVERAGE';
     return 'PENDING';
-  };
-
-  const calculateMetrics = (poQty, acceptedQty) => {
-    const po = Number(poQty);
-    const accepted = Number(acceptedQty);
-    const status = getItemStatus(po, accepted);
-    const difference = po - accepted;
-    const shortageQty = status === 'SHORTAGE' ? po - accepted : 0;
-    const overageQty = status === 'OVERAGE' ? accepted - po : 0;
-
-    return { status, difference, shortageQty, overageQty };
   };
 
   const handleItemChange = (itemId, field, value) => {
@@ -305,7 +272,6 @@ const GRNProcessing = () => {
 
   const handleCreateGRN = async (e) => {
     e.preventDefault();
-
     if (!formData.poId || poItems.length === 0) {
       errorToast('Please select a PO with items');
       return;
@@ -322,7 +288,6 @@ const GRNProcessing = () => {
       }
 
       const accepted = parseInt(data.acceptedQty) || 0;
-
       const itemErrors = validateItemInput(item.id, data.acceptedQty);
       if (itemErrors.length > 0) {
         errors[item.id] = itemErrors;
@@ -350,7 +315,6 @@ const GRNProcessing = () => {
     try {
       setSubmitting(true);
       const token = localStorage.getItem('authToken');
-
       const response = await fetch(`${API_BASE}/grn-items/create-with-items`, {
         method: 'POST',
         headers: {
@@ -372,9 +336,7 @@ const GRNProcessing = () => {
       }
 
       const result = await response.json();
-
       successToast(`GRN created successfully (GRN ID: ${result.grn_id})`);
-
       setShowModal(false);
       setFormData({
         poId: '',
@@ -384,7 +346,6 @@ const GRNProcessing = () => {
       setPoItems([]);
       setItemData({});
       setValidationErrors({});
-
       fetchGRNs();
     } catch (error) {
       console.error('Error creating GRN:', error);
@@ -417,7 +378,6 @@ const GRNProcessing = () => {
       });
 
       if (!response.ok) throw new Error('Failed to delete GRN');
-
       successToast('GRN deleted successfully');
       fetchGRNs();
     } catch (error) {
@@ -425,35 +385,153 @@ const GRNProcessing = () => {
     }
   };
 
+  const fetchGRNs = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/grns`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 404) {
+        setGrns([]);
+        return;
+      }
+
+      if (!response.ok) throw new Error('Failed to fetch GRNs');
+      const data = await response.json();
+      setGrns(Array.isArray(data) ? data : []);
+      fetchStats();
+    } catch (error) {
+      console.error('Error fetching GRNs:', error);
+      setGrns([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewGRN = async (grnId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/grn-items/${grnId}/details`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch GRN details');
+      
+      const data = await response.json();
+      const grn = grns.find(g => g.id === grnId);
+      setSelectedGRNForView({ ...grn, ...data });
+      setShowViewModal(true);
+    } catch (error) {
+      console.error('Error fetching GRN details:', error);
+      errorToast('Failed to load GRN details');
+    }
+  };
+
+  const handlePrintGRN = async (grnId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/grns/${grnId}/pdf`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (error) {
+      console.error('Error printing GRN:', error);
+      errorToast('Failed to print GRN. Please ensure the backend supports GRN PDF generation.');
+    }
+  };
+
+  const filteredGrns = grns.filter(grn => {
+    const matchesSearch = 
+      String(grn.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grn.poNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grn.vendorName?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || grn.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
   const columns = [
-    { label: 'GRN ID', key: 'id', sortable: true, render: (val) => <span className=" text-indigo-600">GRN-{val}</span> },
-    { label: 'PO Number', key: 'poNumber', sortable: true },
     { 
-      label: 'Receipt Ref', 
-      key: 'receiptId', 
-      render: (val) => val ? (
-        <Badge variant="blue">REC-{val}</Badge>
-      ) : <span className="text-slate-400">—</span>
+      label: 'GRN Number', 
+      key: 'id', 
+      sortable: true, 
+      render: (val) => <span className="   text-slate-900">GRN-{String(val).padStart(4, '0')}</span> 
     },
     { 
-      label: 'GRN Date', 
-      key: 'grnDate', 
+      label: 'PO Number', 
+      key: 'poNumber', 
       sortable: true,
-      render: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '—'
+      render: (val) => <span className="text-slate-600">{val || '—'}</span>
     },
     { 
-      label: 'Received Qty', 
-      key: 'receivedQuantity', 
-      className: 'text-right',
-      render: (val) => <span className=" text-slate-900">{val || 0}</span>
+      label: 'Supplier', 
+      key: 'vendorName', 
+      sortable: true,
+      render: (val) => (
+        <div className="flex items-center gap-2 ">
+          <div className="w-7 h-7 rounded  bg-slate-100 flex items-center justify-centertext-xs  text-slate-500 ">
+            {val ? val.charAt(0).toUpperCase() : '?'}
+          </div>
+          <span className="text-slate-700 ">{val || '—'}</span>
+        </div>
+      )
     },
     { 
       label: 'Status', 
       key: 'status',
+      render: (val) => {
+        const statusMap = {
+          'PENDING': 'pending',
+          'RECEIVED': 'qc review',
+          'Approved ': 'completed',
+          'REJECTED': 'rejected'
+        };
+        const displayStatus = statusMap[val] || (val ? val.toLowerCase() : 'pending');
+        return (
+          <div className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs    border ${itemStatusColors[val] || itemStatusColors.PENDING}`}>
+            {displayStatus}
+          </div>
+        );
+      }
+    },
+    { 
+      label: 'Items', 
+      key: 'items_count',
+      render: (_, row) => (
+        <span className=" text-slate-700">
+          {row.items_count || 0} items
+        </span>
+      )
+    },
+    { 
+      label: 'Date', 
+      key: 'createdAt', 
+      sortable: true,
       render: (val) => (
-        <Badge className={itemStatusColors[val] || itemStatusColors.PENDING}>
-          {val || 'Pending'}
-        </Badge>
+        <div className="text-slate-500 text-xs">
+          <div>{val ? new Date(val).toLocaleDateString('en-GB') : '—'}</div>
+          <div className="text-[10px] opacity-70">{val ? new Date(val).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+        </div>
       )
     },
     {
@@ -461,125 +539,187 @@ const GRNProcessing = () => {
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrintGRN(row.id);
+            }}
+            className="p-1.5 border border-slate-200 rounded  text-slate-400 hover:text-indigo-600 hover:border-indigo-100 transition-colors flex items-center gap-1.5text-xs  "
+            title="Print GRN"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print</span>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewGRN(row.id);
+            }}
+            className="p-1.5 bg-emerald-500 text-white rounded  hover:bg-emerald-600 transition-colors "
+            title="View Details"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               handleDeleteGRN(row.id);
             }}
-            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            className="p-1.5 bg-rose-50 border border-rose-100 text-rose-500 rounded  hover:bg-rose-100 transition-colors "
             title="Delete GRN"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <XCircle className="w-4 h-4" />
           </button>
         </div>
       )
     }
   ];
 
-  const renderExpanded = (row) => {
-    fetchGrnItemsIfNeeded(row.id);
-    const items = expandedItems[row.id] || [];
-    const isLoading = itemsLoading[row.id];
 
-    if (isLoading) {
-      return (
-        <div className="flex justify-center py-8">
-          <div className="w-6 h-6 border-2 border-indigo-600/10 border-t-indigo-600 rounded-full animate-spin"></div>
-        </div>
-      );
-    }
-
-    if (items.length === 0) {
-      return (
-        <div className="text-center py-8 text-slate-500 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-          No items found for this GRN
-        </div>
-      );
-    }
-
-    return (
-      <div className="bg-slate-50/50 rounded-xl border border-slate-100 overflow-hidden">
-        <table className="w-full text-xs">
-          <thead className="bg-white/80 text-slate-500   tracking-wider">
-            <tr>
-              <th className="px-4 py-3 text-left">Material / Description</th>
-              <th className="px-4 py-3 text-left">Type / Drawing</th>
-              <th className="px-4 py-3 text-center">PO Qty</th>
-              <th className="px-4 py-3 text-center">Accepted</th>
-              <th className="px-4 py-3 text-center">Status</th>
-              <th className="px-4 py-3 text-right pr-6">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {items.map((item) => (
-              <tr key={item.id} className="hover:bg-white/80 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="font-medium text-slate-900">{item.material_name}</div>
-                  <div className="text-slate-500 truncate max-w-[200px]">{item.description}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="text-slate-600">{item.material_type}</div>
-                  <div className="text-indigo-600 font-medium">{item.drawing_no}</div>
-                </td>
-                <td className="px-4 py-3 text-center font-medium">{item.po_qty}</td>
-                <td className="px-4 py-3 text-center  text-indigo-600">{item.accepted_qty}</td>
-                <td className="px-4 py-3 text-center">
-                  <Badge className={itemStatusColors[item.status] || itemStatusColors.PENDING}>
-                    {item.status}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-right pr-6">
-                  <button
-                    onClick={() => handleDeleteItem(item.id, row.id)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 space-y-6 bg-slate-50 min-h-screen">
+      {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl  text-slate-900">GRN Processing</h1>
-          <p className="text-slate-500 mt-1">Manage Goods Received Notes and track material shortages</p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100 ">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-xl  text-slate-900 leading-tight">Quality Control</h1>
+            <p className="text-slate-500 text-sm">Manage Goods Received Notes & Inspections</p>
+          </div>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm  hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all active:scale-95"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-          </svg>
-          Create GRN
-        </button>
+        
+        <div className="flex items-center gap-2 ">
+          <div className="flex bg-white border border-slate-200 rounded  p-0.5 ">
+            <button 
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <button 
+            onClick={() => { fetchGRNs(); fetchStats(); }}
+            className="p-2 bg-white border border-slate-200 text-slate-600 rounded  hover:bg-slate-50 transition-all  flex items-center gap-2  text-sm "
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={grns}
-        loading={loading}
-        renderExpanded={renderExpanded}
-        searchPlaceholder="Search PO numbers..."
-        emptyMessage="No GRNs found"
-      />
+      {/* Stats section */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard 
+          label="Total GRNs" 
+          value={stats.totalGrns} 
+          icon={FileText} 
+          iconBg="bg-blue-50" 
+          colorClass="text-blue-600" 
+        />
+        <StatCard 
+          label="Pending" 
+          value={stats.pendingGrns} 
+          icon={Clock} 
+          iconBg="bg-amber-50" 
+          colorClass="text-amber-600" 
+        />
+        <StatCard 
+          label="QC Review" 
+          value={stats.qcReview} 
+          icon={ShieldCheck} 
+          iconBg="bg-indigo-50" 
+          colorClass="text-indigo-600" 
+        />
+        <StatCard 
+          label="Awaiting Storage" 
+          value={stats.awaitingStorage} 
+          icon={Package} 
+          iconBg="bg-purple-50" 
+          colorClass="text-purple-600" 
+        />
+        <StatCard 
+          label="Completed" 
+          value={stats.completed} 
+          icon={CheckCircle2} 
+          iconBg="bg-emerald-50" 
+          colorClass="text-emerald-600" 
+        />
+        <StatCard 
+          label="Rejected" 
+          value={stats.rejected} 
+          icon={XCircle} 
+          iconBg="bg-rose-50" 
+          colorClass="text-rose-600" 
+        />
+      </div>
+
+      {/* Filter/Actions bar */}
+      <div className="bg-white p-3 rounded  border border-slate-200  flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div className="relative w-full md:w-96">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search GRN, PO, or Supplier..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all"
+          />
+        </div>
+        
+        <div className="flex items-center gap-2  w-full md:w-auto">
+          <div className="flex items-center gap-2  bg-slate-50 border border-slate-200 rounded  p-2 .5 flex-1 md:flex-none">
+            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-transparent text-sm text-slate-600 focus:outline-none min-w-[120px]"
+            >
+              <option value="all">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="RECEIVED">QC Review</option>
+              <option value="Approved ">Completed</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
+          
+          <button className="p-2 border border-slate-200 rounded  text-slate-600 hover:bg-slate-50 flex items-center gap-2  text-sm   transition-all">
+            <Columns className="w-4 h-4" />
+            <span className="hidden md:inline">Columns</span>
+          </button>
+          
+          <button className="p-2 border border-slate-200 rounded  text-slate-600 hover:bg-slate-50 flex items-center gap-2  text-sm   transition-all">
+            <Download className="w-4 h-4" />
+            <span className="hidden md:inline">Export</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded  border border-slate-200  overflow-hidden">
+        <DataTable
+          columns={columns}
+          data={filteredGrns}
+          loading={loading}
+          searchPlaceholder="Search PO numbers..."
+          emptyMessage="No GRNs found"
+          hideSearch={true} // We have our own search bar
+        />
+      </div>
 
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded  max-w-5xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
               <div>
                 <h2 className="text-xl text-slate-900">Create GRN</h2>
@@ -587,11 +727,9 @@ const GRNProcessing = () => {
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XCircle size={24} />
               </button>
             </div>
 
@@ -603,7 +741,7 @@ const GRNProcessing = () => {
                     value={formData.poId}
                     onChange={(e) => handlePOSelect(e.target.value)}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   >
                     <option value="">Select PO...</option>
                     {purchaseOrders.map((po) => (
@@ -618,7 +756,7 @@ const GRNProcessing = () => {
                     value={selectedReceiptId}
                     onChange={(e) => handleReceiptSelect(e.target.value)}
                     disabled={!formData.poId}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none disabled:opacity-50"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none disabled:opacity-50"
                   >
                     <option value="">Select Receipt...</option>
                     {poReceipts
@@ -638,7 +776,7 @@ const GRNProcessing = () => {
                     value={formData.grnDate}
                     onChange={(e) => setFormData({ ...formData, grnDate: e.target.value })}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </div>
 
@@ -649,33 +787,33 @@ const GRNProcessing = () => {
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     placeholder="Reference notes..."
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </div>
               </div>
 
               {formData.poId && (
-                <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+                <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-indigo-50/50 rounded  border border-indigo-100">
                   <div>
-                    <div className="text-[10px]  tracking-wider  text-indigo-400">Vendor</div>
+                    <div className="text-[10px]    text-indigo-400">Vendor</div>
                     <div className="text-sm  text-slate-900">
                       {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.vendor_name || 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]  tracking-wider  text-indigo-400">PO Total</div>
+                    <div className="text-[10px]    text-indigo-400">PO Total</div>
                     <div className="text-sm  text-slate-900">
                       ₹{purchaseOrders.find(p => String(p.id) === String(formData.poId))?.total_amount?.toLocaleString('en-IN') || '0'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]  tracking-wider  text-indigo-400">Delivery Date</div>
+                    <div className="text-[10px]    text-indigo-400">Delivery Date</div>
                     <div className="text-sm  text-slate-900">
                       {new Date(purchaseOrders.find(p => String(p.id) === String(formData.poId))?.expected_delivery_date).toLocaleDateString('en-IN') || 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]  tracking-wider  text-indigo-400">PO Status</div>
+                    <div className="text-[10px]    text-indigo-400">PO Status</div>
                     <div className="text-sm">
                       <Badge variant="success">
                         {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.status || 'N/A'}
@@ -686,14 +824,14 @@ const GRNProcessing = () => {
               )}
 
               {poItems.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="rounded  border border-slate-200 overflow-hidden">
                   <div className="p-2 bg-slate-50 border-b border-slate-200">
                     <h3 className=" text-slate-900">PO Items</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Enter actual accepted quantities to track shortages</p>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="bg-slate-50/50 text-slate-500 text-[10px]   ">
+                      <thead className="bg-slate-50/50 text-slate-500 text-xs  ">
                         <tr>
                           <th className="px-6 py-3 text-left">Material Details</th>
                           <th className="px-6 py-3 text-center">PO Qty</th>
@@ -706,7 +844,7 @@ const GRNProcessing = () => {
                         {poItems.map((item) => {
                           const data = itemData[item.id] || {};
                           const accepted = parseInt(data.acceptedQty) || 0;
-                          const { status } = calculateMetrics(item.quantity, accepted);
+                          const status = getItemStatus(item.quantity, accepted);
                           const itemError = validationErrors[item.id];
 
                           return (
@@ -715,14 +853,14 @@ const GRNProcessing = () => {
                                 <div className=" text-slate-900">{item.material_name}</div>
                                 <div className="text-xs text-slate-500">{item.material_type} • {item.drawing_no || 'No Drawing'}</div>
                               </td>
-                              <td className="p-2 text-center font-medium text-slate-700">{item.quantity}</td>
+                              <td className="p-2 text-center  text-slate-700">{item.quantity}</td>
                               <td className="p-2">
                                 <input
                                   type="number"
                                   min="0"
                                   value={data.acceptedQty}
                                   onChange={(e) => handleItemChange(item.id, 'acceptedQty', e.target.value)}
-                                  className={`w-full px-3 py-1.5 bg-white border ${itemError ? 'border-red-300' : 'border-slate-200'} rounded-lg text-center  text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-none`}
+                                  className={`w-full p-2 .5 bg-white border ${itemError ? 'border-red-300' : 'border-slate-200'} rounded  text-center  text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-none`}
                                 />
                               </td>
                               <td className="p-2 text-center">
@@ -736,7 +874,7 @@ const GRNProcessing = () => {
                                   value={data.remarks || ''}
                                   onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
                                   placeholder="Notes..."
-                                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                  className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none"
                                 />
                               </td>
                             </tr>
@@ -753,16 +891,107 @@ const GRNProcessing = () => {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-700  hover:bg-white transition-all"
+                className="p-2.5 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateGRN}
                 disabled={submitting || poItems.length === 0}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 active:scale-95"
+                className="p-2.5 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 active:scale-95"
               >
                 {submitting ? 'Processing...' : 'Create GRN'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showViewModal && selectedGRNForView && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded  max-w-4xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+              <div>
+                <h2 className="text-xl  text-slate-900">GRN Details: GRN-{String(selectedGRNForView.id).padStart(4, '0')}</h2>
+                <p className="text-sm text-slate-500">View recorded material receipt and verify quantities</p>
+              </div>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded  transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded  border border-slate-200">
+                <div>
+                  <div className="text-[10px]    text-slate-400">PO Number</div>
+                  <div className="text-sm  text-slate-900">{selectedGRNForView.poNumber}</div>
+                </div>
+                <div>
+                  <div className="text-[10px]    text-slate-400">GRN Date</div>
+                  <div className="text-sm  text-slate-900">{new Date(selectedGRNForView.grnDate).toLocaleDateString('en-IN')}</div>
+                </div>
+                <div>
+                  <div className="text-[10px]    text-slate-400">Supplier</div>
+                  <div className="text-sm  text-slate-900">{selectedGRNForView.vendorName}</div>
+                </div>
+                <div>
+                  <div className="text-[10px]    text-slate-400">Status</div>
+                  <div className={`inline-flex items-center p-1  rounded text-xs     border ${itemStatusColors[selectedGRNForView.status] || itemStatusColors.PENDING}`}>
+                    {selectedGRNForView.status?.toLowerCase()}
+                  </div>
+                </div>
+              </div>
+
+              {selectedGRNForView.notes && (
+                <div className="p-4 bg-amber-50 rounded  border border-amber-100">
+                  <div className="text-[10px]    text-amber-500 mb-1">Notes</div>
+                  <div className="text-sm text-amber-800">{selectedGRNForView.notes}</div>
+                </div>
+              )}
+
+              <div className="rounded  border border-slate-200 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="p-3text-xs   text-slate-500  ">Item Details</th>
+                      <th className="p-3text-xs   text-slate-500   text-center">PO Qty</th>
+                      <th className="p-3text-xs   text-slate-500   text-center">Accepted Qty</th>
+                      <th className="p-3text-xs   text-slate-500  ">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(selectedGRNForView.items || []).map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="p-3">
+                          <div className="text-sm  text-slate-900">{item.material_name}</div>
+                          <div className="text-[10px] text-slate-500">{item.item_code} • {item.material_type}</div>
+                        </td>
+                        <td className="p-3 text-center text-sm  text-slate-600">{item.po_qty}</td>
+                        <td className="p-3 text-center text-sm  text-indigo-600">{item.accepted_qty}</td>
+                        <td className="p-3 text-xs text-slate-500">{item.remarks || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                onClick={() => handlePrintGRN(selectedGRNForView.id)}
+                className="flex items-center gap-2  p-2.5 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+              >
+                <Printer className="w-4 h-4" />
+                Print GRN
+              </button>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="p-2.5 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
+              >
+                Close
               </button>
             </div>
           </div>

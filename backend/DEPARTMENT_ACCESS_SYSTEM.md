@@ -149,7 +149,7 @@ CLOSED (ACCOUNTS)
 ```
 DRAFT (SALES)
   ↓
-APPROVED (SALES)
+Approved  (SALES)
 ```
 
 ## API Endpoints

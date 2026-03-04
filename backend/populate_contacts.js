@@ -12,7 +12,7 @@ const mysql = require('mysql2/promise');
     const [orders] = await pool.query(
       `SELECT DISTINCT c.id, c.company_name FROM sales_orders so 
        JOIN companies c ON c.id = so.company_id 
-       WHERE so.status = 'DESIGN_APPROVED' AND so.current_department = 'SALES'
+       WHERE so.status = 'DESIGN_Approved ' AND so.current_department = 'SALES'
        ORDER BY c.id`
     );
     

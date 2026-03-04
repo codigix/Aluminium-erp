@@ -14,7 +14,7 @@ const getGRNWithDetails = async (grnId) => {
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
-      SUM(poi.quantity) AS orderedQuantity
+      SUM(COALESCE(poi.design_qty, poi.quantity)) AS orderedQuantity
     FROM grns g
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
     LEFT JOIN vendors v ON po.vendor_id = v.id
@@ -41,11 +41,10 @@ const getAllGRNs = async () => {
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
-      SUM(poi.quantity) AS orderedQuantity
+      (SELECT COUNT(*) FROM grn_items WHERE grn_id = g.id) AS items_count
     FROM grns g
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
     LEFT JOIN vendors v ON po.vendor_id = v.id
-    LEFT JOIN purchase_order_items poi ON po.id = poi.purchase_order_id
     GROUP BY g.id
     ORDER BY g.created_at DESC`
   );
@@ -160,7 +159,7 @@ const getGRNStats = async () => {
       COUNT(*) as totalGrns,
       SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pendingGrns,
       SUM(CASE WHEN status = 'RECEIVED' THEN 1 ELSE 0 END) as receivedGrns,
-      SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as approvedGrns,
+      SUM(CASE WHEN status = 'Approved ' THEN 1 ELSE 0 END) as approvedGrns,
       SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejectedGrns
     FROM grns`
   );

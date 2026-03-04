@@ -207,6 +207,61 @@ const updateInventoryDashboardPendingPO = async (poId, deductQty = 0) => {
   }
 };
 
+const postInventoryFromDispatch = async (dispatchId, items, reference = null) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    for (const item of items) {
+      const { item_code, quantity, warehouse_id } = item;
+      
+      // 1. Get inventory item
+      const [inventoryData] = await connection.query(
+        'SELECT id, stock_on_hand FROM inventory WHERE item_code = ?',
+        [item_code]
+      );
+
+      if (!inventoryData.length) {
+        throw new Error(`Item ${item_code} not found in inventory`);
+      }
+
+      const inventoryItemId = inventoryData[0].id;
+
+      // 2. Reduce stock
+      await connection.execute(
+        `UPDATE inventory SET 
+          stock_on_hand = stock_on_hand - ?,
+          updated_at = NOW()
+         WHERE id = ?`,
+        [quantity, inventoryItemId]
+      );
+
+      // 3. Create posting entry
+      await connection.execute(
+        `INSERT INTO inventory_postings (
+          inventory_id, posting_type, quantity, reference_type, reference_id, remarks
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          inventoryItemId,
+          POSTING_TYPE.OUTWARD,
+          quantity,
+          'DISPATCH',
+          dispatchId,
+          `Dispatched for shipment ${reference || dispatchId}`
+        ]
+      );
+    }
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const validateStockAvailability = async (itemCode, requiredQty) => {
   const [items] = await pool.query(
     `SELECT stock_on_hand FROM inventory WHERE item_code = ?`,
@@ -233,5 +288,6 @@ module.exports = {
   getInventoryLedger,
   updateInventoryDashboardMetrics,
   updateInventoryDashboardPendingPO,
-  validateStockAvailability
+  validateStockAvailability,
+  postInventoryFromDispatch
 };

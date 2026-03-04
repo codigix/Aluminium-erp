@@ -239,7 +239,9 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_APPROVED', 'BOM_APPROVED') AND so.is_sales_order = 0`;
+     WHERE (TRIM(so.status) = 'BOM_Approved' 
+        OR so.status IN ('PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
+        AND so.quotation_id IS NULL AND so.is_sales_order = 0`;
   
   const params = [];
   if (companyId) {
@@ -254,6 +256,7 @@ const getApprovedDrawings = async (companyId = null) => {
   for (const order of rows) {
     const [items] = await pool.query(
       `SELECT soi.*, 
+              COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, ''), 'FG') as item_group,
               COALESCE(
                 poi.quantity, 
                 (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
@@ -262,7 +265,8 @@ const getApprovedDrawings = async (companyId = null) => {
        FROM sales_order_items soi
        LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id AND TRIM(poi.drawing_no) = TRIM(soi.drawing_no)
-       WHERE soi.sales_order_id = ?`,
+       WHERE soi.sales_order_id = ?
+       AND (soi.item_group = 'FG' OR soi.item_type = 'FG' OR soi.item_group IS NULL OR soi.item_group = '')`,
       [order.id]
     );
     order.items = items;
@@ -271,11 +275,34 @@ const getApprovedDrawings = async (companyId = null) => {
   return rows;
 };
 
+const getStats = async () => {
+  const [rows] = await pool.query(`
+    SELECT 
+      COUNT(*) as total_orders,
+      SUM(CASE WHEN status = 'Draft' THEN 1 ELSE 0 END) as draft_orders,
+      SUM(CASE WHEN status = 'Created' THEN 1 ELSE 0 END) as open_orders,
+      SUM(CASE WHEN status = 'Delivered' THEN 1 ELSE 0 END) as delivered_orders,
+      SUM(CASE WHEN status = 'Cancelled' THEN 1 ELSE 0 END) as cancelled_orders,
+      SUM(grand_total) as total_amount
+    FROM orders
+  `);
+  
+  return {
+    total: rows[0].total_orders || 0,
+    draft: rows[0].draft_orders || 0,
+    open: rows[0].open_orders || 0,
+    delivered: rows[0].delivered_orders || 0,
+    cancelled: rows[0].cancelled_orders || 0,
+    totalAmount: rows[0].total_amount || 0
+  };
+};
+
 module.exports = {
   listOrders,
   createOrder,
   getOrderById,
   updateOrder,
   deleteOrder,
-  getApprovedDrawings
+  getApprovedDrawings,
+  getStats
 };

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const mysql = require('mysql2/promise');
 
 const baseConfig = {
@@ -21,6 +22,87 @@ const pool = mysql.createPool({
   queueLimit: 0,
   namedPlaceholders: true
 });
+
+const ensureJobCardColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM job_cards');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'std_time', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'hourly_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'operation_name', definition: 'VARCHAR(255) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (missing.length > 0) {
+      const alterSql = `ALTER TABLE job_cards ${missing
+        .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+        .join(', ')};`;
+
+      await connection.query(alterSql);
+      console.log('Job Card columns synchronized');
+    }
+
+    // Create detailed logging tables
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS job_card_time_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        job_card_id INT NOT NULL,
+        log_date DATE NOT NULL,
+        operator_id INT,
+        workstation_id INT,
+        shift VARCHAR(20),
+        start_time DATETIME,
+        end_time DATETIME,
+        produced_qty DECIMAL(12, 3) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS job_card_quality_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        job_card_id INT NOT NULL,
+        check_date DATE NOT NULL,
+        shift VARCHAR(20),
+        inspected_qty DECIMAL(12, 3) DEFAULT 0,
+        accepted_qty DECIMAL(12, 3) DEFAULT 0,
+        rejected_qty DECIMAL(12, 3) DEFAULT 0,
+        scrap_qty DECIMAL(12, 3) DEFAULT 0,
+        rejection_reason TEXT,
+        status ENUM('PENDING', 'Approved ', 'REJECTED') DEFAULT 'PENDING',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS job_card_downtime_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        job_card_id INT NOT NULL,
+        downtime_date DATE NOT NULL,
+        shift VARCHAR(20),
+        downtime_type VARCHAR(100),
+        start_time DATETIME,
+        end_time DATETIME,
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Job Card detailed log tables synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Job Card column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
 
 const ensureDatabase = async () => {
   try {
@@ -154,13 +236,37 @@ const ensureQuotationItemColumns = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
+    
+    // Update quotations table first
+    const [qCols] = await connection.query('SHOW COLUMNS FROM quotations');
+    const existingQCols = new Set(qCols.map(c => c.Field));
+    const requiredQCols = [
+      { name: 'tax_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'grand_total', definition: 'DECIMAL(14, 2) DEFAULT 0' }
+    ];
+    
+    const missingQCols = requiredQCols.filter(c => !existingQCols.has(c.name));
+    if (missingQCols.length > 0) {
+      const alterQSql = `ALTER TABLE quotations ${missingQCols
+        .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
+        .join(', ')};`;
+      await connection.query(alterQSql);
+      console.log('Quotation tax columns synchronized');
+    }
+
     const [columns] = await connection.query('SHOW COLUMNS FROM quotation_items');
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
-      { name: 'drawing_id', definition: 'INT NULL' }
+      { name: 'drawing_id', definition: 'INT NULL' },
+      { name: 'design_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'cgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
+      { name: 'cgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'sgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
+      { name: 'sgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -233,7 +339,6 @@ const ensureGrnColumns = async () => {
     if (connection) connection.release();
   }
 };
-
 const ensurePoMaterialRequestColumns = async () => {
   let connection;
   try {
@@ -245,7 +350,10 @@ const ensurePoMaterialRequestColumns = async () => {
     const requiredPoCols = [
       { name: 'store_acceptance_status', definition: "ENUM('PENDING', 'ACCEPTED', 'REJECTED') DEFAULT 'PENDING'" },
       { name: 'store_acceptance_date', definition: 'TIMESTAMP NULL' },
-      { name: 'store_acceptance_notes', definition: 'TEXT NULL' }
+      { name: 'store_acceptance_notes', definition: 'TEXT NULL' },
+      { name: 'mr_id', definition: 'INT NULL' },
+      { name: 'approved_by', definition: 'INT NULL' },
+      { name: 'approved_at', definition: 'TIMESTAMP NULL' }
     ];
     
     const missingPoCols = requiredPoCols.filter(c => !existingPoCols.has(c.name));
@@ -257,11 +365,25 @@ const ensurePoMaterialRequestColumns = async () => {
       console.log('Purchase Order material request columns synchronized');
     }
 
+    // Ensure quotation_id and vendor_id are nullable for MR-based POs
+    const quotationIdCol = poCols.find(c => c.Field === 'quotation_id');
+    if (quotationIdCol && quotationIdCol.Null === 'NO') {
+      await connection.query('ALTER TABLE purchase_orders MODIFY COLUMN quotation_id INT NULL');
+      console.log('Purchase Order quotation_id made nullable');
+    }
+
+    const vendorIdCol = poCols.find(c => c.Field === 'vendor_id');
+    if (vendorIdCol && vendorIdCol.Null === 'NO') {
+      await connection.query('ALTER TABLE purchase_orders MODIFY COLUMN vendor_id INT NULL');
+      console.log('Purchase Order vendor_id made nullable');
+    }
+
     // Update purchase_order_items table
     const [itemCols] = await connection.query('SHOW COLUMNS FROM purchase_order_items');
     const existingItemCols = new Set(itemCols.map(c => c.Field));
     const requiredItemCols = [
       { name: 'accepted_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'design_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
@@ -278,6 +400,44 @@ const ensurePoMaterialRequestColumns = async () => {
     }
   } catch (error) {
     console.error('PO Material Request column sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureMaterialRequestColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM material_requests');
+    const existing = new Set(columns.map(column => column.Field));
+    
+    const requiredColumns = [
+      { name: 'linked_po_id', definition: 'INT NULL' },
+      { name: 'linked_po_number', definition: 'VARCHAR(100) NULL' },
+      { name: 'target_warehouse', definition: 'VARCHAR(100) NULL' },
+      { name: 'source_warehouse', definition: 'VARCHAR(100) NULL' },
+      { name: 'plan_id', definition: 'INT NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    
+    // Update status enum if needed
+    const statusCol = columns.find(c => c.Field === 'status');
+    if (statusCol && (!statusCol.Type.includes('ORDERED') || !statusCol.Type.includes('COMPLETED') || !statusCol.Type.includes('PO_CREATED'))) {
+      await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'Approved ', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT'`);
+      console.log('Material Request status enum updated');
+    }
+
+    if (missing.length > 0) {
+      const alterSql = `ALTER TABLE material_requests ${missing
+        .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+        .join(', ')};`;
+      await connection.query(alterSql);
+      console.log('Material Request columns synchronized');
+    }
+  } catch (error) {
+    console.error('Material Request column sync failed', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -335,7 +495,10 @@ const ensureStockColumns = async () => {
       { name: 'drawing_id', definition: 'INT NULL' },
       { name: 'revision', definition: 'VARCHAR(50) NULL' },
       { name: 'material_grade', definition: 'VARCHAR(100) NULL' },
-      { name: 'unit', definition: 'VARCHAR(20) DEFAULT "Nos"' }
+      { name: 'unit', definition: 'VARCHAR(20) DEFAULT "Nos"' },
+      { name: 'warehouse', definition: 'VARCHAR(100) NULL' },
+      { name: 'qty_in', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'qty_out', definition: 'DECIMAL(12, 3) DEFAULT 0' }
     ];
     
     const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));
@@ -360,6 +523,23 @@ const ensureStockColumns = async () => {
       console.log('Executing SQL:', alterBalanceSql);
       await connection.query(alterBalanceSql);
       console.log('Stock Balance material columns synchronized');
+    }
+
+    // Add unique index for item_code + warehouse if it doesn't exist
+    const [indexes] = await connection.query('SHOW INDEX FROM stock_balance');
+    const hasItemWhIndex = indexes.some(idx => idx.Key_name === 'unique_item_warehouse');
+    if (!hasItemWhIndex) {
+      try {
+        // First drop existing unique constraint on item_code if it exists and is not the PK
+        const itemCodeIndex = indexes.find(idx => idx.Column_name === 'item_code' && idx.Non_unique === 0 && idx.Key_name !== 'PRIMARY');
+        if (itemCodeIndex) {
+          await connection.query(`ALTER TABLE stock_balance DROP INDEX ${itemCodeIndex.Key_name}`);
+        }
+        await connection.query('ALTER TABLE stock_balance ADD UNIQUE INDEX unique_item_warehouse (item_code, warehouse)');
+        console.log('Added unique index for item_code and warehouse in stock_balance');
+      } catch (e) {
+        console.error('Failed to add unique index to stock_balance:', e.message);
+      }
     }
 
     // Populate existing records if possible
@@ -441,6 +621,31 @@ const ensureWarehouseAllocationTables = async () => {
   }
 };
 
+const ensureWarehousesTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS warehouses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        warehouse_code VARCHAR(50) UNIQUE NOT NULL,
+        warehouse_name VARCHAR(100) NOT NULL,
+        warehouse_type VARCHAR(50),
+        location VARCHAR(255),
+        capacity DECIMAL(12, 3),
+        status ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Warehouses master table synchronized');
+  } catch (error) {
+    console.error('Warehouses master table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureCustomerDrawingTable = async () => {
   let connection;
   try {
@@ -495,6 +700,42 @@ const ensureCustomerDrawingTable = async () => {
       console.log('Added phone column to customer_drawings');
     }
 
+    const [customerTypeCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'customer_type'");
+    if (customerTypeCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN customer_type VARCHAR(50) NULL");
+      console.log('Added customer_type column to customer_drawings');
+    }
+
+    const [gstinCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'gstin'");
+    if (gstinCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN gstin VARCHAR(50) NULL");
+      console.log('Added gstin column to customer_drawings');
+    }
+
+    const [cityCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'city'");
+    if (cityCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN city VARCHAR(100) NULL");
+      console.log('Added city column to customer_drawings');
+    }
+
+    const [stateCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'state'");
+    if (stateCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN state VARCHAR(100) NULL");
+      console.log('Added state column to customer_drawings');
+    }
+
+    const [billingAddressCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'billing_address'");
+    if (billingAddressCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN billing_address TEXT NULL");
+      console.log('Added billing_address column to customer_drawings');
+    }
+
+    const [shippingAddressCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'shipping_address'");
+    if (shippingAddressCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN shipping_address TEXT NULL");
+      console.log('Added shipping_address column to customer_drawings');
+    }
+
     console.log('Customer drawings table synchronized');
   } catch (error) {
     console.error('Customer drawing table sync failed', error.message);
@@ -541,7 +782,7 @@ const ensureQuotationRequestTables = async () => {
         sales_order_id INT NOT NULL,
         sales_order_item_id INT NULL,
         company_id INT NOT NULL,
-        status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'APPROVAL', 'Approved ', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING',
         total_amount DECIMAL(14, 2) DEFAULT 0,
         received_amount DECIMAL(14, 2) DEFAULT 0,
         notes TEXT NULL,
@@ -601,7 +842,7 @@ const ensureQuotationRequestStatus = async () => {
       if (!type.includes('APPROVAL') || !type.includes('ACCEPTED')) {
         await connection.query(`
           ALTER TABLE quotation_requests 
-          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING'
+          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'Approved ', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING'
         `);
         console.log('Quotation Request status updated with APPROVAL and ACCEPTED');
       }
@@ -675,21 +916,82 @@ const ensureSalesOrderStatuses = async () => {
     const [columns] = await connection.query("SHOW COLUMNS FROM sales_orders LIKE 'status'");
     if (columns.length > 0) {
       const type = columns[0].Type;
-      if (!type.includes('QUOTATION_SENT') || !type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED')) {
+      if (!type.includes('QUOTATION_SENT') || !type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED') || !type.includes('READY_FOR_SHIPMENT')) {
         await connection.query(`
           ALTER TABLE sales_orders 
           MODIFY COLUMN status ENUM(
-            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY', 'QUOTATION_SENT',
-            'BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 
+            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'DESIGN_QUERY', 'QUOTATION_Sent ',
+            'BOM_SUBMITTED', 'BOM_Approved ', 'PROCUREMENT_IN_PROGRESS', 
             'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 
-            'PRODUCTION_COMPLETED', 'CLOSED'
+            'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'
           ) DEFAULT 'CREATED'
         `);
-        console.log('Sales order statuses updated with QUOTATION_SENT');
+        console.log('Sales order statuses updated');
       }
     }
   } catch (error) {
     console.error('Sales order status sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureShipmentOrdersTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS shipment_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        shipment_code VARCHAR(50) UNIQUE NOT NULL,
+        sales_order_id INT NULL,
+        customer_id INT,
+        dispatch_target_date DATE,
+        priority VARCHAR(50),
+        status ENUM('PENDING_ACCEPTANCE', 'ACCEPTED', 'REJECTED', 'PLANNING', 'PLANNED', 'READY_TO_DISPATCH', 'DISPATCHED', 'CANCELLED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'DELAYED', 'CLOSED', 'RETURN_INITIATED', 'RETURN_PICKUP_ASSIGNED', 'RETURN_IN_TRANSIT', 'RETURN_RECEIVED', 'RETURN_COMPLETED') DEFAULT 'PENDING_ACCEPTANCE',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (customer_id) REFERENCES companies(id) ON DELETE SET NULL
+      )
+    `);
+    
+    // Ensure status column is updated for existing table
+    const [cols] = await connection.query("SHOW COLUMNS FROM shipment_orders LIKE 'status'");
+    if (cols.length > 0 && (!cols[0].Type.includes('RETURN_INITIATED') || !cols[0].Type.includes('REJECTED'))) {
+      console.log('Updating shipment_orders status enum...');
+      await connection.query(`ALTER TABLE shipment_orders MODIFY COLUMN status ENUM('PENDING_ACCEPTANCE', 'ACCEPTED', 'REJECTED', 'PLANNING', 'PLANNED', 'READY_TO_DISPATCH', 'DISPATCHED', 'CANCELLED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'DELAYED', 'CLOSED', 'RETURN_INITIATED', 'RETURN_PICKUP_ASSIGNED', 'RETURN_IN_TRANSIT', 'RETURN_RECEIVED', 'RETURN_COMPLETED') DEFAULT 'PENDING_ACCEPTANCE'`);
+    }
+
+    // Ensure planning and tracking columns exist
+    const [allCols] = await connection.query("SHOW COLUMNS FROM shipment_orders");
+    const existingCols = new Set(allCols.map(c => c.Field));
+    const columnsToAdd = [
+      { name: 'planned_dispatch_date', definition: 'DATE NULL' },
+      { name: 'actual_delivery_date', definition: 'DATETIME NULL' },
+      { name: 'estimated_delivery_date', definition: 'DATETIME NULL' },
+      { name: 'transporter', definition: 'VARCHAR(255) NULL' },
+      { name: 'vehicle_number', definition: 'VARCHAR(50) NULL' },
+      { name: 'driver_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'driver_contact', definition: 'VARCHAR(20) NULL' },
+      { name: 'packing_status', definition: "ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED') DEFAULT 'PENDING'" },
+      { name: 'shipping_address', definition: 'TEXT NULL' },
+      { name: 'billing_address', definition: 'TEXT NULL' },
+      { name: 'customer_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'customer_phone', definition: 'VARCHAR(20) NULL' },
+      { name: 'customer_email', definition: 'VARCHAR(255) NULL' }
+    ];
+
+    for (const col of columnsToAdd) {
+      if (!existingCols.has(col.name)) {
+        await connection.query(`ALTER TABLE shipment_orders ADD COLUMN \`${col.name}\` ${col.definition}`);
+        console.log(`Added column ${col.name} to shipment_orders`);
+      }
+    }
+
+    console.log('Shipment orders table synchronized');
+  } catch (error) {
+    console.error('Shipment orders table sync failed', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -994,8 +1296,12 @@ const ensureProductionPlanTables = async () => {
         sales_order_id INT NULL,
         sales_order_item_id INT NULL,
         item_code VARCHAR(120),
+        description TEXT,
         bom_no VARCHAR(100),
+        design_qty DECIMAL(12, 3),
+        uom VARCHAR(20),
         planned_qty DECIMAL(12, 3) NOT NULL,
+        rate DECIMAL(12, 2) DEFAULT 0,
         warehouse VARCHAR(100),
         workstation_id INT,
         planned_start_date DATE,
@@ -1032,10 +1338,12 @@ const ensureProductionPlanTables = async () => {
     }
 
     if (!existingPpiCols.has('item_code')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN item_code VARCHAR(120) AFTER sales_order_item_id');
+    if (!existingPpiCols.has('description')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN description TEXT AFTER item_code');
     if (!existingPpiCols.has('bom_no')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN bom_no VARCHAR(100) AFTER item_code');
     if (!existingPpiCols.has('warehouse')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN warehouse VARCHAR(100) AFTER planned_qty');
     if (!existingPpiCols.has('design_qty')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN design_qty DECIMAL(12, 3) AFTER bom_no');
     if (!existingPpiCols.has('uom')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN uom VARCHAR(20) AFTER design_qty');
+    if (!existingPpiCols.has('rate')) await connection.query('ALTER TABLE production_plan_items ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER planned_qty');
 
     // Create production_plan_sub_assemblies table
     await connection.query(`
@@ -1043,7 +1351,9 @@ const ensureProductionPlanTables = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         plan_id INT NOT NULL,
         item_code VARCHAR(120) NOT NULL,
+        description TEXT,
         required_qty DECIMAL(12, 3) NOT NULL,
+        rate DECIMAL(12, 2) DEFAULT 0,
         bom_no VARCHAR(100),
         target_warehouse VARCHAR(100),
         scheduled_date DATE,
@@ -1057,7 +1367,10 @@ const ensureProductionPlanTables = async () => {
     // Ensure missing columns in production_plan_sub_assemblies
     const [saCols] = await connection.query('SHOW COLUMNS FROM production_plan_sub_assemblies');
     const existingSaCols = new Set(saCols.map(c => c.Field));
+    if (!existingSaCols.has('description')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN description TEXT AFTER item_code');
+    if (!existingSaCols.has('design_qty')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN design_qty DECIMAL(12, 3) AFTER description');
     if (!existingSaCols.has('source_fg')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN source_fg VARCHAR(120) AFTER manufacturing_type');
+    if (!existingSaCols.has('rate')) await connection.query('ALTER TABLE production_plan_sub_assemblies ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER required_qty');
 
     // Create production_plan_materials table
     await connection.query(`
@@ -1067,6 +1380,7 @@ const ensureProductionPlanTables = async () => {
         item_code VARCHAR(120),
         material_name VARCHAR(255) NOT NULL,
         required_qty DECIMAL(12, 3) NOT NULL,
+        rate DECIMAL(12, 2) DEFAULT 0,
         uom VARCHAR(20),
         warehouse VARCHAR(100),
         bom_ref VARCHAR(100),
@@ -1077,6 +1391,16 @@ const ensureProductionPlanTables = async () => {
         FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure rate column exists for existing table
+    const [ppmCols] = await connection.query('SHOW COLUMNS FROM production_plan_materials');
+    const existingPpmCols = new Set(ppmCols.map(c => c.Field));
+    if (!existingPpmCols.has('design_qty')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN design_qty DECIMAL(12, 3) AFTER material_name');
+    }
+    if (!existingPpmCols.has('rate')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER required_qty');
+    }
 
     // Create production_plan_operations table
     await connection.query(`
@@ -1162,6 +1486,7 @@ const ensureWorkOrderTables = async () => {
     if (!existingWoCols.has('item_name')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_name VARCHAR(255) AFTER item_code');
     if (!existingWoCols.has('bom_no')) await connection.query('ALTER TABLE work_orders ADD COLUMN bom_no VARCHAR(100) AFTER item_name');
     if (!existingWoCols.has('source_type')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_type ENUM("FG", "SA") DEFAULT "FG" AFTER bom_no');
+    if (!existingWoCols.has('source_fg')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_fg VARCHAR(120) AFTER source_type');
     
     // Update status enum and make sales order columns nullable
     await connection.query("ALTER TABLE work_orders MODIFY COLUMN sales_order_id INT NULL");
@@ -1239,6 +1564,66 @@ const ensureWorkOrderTables = async () => {
   }
 };
 
+const ensureMaterialRequestTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS material_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        mr_number VARCHAR(50) UNIQUE NOT NULL,
+        department VARCHAR(100),
+        requested_by INT,
+        required_by DATE,
+        purpose ENUM('Purchase Request', 'Internal Transfer', 'Material Issue') NOT NULL,
+        status ENUM('DRAFT', 'Approved ', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS material_request_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        mr_id INT NOT NULL,
+        item_code VARCHAR(100) NOT NULL,
+        item_name VARCHAR(255),
+        item_type VARCHAR(50),
+        quantity DECIMAL(12, 3) NOT NULL,
+        unit_rate DECIMAL(12, 2) DEFAULT 0,
+        uom VARCHAR(20),
+        warehouse VARCHAR(100),
+        allocated_quantity DECIMAL(12, 3) DEFAULT 0,
+        FOREIGN KEY (mr_id) REFERENCES material_requests(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Ensure columns exist for existing tables
+    const [itemCols] = await connection.query('SHOW COLUMNS FROM material_request_items');
+    const existingItemCols = new Set(itemCols.map(c => c.Field));
+    if (!existingItemCols.has('warehouse')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN warehouse VARCHAR(100)');
+    }
+    if (!existingItemCols.has('item_name')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN item_name VARCHAR(255) AFTER item_code');
+    }
+    if (!existingItemCols.has('item_type')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN item_type VARCHAR(50) AFTER item_name');
+    }
+    if (!existingItemCols.has('unit_rate')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN unit_rate DECIMAL(12, 2) DEFAULT 0 AFTER quantity');
+    }
+
+    console.log('Material Request tables synchronized');
+  } catch (error) {
+    console.error('Material Request tables sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureSeed = async () => {
   let connection;
   try {
@@ -1266,7 +1651,7 @@ const ensureQuotationCommunicationTable = async () => {
         id INT PRIMARY KEY AUTO_INCREMENT,
         quotation_id INT NOT NULL,
         quotation_type ENUM('CLIENT', 'VENDOR') NOT NULL,
-        sender_type ENUM('SYSTEM', 'CLIENT', 'VENDOR') NOT NULL,
+        sender_type ENUM('SYSTEM', 'CLIENT', 'VENDOR', 'INTERNAL') NOT NULL,
         sender_email VARCHAR(255),
         message TEXT NOT NULL,
         email_message_id VARCHAR(255),
@@ -1275,7 +1660,15 @@ const ensureQuotationCommunicationTable = async () => {
         INDEX idx_quotation (quotation_id, quotation_type)
       )
     `);
-    console.log('Quotation communication table synchronized');
+
+    // Add received_pdf_path to quotations if not exists
+    const [cols] = await connection.query('SHOW COLUMNS FROM quotations');
+    const existing = new Set(cols.map(c => c.Field));
+    if (!existing.has('received_pdf_path')) {
+      await connection.query('ALTER TABLE quotations ADD COLUMN received_pdf_path VARCHAR(500) NULL');
+    }
+
+    console.log('Quotation communication table and related columns synchronized');
   } catch (error) {
     console.error('Quotation communication table sync failed', error.message);
   } finally {
@@ -1344,6 +1737,95 @@ const ensureOrdersTable = async () => {
   }
 };
 
+const ensureOutwardChallanTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS outward_challans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        challan_number VARCHAR(50) UNIQUE NOT NULL,
+        job_card_id INT NOT NULL,
+        work_order_id INT NOT NULL,
+        vendor_id INT NOT NULL,
+        operation_name VARCHAR(255),
+        planned_qty DECIMAL(12, 3),
+        dispatch_qty DECIMAL(12, 3),
+        expected_return_date DATE,
+        notes TEXT,
+        status ENUM('PENDING', 'RECEIVED', 'CANCELLED') DEFAULT 'PENDING',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE,
+        FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS outward_challan_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        challan_id INT NOT NULL,
+        item_code VARCHAR(120),
+        required_qty DECIMAL(12, 3),
+        release_qty DECIMAL(12, 3),
+        FOREIGN KEY (challan_id) REFERENCES outward_challans(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Outward Challan tables synchronized');
+  } catch (error) {
+    console.error('Outward Challan table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureDeliveryChallansTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // 1. Create delivery_challans table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS delivery_challans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        challan_number VARCHAR(50) UNIQUE NOT NULL,
+        shipment_id INT NOT NULL,
+        customer_id INT NOT NULL,
+        delivery_status ENUM('DRAFT', 'COMPLETED') DEFAULT 'DRAFT',
+        dispatch_time TIMESTAMP NULL,
+        delivery_time TIMESTAMP NULL,
+        receiver_name VARCHAR(120),
+        receiver_mobile VARCHAR(30),
+        signature_file VARCHAR(500),
+        photo_proof VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (shipment_id) REFERENCES shipment_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (customer_id) REFERENCES companies(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 2. Create delivery_challan_items table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS delivery_challan_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        challan_id INT NOT NULL,
+        item_code VARCHAR(120),
+        description TEXT,
+        quantity DECIMAL(12, 3) NOT NULL,
+        unit VARCHAR(20),
+        weight DECIMAL(12, 3),
+        FOREIGN KEY (challan_id) REFERENCES delivery_challans(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('Delivery Challan tables synchronized');
+  } catch (error) {
+    console.error('Delivery Challan table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureSalesOrderColumns = async () => {
   let connection;
   try {
@@ -1385,19 +1867,379 @@ const ensureSalesOrderColumns = async () => {
   }
 };
 
+const ensureVendorColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM vendors');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'gstin', definition: 'VARCHAR(20) NULL' },
+      { name: 'group_name', definition: 'VARCHAR(100) NULL' },
+      { name: 'lead_time', definition: 'VARCHAR(50) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE vendors ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Vendor columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Vendor column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensurePurchaseOrderQuotationNullable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query("SHOW COLUMNS FROM purchase_orders LIKE 'quotation_id'");
+    if (columns.length > 0 && columns[0].Null === 'NO') {
+      console.log('[ensurePurchaseOrderQuotationNullable] Making quotation_id nullable in purchase_orders...');
+      await connection.query('ALTER TABLE purchase_orders MODIFY quotation_id INT NULL');
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Purchase Order quotation_id nullability sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensurePurchaseOrderVendorNullable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query("SHOW COLUMNS FROM purchase_orders");
+    const vendorIdCol = columns.find(c => c.Field === 'vendor_id');
+    if (vendorIdCol && vendorIdCol.Null === 'NO') {
+      console.log('[ensurePurchaseOrderVendorNullable] Making vendor_id nullable in purchase_orders...');
+      await connection.query('ALTER TABLE purchase_orders MODIFY vendor_id INT NULL');
+    }
+
+    const statusCol = columns.find(c => c.Field === 'status');
+    if (statusCol && !statusCol.Type.includes('PO_REQUEST')) {
+      console.log('[ensurePurchaseOrderVendorNullable] Adding PO_REQUEST to purchase_orders status enum...');
+      await connection.query(`ALTER TABLE purchase_orders MODIFY status ENUM('DRAFT', 'PO_REQUEST', 'ORDERED', 'Sent ', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'CLOSED', 'COMPLETED') DEFAULT 'ORDERED'`);
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Purchase Order vendor_id nullability or status sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureStockEntryTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS stock_entries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        entry_no VARCHAR(50) UNIQUE NOT NULL,
+        entry_type ENUM('Material Receipt', 'Material Issue', 'Material Transfer', 'Material Adjustment') NOT NULL,
+        purpose VARCHAR(255),
+        from_warehouse_id INT,
+        to_warehouse_id INT,
+        status ENUM('draft', 'submitted', 'cancelled') DEFAULT 'draft',
+        entry_date DATE NOT NULL,
+        grn_id INT,
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        created_by INT,
+        FOREIGN KEY (from_warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL,
+        FOREIGN KEY (to_warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL,
+        FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE SET NULL,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS stock_entry_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_entry_id INT NOT NULL,
+        item_code VARCHAR(100) NOT NULL,
+        material_name VARCHAR(255),
+        material_type VARCHAR(100),
+        quantity DECIMAL(12, 3) NOT NULL,
+        uom VARCHAR(20),
+        batch_no VARCHAR(100),
+        valuation_rate DECIMAL(12, 2) DEFAULT 0,
+        amount DECIMAL(14, 2) DEFAULT 0,
+        FOREIGN KEY (stock_entry_id) REFERENCES stock_entries(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Ensure material_name and material_type columns exist
+    const [seItemsCols] = await connection.query("SHOW COLUMNS FROM stock_entry_items");
+    const existingSeItemsCols = new Set(seItemsCols.map(c => c.Field));
+    
+    if (!existingSeItemsCols.has('material_name')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN material_name VARCHAR(255) AFTER item_code");
+    }
+    if (!existingSeItemsCols.has('material_type')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN material_type VARCHAR(100) AFTER material_name");
+    }
+    console.log('Stock Entry tables synchronized');
+  } catch (error) {
+    console.error('Stock Entry table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureGrnItemsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS grn_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        grn_id INT NOT NULL,
+        po_item_id INT NOT NULL,
+        po_qty DECIMAL(12, 3) DEFAULT 0,
+        received_qty DECIMAL(12, 3) DEFAULT 0,
+        accepted_qty DECIMAL(12, 3) DEFAULT 0,
+        rejected_qty DECIMAL(12, 3) DEFAULT 0,
+        shortage_qty DECIMAL(12, 3) DEFAULT 0,
+        overage_qty DECIMAL(12, 3) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'RECEIVED',
+        remarks TEXT,
+        is_approved TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE CASCADE
+      )
+    `);
+    
+    // Ensure all columns exist
+    const [columns] = await connection.query('SHOW COLUMNS FROM grn_items');
+    const existing = new Set(columns.map(c => c.Field));
+    const required = [
+      { name: 'shortage_qty', def: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'overage_qty', def: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'rejected_qty', def: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'is_approved', def: 'TINYINT(1) DEFAULT 0' }
+    ];
+    
+    for (const col of required) {
+      if (!existing.has(col.name)) {
+        await connection.query(`ALTER TABLE grn_items ADD COLUMN ${col.name} ${col.def}`);
+      }
+    }
+    
+    console.log('GRN items table synchronized');
+  } catch (error) {
+    console.error('GRN items table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureGrnExcessApprovalsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS grn_excess_approvals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        grn_item_id INT NOT NULL,
+        excess_qty DECIMAL(12, 3) NOT NULL,
+        status VARCHAR(50) DEFAULT 'PENDING',
+        approval_notes TEXT,
+        rejection_reason TEXT,
+        approved_at TIMESTAMP NULL,
+        rejected_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (grn_item_id) REFERENCES grn_items(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('GRN excess approvals table synchronized');
+  } catch (error) {
+    console.error('GRN excess approvals table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureQCInspectionsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // Create qc_inspections table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS qc_inspections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        grn_id INT NOT NULL,
+        inspection_date DATE,
+        pass_quantity DECIMAL(12, 3) DEFAULT 0,
+        fail_quantity DECIMAL(12, 3) DEFAULT 0,
+        status ENUM('PENDING', 'IN_PROGRESS', 'PASSED', 'FAILED', 'ACCEPTED', 'REJECTED', 'SHORTAGE') DEFAULT 'PENDING',
+        defects TEXT,
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Ensure invoice_url column exists in qc_inspections
+    const [qcCols] = await connection.query("SHOW COLUMNS FROM qc_inspections LIKE 'invoice_url'");
+    if (qcCols.length === 0) {
+      await connection.query("ALTER TABLE qc_inspections ADD COLUMN invoice_url VARCHAR(255) NULL AFTER remarks");
+      console.log('QC Inspections invoice_url column added');
+    }
+
+    // Create qc_inspection_items table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS qc_inspection_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        qc_inspection_id INT NOT NULL,
+        grn_item_id INT NOT NULL,
+        warehouse_id INT NULL,
+        item_code VARCHAR(100),
+        po_qty DECIMAL(12, 3) DEFAULT 0,
+        received_qty DECIMAL(12, 3) DEFAULT 0,
+        accepted_qty DECIMAL(12, 3) DEFAULT 0,
+        rejected_qty DECIMAL(12, 3) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'PENDING',
+        remarks TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (qc_inspection_id) REFERENCES qc_inspections(id) ON DELETE CASCADE,
+        FOREIGN KEY (grn_item_id) REFERENCES grn_items(id) ON DELETE CASCADE,
+        FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Ensure warehouse_id column exists
+    const [cols] = await connection.query("SHOW COLUMNS FROM qc_inspection_items LIKE 'warehouse_id'");
+    if (cols.length === 0) {
+      await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN warehouse_id INT NULL AFTER grn_item_id");
+      await connection.query("ALTER TABLE qc_inspection_items ADD FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL");
+    }
+
+    // Ensure remarks column exists in qc_inspection_items
+    const [itemRemarksCol] = await connection.query("SHOW COLUMNS FROM qc_inspection_items LIKE 'remarks'");
+    if (itemRemarksCol.length === 0) {
+      await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN remarks TEXT AFTER status");
+      console.log('QC Inspection items remarks column added');
+    }
+    
+    console.log('QC Inspections tables synchronized');
+  } catch (error) {
+    console.error('QC Inspections table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureReturnsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS shipment_returns (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        return_code VARCHAR(50) NOT NULL UNIQUE,
+        shipment_id INT NOT NULL,
+        order_id INT NULL,
+        customer_id INT NULL,
+        reason TEXT NOT NULL,
+        status ENUM('RETURN_INITIATED', 'RETURN_PICKUP_ASSIGNED', 'RETURN_IN_TRANSIT', 'RETURN_RECEIVED', 'RETURN_COMPLETED') DEFAULT 'RETURN_INITIATED',
+        pickup_date DATE NULL,
+        received_date DATE NULL,
+        condition_status ENUM('GOOD', 'DAMAGED', 'WRONG_ITEM', 'CANCELLED') NULL,
+        refund_amount DECIMAL(15, 2) DEFAULT 0.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (shipment_id) REFERENCES shipment_orders(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS shipment_return_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        return_id INT NOT NULL,
+        item_code VARCHAR(100) NOT NULL,
+        quantity DECIMAL(15, 3) NOT NULL,
+        condition_note TEXT,
+        FOREIGN KEY (return_id) REFERENCES shipment_returns(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Shipment Returns tables synchronized');
+  } catch (error) {
+    console.error('Shipment Returns table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+const ensureItemGroupsTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS item_groups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(120) NOT NULL UNIQUE,
+        status ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Seed initial data if table is empty
+    const [rows] = await connection.query('SELECT COUNT(*) as count FROM item_groups');
+    if (rows[0].count === 0) {
+      await connection.query(`
+        INSERT INTO item_groups (name) VALUES 
+        ('Raw Material'), ('SFG'), ('FG'), ('Sub Assembly'), ('Consumable')
+      `);
+      console.log('Item Groups seeded');
+    }
+    console.log('Item Groups table synchronized');
+  } catch (error) {
+    console.error('Item Groups table sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
   await ensureSeed();
+  await ensureItemGroupsTable();
+  await ensureVendorColumns();
   await ensureCustomerPoColumns();
   await ensurePurchaseOrderItemColumns();
+  await ensurePurchaseOrderQuotationNullable();
+  await ensurePurchaseOrderVendorNullable();
   await ensureQuotationItemColumns();
   await ensurePoReceiptItemTable();
   await ensurePoReceiptColumns();
   await ensureGrnColumns();
+  await ensureGrnItemsTable();
+  await ensureGrnExcessApprovalsTable();
+  await ensureQCInspectionsTable();
   await ensurePoMaterialRequestColumns();
   await ensureStockColumns();
+  await ensureStockEntryTables();
   await ensureWarehouseAllocationTables();
+  await ensureWarehousesTable();
   await ensureDesignOrderTables();
   await ensureQuotationRequestTables();
   await ensureQuotationRequestStatus();
@@ -1405,6 +2247,7 @@ const bootstrapDatabase = async () => {
   await ensureSalesOrderItemColumns();
   await ensureSalesOrderStatuses();
   await ensureCustomerDrawingTable();
+  await ensureShipmentOrdersTable();
   await ensureSalesOrderItemMaterialsTable();
   await ensureBOMAdditionalTables();
   await ensureBOMMaterialsColumns();
@@ -1414,8 +2257,14 @@ const bootstrapDatabase = async () => {
   await ensureOperationsTable();
   await ensureProductionPlanTables();
   await ensureWorkOrderTables();
+  await ensureJobCardColumns();
+  await ensureMaterialRequestTables();
+  await ensureMaterialRequestColumns();
   await ensureQuotationCommunicationTable();
   await ensureOrdersTable();
+  await ensureDeliveryChallansTable();
+  await ensureOutwardChallanTables();
+  await ensureReturnsTable();
 };
 
 bootstrapDatabase();

@@ -6,6 +6,7 @@ const { authorize } = require('../middleware/authMiddleware');
 
 router.post('/', authorize(['COMPANY_EDIT']), companyController.createCompany);
 router.get('/', authorize(['COMPANY_VIEW']), companyController.getCompanies);
+router.get('/:companyId', authorize(['COMPANY_VIEW']), companyController.getCompanyById);
 router.put('/:companyId', authorize(['COMPANY_EDIT']), companyController.updateCompany);
 router.patch('/:companyId/status', authorize(['COMPANY_EDIT']), companyController.updateCompanyStatus);
 router.delete('/:companyId', authorize(['COMPANY_EDIT']), companyController.deleteCompany);

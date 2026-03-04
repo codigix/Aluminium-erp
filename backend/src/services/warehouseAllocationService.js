@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const stockService = require('./stockService');
 
 const getPendingAllocations = async () => {
   const [rows] = await pool.query(`
@@ -76,19 +77,41 @@ const allocateWarehouse = async (allocationData, userId) => {
     // 4. Update Stock Ledger (2 entries: OUT from RM-HOLD, IN to Target WH)
     const grnNumber = `GRN-${String(item.grn_id).padStart(4, '0')}`;
 
-    // Create OUT entry
-    await connection.execute(`
-      INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, remarks, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [item.item_code, item.material_name, item.material_type, 'OUT', allocate_qty, 'WAREHOUSE_ALLOCATION', allocResult.insertId, grnNumber, `Transfer from RM-HOLD to ${target_warehouse} (${remarks || ''})`, userId]);
+    // Create OUT entry from source warehouse
+    await stockService.addStockLedgerEntry(
+      item.item_code,
+      'OUT',
+      allocate_qty,
+      'WAREHOUSE_ALLOCATION',
+      allocResult.insertId,
+      grnNumber,
+      `Transfer from RM-HOLD to ${target_warehouse} (${remarks || ''})`,
+      userId,
+      { 
+        connection, 
+        warehouse: 'RM-HOLD',
+        materialName: item.material_name,
+        materialType: item.material_type
+      }
+    );
 
-    // Create IN entry
-    await connection.execute(`
-      INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, transaction_type, quantity, reference_doc_type, reference_doc_id, reference_doc_number, remarks, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [item.item_code, item.material_name, item.material_type, 'IN', allocate_qty, 'WAREHOUSE_ALLOCATION', allocResult.insertId, grnNumber, `Transfer to ${target_warehouse} from RM-HOLD (${remarks || ''})`, userId]);
+    // Create IN entry to target warehouse
+    await stockService.addStockLedgerEntry(
+      item.item_code,
+      'IN',
+      allocate_qty,
+      'WAREHOUSE_ALLOCATION',
+      allocResult.insertId,
+      grnNumber,
+      `Transfer to ${target_warehouse} from RM-HOLD (${remarks || ''})`,
+      userId,
+      { 
+        connection, 
+        warehouse: target_warehouse,
+        materialName: item.material_name,
+        materialType: item.material_type
+      }
+    );
 
     await connection.commit();
     return { success: true, allocationId: allocResult.insertId };

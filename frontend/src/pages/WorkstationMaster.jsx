@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, StatusBadge, FormControl, Modal, DataTable, Badge } from '../components/ui.jsx';
+import { Card, StatusBadge, FormControl, Modal, DataTable, Badge, SearchableSelect } from '../components/ui.jsx';
 import { Search, Plus, RefreshCw, Edit2, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
 
-const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const WorkstationMaster = ({ showForm, setShowForm }) => {
   const [workstations, setWorkstations] = useState([]);
@@ -196,7 +196,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       label: 'ID Code', 
       key: 'workstation_code', 
       sortable: true,
-      render: (val) => <span className=" text-indigo-600 font-mono">{val}</span>
+      render: (val) => <span className=" text-indigo-600  ">{val}</span>
     },
     { 
       label: 'Workstation / Location', 
@@ -204,35 +204,15 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       sortable: true,
       render: (val, row) => (
         <div>
-          <div className="font-medium text-slate-900">{val}</div>
+          <div className=" text-slate-900">{val}</div>
           <div className="text-[10px] text-slate-400">{row.location}</div>
         </div>
       )
     },
     { 
-      label: 'Classification', 
-      key: 'workstation_type',
-      render: (val, row) => (
-        <div>
-          <Badge variant="info">{val}</Badge>
-          <div className="text-[10px] text-slate-400 mt-1">{row.department}</div>
-        </div>
-      )
-    },
-    { 
-      label: 'Metric (Units/hr)', 
-      key: 'capacity_per_hour',
-      render: (val) => <span className="text-slate-600 font-medium">{val} units/hr</span>
-    },
-    { 
-      label: 'Hourly Rate', 
-      key: 'hourly_rate',
-      render: (val) => <span className="text-emerald-600 ">₹{val}</span>
-    },
-    { 
       label: 'Target', 
       key: 'target_utilization',
-      render: (val) => <span className="text-amber-600 font-medium">{val}%</span>
+      render: (val) => <span className="text-amber-600 ">{val}%</span>
     },
     { 
       label: 'Status', 
@@ -248,17 +228,17 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-center gap-2">
           <button 
             onClick={() => handleEdit(row)}
-            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
             title="Edit Workstation"
           >
             <Edit2 className="w-4 h-4" />
           </button>
           <button 
             onClick={() => handleDelete(row.id, row.workstation_name)}
-            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded  transition-colors"
             title="Delete Workstation"
           >
             <Trash2 className="w-4 h-4" />
@@ -274,8 +254,8 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
         <form onSubmit={handleSubmit} className="space-y-3">
             {/* Basic Information */}
             <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm">📋</span>
+              <div className="flex items-center gap-2  border-b border-slate-100 pb-3">
+                <span className="p-1.5 bg-blue-50 text-blue-600 rounded  text-sm">📋</span>
                 <h3 className="text-sm  text-slate-500">Basic Information</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -291,14 +271,15 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
                   />
                 </FormControl>
                 <FormControl label="Workstation Name *">
-                  <input
-                    type="text"
-                    name="workstation_name"
+                  <SearchableSelect
+                    options={Array.from(new Set(workstations.map(ws => ws.workstation_name))).map(name => ({
+                      label: name,
+                      value: name
+                    }))}
                     value={formData.workstation_name}
-                    onChange={handleInputChange}
+                    onChange={(e) => setFormData(prev => ({ ...prev, workstation_name: e.target.value }))}
                     placeholder="e.g., Assembly Line 1"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                    required
+                    allowCustom={true}
                   />
                 </FormControl>
                 <FormControl label="Location">
@@ -324,163 +305,18 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
               </div>
             </section>
 
-            {/* Capacity & Performance */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-sm">⚙️</span>
-                <h3 className="text-sm  text-slate-500">Capacity & Performance</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <FormControl label="Capacity (units/hour)">
-                  <input
-                    type="number"
-                    name="capacity_per_hour"
-                    value={formData.capacity_per_hour}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  />
-                </FormControl>
-                <FormControl label="Target Utilization (%)">
-                  <input
-                    type="number"
-                    name="target_utilization"
-                    value={formData.target_utilization}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  />
-                </FormControl>
-                <FormControl label="Hourly Rate (₹)">
-                  <input
-                    type="number"
-                    name="hourly_rate"
-                    step="0.01"
-                    value={formData.hourly_rate}
-                    onChange={handleInputChange}
-                    placeholder="e.g., 500.00"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  />
-                </FormControl>
-              </div>
-            </section>
-
-            {/* Equipment Information */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <span className="p-1.5 bg-purple-50 text-purple-600 rounded-lg text-sm">🔧</span>
-                <h3 className="text-sm  text-slate-500">Equipment Information</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <FormControl label="Equipment Type">
-                  <select
-                    name="workstation_type"
-                    value={formData.workstation_type}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  >
-                    {equipmentTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </FormControl>
-                <FormControl label="Equipment Code/Reference">
-                  <input
-                    type="text"
-                    name="equipment_code"
-                    value={formData.equipment_code}
-                    onChange={handleInputChange}
-                    placeholder="e.g., EQ-12345"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  />
-                </FormControl>
-              </div>
-            </section>
-
-            {/* Maintenance Schedule */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <span className="p-1.5 bg-amber-50 text-amber-600 rounded-lg text-sm">🛠️</span>
-                <h3 className="text-sm  text-slate-500">Maintenance Schedule</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <FormControl label="Maintenance Frequency">
-                  <select
-                    name="maintenance_frequency"
-                    value={formData.maintenance_frequency}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  >
-                    {maintenanceFrequencies.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </FormControl>
-                <FormControl label="Last Maintenance Date">
-                  <input
-                    type="date"
-                    name="last_maintenance_date"
-                    value={formData.last_maintenance_date}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  />
-                </FormControl>
-              </div>
-            </section>
-
-            {/* Operations & Assignment */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <span className="p-1.5 bg-cyan-50 text-cyan-600 rounded-lg text-sm">👥</span>
-                <h3 className="text-sm  text-slate-500">Operations & Assignment</h3>
-              </div>
-              <FormControl label="Assigned Operators">
-                <input
-                  type="text"
-                  name="assigned_operators"
-                  value={formData.assigned_operators}
-                  onChange={handleInputChange}
-                  placeholder="Comma-separated operator names or IDs (e.g., OP-001, OP-002)"
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                />
-              </FormControl>
-            </section>
-
-            {/* Details & Notes */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <span className="p-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm">📝</span>
-                <h3 className="text-sm  text-slate-500">Details & Notes</h3>
-              </div>
-              <FormControl label="Description">
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  rows="3"
-                  placeholder="Detailed description of the workstation, equipment specifications, etc."
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                ></textarea>
-              </FormControl>
-              <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100 w-fit">
-                <input
-                  type="checkbox"
-                  name="status"
-                  id="activeStatus"
-                  checked={formData.status === 'Active'}
-                  onChange={handleInputChange}
-                  className="w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                />
-                <label htmlFor="activeStatus" className="text-sm  text-slate-700">Active Status</label>
-              </div>
-            </section>
-
             {/* Action Buttons */}
             <div className="flex justify-end gap-3 pt-8 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => { resetForm(); setShowForm(false); }}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 text-sm  text-slate-600 hover:bg-slate-50 transition-all"
+                className="p-2.5 rounded  border border-slate-200 text-sm  text-slate-600 hover:bg-slate-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-8 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-white text-sm  shadow-lg shadow-cyan-100 transition-all flex items-center gap-2"
+                className="px-8 py-2.5 rounded  bg-cyan-500 hover:bg-cyan-600 text-white text-sm  shadow-lg shadow-cyan-100 transition-all flex items-center gap-2 "
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
@@ -492,9 +328,9 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       </Modal>
 
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded  border border-slate-100 ">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100">
+          <div className="p-3 bg-indigo-600 rounded  shadow-lg shadow-indigo-100">
             <RefreshCw className={`w-6 h-6 text-white ${loading ? 'animate-spin' : ''}`} />
           </div>
           <div>
@@ -504,7 +340,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
         </div>
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-200 font-medium"
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded  transition-all shadow-lg shadow-indigo-200 "
         >
           <Plus className="w-5 h-5" />
           Add Workstation

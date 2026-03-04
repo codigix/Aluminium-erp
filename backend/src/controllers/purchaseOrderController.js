@@ -2,13 +2,7 @@ const purchaseOrderService = require('../services/purchaseOrderService');
 
 const createPurchaseOrder = async (req, res, next) => {
   try {
-    const { quotationId, expectedDeliveryDate, notes, poNumber } = req.body;
-    const result = await purchaseOrderService.createPurchaseOrder(
-      quotationId,
-      expectedDeliveryDate,
-      notes,
-      poNumber
-    );
+    const result = await purchaseOrderService.createPurchaseOrder(req.body);
     res.status(201).json({ message: 'Purchase Order created', data: result });
   } catch (error) {
     next(error);
@@ -90,6 +84,97 @@ const handleStoreAcceptance = async (req, res, next) => {
   }
 };
 
+const approvePurchaseOrder = async (req, res, next) => {
+  try {
+    const result = await purchaseOrderService.approvePurchaseOrder(
+      req.params.poId,
+      req.user.id
+    );
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPurchaseOrderPDF = async (req, res, next) => {
+  try {
+    const pdfBuffer = await purchaseOrderService.generatePurchaseOrderPDF(req.params.poId);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=PO-${req.params.poId}.pdf`,
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const sendPurchaseOrderEmail = async (req, res, next) => {
+  try {
+    const result = await purchaseOrderService.sendPurchaseOrderEmail(req.params.poId, req.body);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const uploadInvoice = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const invoiceUrl = `uploads/${req.file.filename}`;
+    const result = await purchaseOrderService.updatePurchaseOrderInvoice(req.params.poId, invoiceUrl);
+    res.json({ message: 'Invoice uploaded successfully', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const sendToPendingPayment = async (req, res, next) => {
+  try {
+    const pool = require('../config/db');
+    const poId = parseInt(req.params.poId);
+    
+    console.log(`[DEBUG] sendToPendingPayment called for PO ID: ${poId}`);
+    
+    const [existing] = await pool.query(
+      'SELECT id, po_number, status FROM purchase_orders WHERE id = ?',
+      [poId]
+    );
+
+    if (!existing.length) {
+      const error = new Error('Purchase Order not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    console.log(`[DEBUG] Current PO status: ${existing[0].status}`);
+    console.log(`[DEBUG] Updating to: PENDING_PAYMENT`);
+
+    // Use query() instead of execute() to avoid mysql2 parameter binding issues
+    const [result] = await pool.query(
+      'UPDATE purchase_orders SET status = "PENDING_PAYMENT" WHERE id = ?',
+      [poId]
+    );
+
+    console.log(`[DEBUG] Update successful`);
+
+    res.json({
+      message: 'Invoice sent to payment processing',
+      data: {
+        id: poId,
+        poNumber: existing[0].po_number,
+        status: 'PENDING_PAYMENT'
+      }
+    });
+  } catch (error) {
+    console.error(`[ERROR] sendToPendingPayment error:`, error);
+    next(error);
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -99,5 +184,10 @@ module.exports = {
   deletePurchaseOrder,
   getPurchaseOrderStats,
   getPOMaterialRequests,
-  handleStoreAcceptance
+  handleStoreAcceptance,
+  approvePurchaseOrder,
+  getPurchaseOrderPDF,
+  sendPurchaseOrderEmail,
+  uploadInvoice,
+  sendToPendingPayment
 };

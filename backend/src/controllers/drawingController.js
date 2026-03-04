@@ -3,6 +3,7 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const drawingService = require('../services/drawingService');
 const parseExcelDrawings = require('../utils/excelDrawingParser');
+const { uploadsPath } = require('../config/uploadConfig');
 
 const listDrawings = async (req, res, next) => {
   try {
@@ -25,11 +26,44 @@ const getDrawingRevisions = async (req, res, next) => {
 
 const updateDrawing = async (req, res, next) => {
   try {
-    const { drawingNo } = req.params;
-    const { description, revisionNo } = req.body;
+    const { id } = req.params;
+    const { 
+      description, 
+      revisionNo, 
+      clientName, 
+      contactPerson, 
+      phoneNumber, 
+      emailAddress,
+      customerType,
+      gstin,
+      city,
+      state,
+      billingAddress,
+      shippingAddress,
+      qty,
+      remarks,
+      drawingNo
+    } = req.body;
     const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
 
-    await drawingService.updateDrawing(drawingNo, { description, revisionNo, drawingPdf });
+    await drawingService.updateDrawing(id, { 
+      description, 
+      revisionNo, 
+      drawingPdf,
+      clientName,
+      contactPerson,
+      phoneNumber,
+      emailAddress,
+      customerType,
+      gstin,
+      city,
+      state,
+      billingAddress,
+      shippingAddress,
+      qty,
+      remarks,
+      drawingNo
+    });
     res.json({ message: 'Drawing updated successfully' });
   } catch (error) {
     next(error);
@@ -51,20 +85,28 @@ const updateItemDrawing = async (req, res, next) => {
 
 const createDrawing = async (req, res, next) => {
   try {
-    const { clientName, drawingNo, revision, qty, description, remarks, fileType, contactPerson, phoneNumber, emailAddress } = req.body;
+    const { 
+      clientName, drawingNo, revision, qty, description, remarks, fileType, 
+      contactPerson, phoneNumber, emailAddress,
+      customerType, gstin, city, state, billingAddress, shippingAddress
+    } = req.body;
     
     // Check for both single file and multiple files (upload.fields)
     const excelFile = req.files?.file?.[0] || req.file;
     const zipFile = req.files?.zipFile?.[0];
 
-    const filePath = excelFile ? `uploads/${excelFile.filename}` : null;
-    if (!filePath) throw new Error('Excel or Drawing file is required');
+    const fileName = excelFile ? excelFile.filename : null;
+    if (!fileName) throw new Error('Excel or Drawing file is required');
+
+    // Use absolute path for reading the file with XLSX
+    const absoluteExcelPath = path.join(uploadsPath, fileName);
+    const dbFilePath = `uploads/${fileName}`;
 
     const uploadedBy = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'Sales';
 
     // Handle Excel + ZIP
     if ((fileType === 'XLSX' || fileType === 'XLS') && excelFile) {
-      const parsedDrawings = await parseExcelDrawings(filePath);
+      const parsedDrawings = await parseExcelDrawings(absoluteExcelPath);
       if (parsedDrawings && parsedDrawings.length > 0) {
         let zipEntries = [];
         if (zipFile) {
@@ -103,7 +145,7 @@ const createDrawing = async (req, res, next) => {
 
             if (entry) {
               const safeFileName = `${Date.now()}-${path.basename(entry.entryName).replace(/\s+/g, '_')}`;
-              const destPath = path.join(process.cwd(), 'uploads', safeFileName);
+              const destPath = path.join(uploadsPath, safeFileName);
               fs.writeFileSync(destPath, entry.getData());
               rowFilePath = `uploads/${safeFileName}`;
             }
@@ -124,7 +166,13 @@ const createDrawing = async (req, res, next) => {
             uploadedBy,
             contactPerson,
             phoneNumber,
-            emailAddress
+            emailAddress,
+            customerType,
+            gstin,
+            city,
+            state,
+            billingAddress,
+            shippingAddress
           });
         }
         
@@ -142,13 +190,19 @@ const createDrawing = async (req, res, next) => {
       revision,
       qty,
       description,
-      filePath,
+      filePath: dbFilePath,
       fileType,
       remarks,
       uploadedBy,
       contactPerson,
       phoneNumber,
-      emailAddress
+      emailAddress,
+      customerType,
+      gstin,
+      city,
+      state,
+      billingAddress,
+      shippingAddress
     });
 
     res.status(201).json({ message: 'Customer drawing uploaded successfully', id });

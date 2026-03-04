@@ -67,9 +67,9 @@ const CompanyMaster = ({
         <form onSubmit={onInlineSubmit} className="space-y-8 max-h-[70vh] overflow-y-auto px-1">
           {/* Company Info */}
           <div className="">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2  pb-2 border-b border-slate-100">
               <Building2 className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm  text-slate-800 tracking-wider ">Company Information</h3>
+              <h3 className="text-sm  text-slate-800  ">Company Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <FormControl label="Company Name">
@@ -99,9 +99,9 @@ const CompanyMaster = ({
 
           {/* Tax Info */}
           <div className="">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2  pb-2 border-b border-slate-100">
               <Building2 className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm  text-slate-800 tracking-wider ">Tax Information</h3>
+              <h3 className="text-sm  text-slate-800  ">Tax Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <FormControl label="GSTIN">
@@ -110,7 +110,7 @@ const CompanyMaster = ({
                   value={companyForm.gstin}
                   onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value })}
                   placeholder="XXXXXXXXXXXX"
-                  className={`${fieldInputClass} font-mono`}
+                  className={`${fieldInputClass}  `}
                   required
                 />
               </FormControl>
@@ -120,7 +120,7 @@ const CompanyMaster = ({
                   value={companyForm.cin}
                   onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value })}
                   placeholder="CIN number"
-                  className={`${fieldInputClass} font-mono`}
+                  className={`${fieldInputClass}  `}
                 />
               </FormControl>
               <FormControl label="PAN">
@@ -129,7 +129,7 @@ const CompanyMaster = ({
                   value={companyForm.pan}
                   onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value })}
                   placeholder="PAN number"
-                  className={`${fieldInputClass} font-mono`}
+                  className={`${fieldInputClass}  `}
                 />
               </FormControl>
             </div>
@@ -137,9 +137,9 @@ const CompanyMaster = ({
 
           {/* Billing Address */}
           <div className="">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2  pb-2 border-b border-slate-100">
               <MapPin className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm  text-slate-800 tracking-wider ">Billing Address</h3>
+              <h3 className="text-sm  text-slate-800  ">Billing Address</h3>
             </div>
             <div className="space-y-3">
               <FormControl label="Address Line 1">
@@ -175,7 +175,7 @@ const CompanyMaster = ({
                     type="text"
                     value={companyForm.billingAddress.pincode}
                     onChange={e => updateAddress('billingAddress', 'pincode', e.target.value)}
-                    className={`${fieldInputClass} font-mono`}
+                    className={`${fieldInputClass}  `}
                   />
                 </FormControl>
                 <FormControl label="Country">
@@ -192,9 +192,9 @@ const CompanyMaster = ({
 
           {/* Contact Person */}
           <div className="">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2  pb-2 border-b border-slate-100">
               <User className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm  text-slate-800 tracking-wider ">Contact Person</h3>
+              <h3 className="text-sm  text-slate-800  ">Contact Person</h3>
             </div>
             <FormControl label="Contact Person Name">
               <input
@@ -212,7 +212,7 @@ const CompanyMaster = ({
                   value={companyForm.contactMobile || ''}
                   onChange={e => setCompanyForm({ ...companyForm, contactMobile: e.target.value })}
                   placeholder="e.g., 9823714674"
-                  className={`${fieldInputClass} font-mono`}
+                  className={`${fieldInputClass}  `}
                 />
               </FormControl>
               <FormControl label="Email">
@@ -231,14 +231,14 @@ const CompanyMaster = ({
             <button
               type="button"
               onClick={onToggleCreatePanel}
-              className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs  hover:bg-slate-50 transition-all"
+              className="p-2.5 rounded  border border-slate-200 text-slate-600 text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-10 py-2.5 rounded-xl bg-indigo-600 text-white text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2"
+              className="px-10 py-2.5 rounded  bg-indigo-600 text-white text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2 "
             >
               {loading ? (
                 <>
@@ -260,7 +260,7 @@ const CompanyMaster = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-indigo-50 rounded-lg">
+            <div className="p-2 bg-indigo-50 rounded ">
               <Building2 className="w-5 h-5 text-indigo-600" />
             </div>
             <h2 className="text-xl text-slate-900">Company Master</h2>
@@ -272,7 +272,7 @@ const CompanyMaster = ({
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+            className="p-2.5 rounded  border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all "
             title="Refresh Data"
           >
             <RotateCcw className="w-5 h-5" />
@@ -281,7 +281,7 @@ const CompanyMaster = ({
           <button
             type="button"
             onClick={onToggleCreatePanel}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+            className="flex items-center gap-2  px-5 py-2.5 rounded  bg-indigo-600 text-white text-sm  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
           >
             <Plus className="w-5 h-5" />
             <span>New Company</span>
@@ -291,18 +291,18 @@ const CompanyMaster = ({
 
       {/* Bulk Action Toolbar */}
       {selectedRows.size > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
+          <div className="bg-blue-50 border border-blue-200 rounded  p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center text-sm ">
                 {selectedRows.size}
               </div>
-              <span className="text-sm font-medium text-slate-700">{selectedRows.size} selected</span>
+              <span className="text-sm  text-slate-700">{selectedRows.size} selected</span>
             </div>
             <div className="flex gap-2">
-              <button className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button className="p-2  rounded  bg-white border border-slate-200 text-sm  text-slate-700 hover:bg-slate-50">
                 Deactivate
               </button>
-              <button className="px-4 py-2 rounded-lg bg-white border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50">
+              <button className="p-2  rounded  bg-white border border-red-200 text-sm  text-red-600 hover:bg-red-50">
                 Delete
               </button>
             </div>
@@ -310,7 +310,7 @@ const CompanyMaster = ({
         )}
 
         {/* Table */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded  border border-slate-200 overflow-hidden">
           {/* Table Header */}
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -329,7 +329,7 @@ const CompanyMaster = ({
                   <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">City</th>
                   <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">GSTIN</th>
                   <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">Status</th>
-                  <th className="px-4 py-3 text-right text-xs  text-slate-700  tracking-wide">Actions</th>
+                  <th className="p-2  text-right text-xs  text-slate-700  tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -342,7 +342,7 @@ const CompanyMaster = ({
                 ) : (
                   companies.map(company => (
                     <tr key={company.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
-                      <td className="px-4 py-3">
+                      <td className="p-2 ">
                         <input
                           type="checkbox"
                           checked={selectedRows.has(company.id)}
@@ -350,42 +350,35 @@ const CompanyMaster = ({
                           className="w-4 h-4 rounded border-slate-300"
                         />
                       </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{company.company_name}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{formatCustomerType(company.customer_type)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{getCompanyCity(company)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600 font-mono">{company.gstin || '—'}</td>
-                      <td className="px-4 py-3">
+                      <td className="p-2   text-slate-900">{company.company_name}</td>
+                      <td className="p-2  text-sm text-slate-600">{formatCustomerType(company.customer_type)}</td>
+                      <td className="p-2  text-sm text-slate-600">{getCompanyCity(company)}</td>
+                      <td className="p-2  text-sm text-slate-600  ">{company.gstin || '—'}</td>
+                      <td className="p-2 ">
                         <StatusBadge status={company.status} />
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="p-2  text-right">
                         <div className="flex gap-1 justify-end">
                           <button
                             onClick={() => onViewCompany(company)}
                             title="View"
-                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
+                            className="p-1.5 rounded  hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                            </svg>
+                            <Eye className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => onEditCompany(company)}
                             title="Edit"
-                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors"
+                            className="p-1.5 rounded  hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
+                            <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => onDeleteCompany(company)}
                             title="Delete"
-                            className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                            className="p-1.5 rounded  hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>

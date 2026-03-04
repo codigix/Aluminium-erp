@@ -5,7 +5,8 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.get('/', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW']), async (req, res) => {
   try {
-    const items = await stockService.getStockBalance();
+    const { includeAll } = req.query;
+    const items = await stockService.getStockBalance(null, includeAll === 'true');
     res.json(items);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
@@ -40,7 +41,7 @@ router.put('/items/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE
   }
 });
 
-router.delete('/items/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.delete('/items/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const result = await stockService.deleteStockBalance(req.params.id);
     res.json(result);
@@ -61,8 +62,8 @@ router.get('/ledger', authenticate, authorize(['STOCK_VIEW']), async (req, res) 
 
 router.get('/balance', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
-    const { drawingNo } = req.query;
-    const balances = await stockService.getStockBalance(drawingNo);
+    const { drawingNo, includeAll } = req.query;
+    const balances = await stockService.getStockBalance(drawingNo, includeAll === 'true');
     res.json(balances);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
@@ -81,7 +82,7 @@ router.get('/balance/:itemCode', authenticate, authorize(['STOCK_VIEW', 'DESIGN_
   }
 });
 
-router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const { itemCode, transactionType, quantity, refDocType, refDocId, refDocNumber, remarks } = req.body;
     const userId = req.user?.id;
@@ -108,7 +109,7 @@ router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE']), async (r
   }
 });
 
-router.delete('/ledger/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.delete('/ledger/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     await stockService.deleteStockLedgerEntry(req.params.id);
     res.json({ success: true });
@@ -117,7 +118,7 @@ router.delete('/ledger/:id', authenticate, authorize(['STOCK_MANAGE']), async (r
   }
 });
 
-router.delete('/balance/:id', authenticate, authorize(['STOCK_MANAGE']), async (req, res) => {
+router.delete('/balance/:id', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     await stockService.deleteStockBalance(req.params.id);
     res.json({ success: true });

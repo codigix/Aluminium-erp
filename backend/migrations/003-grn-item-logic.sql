@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS grn_excess_approvals (
   id INT PRIMARY KEY AUTO_INCREMENT,
   grn_item_id INT NOT NULL,
   excess_qty INT NOT NULL,
-  status VARCHAR(50) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING, APPROVED, REJECTED',
+  status VARCHAR(50) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING, Approved , REJECTED',
   approval_notes TEXT,
   rejection_reason TEXT,
   approved_at TIMESTAMP NULL,

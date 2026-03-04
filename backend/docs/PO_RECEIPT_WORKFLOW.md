@@ -182,7 +182,7 @@
                    │
                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│              SCENARIO A: EXCESS APPROVED                             │
+│              SCENARIO A: EXCESS Approved                              │
 │                                                                       │
 │  After Approval:                                                    │
 │                                                                       │
@@ -653,7 +653,7 @@ INWARD | ITEM002 | 2 | GRN | Replacement
 | GRN Items Processed | ✓ | `grn_items.status` in (RECEIVED, SHORT_RECEIPT, REJECTED, EXCESS_HOLD) |
 | Inventory Posted (Accepted Only) | ✓ | `inventory.stock_on_hand = sum(accepted_qty)` |
 | PO Balance Calculated | ✓ | `balance_qty = po_qty - total_accepted_qty` |
-| Excess Approved | ✓ | `grn_excess_approvals.status = APPROVED` |
+| Excess Approved | ✓ | `grn_excess_approvals.status = Approved ` |
 | PO Complete | ✓ | `purchase_orders.status = COMPLETED` |
 
 ---

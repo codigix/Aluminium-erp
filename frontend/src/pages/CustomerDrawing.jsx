@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, DataTable, StatusBadge, FormControl } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Plus, Search, RefreshCw, Filter, FileText, Send } from 'lucide-react';
+import { Plus, Search, RefreshCw, Filter, FileText, Send, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast, infoToast } from '../utils/toast';
 
-const API_BASE = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api');
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const CustomerDrawing = () => {
   const [drawings, setDrawings] = useState([]);
@@ -29,11 +29,26 @@ const CustomerDrawing = () => {
   
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
+  const [modalMode, setModalMode] = useState('edit'); // 'view' or 'edit'
   const [editData, setEditData] = useState({
+    id: '',
     drawing_no: '',
     revision_no: '',
     description: '',
-    drawing_pdf: null
+    client_name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    customer_type: '',
+    gstin: '',
+    city: '',
+    state: '',
+    billing_address: '',
+    shipping_address: '',
+    qty: 1,
+    remarks: '',
+    drawing_pdf: null,
+    file_path: ''
   });
   const [saveLoading, setSaveLoading] = useState(false);
 
@@ -44,7 +59,7 @@ const CustomerDrawing = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="font-medium text-slate-900">{val || row.company_name || '—'}</span>
+          <span className=" text-slate-900">{val || row.company_name || '—'}</span>
         </div>
       )
     },
@@ -53,7 +68,7 @@ const CustomerDrawing = () => {
       key: 'drawing_no', 
       sortable: true,
       render: (val) => (
-        <div className="max-w-[250px] max-h-[60px] overflow-y-auto text-[10px] leading-relaxed pr-2 text-slate-500" title={val}>
+        <div className="max-w-[250px] max-h-[60px] overflow-y-auto text-xs  leading-relaxed pr-2 text-slate-500" title={val}>
           {val}
         </div>
       )
@@ -63,7 +78,7 @@ const CustomerDrawing = () => {
       key: 'contact_person',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="font-medium text-slate-900">{row.contact_phone || val || '—'}</span>
+          <span className=" text-slate-900">{row.contact_phone || val || '—'}</span>
           {row.contact_phone && val && val !== row.contact_phone && (
             <span className="text-[10px] text-slate-500">{val}</span>
           )}
@@ -321,7 +336,7 @@ const CustomerDrawing = () => {
   };
 
   useEffect(() => {
-    fetchDrawings();
+    fetchDrawings(searchTerm);
     fetchCompanies();
     fetchRequirements();
   }, []);
@@ -365,13 +380,40 @@ const CustomerDrawing = () => {
     }
   };
 
-  const handleEdit = (drawing) => {
+  const handleEdit = (drawing, mode = 'edit') => {
+    const company = companies.find(c => c.company_name === drawing.client_name);
+    
+    let billingAddressLine = '';
+    let shippingAddressLine = '';
+    
+    if (company) {
+      const billingAddress = company.addresses?.find(a => a.address_type === 'BILLING');
+      const shippingAddress = company.addresses?.find(a => a.address_type === 'SHIPPING');
+      billingAddressLine = billingAddress ? `${billingAddress.line1}${billingAddress.line2 ? ', ' + billingAddress.line2 : ''}, ${billingAddress.city}, ${billingAddress.state} ${billingAddress.pincode}` : '';
+      shippingAddressLine = shippingAddress ? `${shippingAddress.line1}${shippingAddress.line2 ? ', ' + shippingAddress.line2 : ''}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}` : '';
+    }
+
     setEditData({
+      id: drawing.id,
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision || drawing.revision_no || '0',
       description: drawing.description || '',
-      drawing_pdf: null
+      client_name: drawing.client_name,
+      contact_person: drawing.contact_person || (company ? company.contact_person : ''),
+      phone: drawing.phone || (company ? company.contact_mobile : ''),
+      email: drawing.email || (company ? company.contact_email : ''),
+      customer_type: drawing.customer_type || (company ? company.customer_type : ''),
+      gstin: drawing.gstin || (company ? company.gstin : ''),
+      city: drawing.city || (company ? (company.addresses?.find(a => a.address_type === 'BILLING')?.city || '') : ''),
+      state: drawing.state || (company ? (company.addresses?.find(a => a.address_type === 'BILLING')?.state || '') : ''),
+      billing_address: drawing.billing_address || billingAddressLine,
+      shipping_address: drawing.shipping_address || shippingAddressLine,
+      qty: drawing.qty || 1,
+      remarks: drawing.remarks || '',
+      drawing_pdf: null,
+      file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
+    setModalMode(mode);
     setShowEditModal(true);
   };
 
@@ -386,13 +428,28 @@ const CustomerDrawing = () => {
       setSaveLoading(true);
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
+      formData.append('id', editData.id);
+      formData.append('drawingNo', editData.drawing_no);
       formData.append('revisionNo', editData.revision_no);
       formData.append('description', editData.description);
+      formData.append('clientName', editData.client_name);
+      formData.append('contactPerson', editData.contact_person);
+      formData.append('phoneNumber', editData.phone);
+      formData.append('emailAddress', editData.email);
+      formData.append('customerType', editData.customer_type);
+      formData.append('gstin', editData.gstin);
+      formData.append('city', editData.city);
+      formData.append('state', editData.state);
+      formData.append('billingAddress', editData.billing_address);
+      formData.append('shippingAddress', editData.shipping_address);
+      formData.append('qty', editData.qty);
+      formData.append('remarks', editData.remarks);
+
       if (editData.drawing_pdf) {
         formData.append('drawing_pdf', editData.drawing_pdf);
       }
 
-      const response = await fetch(`${API_BASE}/drawings/${encodeURIComponent(editData.drawing_no)}`, {
+      const response = await fetch(`${API_BASE}/drawings/${editData.id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -405,6 +462,55 @@ const CustomerDrawing = () => {
       successToast('Customer drawing updated successfully');
       setShowEditModal(false);
       fetchDrawings(searchTerm);
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const handleEditAndSendToDesign = async (e) => {
+    e.preventDefault();
+    try {
+      setSaveLoading(true);
+      const token = localStorage.getItem('authToken');
+      const formData = new FormData();
+      formData.append('id', editData.id);
+      formData.append('drawingNo', editData.drawing_no);
+      formData.append('revisionNo', editData.revision_no);
+      formData.append('description', editData.description);
+      formData.append('clientName', editData.client_name);
+      formData.append('contactPerson', editData.contact_person);
+      formData.append('phoneNumber', editData.phone);
+      formData.append('emailAddress', editData.email);
+      formData.append('customerType', editData.customer_type);
+      formData.append('gstin', editData.gstin);
+      formData.append('city', editData.city);
+      formData.append('state', editData.state);
+      formData.append('billingAddress', editData.billing_address);
+      formData.append('shippingAddress', editData.shipping_address);
+      formData.append('qty', editData.qty);
+      formData.append('remarks', editData.remarks);
+
+      if (editData.drawing_pdf) {
+        formData.append('drawing_pdf', editData.drawing_pdf);
+      }
+
+      const response = await fetch(`${API_BASE}/drawings/${editData.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Failed to update drawing');
+      
+      // Share with design
+      await handleShareWithDesign(editData.id);
+      
+      setShowEditModal(false);
     } catch (error) {
       console.error(error);
       errorToast(error.message);
@@ -581,7 +687,7 @@ const CustomerDrawing = () => {
       const isExcelUpload = isExcel && savedDrawing.count;
 
       if (sendToDesign && drawingId) {
-        await shareDrawingWithDesign(drawingId);
+        await handleShareWithDesign(drawingId);
       } else if (isExcelUpload && sendToDesign) {
         await sendBulkUploadedToDesign(newDrawing.client_name, savedDrawing.count);
       }
@@ -627,7 +733,7 @@ const CustomerDrawing = () => {
           warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
         }
       }
-      fetchDrawings();
+      fetchDrawings(searchTerm);
       fetchRequirements();
     } catch (error) {
       errorToast(error.message);
@@ -668,7 +774,7 @@ const CustomerDrawing = () => {
         successToast(`All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`);
         setLastUploadedDrawings([]);
         setShowFormModal(false);
-        fetchDrawings();
+        fetchDrawings(searchTerm);
         fetchRequirements();
       }
     } catch (error) {
@@ -705,34 +811,13 @@ const CustomerDrawing = () => {
         setLoading(true);
         await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.id));
         successToast(`All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer as a single request`);
-        fetchDrawings();
+        fetchDrawings(searchTerm);
         fetchRequirements();
       } catch (error) {
         errorToast(error.message);
       } finally {
         setLoading(false);
       }
-    }
-  };
-
-  const shareDrawingWithDesign = async (drawingId) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/drawings/${drawingId}/share`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Share failed');
-      
-      successToast('Drawing saved and sent to Design Engineer for review and approval');
-      fetchDrawings();
-      fetchRequirements();
-    } catch (error) {
-      console.error(error);
-      errorToast(error.message);
     }
   };
 
@@ -769,7 +854,7 @@ const CustomerDrawing = () => {
           setShowFormModal(false);
         }
       }
-      fetchDrawings();
+      fetchDrawings(searchTerm);
       fetchRequirements();
     } catch (error) {
       errorToast(error.message);
@@ -821,7 +906,7 @@ const CustomerDrawing = () => {
         });
         if (!response.ok) throw new Error('Delete failed');
         successToast('Drawing has been deleted.');
-        fetchDrawings();
+        fetchDrawings(searchTerm);
       } catch (error) {
         errorToast(error.message);
       }
@@ -859,10 +944,10 @@ const CustomerDrawing = () => {
 
         if (failed.length === 0) {
           successToast(`All drawings for ${clientName} have been deleted.`);
-          fetchDrawings();
+          fetchDrawings(searchTerm);
         } else {
           warningToast(`${failed.length} drawings failed to delete.`);
-          fetchDrawings();
+          fetchDrawings(searchTerm);
         }
       } catch (error) {
         errorToast(error.message);
@@ -873,7 +958,7 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 ">
       <div className="max-w-7xl mx-auto">
         {/* HEADER SECTION */}
         <div className="mb-4">
@@ -885,14 +970,14 @@ const CustomerDrawing = () => {
             <div className="flex gap-2">
               <button 
                 onClick={() => setShowFormModal(true)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs  hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                className="p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-colors flex items-center gap-2 "
               >
                 <Plus className="w-4 h-4" />
                 Client Requirement
               </button>
               <button 
                 onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs  hover:bg-emerald-700 transition-colors flex items-center gap-2"
+                className="p-2  bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-colors flex items-center gap-2 "
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Approved Drawings
@@ -905,7 +990,7 @@ const CustomerDrawing = () => {
                 <input 
                   type="text" 
                   placeholder="Search drawings, clients..." 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-slate-300 rounded  text-xs outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -915,14 +1000,14 @@ const CustomerDrawing = () => {
               </div>
               <button 
                 type="submit"
-                className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs  hover:bg-indigo-700 transition-colors"
+                className="px-3 py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-colors"
               >
                 Search
               </button>
               <button 
                 type="button"
-                onClick={() => { setSearchTerm(''); fetchDrawings(); }}
-                className="px-3 py-2 bg-white text-slate-600 rounded-lg text-xs  hover:bg-slate-50 border border-slate-300 transition-colors"
+                onClick={() => { setSearchTerm(''); fetchDrawings(''); }}
+                className="px-3 py-2 bg-white text-slate-600 rounded  text-xs  hover:bg-slate-50 border border-slate-300 transition-colors"
               >
                 Reset
               </button>
@@ -930,23 +1015,14 @@ const CustomerDrawing = () => {
           </div>
 
           {/* INFO BANNER */}
-          <div className="bg-gradient-to-r mt-3 from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-            <div className="flex-shrink-0 mt-0.5">
-              <svg className="h-4 w-4 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <p className="text-xs text-amber-900 font-medium ">
-              Customer drawings are reference only. Production drawings created by Engineering.
-            </p>
-          </div>
+          
         </div>
 
         {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
-        <div className="mb-4">
+        <div className="mb-2">
           <Card>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg  text-slate-800 flex items-center gap-2">
+              <h2 className="text-lg  text-slate-800 flex items-center gap-2 ">
                 <FileText className="w-5 h-5 text-indigo-600" />
                 Client Requirements
               </h2>
@@ -961,18 +1037,18 @@ const CustomerDrawing = () => {
 
         {/* SECTION 3: CUSTOMER DRAWINGS TABLE */}
         <div className="mb-4">
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-200">
+          <div className="bg-white rounded   overflow-hidden border border-slate-200">
             <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
               <div>
-                <h2 className="text-base text-slate-900 flex items-center gap-2 mb-0.5">
+                <h2 className="text-base text-slate-900 flex items-center gap-2  mb-0.5">
                   <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                   Drawings Database
                 </h2>
                 <p className="text-xs text-slate-600"><span className="">{drawings.length}</span> drawings | <span className="">{Object.keys(groupedDrawings).length}</span> clients</p>
               </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 ">
               <select 
-                className="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs  text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="p-2 .5 bg-white border border-slate-300 rounded text-xs  text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={clientFilter}
                 onChange={(e) => setClientFilter(e.target.value)}
               >
@@ -1015,7 +1091,7 @@ const CustomerDrawing = () => {
             {loading ? (
               <div className="py-8 text-center">
                 <div className="flex justify-center mb-2">
-                  <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
                 </div>
                 <p className="text-slate-600  text-xs">Loading...</p>
               </div>
@@ -1028,11 +1104,11 @@ const CustomerDrawing = () => {
             ) : (
               <div className="space-y-2">
                 {Object.entries(groupedDrawings).map(([clientName, clientDrawings]) => (
-                  <div key={clientName} className="border border-slate-200 rounded bg-white overflow-hidden transition-all hover:shadow-sm">
+                  <div key={clientName} className="border border-slate-200 rounded bg-white overflow-hidden transition-all hover:">
                     {/* CLIENT GROUP HEADER */}
                     <div 
                       onClick={() => toggleClientGroup(clientName)}
-                      className={`px-4 py-2 cursor-pointer flex justify-between items-center transition-all group ${expandedClients[clientName] ? 'bg-indigo-50 border-b border-slate-200' : 'hover:bg-slate-50'}`}
+                      className={`p-2  cursor-pointer flex justify-between items-center transition-all group ${expandedClients[clientName] ? 'bg-indigo-50 border-b border-slate-200' : 'hover:bg-slate-50'}`}
                     >
                       <div className="flex items-center gap-3 flex-1">
                         <div className={`p-1 rounded text-indigo-600 transition-all ${expandedClients[clientName] ? 'rotate-90' : ''}`}>
@@ -1043,7 +1119,7 @@ const CustomerDrawing = () => {
                         <div className="flex flex-col flex-1">
                           <span className="text-sm text-slate-900">{clientName}</span>
                         </div>
-                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs ">
+                        <span className="p-1  bg-indigo-100 text-indigo-700 rounded text-xs ">
                           {clientDrawings.length}
                         </span>
                         {clientDrawings.some(d => !d.status || d.status !== 'SHARED') && (
@@ -1052,7 +1128,7 @@ const CustomerDrawing = () => {
                               e.stopPropagation();
                               handleShareClientGroupWithDesign(clientName);
                             }}
-                            className="px-2 py-0.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded text-[10px]  transition-all flex items-center gap-1"
+                            className="p-1  bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded text-xs   transition-all flex items-center gap-1"
                             title="Send all unshared drawings to Design"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
@@ -1097,7 +1173,7 @@ const CustomerDrawing = () => {
                                   {drawing.description || <span className="text-slate-400 italic">—</span>}
                                 </td>
                                 <td className="px-3 py-2 whitespace-nowrap">
-                                  <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-mono text-xs ">
+                                  <span className="p-1  bg-slate-100 rounded text-slate-700   text-xs ">
                                     {drawing.revision || drawing.revision_no || '0'}
                                   </span>
                                 </td>
@@ -1125,10 +1201,10 @@ const CustomerDrawing = () => {
                                 </td>
                                 <td className="px-3 py-2 whitespace-nowrap">
                                   <div className="flex items-center gap-1">
-                                    <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-xs  text-indigo-700">
+                                    <div className="w-5 h-5 rounded  bg-indigo-100 flex items-center justify-center text-xs  text-indigo-700">
                                       {(drawing.uploaded_by || 'S')[0].toUpperCase()}
                                     </div>
-                                    <span className="text-slate-600 font-medium hidden sm:inline">{drawing.uploaded_by || 'Sales'}</span>
+                                    <span className="text-slate-600  hidden sm:inline">{drawing.uploaded_by || 'Sales'}</span>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2 whitespace-nowrap text-right">
@@ -1154,13 +1230,6 @@ const CustomerDrawing = () => {
                                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                     </button>
                                     <button 
-                                      onClick={() => handleViewRevisions(drawing)}
-                                      className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded transition-all"
-                                      title="Revisions"
-                                    >
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                    </button>
-                                    <button 
                                       onClick={() => handleDelete(drawing.id)}
                                       className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-all"
                                       title="Delete"
@@ -1184,83 +1253,258 @@ const CustomerDrawing = () => {
       </div>
     </div>
 
-      {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 py-4">
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowEditModal(false)}></div>
-            <div className="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-5 transform transition-all">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-md text-slate-900">Edit Drawing</h3>
-                <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">
-                  ✕
-                </button>
-              </div>
-              <p className="text-slate-600 text-xs mb-3">Drawing: <span className=" text-indigo-600">{editData.drawing_no}</span></p>
-              
-              <form onSubmit={handleSave} className="space-y-3">
+      {/* Edit/View Modal */}
+      <Modal 
+        isOpen={showEditModal} 
+        onClose={() => setShowEditModal(false)}
+        title={modalMode === 'view' ? 'View Drawing Details' : 'Edit Drawing'}
+        size="4xl"
+      >
+        <form onSubmit={handleSave} className="space-y-4 pb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded  border border-slate-200">
+            {/* Client Info Section */}
+            <div className="lg:col-span-1">
+              <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
+              <input 
+                type="text"
+                readOnly
+                className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600"
+                value={editData.client_name}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Contact Person</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Contact person name"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.contact_person}
+                onChange={(e) => setEditData({...editData, contact_person: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Phone</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Phone number"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.phone}
+                onChange={(e) => setEditData({...editData, phone: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Email</label>
+              <input 
+                type="email"
+                disabled={modalMode === 'view'}
+                placeholder="Email address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.email}
+                onChange={(e) => setEditData({...editData, email: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Type</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Customer type"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.customer_type}
+                onChange={(e) => setEditData({...editData, customer_type: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">GSTIN</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="GST number"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.gstin}
+                onChange={(e) => setEditData({...editData, gstin: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">City</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="City"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.city}
+                onChange={(e) => setEditData({...editData, city: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">State</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="State"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.state}
+                onChange={(e) => setEditData({...editData, state: e.target.value})}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs  text-slate-700 mb-1">Billing Address</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Billing address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.billing_address}
+                onChange={(e) => setEditData({...editData, billing_address: e.target.value})}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs  text-slate-700 mb-1">Shipping Address</label>
+              <input 
+                type="text"
+                disabled={modalMode === 'view'}
+                placeholder="Shipping address"
+                className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                value={editData.shipping_address}
+                onChange={(e) => setEditData({...editData, shipping_address: e.target.value})}
+              />
+            </div>
+          </div>
+
+          {/* Drawing Details Section */}
+          <div className="mt-4">
+            <h3 className="text-xs  text-slate-700 mb-2">Drawing Details</h3>
+            <div className="bg-slate-50 p-4 rounded border border-slate-200 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className=" flex items-center gap-2 text-xs text-slate-600">Revision</label>
+                  <label className="block text-xs text-slate-700 mb-1">Drawing # *</label>
                   <input 
-                    type="text" 
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors text-xs"
+                    type="text"
+                    readOnly
+                    className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600"
+                    value={editData.drawing_no}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-700 mb-1">Revision</label>
+                  <input 
+                    type="text"
+                    disabled={modalMode === 'view'}
+                    className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={editData.revision_no}
                     onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className=" flex items-center gap-2 text-xs text-slate-600">Description</label>
-                  <textarea 
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none text-xs"
-                    value={editData.description}
-                    onChange={(e) => setEditData({...editData, description: e.target.value})}
+                  <label className="block text-xs text-slate-700 mb-1">Qty</label>
+                  <input 
+                    type="number"
+                    disabled={modalMode === 'view'}
+                    className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    value={editData.qty}
+                    onChange={(e) => setEditData({...editData, qty: parseInt(e.target.value) || 0})}
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-700 mb-1">Description</label>
+                <textarea 
+                  disabled={modalMode === 'view'}
+                  className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                  value={editData.description}
+                  onChange={(e) => setEditData({...editData, description: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-700 mb-1">Remarks</label>
+                <textarea 
+                  disabled={modalMode === 'view'}
+                  className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                  value={editData.remarks}
+                  onChange={(e) => setEditData({...editData, remarks: e.target.value})}
+                />
+              </div>
+
+              {modalMode === 'edit' && (
                 <div>
-                  <label className=" flex items-center gap-2 text-xs text-slate-600">PDF File</label>
-                  <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                  <label className="block text-xs text-slate-700 mb-1">Update PDF File</label>
+                  <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-4 hover:border-indigo-400 transition-colors bg-white cursor-pointer relative">
                     <input 
                       type="file" 
                       accept=".pdf"
-                      className="hidden"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
-                      id="edit-file"
                     />
-                    <label htmlFor="edit-file" className="cursor-pointer text-center w-full">
-                      <svg className="mx-auto h-6 w-6 text-slate-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                      <p className="text-xs text-slate-600 ">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click'}</p>
-                    </label>
+                    <div className="text-center">
+                      <svg className="mx-auto h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                      <p className="mt-1 text-xs text-slate-500">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click to update PDF'}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200">
+              )}
+              
+              {editData.file_path && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs text-slate-500">Current File:</span>
                   <button 
                     type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="flex-1 px-3 py-1.5 text-slate-700  hover:bg-slate-100 rounded transition-colors text-xs"
+                    onClick={() => {
+                      setPreviewDrawing({ ...editData, drawing_pdf: editData.file_path });
+                      setShowPreviewModal(true);
+                    }}
+                    className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
                   >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    disabled={saveLoading}
-                    className="flex-1 px-3 py-1.5 bg-indigo-600 text-white  rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 text-xs"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
-                    {saveLoading ? 'Saving...' : 'Save'}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    View Current PDF
                   </button>
                 </div>
-              </form>
+              )}
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <button 
+              type="button"
+              onClick={() => setShowEditModal(false)}
+              className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
+            >
+              Close
+            </button>
+            {modalMode === 'edit' && (
+              <>
+                <button 
+                  type="button"
+                  onClick={handleEditAndSendToDesign}
+                  disabled={saveLoading}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {saveLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                  <Send className="w-3 h-3" />
+                  Save & Send to Design
+                </button>
+                <button 
+                  type="submit"
+                  disabled={saveLoading}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {saveLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Save Changes
+                </button>
+              </>
+            )}
+          </div>
+        </form>
+      </Modal>
 
       {/* Revisions Modal */}
       {showRevisions && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 py-4">
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowRevisions(false)}></div>
-            <div className="relative bg-white rounded-lg shadow-2xl max-w-3xl w-full p-5">
+            <div className="relative bg-white rounded  shadow-2xl max-w-3xl w-full p-5">
               <div className="flex justify-between items-center mb-3">
                 <div>
                   <h3 className="text-md text-slate-900">Revision History</h3>
@@ -1274,7 +1518,7 @@ const CustomerDrawing = () => {
               {revisionsLoading ? (
                 <div className="py-8 text-center">
                   <div className="flex justify-center mb-2">
-                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
                   </div>
                   <p className="text-slate-600  text-xs">Loading...</p>
                 </div>
@@ -1301,9 +1545,9 @@ const CustomerDrawing = () => {
                         revisions.map((rev, i) => (
                           <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
                             <td className="px-3 py-2 whitespace-nowrap">
-                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs ">{rev.revision_no || '0'}</span>
+                              <span className="p-1  bg-indigo-100 text-indigo-700 rounded text-xs ">{rev.revision_no || '0'}</span>
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-slate-600 font-medium">
+                            <td className="px-3 py-2 whitespace-nowrap text-slate-600 ">
                               {new Date(rev.created_at).toLocaleDateString('en-IN')}
                             </td>
                             <td className="px-3 py-2 text-slate-600">{rev.description || '—'}</td>
@@ -1324,7 +1568,7 @@ const CustomerDrawing = () => {
                               )}
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap text-right">
-                              <div className="text-slate-900 text-xs text-xs">{rev.po_number || '—'}</div>
+                              <div className="text-slate-900 text-xs ">{rev.po_number || '—'}</div>
                               <div className="text-xs text-slate-500">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
                             </td>
                           </tr>
@@ -1344,7 +1588,7 @@ const CustomerDrawing = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 py-4">
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowApprovedDrawings(false)}></div>
-            <div className="relative bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-5">
+            <div className="relative bg-white rounded  shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-5">
               <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pb-3 border-b border-slate-200">
                 <div>
                   <h3 className="text-md text-slate-900">Approved Drawings</h3>
@@ -1358,7 +1602,7 @@ const CustomerDrawing = () => {
               {approvedLoading ? (
                 <div className="py-8 text-center">
                   <div className="flex justify-center mb-2">
-                    <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded  animate-spin"></div>
                   </div>
                   <p className="text-slate-600  text-xs">Loading approved drawings...</p>
                 </div>
@@ -1385,7 +1629,7 @@ const CustomerDrawing = () => {
                               {clientData.email && <p className="text-xs text-slate-500">{clientData.email}</p>}
                               {clientData.phone && <p className="text-xs text-slate-500">{clientData.phone}</p>}
                             </div>
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs ">
+                            <span className="p-1  bg-emerald-100 text-emerald-700 rounded text-xs ">
                               {clientData.orders.reduce((sum, order) => sum + (order.items?.length || 0), 0)} items
                             </span>
                           </div>
@@ -1405,7 +1649,7 @@ const CustomerDrawing = () => {
                             setSelectedApprovedItems([]);
                             setQuotePrices({});
                           }}
-                          className="px-3 py-1 text-xs  text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                          className="p-2  text-xs  text-slate-600 hover:bg-slate-100 rounded transition-colors"
                         >
                           ← Back
                         </button>
@@ -1426,7 +1670,7 @@ const CustomerDrawing = () => {
                             {selectedApprovedItems.map((item) => (
                               <tr key={item.id} className="hover:bg-emerald-50/30 transition-colors">
                                 <td className="px-3 py-2 whitespace-nowrap text-slate-900">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 ">
                                     {item.drawing_pdf && (
                                       <button 
                                         onClick={() => handlePreview({ ...item, file_path: item.drawing_pdf })}
@@ -1478,7 +1722,7 @@ const CustomerDrawing = () => {
                         <button
                           onClick={handleCreateQuotation}
                           disabled={creatingQuotation || calculateQuotationTotal() === 0}
-                          className="px-4 py-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-xs"
+                          className="p-2  bg-emerald-600 text-white rounded  hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2  text-xs"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
                           {creatingQuotation ? 'Creating...' : 'Create Quotation'}
@@ -1499,33 +1743,33 @@ const CustomerDrawing = () => {
         title="Add Client Requirement"
       >
         <form onSubmit={handleAddDrawing} className="space-y-4">
-          <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
+          <div className="flex justify-between items-center bg-slate-50 p-3 rounded  border border-slate-200">
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 cursor-pointer group">
+              <label className="flex items-center gap-2  cursor-pointer group">
                 <input 
                   type="radio" 
                   className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
                   checked={uploadMode === 'bulk'} 
                   onChange={() => setUploadMode('bulk')} 
                 />
-                <span className={`text-xs font-medium transition-colors ${uploadMode === 'bulk' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Bulk Import (Excel)</span>
+                <span className={`text-xs  transition-colors ${uploadMode === 'bulk' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Bulk Import (Excel)</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer group">
+              <label className="flex items-center gap-2  cursor-pointer group">
                 <input 
                   type="radio" 
                   className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
                   checked={uploadMode === 'manual'} 
                   onChange={() => setUploadMode('manual')} 
                 />
-                <span className={`text-xs font-medium transition-colors ${uploadMode === 'manual' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Manual Entry</span>
+                <span className={`text-xs  transition-colors ${uploadMode === 'manual' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Manual Entry</span>
               </label>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-lg border border-slate-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded  border border-slate-200">
             {/* Client Selection */}
             <div className="lg:col-span-1">
-              <label className="block text-xs font-medium text-slate-700 mb-1">Client Name *</label>
+              <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
               <div className="flex gap-1">
                 <div className="relative flex-1 client-input-container">
                   <input 
@@ -1533,7 +1777,7 @@ const CustomerDrawing = () => {
                     required
                     disabled={clientLocked}
                     placeholder="Type client name..."
-                    className={`w-full px-3 py-1.5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all ${clientLocked ? 'bg-slate-100 cursor-not-allowed text-slate-600 border-slate-300' : 'border-slate-300 hover:border-slate-400'}`}
+                    className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all ${clientLocked ? 'bg-slate-100 cursor-not-allowed text-slate-600 border-slate-300' : 'border-slate-300 hover:border-slate-400'}`}
                     value={newDrawing.client_name}
                     onChange={(e) => handleClientInput(e.target.value)}
                     onFocus={() => newDrawing.client_name && setShowSuggestions(true)}
@@ -1569,91 +1813,91 @@ const CustomerDrawing = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Contact Person</label>
+              <label className="block text-xs  text-slate-700 mb-1">Contact Person</label>
               <input 
                 type="text"
                 placeholder="Contact person name"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.contact_person}
                 onChange={(e) => setNewDrawing({...newDrawing, contact_person: e.target.value})}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Phone</label>
+              <label className="block text-xs  text-slate-700 mb-1">Phone</label>
               <input 
                 type="text"
                 placeholder="Phone number"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.phone_number}
                 onChange={(e) => setNewDrawing({...newDrawing, phone_number: e.target.value})}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+              <label className="block text-xs  text-slate-700 mb-1">Email</label>
               <input 
                 type="email"
                 placeholder="Email address"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.email_address}
                 onChange={(e) => setNewDrawing({...newDrawing, email_address: e.target.value})}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Type</label>
+              <label className="block text-xs  text-slate-700 mb-1">Type</label>
               <input 
                 type="text"
                 placeholder="Customer type"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.customer_type}
                 onChange={(e) => setNewDrawing({...newDrawing, customer_type: e.target.value})}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">GSTIN</label>
+              <label className="block text-xs  text-slate-700 mb-1">GSTIN</label>
               <input 
                 type="text"
                 placeholder="GST number"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.gstin}
                 onChange={(e) => setNewDrawing({...newDrawing, gstin: e.target.value})}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">City</label>
+              <label className="block text-xs  text-slate-700 mb-1">City</label>
               <input 
                 type="text"
                 placeholder="City"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.city}
                 onChange={(e) => setNewDrawing({...newDrawing, city: e.target.value})}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">State</label>
+              <label className="block text-xs  text-slate-700 mb-1">State</label>
               <input 
                 type="text"
                 placeholder="State"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.state}
                 onChange={(e) => setNewDrawing({...newDrawing, state: e.target.value})}
               />
             </div>
             <div className="lg:col-span-2">
-              <label className="block text-xs font-medium text-slate-700 mb-1">Billing Address</label>
+              <label className="block text-xs  text-slate-700 mb-1">Billing Address</label>
               <input 
                 type="text"
                 placeholder="Billing address"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.billing_address}
                 onChange={(e) => setNewDrawing({...newDrawing, billing_address: e.target.value})}
               />
             </div>
             <div className="lg:col-span-2">
-              <label className="block text-xs font-medium text-slate-700 mb-1">Shipping Address</label>
+              <label className="block text-xs  text-slate-700 mb-1">Shipping Address</label>
               <input 
                 type="text"
                 placeholder="Shipping address"
-                className="w-full px-3 py-1.5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
                 value={newDrawing.shipping_address}
                 onChange={(e) => setNewDrawing({...newDrawing, shipping_address: e.target.value})}
               />
@@ -1668,23 +1912,23 @@ const CustomerDrawing = () => {
                 <button 
                   type="button"
                   onClick={addManualDrawingRow}
-                  className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md text-[10px] hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                  className="p-2  bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md text-xs  hover:bg-indigo-100 transition-colors flex items-center gap-1"
                 >
                   <Plus className="w-3 h-3" />
                   Add Drawing
                 </button>
               </div>
-              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <div className="overflow-x-auto border border-slate-200 rounded ">
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider">Drawing # *</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider">Description</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider w-16">Rev</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider w-16">Qty</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider">File *</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500  tracking-wider">Notes</th>
-                      <th className="px-3 py-2 text-center text-[10px] font-medium text-slate-500  tracking-wider w-10"></th>
+                      <th className="px-3 py-2 text-left text-xs   text-slate-500  ">Drawing # *</th>
+                      <th className="px-3 py-2 text-left text-xs   text-slate-500  ">Description</th>
+                      <th className="px-3 py-2 text-left text-xs   text-slate-500   w-16">Rev</th>
+                      <th className="px-3 py-2 text-left text-xs   text-slate-500   w-16">Qty</th>
+                      <th className="px-3 py-2 text-left text-xs   text-slate-500  ">File *</th>
+                      <th className="px-3 py-2 text-left text-xs   text-slate-500  ">Notes</th>
+                      <th className="px-3 py-2 text-center text-xs   text-slate-500   w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
@@ -1739,7 +1983,7 @@ const CustomerDrawing = () => {
                             />
                             <label 
                               htmlFor={`file-${drawing.id}`}
-                              className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-[10px] cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400'}`}
+                              className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400'}`}
                             >
                               <Plus className="w-3 h-3" />
                               <span className="truncate max-w-[60px]">{drawing.file ? drawing.file.name : 'Choose'}</span>
@@ -1776,8 +2020,8 @@ const CustomerDrawing = () => {
             /* BULK MODE */
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Excel File <span className="text-red-500">*</span></label>
-                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded-lg p-6 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                <label className="block text-xs  text-slate-700 mb-2">Excel File <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-6 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
                   <input 
                     type="file" 
                     required
@@ -1788,10 +2032,10 @@ const CustomerDrawing = () => {
                   />
                   <label htmlFor="bulk-file" className="cursor-pointer text-center w-full">
                     <svg className="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                    <p className="text-sm text-slate-900 font-medium">{newDrawing.file ? newDrawing.file.name : 'Upload Excel File'}</p>
+                    <p className="text-sm text-slate-900 ">{newDrawing.file ? newDrawing.file.name : 'Upload Excel File'}</p>
                     <p className="text-[10px] text-slate-500 mt-1">Format: Drawing No, Revision, Description, Qty, Drawing_File</p>
                     {newDrawing.file && (
-                      <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center justify-center gap-1">
+                      <p className="mt-2 text-xs text-emerald-600  flex items-center justify-center gap-1">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                         File selected
                       </p>
@@ -1801,8 +2045,8 @@ const CustomerDrawing = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">ZIP File (Drawings)</label>
-                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded-lg p-6 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                <label className="block text-xs  text-slate-700 mb-2">ZIP File (Drawings)</label>
+                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-6 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
                   <input 
                     type="file" 
                     accept=".zip"
@@ -1812,10 +2056,10 @@ const CustomerDrawing = () => {
                   />
                   <label htmlFor="bulk-zip" className="cursor-pointer text-center w-full">
                     <svg className="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-                    <p className="text-sm text-slate-900 font-medium">{newDrawing.zipFile ? newDrawing.zipFile.name : 'Upload ZIP File'}</p>
+                    <p className="text-sm text-slate-900 ">{newDrawing.zipFile ? newDrawing.zipFile.name : 'Upload ZIP File'}</p>
                     <p className="text-[10px] text-slate-500 mt-1">Contains images or PDFs of drawings</p>
                     {newDrawing.zipFile && (
-                      <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center justify-center gap-1">
+                      <p className="mt-2 text-xs text-emerald-600  flex items-center justify-center gap-1">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                         ZIP selected
                       </p>
@@ -1834,14 +2078,14 @@ const CustomerDrawing = () => {
                 setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, zipFile: null, remarks: '' }]);
                 setClientLocked(false);
               }}
-              className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors"
+              className="p-2  bg-white border border-slate-300 text-slate-700 rounded  text-xs  hover:bg-slate-50 transition-colors"
             >
               Clear Form
             </button>
             <button 
               type="submit"
               disabled={loading}
-              className={`px-6 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-all flex items-center gap-2 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all flex items-center gap-2  ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {loading ? 'Processing...' : uploadMode === 'bulk' ? 'Upload Excel' : 'Save Requirement'}
@@ -1851,7 +2095,7 @@ const CustomerDrawing = () => {
                 type="button"
                 onClick={handleAddAndSendToDesign}
                 disabled={loading}
-                className={`px-6 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-all flex items-center gap-2 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`p-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all flex items-center gap-2  ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 Send to Design
@@ -1860,10 +2104,10 @@ const CustomerDrawing = () => {
           </div>
 
           {lastUploadedDrawings && lastUploadedDrawings.clientName && (
-            <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded ">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
+                  <div className="p-2 bg-emerald-100 rounded  text-emerald-600">
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                   </div>
                   <div>
@@ -1875,7 +2119,7 @@ const CustomerDrawing = () => {
                   type="button"
                   onClick={() => sendBulkUploadedToDesign(lastUploadedDrawings.clientName, lastUploadedDrawings.count)}
                   disabled={loading}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-all flex items-center gap-2"
+                  className="p-2  bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all flex items-center gap-2 "
                 >
                   <Send className="w-4 h-4" />
                   Send to Design Now

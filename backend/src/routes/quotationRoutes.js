@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const upload = require('../middleware/upload');
 const quotationController = require('../controllers/quotationController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
@@ -10,7 +11,11 @@ router.get('/', authorize(['QUOTATION_VIEW']), quotationController.getQuotations
 router.get('/stats', authorize(['QUOTATION_VIEW']), quotationController.getQuotationStats);
 router.get('/:quotationId', authorize(['QUOTATION_VIEW']), quotationController.getQuotationById);
 router.get('/:quotationId/pdf', authorize(['QUOTATION_VIEW']), quotationController.getQuotationPDF);
+router.get('/:quotationId/received-pdf', authorize(['QUOTATION_VIEW']), quotationController.getReceivedQuotationPDF);
+router.get('/:quotationId/parse-received-pdf', authorize(['QUOTATION_EDIT']), quotationController.parseReceivedQuotationPDF);
+router.post('/parse-pdf', authorize(['QUOTATION_EDIT']), upload.single('pdf'), quotationController.parseQuotationPDF);
 router.put('/:quotationId', authorize(['QUOTATION_EDIT']), quotationController.updateQuotation);
+router.post('/:quotationId/upload-response', authorize(['QUOTATION_EDIT']), upload.single('pdf'), quotationController.uploadVendorResponse);
 router.patch('/:quotationId/status', authorize(['QUOTATION_EDIT']), quotationController.updateQuotationStatus);
 router.post('/:quotationId/send-email', authorize(['QUOTATION_EDIT']), quotationController.sendQuotationEmail);
 router.delete('/:quotationId', authorize(['QUOTATION_EDIT']), quotationController.deleteQuotation);

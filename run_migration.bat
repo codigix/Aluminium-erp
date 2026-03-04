@@ -1,0 +1,7 @@
+@echo off
+"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -h 127.0.0.1 -u aluminium_user -p"C0digix$309" -P 3307 sales_erp < "e:\codigix-project\Aluminium-erp\create_payment_tables.sql"
+if %ERRORLEVEL% EQU 0 (
+    echo Database tables created successfully.
+) else (
+    echo Failed to create database tables.
+)

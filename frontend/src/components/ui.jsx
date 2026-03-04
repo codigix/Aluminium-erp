@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, Search, FileText, ChevronRight, Loader2 } from 'lucide-react';
 
 export const Card = ({ id, title, subtitle, action, children, className = '' }) => (
   <div id={id} className={className}>
@@ -15,7 +16,7 @@ export const Card = ({ id, title, subtitle, action, children, className = '' }) 
   </div>
 )
 
-export const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true, disabled = false }) => {
+export const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true, disabled = false, openUpwards = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
@@ -53,7 +54,7 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
       <div className="relative">
         <input
           type="text"
-          className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
+          className={`w-full px-3 py-2 border border-slate-200 rounded  text-xs  text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
           placeholder={placeholder}
           value={searchTerm}
           onChange={(e) => {
@@ -67,13 +68,13 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
           onFocus={() => !disabled && setIsOpen(true)}
           disabled={disabled}
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
-          {isOpen ? '▲' : '▼'}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
+          {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </div>
       </div>
       
       {isOpen && !disabled && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 flex flex-col overflow-hidden">
+        <div className={`absolute z-[100] w-full bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           <div className="overflow-y-auto flex-1">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => (
@@ -120,28 +121,47 @@ export const StatusBadge = ({ status }) => {
     switch (s) {
       case 'DRAFT':
       case 'CREATED':
-        return 'bg-amber-50 border-amber-200 text-amber-600'
+        return 'bg-slate-50 border-slate-200 text-slate-600'
+      case 'Approved ':
+      case 'DESIGN_Approved ':
+      case 'BOM_Approved ':
+        return 'bg-blue-50 border-blue-200 text-blue-600'
+      case 'PROCESSING':
       case 'DESIGN_IN_REVIEW':
       case 'IN_DESIGN':
       case 'IN_PROGRESS':
       case 'RELEASED':
-        return 'bg-blue-50 border-blue-200 text-blue-600'
-      case 'BOM_SUBMITTED':
+      case 'PO_CREATED':
+      case 'ORDERED':
+      case 'DISPATCHED':
+      case 'IN_TRANSIT':
+      case 'RETURN_INITIATED':
+      case 'RETURN_IN_TRANSIT':
         return 'bg-indigo-50 border-indigo-200 text-indigo-600'
+      case 'FULFILLED':
       case 'ACTIVE':
-      case 'DESIGN_APPROVED':
-      case 'BOM_APPROVED':
       case 'COMPLETED':
       case 'PRODUCTION_COMPLETED':
+      case 'DELIVERED':
+      case 'RETURN_COMPLETED':
+        return 'bg-emerald-50 border-emerald-200 text-emerald-600'
+      case 'READY_FOR_SHIPMENT':
+      case 'QC_APPROVED':
+      case 'READY_TO_DISPATCH':
         return 'bg-emerald-50 border-emerald-200 text-emerald-600'
       case 'DESIGN_QUERY':
       case 'INACTIVE':
       case 'REJECTED':
+      case 'QC_REJECTED':
       case 'BLOCKED':
       case 'CANCELLED':
         return 'bg-rose-50 border-rose-200 text-rose-600'
       case 'ON_HOLD':
+      case 'OUT_FOR_DELIVERY':
+      case 'RETURN_PICKUP_ASSIGNED':
         return 'bg-amber-50 border-amber-200 text-amber-600'
+      case 'RETURN_RECEIVED':
+        return 'bg-purple-50 border-purple-200 text-purple-600'
       default:
         return 'bg-slate-50 border-slate-200 text-slate-600'
     }
@@ -152,7 +172,7 @@ export const StatusBadge = ({ status }) => {
   }
 
   return (
-    <span className={`px-3 py-1 rounded-full text-[10px]  border  tracking-wider ${getStatusStyles(normalized)}`}>
+    <span className={`p-1 rounded text-xs   border   ${getStatusStyles(normalized)}`}>
       {formatStatus(normalized)}
     </span>
   )
@@ -169,27 +189,55 @@ export const Badge = ({ children, variant = 'default', className = '' }) => {
   };
 
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${variants[variant] || variants.default} ${className}`}>
+    <span className={`p-1  rounded text-xs   border ${variants[variant] || variants.default} ${className}`}>
       {children}
     </span>
   );
 };
 
-export const Modal = ({ isOpen, onClose, title, children }) => {
+export const Modal = ({ isOpen, onClose, title, children, className = '', size = '4xl' }) => {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
+  const isDark = className.includes('bg-slate-900') || className.includes('bg-[#1e293b]') || className.includes('dark');
+
+  const sizeClasses = {
+    'sm': 'max-w-sm',
+    'md': 'max-w-md',
+    'lg': 'max-w-lg',
+    'xl': 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
+    '6xl': 'max-w-6xl',
+    '7xl': 'max-w-7xl',
+    'full': 'max-w-full'
+  };
+
+  const maxWidth = sizeClasses[size] || 'max-w-4xl';
+  const isFull = size === 'full';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-md shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white border-b border-slate-100 p-2 flex items-center justify-between rounded-sm">
-          <h2 className="text-lg  text-slate-900">{title}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-            <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-start bg-black/60 backdrop-blur-sm overflow-y-auto py-4 sm:py-8" onClick={onClose}>
+      <div className={`rounded  shadow-2xl ${maxWidth} w-full ${isFull ? 'min-h-full mx-0 rounded-none !my-0' : 'mx-4 h-fit max-h-[85vh] flex flex-col overflow-hidden'} border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
+        <div className={`sticky top-0 z-10 border-b p-4 flex items-center justify-between ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900 '}`}>
+          <h2 className="text-lg  tracking-tight">{title}</h2>
+          <button onClick={onClose} className={`p-2 rounded  transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
+            <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-4">
+        <div className="p-4 overflow-y-auto flex-1">
           {children}
         </div>
       </div>
@@ -197,10 +245,12 @@ export const Modal = ({ isOpen, onClose, title, children }) => {
   )
 }
 
-export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded }) => {
+export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
+
+  const isDark = className.includes('bg-[#1e293b]') || className.includes('bg-slate-900') || className.includes('bg-[#0f172a]');
 
   const toggleRow = (id) => {
     const newExpandedRows = new Set(expandedRows);
@@ -237,6 +287,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
   }, [data, sortConfig]);
 
   const filteredData = sortedData.filter(item => {
+    if (hideHeader) return true;
     const searchLower = String(searchTerm || '').toLowerCase();
     return Object.values(item).some(val => 
       String(val).toLowerCase().includes(searchLower)
@@ -244,39 +295,39 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
   });
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div className="p-4 border-b border-slate-50 bg-slate-50/30 flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex-1 min-w-[280px] relative group">
-          <input 
-            type="text" 
-            placeholder={searchPlaceholder}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400"
-          />
-          <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+    <div className={`flex flex-col h-full rounded    overflow-hidden ${isDark ? 'border-slate-800' : 'border-slate-100 '} ${className}`}>
+      {!hideHeader && (
+        <div className={`border-b flex flex-wrap gap-4 items-center justify-between ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-50 bg-slate-50/30'}`}>
+          <div className="flex-1 min-w-[280px] relative group">
+            <input 
+              type="text" 
+              placeholder={searchPlaceholder}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full pl-10 pr-4 py-2 border rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+            />
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+          </div>
+          {actions}
         </div>
-        {actions}
-      </div>
+      )}
 
-      <div className="overflow-x-auto relative">
-        <table className="w-full text-left text-sm border-collapse">
-          <thead className="bg-slate-50/50 text-slate-500 text-[10px]   ">
+      <div className="overflow-x-auto relative mt-3">
+        <table className="w-full text-left bg-white text-sm border-collapse">
+          <thead className={`${isDark ? 'bg-white text-slate-400' : 'bg-slate-50/50 text-slate-500'} text-xs    `}>
             <tr>
-              {renderExpanded && <th className="p-2 border-b border-slate-100 w-10"></th>}
+              {renderExpanded && <th className={`p-2 border-b w-10 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}></th>}
               {columns.map((col, idx) => (
                 <th 
                   key={idx} 
-                  className={`p-2 border-b border-slate-100 ${col.sortable ? 'cursor-pointer hover:bg-slate-100/50 transition-colors' : ''} ${col.className || ''}`}
+                  className={`p-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'} ${col.sortable ? 'cursor-pointer hover:bg-slate-100/50 transition-colors' : ''} ${col.className || ''}`}
                   onClick={() => col.sortable && handleSort(col.key)}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 ">
                     {col.label}
                     {col.sortable && (
                       <span className="text-slate-300">
-                        {sortConfig?.key === col.key ? (sortConfig.direction === 'ascending' ? '↑' : '↓') : '↕'}
+                        {sortConfig?.key === col.key ? (sortConfig.direction === 'ascending' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3" />}
                       </span>
                     )}
                   </div>
@@ -284,24 +335,22 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-50'}`}>
             {loading ? (
               <tr>
-                <td colSpan={columns.length + (renderExpanded ? 1 : 0)} className="px-6 py-20 text-center">
+                <td colSpan={columns.length + (renderExpanded ? 1 : 0)} className="p-2 text-center">
                   <div className="flex flex-col items-center gap-4">
-                    <div className="w-10 h-10 border-4 border-indigo-600/10 border-t-indigo-600 rounded-full animate-spin"></div>
-                    <span className="text-slate-400 font-medium animate-pulse">{loadingMessage}</span>
+                    <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+                    <span className="text-slate-400  animate-pulse">{loadingMessage}</span>
                   </div>
                 </td>
               </tr>
             ) : filteredData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + (renderExpanded ? 1 : 0)} className="px-6 py-20 text-center">
+                <td colSpan={columns.length + (renderExpanded ? 1 : 0)} className="p-2 text-center">
                   <div className="flex flex-col items-center gap-2">
-                    <svg className="w-12 h-12 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span className="text-slate-400 font-medium">{emptyMessage}</span>
+                    <FileText className="w-12 h-12 text-slate-200" />
+                    <span className="text-slate-400 ">{emptyMessage}</span>
                   </div>
                 </td>
               </tr>
@@ -311,7 +360,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                 return (
                   <React.Fragment key={row.id || rowIdx}>
                     <tr 
-                      className={`group transition-all duration-200 ${onRowClick ? 'cursor-pointer hover:bg-indigo-50/30' : 'hover:bg-slate-50/50'} ${isExpanded ? 'bg-indigo-50/20' : ''}`}
+                      className={`group transition-all duration-200 ${onRowClick ? 'cursor-pointer hover:bg-indigo-50/30' : (isDark ? 'hover:bg-white' : 'hover:bg-slate-50/50')} ${isExpanded ? (isDark ? 'bg-indigo-900/20' : 'bg-indigo-50/20') : ''}`}
                       onClick={() => {
                         if (renderExpanded) toggleRow(row.id || rowIdx);
                         if (onRowClick) onRowClick(row);
@@ -319,21 +368,19 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                     >
                       {renderExpanded && (
                         <td className="p-2 text-slate-400">
-                          <svg className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                          </svg>
+                          <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
                         </td>
                       )}
                       {columns.map((col, colIdx) => (
-                        <td key={colIdx} className={`p-2 text-slate-600 group-hover:text-slate-900 transition-colors ${col.className || ''}`}>
+                        <td key={colIdx} className={`p-2 transition-colors text-xs ${isDark ? 'text-slate-300 group-hover:text-white' : 'text-slate-600 group-hover:text-slate-900'} ${col.className || ''}`}>
                           {col.render ? col.render(row[col.key], row) : (row[col.key] || '—')}
                         </td>
                       ))}
                     </tr>
                     {isExpanded && renderExpanded && (
                       <tr>
-                        <td colSpan={columns.length + 1} className="px-6 py-0 border-b border-slate-100">
-                          <div className="py-4 animate-in slide-in-from-top-2 duration-200">
+                        <td colSpan={columns.length + 1} className={`p-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                          <div className=" animate-in slide-in-from-top-2 duration-200">
                             {renderExpanded(row)}
                           </div>
                         </td>

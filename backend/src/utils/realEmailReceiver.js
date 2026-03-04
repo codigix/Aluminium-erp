@@ -1,6 +1,15 @@
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
+const fs = require('fs');
+const path = require('path');
 const pool = require('../config/db');
+
+const uploadsDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 const config = {
     host: 'imap.gmail.com',
@@ -61,12 +70,12 @@ const processEmails = async () => {
         try {
             await client.mailboxOpen('INBOX');
 
-            // Search for unread messages OR recently received messages to ensure we don't miss anything
+            // Search for unread messages
             let messages = await client.search({ seen: false });
             
-            // If no unread, check last 10 messages just in case some were marked seen but not processed
+            // If no unread, check last 5 messages just in case
             if (messages.length === 0) {
-                const list = await client.fetch('1:*', { uid: true }, { last: 10 });
+                const list = await client.fetch('1:*', { uid: true }, { last: 5 });
                 for await (const msg of list) {
                     messages.push(msg.uid);
                 }
@@ -81,71 +90,43 @@ const processEmails = async () => {
                     const subject = parsed.subject || '';
                     let body = parsed.text || '';
                     
-                    // Fallback to HTML if text is empty
                     if (!body && parsed.html) {
-                        body = parsed.html.replace(/<[^>]*>?/gm, ''); // Basic HTML strip
+                        body = parsed.html.replace(/<[^>]*>?/gm, ''); 
                     }
 
                     const from = parsed.from?.value[0]?.address || '';
                     const messageId = parsed.messageId;
 
                     // Match quotation ID or number from subject
-                    // Support QRT-123 (Client), QT-123 (Vendor), [QRT-123], [QT-123]
-                    let qrtMatch = subject.match(/(QRT|QT)-(\d+)/i) || subject.match(/\[((?:QRT|QT)-[^\]]+)\]/i);
+                    // Improved regex to handle both standard and bracketed formats
+                    const qrtMatch = subject.match(/(QRT|QT)-(\d+)/i) || subject.match(/\[((?:QRT|QT)-([^\]]+))\]/i);
                     
-                    // Fallback: Check body if not found in subject (for older emails)
-                    if (!qrtMatch) {
-                        qrtMatch = body.match(/(QRT|QT)-(\d+)/i);
-                    }
-
                     let quotationId = null;
-                    let quotationType = 'CLIENT'; // Default
+                    let quotationType = 'CLIENT'; 
 
                     if (qrtMatch) {
-                        const prefix = (qrtMatch[1] || '').toUpperCase();
+                        let prefix, fullMatch, numericPart;
                         
-                        // If it's a numeric match like QRT-123, extract the ID
-                        if (qrtMatch[2] && !qrtMatch[1].includes('-')) {
-                            quotationId = parseInt(qrtMatch[2]);
-                            // Determine type from prefix
-                            quotationType = (prefix === 'QT') ? 'VENDOR' : 'CLIENT';
+                        if (qrtMatch[0].startsWith('[')) {
+                            fullMatch = qrtMatch[1];
+                            prefix = (fullMatch.split('-')[0] || '').toUpperCase();
+                            numericPart = fullMatch.split('-')[1];
                         } else {
-                            // If it's a full number match like [QT-1738161038137], find in DB
-                            const fullQuoteNumber = qrtMatch[1] || qrtMatch[0];
-                            if (fullQuoteNumber.startsWith('QT-')) {
-                                quotationType = 'VENDOR';
-                                const [rows] = await pool.query('SELECT id FROM quotations WHERE quote_number = ?', [fullQuoteNumber]);
-                                if (rows.length > 0) quotationId = rows[0].id;
-                            } else {
-                                quotationType = 'CLIENT';
-                                // For QRT-0007, try to extract numeric ID if it's not in a dedicated quote_number column
-                                const numMatch = fullQuoteNumber.match(/\d+/);
-                                if (numMatch) quotationId = parseInt(numMatch[0]);
-                            }
+                            fullMatch = qrtMatch[0];
+                            prefix = (qrtMatch[1] || '').toUpperCase();
+                            numericPart = qrtMatch[2];
                         }
-                    } else {
-                        // LAST RESORT: Try to match by client name in subject for older emails
-                        const clientMatch = subject.match(/-\s*([^-]+)$/i);
-                        if (clientMatch) {
-                            const clientName = clientMatch[1].trim();
-                            
-                            // Find company ID
-                            const [companies] = await pool.query(
-                                'SELECT id FROM companies WHERE company_name LIKE ?',
-                                [`%${clientName}%`]
-                            );
 
-                            if (companies.length > 0) {
-                                // Find latest quotation request for this company
-                                const [quotes] = await pool.query(
-                                    'SELECT id FROM quotation_requests WHERE company_id = ? ORDER BY created_at DESC LIMIT 1',
-                                    [companies[0].id]
-                                );
-                                
-                                if (quotes.length > 0) {
-                                    quotationId = quotes[0].id;
-                                    quotationType = 'CLIENT';
-                                }
+                        if (prefix === 'QT') {
+                            quotationType = 'VENDOR';
+                            const [rows] = await pool.query('SELECT id FROM quotations WHERE quote_number = ?', [fullMatch]);
+                            if (rows.length > 0) {
+                                quotationId = rows[0].id;
+                            }
+                        } else if (prefix === 'QRT') {
+                            quotationType = 'CLIENT';
+                            if (numericPart && /^\d+$/.test(numericPart) && numericPart.length < 10) {
+                                quotationId = parseInt(numericPart);
                             }
                         }
                     }
@@ -153,14 +134,27 @@ const processEmails = async () => {
                     if (quotationId) {
                         const cleanBody = stripReply(body);
                         
-                        // Check if this message already exists in DB to avoid duplicates
                         const [existing] = await pool.query(
                             'SELECT id FROM quotation_communications WHERE email_message_id = ?',
                             [messageId]
                         );
 
                         if (existing.length === 0) {
-                            // Insert into database with email_message_id
+                            let pdfPath = null;
+                            if (quotationType === 'VENDOR' && parsed.attachments && parsed.attachments.length > 0) {
+                                for (let attachment of parsed.attachments) {
+                                    if (attachment.contentType === 'application/pdf' || attachment.filename?.toLowerCase().endsWith('.pdf')) {
+                                        const filename = `${Date.now()}-vendor-${attachment.filename.replace(/\s+/g, '_')}`;
+                                        const fullPath = path.join(uploadsDir, filename);
+                                        fs.writeFileSync(fullPath, attachment.content);
+                                        pdfPath = filename;
+                                        console.log(`[Email Receiver] Saved vendor PDF: ${filename}`);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Use execute for the INSERT
                             await pool.execute(
                                 `INSERT INTO quotation_communications 
                                 (quotation_id, quotation_type, sender_type, sender_email, message, email_message_id, created_at, is_read) 
@@ -168,14 +162,31 @@ const processEmails = async () => {
                                 [quotationId, quotationType, quotationType, from, cleanBody, messageId]
                             );
                             
-                            console.log(`[Email Receiver] Saved ${quotationType} reply for Quotation ID: ${quotationId} from ${from}`);
+                            if (quotationType === 'VENDOR') {
+                                const updateFields = ["status = 'EMAIL_RECEIVED'"];
+                                const updateParams = [];
+                                
+                                if (pdfPath) {
+                                    updateFields.push("received_pdf_path = ?");
+                                    updateParams.push(pdfPath);
+                                }
+                                
+                                updateParams.push(quotationId);
+                                await pool.execute(
+                                    `UPDATE quotations SET ${updateFields.join(', ')} WHERE id = ?`,
+                                    updateParams
+                                );
+                                console.log(`[Email Receiver] Updated Quotation ${quotationId} to EMAIL_RECEIVED status`);
+                            }
                         }
                     }
 
-                    // Mark as seen
+                    // Always mark as seen if we reached here
                     await client.messageFlagsAdd(uid, ['\\Seen']);
                 } catch (msgError) {
-                    console.error('[Email Receiver] Error parsing message:', msgError.message);
+                    console.error(`[Email Receiver] Error parsing message UID ${uid}:`, msgError.message);
+                    // Mark as seen anyway to avoid infinite loop on bad messages
+                    try { await client.messageFlagsAdd(uid, ['\\Seen']); } catch (e) {}
                 }
             }
         } finally {
@@ -184,12 +195,10 @@ const processEmails = async () => {
         await client.logout();
     } catch (error) {
         console.error('[Email Receiver] IMAP Error:', error.message);
-        // Ensure client is closed on error
         try { await client.logout(); } catch (e) {}
     } finally {
         isProcessing = false;
         console.log(`[Email Receiver] ${new Date().toISOString()} - Email sync finished.`);
-        // Schedule next run
         if (timeoutId !== 'STOPPED') {
             timeoutId = setTimeout(processEmails, 60000);
         }

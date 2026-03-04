@@ -2,13 +2,13 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
 const listSalesOrders = async (includeWithoutPo = true) => {
-  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_APPROVED'))";
+  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved '))";
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
   
   const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
@@ -30,6 +30,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
       [order.id]
     );
     order.items = items;
+    order.client = order.company_name; // Add client alias for frontend
   }
   
   return rows;
@@ -37,7 +38,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
 
 const getSalesOrderById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT so.*, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
@@ -53,6 +54,7 @@ const getSalesOrderById = async (id) => {
   
   if (rows.length === 0) return null;
   const order = rows[0];
+  order.client = order.company_name;
 
   const [items] = await pool.query(
     'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
@@ -70,16 +72,20 @@ const getIncomingOrders = async (departmentCode) => {
   if (departmentCode === 'DESIGN_ENG') {
     whereClause = `so.status IN ('CREATED', 'DESIGN_QUERY')`;
   } else if (departmentCode === 'PROCUREMENT') {
-    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS')`;
+    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS')`;
   } else if (departmentCode === 'INVENTORY') {
-    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION')`;
+    whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION')`;
   } else if (departmentCode === 'PRODUCTION') {
     whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'MATERIAL_READY', 'IN_PRODUCTION')`;
+  } else if (departmentCode === 'QUALITY' || departmentCode === 'QC') {
+    whereClause = `so.status IN ('PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_REJECTED') OR so.current_department IN ('QUALITY', 'QC')`;
+  } else if (departmentCode === 'SHIPMENT') {
+    whereClause = `so.status IN ('READY_FOR_SHIPMENT', 'QC_APPROVED', 'READY_FOR_DISPATCH') OR so.current_department = 'SHIPMENT'`;
   } else {
     whereClause = `so.current_department = '${departmentCode}'`;
   }
   
-  const query = `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
+  const query = `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
             sb.material_type as item_group,
@@ -99,6 +105,12 @@ const getIncomingOrders = async (departmentCode) => {
   const [rows] = await pool.query(query);
   console.log(`[getIncomingOrders-service] Query returned ${rows.length} rows for department "${departmentCode}"`);
   console.log(`[getIncomingOrders-service] Raw rows:`, rows);
+  
+  // Add client alias for each row
+  rows.forEach(row => {
+    row.client = row.company_name;
+  });
+  
   return rows;
 };
 
@@ -110,6 +122,7 @@ const createSalesOrder = async (orderData) => {
     drawingRequired = 0, 
     productionPriority = 'NORMAL', 
     targetDispatchDate, 
+    delivery_date, // Added delivery_date alias
     items,
     cgst_rate = 0,
     sgst_rate = 0,
@@ -120,6 +133,9 @@ const createSalesOrder = async (orderData) => {
     quotation_id = null,
     source_type = 'DIRECT'
   } = orderData;
+
+  // Use either targetDispatchDate or delivery_date
+  const finalTargetDispatchDate = targetDispatchDate || delivery_date;
 
   // Ensure customerPoId is a valid positive integer or null
   // We use Number() and check for truthiness to handle strings like "null", "undefined", or 0
@@ -151,7 +167,7 @@ const createSalesOrder = async (orderData) => {
         projectName || null, 
         drawingRequired, 
         productionPriority, 
-        targetDispatchDate || null, 
+        finalTargetDispatchDate || null, 
         status,
         cgst_rate,
         sgst_rate,
@@ -312,6 +328,7 @@ const updateSalesOrder = async (id, orderData) => {
     drawingRequired, 
     productionPriority, 
     targetDispatchDate, 
+    delivery_date, // Added delivery_date alias
     items,
     cgst_rate,
     sgst_rate,
@@ -322,6 +339,8 @@ const updateSalesOrder = async (id, orderData) => {
     quotation_id = null,
     source_type = 'DIRECT'
   } = orderData;
+
+  const finalTargetDispatchDate = targetDispatchDate || delivery_date;
 
   // Ensure customerPoId is a valid positive integer or null
   let validatedPoId = null;
@@ -361,7 +380,7 @@ const updateSalesOrder = async (id, orderData) => {
         projectName || null, 
         drawingRequired || 0, 
         productionPriority || 'NORMAL', 
-        targetDispatchDate || null, 
+        finalTargetDispatchDate || null, 
         status || null,
         cgst_rate || 0,
         sgst_rate || 0,
@@ -419,18 +438,41 @@ const updateSalesOrder = async (id, orderData) => {
   }
 };
 
-const updateSalesOrderStatus = async (salesOrderId, status) => {
+const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remarks = null) => {
   let department = null;
-  if (status === 'BOM_APPROVED') {
+  if (status === 'BOM_Approved ') {
     department = 'PROCUREMENT';
   } else if (status === 'BOM_SUBMITTED') {
     department = 'DESIGN_ENG'; // Stay in design for approval
   }
 
-  if (department) {
-    await pool.execute('UPDATE sales_orders SET status = ?, current_department = ? WHERE id = ?', [status, department, salesOrderId]);
-  } else {
-    await pool.execute('UPDATE sales_orders SET status = ? WHERE id = ?', [status, salesOrderId]);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    if (department) {
+      await connection.execute('UPDATE sales_orders SET status = ?, current_department = ? WHERE id = ?', [status, department, salesOrderId]);
+    } else {
+      await connection.execute('UPDATE sales_orders SET status = ? WHERE id = ?', [status, salesOrderId]);
+    }
+
+    // Log to BOM approval history if it's a BOM action
+    if (status === 'BOM_Approved ' || status === 'REJECTED_BOM') {
+      const action = status === 'BOM_Approved ' ? 'APPROVED' : 'REJECTED';
+      if (userId) {
+        await connection.execute(
+          'INSERT INTO bom_approval_history (sales_order_id, user_id, action, remarks) VALUES (?, ?, ?, ?)',
+          [salesOrderId, userId, action, remarks]
+        );
+      }
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 };
 
@@ -452,7 +494,7 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
     } else if (departmentCode === 'DESIGN_ENG' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW')) {
       newStatus = 'DESIGN_IN_REVIEW';
       nextDepartment = 'DESIGN_ENG';
-    } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_APPROVED' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
+    } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_Approved ' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
       if (currentOrder.material_available) {
         newStatus = 'MATERIAL_READY';
         nextDepartment = 'PRODUCTION';
@@ -462,7 +504,13 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
       }
     } else if (departmentCode === 'PRODUCTION' && (currentOrder.status === 'MATERIAL_READY' || currentOrder.status === 'IN_PRODUCTION')) {
       newStatus = 'PRODUCTION_COMPLETED';
-      nextDepartment = 'QC';
+      nextDepartment = 'QUALITY';
+    } else if ((departmentCode === 'QUALITY' || departmentCode === 'QC') && (currentOrder.status === 'PRODUCTION_COMPLETED' || currentOrder.status === 'QC_IN_PROGRESS' || currentOrder.status === 'QC_REJECTED')) {
+      newStatus = 'QC_IN_PROGRESS';
+      nextDepartment = 'QUALITY';
+    } else if (departmentCode === 'SHIPMENT' && (currentOrder.status === 'READY_FOR_SHIPMENT' || currentOrder.status === 'QC_APPROVED' || currentOrder.status === 'READY_FOR_DISPATCH')) {
+      newStatus = 'READY_FOR_SHIPMENT';
+      nextDepartment = 'SHIPMENT';
     }
 
     await connection.execute(
@@ -690,7 +738,8 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.status IN ('DESIGN_APPROVED', 'BOM_APPROVED')`;
+     WHERE (TRIM(so.status) IN ('CREATED', 'DESIGN_Approved', 'DESIGN_IN_REVIEW', 'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
+        AND so.quotation_id IS NULL`;
   
   const params = [];
   if (companyId) {
@@ -705,6 +754,7 @@ const getApprovedDrawings = async (companyId = null) => {
   for (const order of rows) {
     const [items] = await pool.query(
       `SELECT soi.*, 
+              COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, ''), 'FG') as item_group,
               COALESCE(
                 poi.quantity, 
                 (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
@@ -714,7 +764,8 @@ const getApprovedDrawings = async (companyId = null) => {
        LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
-       WHERE soi.sales_order_id = ? AND soi.item_group = 'FG' AND (soi.bom_cost > 0 OR soi.status = 'REJECTED')`,
+       WHERE soi.sales_order_id = ? 
+       AND (soi.item_group = 'FG' OR soi.item_type = 'FG' OR soi.item_group IS NULL OR soi.item_group = '')`,
       [order.id]
     );
     order.items = items;
@@ -908,7 +959,7 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     <html>
     <head>
       <style>
-        body { font-family: sans-serif; padding: 20px; color: #333; }
+        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; padding: 20px; color: #333; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
         .company-info h1 { margin: 0; color: #1e293b; font-size: 24px; }
         .order-meta { text-align: right; }
@@ -1036,6 +1087,19 @@ const deleteSalesOrder = async (salesOrderId) => {
   await pool.execute('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
 };
 
+const getBOMApprovalHistory = async () => {
+  const [rows] = await pool.query(
+    `SELECT bah.*, so.project_name, c.company_name, cp.po_number, u.username as approver_name
+     FROM bom_approval_history bah
+     JOIN sales_orders so ON bah.sales_order_id = so.id
+     JOIN companies c ON so.company_id = c.id
+     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
+     JOIN users u ON bah.user_id = u.id
+     ORDER BY bah.created_at DESC`
+  );
+  return rows;
+};
+
 const getSalesOrderItem = async itemId => {
   const [items] = await pool.query(
     `SELECT soi.*, so.project_name, c.company_name, cp.po_number,
@@ -1073,7 +1137,7 @@ const bulkUpdateStatus = async (orderIds, status) => {
     const placeholders = orderIds.map(() => '?').join(',');
     
     let department = null;
-    if (status === 'BOM_APPROVED') {
+    if (status === 'BOM_Approved ') {
       department = 'PROCUREMENT';
     } else if (status === 'BOM_SUBMITTED') {
       department = 'DESIGN_ENG';
@@ -1182,6 +1246,7 @@ module.exports = {
   bulkApproveDesigns,
   bulkRejectDesigns,
   getApprovedDrawings,
+  getBOMApprovalHistory,
   getOrderTimeline,
   getSalesOrderItem,
   updateSalesOrderItem,

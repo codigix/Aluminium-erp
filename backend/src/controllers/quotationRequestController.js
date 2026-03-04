@@ -32,8 +32,8 @@ const getQuotationRequests = async (req, res, next) => {
     const params = [];
 
     if (status) {
-      const statusArray = status.split(',');
-      query += ` AND qr.status IN (${statusArray.map(() => '?').join(',')})`;
+      const statusArray = status.split(',').map(s => s.trim());
+      query += ` AND TRIM(qr.status) IN (${statusArray.map(() => '?').join(',')})`;
       params.push(...statusArray);
     }
 
@@ -57,7 +57,7 @@ const approveQuotationRequest = async (req, res, next) => {
     
     await pool.execute(
       'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-      ['APPROVED', id]
+      ['Approved ', id]
     );
 
     res.json({ message: 'Quotation request approved' });
@@ -84,19 +84,19 @@ const batchApproveQuotationRequests = async (req, res, next) => {
       return res.status(400).json({ error: 'IDs array is required' });
     }
 
-    const replyPdfPath = req.file ? `/uploads/${req.file.filename}` : null;
+    const replyPdfPath = req.file ? `uploads/${req.file.filename}` : null;
 
     await connection.beginTransaction();
     for (const id of ids) {
       if (replyPdfPath) {
         await connection.execute(
           'UPDATE quotation_requests SET status = ?, reply_pdf = ?, updated_at = NOW() WHERE id = ?',
-          ['APPROVED', replyPdfPath, id]
+          ['Approved ', replyPdfPath, id]
         );
       } else {
         await connection.execute(
           'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-          ['APPROVED', id]
+          ['Approved ', id]
         );
       }
     }
@@ -214,7 +214,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
       await connection.execute(
         `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() 
          WHERE id IN (${uniqueOrderIds.map(() => '?').join(',')})`,
-        ['QUOTATION_SENT', 'SALES', ...uniqueOrderIds]
+        ['QUOTATION_Sent ', 'SALES', ...uniqueOrderIds]
       );
     }
 

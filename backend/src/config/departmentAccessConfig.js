@@ -28,7 +28,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DESIGN],
-    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
+    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
@@ -46,13 +46,16 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: ['sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.PRODUCTION],
-    allowedModules: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form'],
+    allowedModules: ['dashboard', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form'],
     permissions: [
       'ORDER_VIEW', 'ORDER_EDIT',
       'PO_VIEW',
       'COMPANY_VIEW',
       'DASHBOARD_VIEW',
-      'STATUS_CHANGE'
+      'STATUS_CHANGE',
+      'DESIGN_VIEW', 'DESIGN_MANAGE',
+      'BOM_VIEW', 'BOM_MANAGE',
+      'PROD_VIEW'
     ]
   },
 
@@ -64,12 +67,25 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['vendors', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
+    allowedModules: ['dashboard', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
     permissions: [
       'PO_VIEW',
       'ORDER_VIEW',
       'COMPANY_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'VENDOR_VIEW',
+      'VENDOR_EDIT',
+      'QUOTATION_VIEW',
+      'QUOTATION_EDIT',
+      'PURCHASE_ORDER_VIEW',
+      'PURCHASE_ORDER_CREATE',
+      'PURCHASE_ORDER_EDIT',
+      'STOCK_VIEW',
+      'STOCK_MANAGE',
+      'GRN_VIEW',
+      'GRN_CREATE',
+      'GRN_EDIT',
+      'GRN_DELETE'
     ]
   },
 
@@ -81,13 +97,18 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: ['sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DISPATCH_PENDING],
-    allowedModules: ['incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card'],
+    allowedModules: ['dashboard', 'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card'],
     permissions: [
       'ORDER_VIEW', 'ORDER_EDIT',
       'PO_VIEW',
       'COMPANY_VIEW',
       'DASHBOARD_VIEW',
-      'STATUS_CHANGE'
+      'STATUS_CHANGE',
+      'PROD_VIEW', 'PROD_MANAGE',
+      'DESIGN_VIEW',
+      'BOM_VIEW',
+      'VENDOR_VIEW',
+      'STOCK_VIEW'
     ]
   },
 
@@ -99,12 +120,15 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'final-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
+    allowedModules: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
       'COMPANY_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'PROD_VIEW',
+      'QC_VIEW', 'QC_CREATE', 'QC_EDIT',
+      'PURCHASE_ORDER_CREATE'
     ]
   },
 
@@ -116,7 +140,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: ['sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.PAYMENT_PENDING],
-    allowedModules: ['incoming-orders'],
+    allowedModules: ['shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'dashboard'],
     permissions: [
       'ORDER_VIEW', 'ORDER_EDIT',
       'PO_VIEW',
@@ -135,14 +159,19 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.CLOSED],
-    allowedModules: [],
+    allowedModules: ['dashboard', 'accounts-dashboard', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
       'COMPANY_VIEW',
+      'PURCHASE_ORDER_VIEW',
       'DASHBOARD_VIEW',
+      'ACCOUNTS_DASHBOARD_VIEW',
       'STATUS_CHANGE',
-      'DATA_EXPORT'
+      'DATA_EXPORT',
+      'PAYMENT_VIEW',
+      'PAYMENT_PROCESS',
+      'PAYMENT_EDIT'
     ]
   },
 
@@ -154,12 +183,24 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-ledger', 'stock-balance', 'warehouse-allocation'],
+    allowedModules: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
       'COMPANY_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'VENDOR_VIEW',
+      'VENDOR_EDIT',
+      'PURCHASE_ORDER_VIEW',
+      'PURCHASE_ORDER_CREATE',
+      'PURCHASE_ORDER_EDIT',
+      'STOCK_VIEW',
+      'STOCK_MANAGE',
+      'GRN_VIEW',
+      'GRN_CREATE',
+      'GRN_EDIT',
+      'GRN_DELETE',
+      'PROD_VIEW'
     ]
   },
 
@@ -171,7 +212,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
-    allowedModules: ['customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card'],
+    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'incoming-qc', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
@@ -180,7 +221,19 @@ const DEPARTMENT_ACCESS_RULES = {
       'DEPT_MANAGE',
       'DASHBOARD_VIEW',
       'DATA_EXPORT',
-      'STATUS_CHANGE'
+      'STATUS_CHANGE',
+      'VENDOR_VIEW',
+      'VENDOR_EDIT',
+      'GRN_VIEW',
+      'GRN_CREATE',
+      'GRN_EDIT',
+      'GRN_DELETE',
+      'STOCK_VIEW',
+      'STOCK_MANAGE',
+      'PAYMENT_VIEW',
+      'PAYMENT_PROCESS',
+      'PAYMENT_EDIT',
+      'PAYMENT_SETUP'
     ]
   }
 };
@@ -196,7 +249,7 @@ const DOCUMENT_WORKFLOW = {
   ],
   'customer_pos': [
     { status: 'DRAFT', department: 'SALES', description: 'PO received and processing' },
-    { status: 'APPROVED', department: 'SALES', description: 'PO approved' }
+    { status: 'Approved ', department: 'SALES', description: 'PO approved' }
   ]
 };
 
