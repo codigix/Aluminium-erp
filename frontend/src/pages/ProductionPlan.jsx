@@ -641,19 +641,43 @@ const ProductionPlan = () => {
   };
 
   const calculatePlanDetails = () => {
-    // 1. Collect all materials
-    const allMaterials = newPlan.items.flatMap(item => 
-      (item.materials || []).map(mat => {
+    // 1. Collect and aggregate all materials across items
+    const materialMap = new Map();
+
+    newPlan.items.forEach(item => {
+      (item.materials || []).forEach(mat => {
+        const itemCode = mat.item_code || mat.material_code || mat.itemCode || mat.item;
+        const matName = mat.material_name || mat.materialName || mat.name || mat.item;
+        const key = `${matName}-${itemCode || ''}`;
+        
         const baseQty = parseFloat(mat.required_qty || mat.qty_per_pc || 0);
-        return {
-          ...mat,
-          totalDesignQty: newPlan.targetQuantity || 0,
-          totalPlannedQty: baseQty * (newPlan.targetQuantity || 1),
-          bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
-          source_fg: item.itemCode
-        };
-      })
-    );
+        const totalQty = baseQty * (newPlan.targetQuantity || 1);
+        
+        const existing = materialMap.get(key);
+        if (existing) {
+          existing.totalDesignQty += totalQty;
+          existing.totalPlannedQty += totalQty;
+          existing.required_qty += totalQty;
+          // CORE takes precedence
+          if (mat.material_category === 'CORE') {
+            existing.material_category = 'CORE';
+          }
+        } else {
+          materialMap.set(key, {
+            ...mat,
+            item_code: itemCode,
+            material_name: matName,
+            totalDesignQty: totalQty,
+            totalPlannedQty: totalQty,
+            required_qty: totalQty,
+            bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
+            source_fg: item.itemCode
+          });
+        }
+      });
+    });
+
+    const allMaterials = Array.from(materialMap.values());
 
     // 2. Collect all potential sub-assemblies (components)
     const rawComponents = isViewing 

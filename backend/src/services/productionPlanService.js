@@ -810,22 +810,26 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     materials.forEach(m => {
       // level 0 (FG) and level 1 (direct sub-assemblies) are considered CORE for primary list
       const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
-      const source_assembly = depth === 0 ? null : itemCode;
       
-      const mKey = `${m.material_name}-${m.material_code || ''}-${material_category}-${source_assembly || ''}`;
+      // Use name and code for aggregation to avoid duplicates across assemblies/categories
+      const mKey = `${m.material_name || ''}-${m.material_code || m.item_code || ''}`;
       const existing = materialMap.get(mKey);
       const reqQty = (m.qty_per_pc || 0) * qtyMultiplier;
 
       if (existing) {
         existing.required_qty += reqQty;
         existing.totalRequiredQty += reqQty;
+        // If material appears in CORE anywhere, mark it as CORE
+        if (material_category === 'CORE') {
+          existing.material_category = 'CORE';
+        }
       } else {
         materialMap.set(mKey, {
           ...m,
           material_category,
           required_qty: reqQty,
           totalRequiredQty: reqQty,
-          source_assembly,
+          source_assembly: depth === 0 ? null : itemCode,
           rate: m.rate || 0,
           bom_ref: m.bom_no || drawingNo || 'BOM-REF'
         });
