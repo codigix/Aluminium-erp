@@ -201,22 +201,39 @@ const CustomerPO = ({
                                       })}
                                     </tbody>
                                     <tfoot className="bg-slate-50 border-t border-slate-200">
-                                      <tr>
-                                        <td colSpan="3" className="p-2 text-right text-xs text-slate-600">Sub Total:</td>
-                                        <td className="p-2 text-right text-xs text-slate-900">{formatCurrency(group.total_amount)}</td>
-                                      </tr>
-                                      <tr>
-                                        <td colSpan="3" className="p-2 text-right text-xs text-slate-600">GST (18%):</td>
-                                        <td className="p-2 text-right text-xs text-slate-900">{formatCurrency(group.total_amount * 0.18)}</td>
-                                      </tr>
-                                      <tr className="bg-indigo-50">
-                                        <td colSpan="3" className="p-2 text-right text-xs text-indigo-700 ">Grand Total (Incl. GST):</td>
-                                        <td className="p-2 text-right text-sm text-indigo-600 ">{formatCurrency(group.total_amount * 1.18)}</td>
-                                      </tr>
-                                      <tr className="border-t border-slate-200">
-                                        <td colSpan="3" className="p-2 text-right text-xs text-slate-700 ">Received Amount:</td>
-                                        <td className="p-2 text-right text-sm text-emerald-600 ">{formatCurrency(group.received_amount || (group.total_amount * 1.18))}</td>
-                                      </tr>
+                                      {(() => {
+                                        const totalProfit = group.quotes.reduce((sum, q) => {
+                                          if (q.status === 'REJECTED') return sum;
+                                          const amount = parseFloat(q.total_amount) || 0;
+                                          const profitP = parseFloat(q.profit_percentage) || 0;
+                                          const base = amount / (1 + profitP / 100);
+                                          return sum + (amount - base);
+                                        }, 0);
+                                        const subTotal = group.total_amount;
+                                        const receivedAmount = group.received_amount || (group.total_amount * 1.18);
+                                        const taxGst = receivedAmount - subTotal;
+
+                                        return (
+                                          <>
+                                            <tr>
+                                              <td colSpan="3" className="p-2 text-right text-xs text-slate-600">Sub Total:</td>
+                                              <td className="p-2 text-right text-xs text-slate-900">{formatCurrency(subTotal)}</td>
+                                            </tr>
+                                            <tr>
+                                              <td colSpan="3" className="p-2 text-right text-xs text-blue-700">Total Profit:</td>
+                                              <td className="p-2 text-right text-xs text-blue-900 font-medium">{formatCurrency(totalProfit)}</td>
+                                            </tr>
+                                            <tr>
+                                              <td colSpan="3" className="p-2 text-right text-xs text-slate-600">Tax (GST):</td>
+                                              <td className="p-2 text-right text-xs text-slate-900">{formatCurrency(taxGst)}</td>
+                                            </tr>
+                                            <tr className="bg-indigo-50">
+                                              <td colSpan="3" className="p-2 text-right text-xs text-indigo-700 ">Grand Total (Incl. GST):</td>
+                                              <td className="p-2 text-right text-sm text-indigo-600 ">{formatCurrency(receivedAmount)}</td>
+                                            </tr>
+                                          </>
+                                        );
+                                      })()}
                                     </tfoot>
                                   </table>
                                 </div>

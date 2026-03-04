@@ -216,25 +216,47 @@ const SalesOrders = () => {
     const group = quotations.find(q => q.uniqueKey === uniqueKey);
     if (!group) return;
 
+    // Filter out rejected items for calculation
+    const activeItems = group.items.filter(item => item.status !== 'REJECTED');
+    if (activeItems.length === 0) return;
+
+    // Calculate average profit and gst from all active items
+    const avgProfit = activeItems.reduce((sum, item) => sum + (Number(item.profit_percentage) || 0), 0) / activeItems.length;
+    const avgGst = activeItems.reduce((sum, item) => sum + (Number(item.gst_percentage) || 0), 0) / activeItems.length;
+
     const items = group.items.map(item => {
       const qty = Number(item.item_qty) || 1;
       const totalAmount = Number(item.total_amount) || 0;
-      const rate = qty > 0 ? totalAmount / qty : 0;
+      const profitP = Number(item.profit_percentage) || avgProfit;
+      
+      // Calculate base rate (without profit)
+      // total_amount in DB is (quotedPrice * qty)
+      // quotedPrice includes profit
+      const quotedPrice = qty > 0 ? totalAmount / qty : 0;
+      const baseRate = quotedPrice / (1 + (profitP / 100));
+      
       return {
         item_code: item.drawing_no || 'Standard',
         drawing_no: item.drawing_no,
         description: item.item_description,
         type: item.item_group || 'Standard',
         quantity: qty,
-        rate: rate,
-        amount: totalAmount
+        rate: baseRate,
+        amount: baseRate * qty
       };
     });
 
     setFormData(prev => ({
       ...prev,
       customerPoId: uniqueKey,
-      items
+      items,
+      profitMargin: parseFloat(avgProfit.toFixed(2)),
+      cgstRate: parseFloat((avgGst / 2).toFixed(2)),
+      sgstRate: parseFloat((avgGst / 2).toFixed(2)),
+      sourceType: group.isApprovedDrawing ? 'DRAWING' : 'QUOTATION',
+      quotation_id: !group.isApprovedDrawing ? (group.id || group.dbId) : null,
+      bomId: group.items[0]?.bom_id || prev.bomId,
+      projectName: group.items[0]?.project_name || prev.projectName
     }));
   };
 
@@ -887,20 +909,20 @@ const SalesOrders = () => {
                 <span className="text-slate-500">Items Subtotal:</span>
                 <span className=" text-slate-700">₹ {(Number(subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-              <div className="flex justify-between text-xs pt-3 border-t border-slate-100">
-                <span className="text-slate-500">Subtotal with Profit ({profitMarginVal}%):</span>
-                <span className=" text-slate-700">₹ {(Number(costWithProfit) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <div className="flex justify-between text-xs pt-3 border-t border-slate-100 font-medium text-blue-600">
+                <span>Total Profit ({profitMarginVal}%):</span>
+                <span>₹ {(Number(costWithProfit - subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500">GST ({cgstRateVal + sgstRateVal}%):</span>
+                <span className="text-slate-500">Tax (GST {cgstRateVal + sgstRateVal}%):</span>
                 <span className=" text-slate-700">₹ {(Number(gstAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
                 <div>
-                   <p className="text-sm  text-slate-900">Total Order Value:</p>
+                   <p className="text-sm font-semibold text-slate-700">Total Order Value:</p>
                 </div>
                 <div className="text-right">
-                   <p className="text-xl  text-emerald-600 ">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                   <p className="text-xl font-bold text-emerald-600">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>

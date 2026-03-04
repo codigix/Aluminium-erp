@@ -6,6 +6,14 @@ import { successToast, errorToast } from '../utils/toast';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const UPLOAD_BASE = import.meta.env.VITE_UPLOAD_URL;
 
+const formatCurrency = (value) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2
+  }).format(value || 0);
+};
+
 // Robust URL construction
 const getFileUrl = (path) => {
   if (!path) return '';
@@ -273,7 +281,7 @@ const ClientQuotations = () => {
             company_name: quote.company_name,
             company_id: quote.company_id,
             created_at: quote.created_at,
-            status: 'Sent ', // Default status for group
+            status: 'Sent', // Default status for group
             reply_pdf: quote.reply_pdf,
             total_amount: 0,
             received_amount: 0,
@@ -299,17 +307,17 @@ const ClientQuotations = () => {
       
       // Post-process groups to determine status
       Object.values(grouped).forEach(group => {
-        const hasRejected = group.quotes.some(q => q.status === 'REJECTED');
-        const hasAccepted = group.quotes.some(q => q.status !== 'REJECTED');
+        const hasRejected = group.quotes.some(q => (q.status || '').trim().toUpperCase() === 'REJECTED');
+        const hasAccepted = group.quotes.some(q => (q.status || '').trim().toUpperCase() !== 'REJECTED');
         
         if (hasAccepted && hasRejected) {
           group.status = 'PARTIAL';
         } else if (hasRejected && !hasAccepted) {
           group.status = 'REJECTED';
-        } else if (group.quotes.every(q => q.status === 'Approved ')) {
-          group.status = 'Approved ';
+        } else if (group.quotes.every(q => (q.status || '').trim().toUpperCase() === 'APPROVED')) {
+          group.status = 'Approved';
         } else {
-          group.status = 'Sent ';
+          group.status = 'Sent';
         }
       });
       
@@ -668,6 +676,9 @@ const ClientQuotations = () => {
           clientEmail: clientData.email,
           items: allItems.map(item => {
             const order = clientData.orders.find(o => o.items?.some(i => i.id === item.id));
+            const profits = profitMap[clientName] || {};
+            const gsts = gstMap[clientName] || {};
+            
             return {
               orderId: order?.id,
               salesOrderItemId: item.id,
@@ -677,7 +688,9 @@ const ClientQuotations = () => {
               unit: item.unit,
               status: item.status,
               rejection_reason: item.rejection_reason,
-              quotedPrice: parseFloat(prices[item.id]) || 0
+              quotedPrice: parseFloat(prices[item.id]) || 0,
+              profit_percentage: profits[item.id] || 0,
+              gst_percentage: gsts[item.id] || 18
             };
           }),
           totalAmount: total,
@@ -1022,28 +1035,77 @@ const ClientQuotations = () => {
                                                   className="w-16 p-2 border border-slate-300 rounded text-right text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                                 />
                                               </td>
-                                              <td className="p-2 text-right text-xs  text-slate-900 pr-4">
-                                                ₹{((parseFloat(quotePricesMap[clientName]?.[item.id]) || 0) * (parseFloat(item.design_qty) || 0) * (1 + (parseFloat(gstMap[clientName]?.[item.id]) || 18) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                              <td className="p-2 text-right text-xs text-slate-900">
+                                                {formatCurrency((parseFloat(quotePricesMap[clientName]?.[item.id]) || 0) * (parseFloat(item.design_qty) || 0) * (1 + (parseFloat(gstMap[clientName]?.[item.id]) || 18) / 100))}
                                               </td>
                                             </tr>
                                           ))
                                         )}
                                       </tbody>
                                     </table>
-                                    <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-between items-center">
-                                      <div>
-                                        <p className="text-xs text-slate-600 ">Total Quotation Value</p>
-                                        <p className="text-2xl  text-emerald-600">
-                                          ₹{calculateClientTotal(clientName).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                        </p>
-                                      </div>
-                                      <button
-                                        onClick={() => handleSendQuote(clientName)}
-                                        disabled={sendingClientName === clientName || calculateClientTotal(clientName) === 0}
-                                        className="p-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2  text-sm"
-                                      >
-                                        {sendingClientName === clientName ? 'Sending...' : 'Send Quote to Client'}
-                                      </button>
+                                    <div className="bg-slate-50 p-3 border-t border-slate-200">
+                                      {(() => {
+                                        const clientOrders = groupedByClient[clientName].orders;
+                                        let subTotal = 0;
+                                        let totalProfit = 0;
+                                        let totalTax = 0;
+
+                                        clientOrders.forEach(order => {
+                                          (order.items || []).forEach(item => {
+                                            const unitRate = parseFloat(quotePricesMap[clientName]?.[item.id]) || 0;
+                                            const qty = parseFloat(item.design_qty) || 0;
+                                            const profitP = parseFloat(profitMap[clientName]?.[item.id]) || 0;
+                                            const gstRate = parseFloat(gstMap[clientName]?.[item.id]) || 18;
+
+                                            const lineTotal = unitRate * qty;
+                                            const lineTax = lineTotal * (gstRate / 100);
+                                            const basePrice = unitRate / (1 + profitP / 100);
+                                            const lineProfit = (unitRate - basePrice) * qty;
+
+                                            subTotal += lineTotal;
+                                            totalTax += lineTax;
+                                            totalProfit += lineProfit;
+                                          });
+                                        });
+
+                                        return (
+                                          <div className="flex flex-col items-end gap-1">
+                                            <div className="flex justify-between w-64 text-xs">
+                                              <span className="text-slate-500">Sub Total:</span>
+                                              <span className="text-slate-900">{formatCurrency(subTotal)}</span>
+                                            </div>
+                                            <div className="flex justify-between w-64 text-xs font-medium text-blue-600">
+                                              <span>Total Profit:</span>
+                                              <span>{formatCurrency(totalProfit)}</span>
+                                            </div>
+                                            <div className="flex justify-between w-64 text-xs">
+                                              <span className="text-slate-500">Tax (GST):</span>
+                                              <span className="text-slate-900">{formatCurrency(totalTax)}</span>
+                                            </div>
+                                            <div className="flex justify-between w-64 pt-1 mt-1 border-t border-slate-200">
+                                              <span className="text-sm font-semibold text-slate-700">Grand Total:</span>
+                                              <span className="text-lg font-bold text-emerald-600">{formatCurrency(subTotal + totalTax)}</span>
+                                            </div>
+                                            <button
+                                              onClick={() => handleSendQuote(clientName)}
+                                              disabled={sendingClientName === clientName || (subTotal + totalTax) === 0}
+                                              className="mt-3 w-64 p-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex justify-center items-center gap-2 text-sm font-medium shadow-sm"
+                                            >
+                                              {sendingClientName === clientName ? (
+                                                <>
+                                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                                  Sending...
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Send className="w-4 h-4" />
+                                                  Send Quote to Client
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   </div>
                                 </div>
@@ -1129,7 +1191,7 @@ const ClientQuotations = () => {
                                     </>
                                   ) : (
                                     <div className="p-2  bg-emerald-50 text-emerald-700 rounded  text-[11px]  border border-emerald-100">
-                                      ₹{(group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      {formatCurrency(group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18)}
                                     </div>
                                   )}
                                 </div>
@@ -1138,14 +1200,14 @@ const ClientQuotations = () => {
                             <td className="p-2 text-xs text-slate-500">{new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                             <td className="p-2">
                               <span className={`p-1 rounded  text-xs  ${
-                                group.status === 'Sent' ? 'bg-blue-100 text-blue-700' : 
-                                group.status === 'Partial' ? 'bg-amber-100 text-amber-700' : 
-                                group.status === 'Rejected' ? 'bg-red-100 text-red-700' :
-                                (group.status === 'Approved' || group.status === 'Approval') ? 'bg-emerald-100 text-emerald-700' : 
-                                group.status === 'Completed' ? 'bg-indigo-100 text-indigo-700' :
+                                (group.status || '').trim().toUpperCase() === 'SENT' ? 'bg-blue-100 text-blue-700' : 
+                                (group.status || '').trim().toUpperCase() === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 
+                                (group.status || '').trim().toUpperCase() === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                                ['APPROVED', 'APPROVAL'].includes((group.status || '').trim().toUpperCase()) ? 'bg-emerald-100 text-emerald-700' : 
+                                (group.status || '').trim().toUpperCase() === 'COMPLETED' ? 'bg-indigo-100 text-indigo-700' :
                                 'bg-slate-100 text-slate-700'
                               }`}>
-                                {group.status === 'Approval' ? 'Approved' : group.status}
+                                {(group.status || '').trim().toUpperCase() === 'APPROVAL' ? 'Approved' : (group.status || '').trim()}
                               </span>
                             </td>
                             <td className="p-2">
@@ -1161,7 +1223,7 @@ const ClientQuotations = () => {
                                     <FileText className="w-4 h-4" />
                                   </a>
                                 )}
-                                {(activeTab === 'received' || activeTab === 'sent') && !['Approved ', 'APPROVAL', 'COMPLETED'].includes(group.status) && !group.reply_pdf && (
+                                {(activeTab === 'received' || activeTab === 'sent') && !['APPROVED', 'APPROVAL', 'COMPLETED'].includes((group.status || '').trim().toUpperCase()) && !group.reply_pdf && (
                                   <button
                                     onClick={() => handleApproveQuote(group)}
                                     className="p-2  bg-emerald-600 text-white rounded text-[10px]  hover:bg-emerald-700 transition-colors flex items-center gap-1"
@@ -1206,6 +1268,8 @@ const ClientQuotations = () => {
                                           <th className="p-2 text-left text-[10px]  text-slate-700 ">Description</th>
                                           <th className="p-2 text-left text-[10px]  text-slate-700 ">Qty</th>
                                           <th className="p-2 text-left text-[10px]  text-slate-700 ">Unit</th>
+                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">Profit %</th>
+                                          <th className="p-2 text-left text-[10px]  text-slate-700 ">GST %</th>
                                           <th className="p-2 text-right text-[10px]  text-slate-700 ">Quote Price</th>
                                         </tr>
                                       </thead>
@@ -1230,7 +1294,7 @@ const ClientQuotations = () => {
                                             </td>
                                             <td className="p-2 text-xs text-slate-600">{q.item_description}</td>
                                             {q.status === 'REJECTED' ? (
-                                              <td colSpan={3} className="p-2 text-right">
+                                              <td colSpan={5} className="p-2 text-right">
                                                 <span className="text-red-600  text-[10px]  pr-4">Rejected – No Financials</span>
                                               </td>
                                             ) : (
@@ -1239,26 +1303,47 @@ const ClientQuotations = () => {
                                                   {q.item_qty !== null ? Number(q.item_qty).toFixed(3) : '—'}
                                                 </td>
                                                 <td className="p-2 text-xs text-slate-600">{q.item_unit || 'NOS'}</td>
+                                                <td className="p-2 text-xs text-blue-600 font-medium">{q.profit_percentage || 0}%</td>
+                                                <td className="p-2 text-xs text-indigo-600 font-medium">{q.gst_percentage || 18}%</td>
                                                 <td className="p-2 text-right text-xs  text-emerald-600">₹{(q.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                               </>
                                             )}
                                           </tr>
                                         ))}
                                       </tbody>
-                                      <tfoot className="bg-slate-50">
-                                        <tr>
-                                          <td colSpan="5" className="p-2 text-right text-xs  text-slate-700">Sub Total:</td>
-                                          <td className="p-2 text-right text-xs text-slate-900">₹{group.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                        </tr>
-                                        <tr>
-                                          <td colSpan="5" className="p-2 text-right text-xs  text-slate-700">GST (18%):</td>
-                                          <td className="p-2 text-right text-xs text-slate-900">₹{(group.total_amount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                        </tr>
-                                        <tr className="bg-emerald-50">
-                                          <td colSpan="5" className="p-2 text-right text-xs  text-emerald-700 ">Grand Total (Incl. GST):</td>
-                                          <td className="p-2 text-right text-xs  text-emerald-600 text-sm">₹{(group.total_amount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                        </tr>
-                                      </tfoot>
+                                      {(() => {
+                                        const totalProfit = group.quotes.reduce((sum, q) => {
+                                          if (q.status === 'REJECTED') return sum;
+                                          const amount = parseFloat(q.total_amount) || 0;
+                                          const profitP = parseFloat(q.profit_percentage) || 0;
+                                          const base = amount / (1 + profitP / 100);
+                                          return sum + (amount - base);
+                                        }, 0);
+                                        const subTotal = group.total_amount;
+                                        const receivedAmount = group.received_amount > 0 ? group.received_amount : subTotal * 1.18;
+                                        const taxGst = receivedAmount - subTotal;
+
+                                        return (
+                                          <tfoot className="bg-slate-50">
+                                            <tr>
+                                              <td colSpan="7" className="p-2 text-right text-xs  text-slate-700">Sub Total:</td>
+                                              <td className="p-2 text-right text-xs text-slate-900">{formatCurrency(subTotal)}</td>
+                                            </tr>
+                                            <tr>
+                                              <td colSpan="7" className="p-2 text-right text-xs  text-blue-700">Total Profit:</td>
+                                              <td className="p-2 text-right text-xs text-blue-900 font-medium">{formatCurrency(totalProfit)}</td>
+                                            </tr>
+                                            <tr>
+                                              <td colSpan="7" className="p-2 text-right text-xs  text-slate-700">Tax (GST):</td>
+                                              <td className="p-2 text-right text-xs text-slate-900">{formatCurrency(taxGst)}</td>
+                                            </tr>
+                                            <tr className="bg-emerald-50">
+                                              <td colSpan="7" className="p-2 text-right text-xs  text-emerald-700 ">Grand Total (Incl. GST):</td>
+                                              <td className="p-2 text-right text-xs  text-emerald-600 text-sm">{formatCurrency(receivedAmount)}</td>
+                                            </tr>
+                                          </tfoot>
+                                        );
+                                      })()}
                                     </table>
                                   </div>
                                 </div>

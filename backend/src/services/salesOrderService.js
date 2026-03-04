@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
 const listSalesOrders = async (includeWithoutPo = true) => {
-  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved ', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_Sent '))";
+  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_SENT'))";
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
@@ -440,9 +440,9 @@ const updateSalesOrder = async (id, orderData) => {
 
 const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remarks = null) => {
   let department = null;
-  if (status === 'BOM_Approved ') {
+  if (status === 'BOM_Approved') {
     department = 'SALES';
-    status = 'QUOTATION_Sent '; // Automatically move to quotation sent status
+    status = 'QUOTATION_SENT'; // Automatically move to quotation sent status
   } else if (status === 'BOM_SUBMITTED') {
     department = 'DESIGN_ENG'; // Stay in design for approval
   }
@@ -458,8 +458,8 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
     }
 
     // Log to BOM approval history if it's a BOM action
-    if (status === 'BOM_Approved ' || status === 'QUOTATION_Sent ' || status === 'REJECTED_BOM') {
-      const action = (status === 'BOM_Approved ' || status === 'QUOTATION_Sent ') ? 'APPROVED' : 'REJECTED';
+    if (status === 'BOM_Approved' || status === 'QUOTATION_SENT' || status === 'REJECTED_BOM') {
+      const action = (status === 'BOM_Approved' || status === 'QUOTATION_SENT') ? 'APPROVED' : 'REJECTED';
       if (userId) {
         await connection.execute(
           'INSERT INTO bom_approval_history (sales_order_id, user_id, action, remarks) VALUES (?, ?, ?, ?)',
@@ -468,7 +468,7 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
       }
       
       // Auto-create quotation if BOM is approved
-      if (status === 'QUOTATION_Sent ') {
+      if (status === 'QUOTATION_SENT') {
         const [orderRows] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
         const order = orderRows[0];
         
@@ -764,7 +764,7 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE (TRIM(so.status) IN ('BOM_SUBMITTED', 'BOM_Approved', 'QUOTATION_Sent', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
+     WHERE (TRIM(so.status) IN ('BOM_SUBMITTED', 'BOM_Approved', 'QUOTATION_SENT', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
         AND so.quotation_id IS NULL`;
   
   const params = [];
@@ -1163,7 +1163,7 @@ const bulkUpdateStatus = async (orderIds, status) => {
     const placeholders = orderIds.map(() => '?').join(',');
     
     let department = null;
-    if (status === 'BOM_Approved ') {
+    if (status === 'BOM_Approved') {
       department = 'PROCUREMENT';
     } else if (status === 'BOM_SUBMITTED') {
       department = 'DESIGN_ENG';

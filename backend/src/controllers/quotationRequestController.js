@@ -7,7 +7,8 @@ const getQuotationRequests = async (req, res, next) => {
     const { status, company_id } = req.query;
     let query = `
       SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
-             so.project_name, c.company_name, cp.po_number,
+             qr.profit_percentage, qr.gst_percentage,
+             so.project_name, so.bom_id, c.company_name, cp.po_number,
              COALESCE(soi.drawing_no, '—') as drawing_no,
              COALESCE(soi.description, so.project_name) as item_description,
              COALESCE(
@@ -57,7 +58,7 @@ const approveQuotationRequest = async (req, res, next) => {
     
     await pool.execute(
       'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-      ['Approved ', id]
+      ['Approved', id]
     );
 
     res.json({ message: 'Quotation request approved' });
@@ -91,12 +92,12 @@ const batchApproveQuotationRequests = async (req, res, next) => {
       if (replyPdfPath) {
         await connection.execute(
           'UPDATE quotation_requests SET status = ?, reply_pdf = ?, updated_at = NOW() WHERE id = ?',
-          ['Approved ', replyPdfPath, id]
+          ['Approved', replyPdfPath, id]
         );
       } else {
         await connection.execute(
           'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-          ['Approved ', id]
+          ['Approved', id]
         );
       }
     }
@@ -193,11 +194,28 @@ const sendQuotationViaEmail = async (req, res, next) => {
       return new Promise(async (resolve, reject) => {
         try {
           const lineTotal = (item.quotedPrice || 0) * (item.quantity || 1);
-          const lineTotalInclGst = lineTotal * 1.18;
+          const gstRate = parseFloat(item.gst_percentage) || 18;
+          const lineTotalInclGst = lineTotal * (1 + gstRate / 100);
+          
           const [result] = await connection.execute(
-            `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, item_qty, company_id, status, total_amount, received_amount, rejection_reason, notes, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-            [item.orderId, item.salesOrderItemId || null, item.quantity || 0, clientId, item.status || 'PENDING', lineTotal, lineTotalInclGst, item.rejection_reason || null, notes || null]
+            `INSERT INTO quotation_requests (
+               sales_order_id, sales_order_item_id, item_qty, company_id, 
+               status, total_amount, received_amount, rejection_reason, 
+               notes, created_at, profit_percentage, gst_percentage
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)`,
+            [
+              item.orderId, 
+              item.salesOrderItemId || null, 
+              item.quantity || 0, 
+              clientId, 
+              'ACCEPTED', 
+              lineTotal, 
+              lineTotalInclGst, 
+              item.rejection_reason || null, 
+              notes || null,
+              item.profit_percentage || 0,
+              gstRate
+            ]
           );
           resolve(result.insertId);
         } catch (error) {
@@ -211,10 +229,12 @@ const sendQuotationViaEmail = async (req, res, next) => {
     const uniqueOrderIds = [...new Set(items.map(i => i.orderId))].filter(Boolean);
 
     if (uniqueOrderIds.length > 0) {
+      // Link SO to the first quotation ID in the batch to mark it as quoted
+      const firstQuoteId = quotationIds[0];
       await connection.execute(
-        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() 
+        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, quotation_id = ?, updated_at = NOW() 
          WHERE id IN (${uniqueOrderIds.map(() => '?').join(',')})`,
-        ['QUOTATION_Sent ', 'SALES', ...uniqueOrderIds]
+        ['QUOTATION_SENT', 'SALES', firstQuoteId, ...uniqueOrderIds]
       );
     }
 

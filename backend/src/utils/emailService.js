@@ -23,11 +23,41 @@ const createTransporter = () => {
 };
 
 const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, quoteNumber) => {
+  let subTotal = 0;
+  let totalTax = 0;
+  let totalProfit = 0;
+
   const itemsHTML = (items || [])
     .map((item, idx) => {
       const isRejected = item.status === 'REJECTED';
-      const unitPrice = isRejected ? '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : `₹${(item.quotedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-      const totalLine = isRejected ? '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : `₹${((item.quantity || 1) * (item.quotedPrice || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      const quantity = item.quantity || 1;
+      const profitP = parseFloat(item.profit_percentage) || 0;
+      const gstRate = parseFloat(item.gst_percentage) || 18;
+      
+      // Calculate rates
+      // item.quotedPrice already includes profit (it's the Unit Rate from UI)
+      const unitRate = item.quotedPrice || 0;
+      const lineTotalBase = unitRate * quantity;
+      const lineTax = lineTotalBase * (gstRate / 100);
+      const lineTotalWithTax = lineTotalBase + lineTax;
+
+      if (!isRejected) {
+        subTotal += lineTotalBase;
+        totalTax += lineTax;
+        
+        // Calculate profit amount for this line
+        const basePrice = unitRate / (1 + profitP / 100);
+        const profitAmount = (unitRate - basePrice) * quantity;
+        totalProfit += profitAmount;
+      }
+
+      const unitPriceStr = isRejected ? 
+        '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : 
+        `₹${unitRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      
+      const totalLineStr = isRejected ? 
+        '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : 
+        `₹${lineTotalWithTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
       
       return `
       <tr>
@@ -37,10 +67,11 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
           ${item.description ? `<div style="font-size: 11px; color: #333; margin-top: 4px;">${item.description}</div>` : ''}
           ${isRejected ? `<div style="font-size: 10px; color: #dc2626; margin-top: 4px; font-weight: bold;">Reason: ${item.rejection_reason || 'Not specified'}</div>` : ''}
         </td>
-        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${item.quantity || 1}</td>
-        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${item.unit || 'Nos'}</td>
-        <td style="padding: 10px; border: 1px solid #000; text-align: right;">${unitPrice}</td>
-        <td style="padding: 10px; border: 1px solid #000; text-align: right; font-weight: bold;">${totalLine}</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${quantity}</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${profit}%</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: right;">${unitPriceStr}</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${gstRate}%</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: right; font-weight: bold;">${totalLineStr}</td>
       </tr>
     `;
     })
@@ -103,11 +134,12 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
         <thead>
           <tr>
             <th style="width: 5%;">Sr. No</th>
-            <th style="width: 45%;">Description / Drawing No</th>
-            <th style="width: 10%;">Qty</th>
-            <th style="width: 10%;">Unit</th>
-            <th style="width: 15%;">Unit Price</th>
-            <th style="width: 15%;">Total</th>
+            <th style="width: 35%;">Description / Drawing No</th>
+            <th style="width: 8%;">Qty</th>
+            <th style="width: 10%;">Profit %</th>
+            <th style="width: 15%;">Unit Rate (₹)</th>
+            <th style="width: 10%;">GST %</th>
+            <th style="width: 17%;">Total (Incl. GST)</th>
           </tr>
         </thead>
         <tbody>
@@ -117,16 +149,20 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
 
       <table class="totals-table">
         <tr>
-          <td style="font-weight: bold;">Sub Total</td>
-          <td style="text-align: right; font-weight: bold;">₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          <td style="font-weight: bold; color: #334155;">Sub Total (Before Tax)</td>
+          <td style="text-align: right; font-weight: bold; color: #1e293b;">₹${subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
         </tr>
         <tr>
-          <td>Tax (GST 18%)</td>
-          <td style="text-align: right;">₹${(totalAmount * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          <td style="color: #2563eb; font-weight: medium;">Total Profit</td>
+          <td style="text-align: right; color: #1e40af; font-weight: bold;">₹${totalProfit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
         </tr>
-        <tr style="background-color: #f2f2f2;">
-          <td style="font-weight: bold; font-size: 14px;">Grand Total</td>
-          <td style="text-align: right; font-weight: bold; font-size: 14px; color: #10b981;">₹${(totalAmount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <tr>
+          <td style="color: #64748b;">Tax (GST)</td>
+          <td style="text-align: right; color: #334155;">₹${totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        </tr>
+        <tr style="background-color: #f8fafc; border-top: 2px solid #e2e8f0;">
+          <td style="font-weight: bold; font-size: 14px; color: #1e3a8a;">Grand Total</td>
+          <td style="text-align: right; font-weight: bold; font-size: 14px; color: #059669;">₹${(subTotal + totalTax).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
         </tr>
       </table>
 
@@ -454,7 +490,7 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
         <div style="font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6;">
           <h2 style="color: #f26522;">Dear ${clientName},</h2>
           <p>Please find the attached quotation ${formattedQuoteNumber} for your approved drawings from <strong>SP TECHPIONEER PVT. LTD.</strong></p>
-          <p><strong>Total Quotation Value (Incl. GST):</strong> ₹${(totalAmount * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+          <p><strong>Total Quotation Value (Incl. GST):</strong> ₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           <p>The detailed breakdown of items, quantities, and pricing is provided in the attached PDF.</p>
           <p>We look forward to your feedback and approval.</p>
           <br/>

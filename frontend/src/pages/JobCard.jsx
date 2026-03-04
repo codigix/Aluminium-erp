@@ -571,6 +571,39 @@ const JobCard = () => {
     }
   };
 
+  const handleUpdateStatus = async (id, status) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const payload = { status };
+      
+      if (status === 'IN_PROGRESS') {
+        payload.startTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      } else if (status === 'COMPLETED') {
+        payload.endTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      }
+
+      const response = await fetch(`${API_BASE}/job-cards/${id}/progress`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        successToast(`Job Card status updated to ${status}`);
+        fetchJobCards();
+      } else {
+        const error = await response.json();
+        errorToast(error.error || 'Failed to update status');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      errorToast('Network error');
+    }
+  };
+
   const handleLogProgress = async (jc) => {
     setSelectedJC(jc);
     setActiveTab('time');

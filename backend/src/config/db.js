@@ -922,8 +922,8 @@ const ensureSalesOrderStatuses = async () => {
         await connection.query(`
           ALTER TABLE sales_orders 
           MODIFY COLUMN status ENUM(
-            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'DESIGN_QUERY', 'QUOTATION_Sent ',
-            'BOM_SUBMITTED', 'BOM_Approved ', 'PROCUREMENT_IN_PROGRESS', 
+            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved', 'DESIGN_QUERY', 'QUOTATION_SENT',
+            'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 
             'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 
             'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'
           ) DEFAULT 'CREATED'
