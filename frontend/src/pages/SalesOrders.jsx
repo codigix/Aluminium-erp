@@ -53,6 +53,7 @@ const SalesOrders = () => {
     cgstRate: 9,
     sgstRate: 9,
     profitMargin: 0,
+    totalProfit: 0,
     sourceType: 'DIRECT',
     items: []
   };
@@ -224,16 +225,16 @@ const SalesOrders = () => {
     const avgProfit = activeItems.reduce((sum, item) => sum + (Number(item.profit_percentage) || 0), 0) / activeItems.length;
     const avgGst = activeItems.reduce((sum, item) => sum + (Number(item.gst_percentage) || 0), 0) / activeItems.length;
 
+    let totalProfitVal = 0;
     const items = group.items.map(item => {
       const qty = Number(item.item_qty) || 1;
       const totalAmount = Number(item.total_amount) || 0;
       const profitP = Number(item.profit_percentage) || avgProfit;
       
-      // Calculate base rate (without profit)
-      // total_amount in DB is (quotedPrice * qty)
-      // quotedPrice includes profit
       const quotedPrice = qty > 0 ? totalAmount / qty : 0;
       const baseRate = quotedPrice / (1 + (profitP / 100));
+      const itemProfit = (quotedPrice - baseRate) * qty;
+      totalProfitVal += itemProfit;
       
       return {
         item_code: item.drawing_no || 'Standard',
@@ -251,6 +252,7 @@ const SalesOrders = () => {
       customerPoId: uniqueKey,
       items,
       profitMargin: parseFloat(avgProfit.toFixed(2)),
+      totalProfit: parseFloat(totalProfitVal.toFixed(2)),
       cgstRate: parseFloat((avgGst / 2).toFixed(2)),
       sgstRate: parseFloat((avgGst / 2).toFixed(2)),
       sourceType: group.isApprovedDrawing ? 'DRAWING' : 'QUOTATION',
@@ -347,6 +349,10 @@ const SalesOrders = () => {
           mappedPoId = `Approved _${data.quotation_id}`;
         }
 
+        const subtotalInclusiveOfProfit = Number(data.subtotal) || 0;
+        const baseItemsSubtotal = formattedItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        const totalProfitVal = subtotalInclusiveOfProfit - baseItemsSubtotal;
+
         setFormData({
           ...initialFormState,
           id: data.id,
@@ -365,7 +371,8 @@ const SalesOrders = () => {
           cgstRate: Number(data.cgst_rate) || 0,
           sgstRate: Number(data.sgst_rate) || 0,
           profitMargin: Number(data.profit_margin) || 0,
-          subtotal: Number(data.subtotal) || 0,
+          totalProfit: totalProfitVal,
+          subtotal: subtotalInclusiveOfProfit,
           gst: Number(data.gst) || 0,
           grand_total: Number(data.grand_total) || 0,
           items: formattedItems
@@ -429,7 +436,8 @@ const SalesOrders = () => {
       // Calculate totals for the new schema
       const subTotalVal = (formData.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
       const profitMarginVal = Number(formData.profitMargin) || 0;
-      const costWithProfit = subTotalVal * (1 + (profitMarginVal / 100));
+      const totalProfitVal = Number(formData.totalProfit) || (subTotalVal * (profitMarginVal / 100));
+      const costWithProfit = subTotalVal + totalProfitVal;
       const cgstRateVal = Number(formData.cgstRate) || 0;
       const sgstRateVal = Number(formData.sgstRate) || 0;
       const gstAmount = costWithProfit * ((cgstRateVal + sgstRateVal) / 100);
@@ -631,7 +639,9 @@ const SalesOrders = () => {
   const selectedBom = boms.find(b => String(b.id) === String(formData.bomId));
   const subTotal = (formData.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const profitMarginVal = Number(formData.profitMargin) || 0;
-  const costWithProfit = subTotal * (1 + (profitMarginVal / 100));
+  // Use totalProfit if available, otherwise calculate from percentage
+  const totalProfitVal = Number(formData.totalProfit) || (subTotal * (profitMarginVal / 100));
+  const costWithProfit = subTotal + totalProfitVal;
   const cgstRateVal = Number(formData.cgstRate) || 0;
   const sgstRateVal = Number(formData.sgstRate) || 0;
   const gstAmount = costWithProfit * ((cgstRateVal + sgstRateVal) / 100);
@@ -890,15 +900,6 @@ const SalesOrders = () => {
                   />
                 </FormControl>
               </div>
-              <FormControl label="Profit Margin (%)">
-                <input 
-                  type="number"
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
-                  value={formData.profitMargin}
-                  onChange={(e) => setFormData({...formData, profitMargin: Number(e.target.value)})}
-                  disabled={formMode === 'view'}
-                />
-              </FormControl>
             </div>
           </Card>
 
@@ -910,8 +911,8 @@ const SalesOrders = () => {
                 <span className=" text-slate-700">₹ {(Number(subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between text-xs pt-3 border-t border-slate-100 font-medium text-blue-600">
-                <span>Total Profit ({profitMarginVal}%):</span>
-                <span>₹ {(Number(costWithProfit - subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span>Total Profit:</span>
+                <span>₹ {(Number(totalProfitVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Tax (GST {cgstRateVal + sgstRateVal}%):</span>
