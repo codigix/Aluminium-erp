@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 
 const listSalesOrders = async (includeWithoutPo = true) => {
-  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved '))";
+  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved ', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_Sent '))";
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
@@ -441,7 +441,8 @@ const updateSalesOrder = async (id, orderData) => {
 const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remarks = null) => {
   let department = null;
   if (status === 'BOM_Approved ') {
-    department = 'PROCUREMENT';
+    department = 'SALES';
+    status = 'QUOTATION_Sent '; // Automatically move to quotation sent status
   } else if (status === 'BOM_SUBMITTED') {
     department = 'DESIGN_ENG'; // Stay in design for approval
   }
@@ -457,13 +458,38 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
     }
 
     // Log to BOM approval history if it's a BOM action
-    if (status === 'BOM_Approved ' || status === 'REJECTED_BOM') {
-      const action = status === 'BOM_Approved ' ? 'APPROVED' : 'REJECTED';
+    if (status === 'BOM_Approved ' || status === 'QUOTATION_Sent ' || status === 'REJECTED_BOM') {
+      const action = (status === 'BOM_Approved ' || status === 'QUOTATION_Sent ') ? 'APPROVED' : 'REJECTED';
       if (userId) {
         await connection.execute(
           'INSERT INTO bom_approval_history (sales_order_id, user_id, action, remarks) VALUES (?, ?, ?, ?)',
           [salesOrderId, userId, action, remarks]
         );
+      }
+      
+      // Auto-create quotation if BOM is approved
+      if (status === 'QUOTATION_Sent ') {
+        const [orderRows] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
+        const order = orderRows[0];
+        
+        const [itemRows] = await connection.query(
+          'SELECT * FROM sales_order_items WHERE sales_order_id = ? AND (status != "REJECTED" OR status IS NULL)', 
+          [salesOrderId]
+        );
+        
+        for (const item of itemRows) {
+          const bomCost = parseFloat(item.bom_cost) || 0;
+          const profitMargin = parseFloat(order.profit_margin) || 0;
+          const quotedPrice = bomCost * (1 + profitMargin / 100);
+          const lineTotal = quotedPrice * (item.quantity || 1);
+          const lineTotalInclGst = lineTotal * 1.18; // Standard 18% GST
+
+          await connection.execute(
+            `INSERT INTO quotation_requests (sales_order_id, sales_order_item_id, item_qty, company_id, status, total_amount, received_amount, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [salesOrderId, item.id, item.quantity || 0, order.company_id, 'PENDING', lineTotal, lineTotalInclGst]
+          );
+        }
       }
     }
 
@@ -738,7 +764,7 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE (TRIM(so.status) IN ('CREATED', 'DESIGN_Approved', 'DESIGN_IN_REVIEW', 'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
+     WHERE (TRIM(so.status) IN ('BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
         AND so.quotation_id IS NULL`;
   
   const params = [];
