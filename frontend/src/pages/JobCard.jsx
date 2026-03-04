@@ -974,7 +974,6 @@ const JobCard = () => {
                                   >
                                     <option value="SHIFT_A">A</option>
                                     <option value="SHIFT_B">B</option>
-                                    <option value="SHIFT_C">C</option>
                                   </select>
                                 </td>
                                 <td className="px-4 py-3">
@@ -1111,8 +1110,6 @@ const JobCard = () => {
                     <div className="flex items-center gap-1">
                       <select value={qualityLogForm.shift} onChange={e => setQualityLogForm({...qualityLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 appearance-none">
                         <option value="SHIFT_A">A</option>
-                        <option value="SHIFT_B">B</option>
-                        <option value="SHIFT_C">C</option>
                       </select>
                       <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
                         <ChevronRight className="w-3 h-3" />
@@ -1221,7 +1218,6 @@ const JobCard = () => {
                                   >
                                     <option value="SHIFT_A">A</option>
                                     <option value="SHIFT_B">B</option>
-                                    <option value="SHIFT_C">C</option>
                                   </select>
                                 </td>
                                 <td className="px-4 py-3" colSpan="2">
@@ -1387,8 +1383,6 @@ const JobCard = () => {
                     <div className="flex items-center gap-1">
                       <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({...downtimeLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
                         <option value="SHIFT_A">A</option>
-                        <option value="SHIFT_B">B</option>
-                        <option value="SHIFT_C">C</option>
                       </select>
                       <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
                         <ChevronRight className="w-3 h-3" />
@@ -1562,14 +1556,14 @@ const JobCard = () => {
 
             <p className="text-[11px] text-slate-400 italic px-1">Specify destination and operational parameters for the next manufacturing phase</p>
 
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-6">
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <FormControl label="Next Operation" required>
                   <SearchableSelect
                     options={operations.map(o => ({ value: o.id, label: o.operation_name }))}
                     value={nextStageForm.nextOperationId}
                     onChange={(val) => setNextStageForm({ ...nextStageForm, nextOperationId: val })}
-                    placeholder="Select Next Op"
+                    placeholder="Welding"
                   />
                 </FormControl>
                 <FormControl label="Assign Operator">
@@ -1608,21 +1602,6 @@ const JobCard = () => {
                   </div>
                 </div>
               </div>
-
-              <div className="pt-4 border-t border-slate-50">
-                <button 
-                  onClick={handleReadyForDispatch}
-                  className="flex items-center gap-3 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 group"
-                >
-                  <div className="w-8 h-8 bg-white/20 rounded flex items-center justify-center">
-                    <CheckCircle className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 leading-none">Finalize & Dispatch</p>
-                    <p className="text-sm font-bold mt-1">Complete Production <ArrowRight className="w-4 h-4 inline ml-1 group-hover:translate-x-1 transition-transform" /></p>
-                  </div>
-                </button>
-              </div>
             </div>
           </section>
 
@@ -1647,71 +1626,33 @@ const JobCard = () => {
             <p className="text-[11px] text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
 
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-50/50 border-b border-slate-100">
-                    <tr>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Shift</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Operator</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Mins</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Produced</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Accepted</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Rejected</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Scrap</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Downtime</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {logs.timeLogs.length === 0 ? (
-                      <tr>
-                        <td colSpan="10" className="py-12 text-center text-slate-400 italic">No data available</td>
-                      </tr>
-                    ) : (
-                      logs.timeLogs.map(log => {
-                        // Find related quality log for the same date and shift
-                        const qLog = logs.qualityLogs.find(q => 
-                          new Date(q.check_date).toDateString() === new Date(log.log_date).toDateString() && 
-                          q.shift === log.shift
-                        );
-                        // Find related downtime for same date and shift
-                        const dLog = logs.downtimeLogs.filter(d => 
-                          new Date(d.downtime_date).toDateString() === new Date(log.log_date).toDateString() && 
-                          d.shift === log.shift
-                        );
-                        const totalDowntime = dLog.reduce((acc, d) => acc + calculateISODuration(d.start_time, d.end_time), 0);
-                        const duration = calculateISODuration(log.start_time, log.end_time);
-
-                        return (
-                          <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4 font-bold text-slate-900">{new Date(log.log_date).toLocaleDateString('en-GB')}</td>
-                            <td className="px-6 py-4">
-                              <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[9px] font-bold uppercase tracking-wider">
-                                {log.shift === 'SHIFT_A' ? 'Shift A' : log.shift === 'SHIFT_B' ? 'Shift B' : 'Shift C'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-slate-500 font-medium">{log.operator_name || 'N/A'}</td>
-                            <td className="px-6 py-4 text-center font-bold text-indigo-600">{duration}</td>
-                            <td className="px-6 py-4 text-center font-bold text-slate-900">{parseFloat(log.produced_qty).toFixed(0)}</td>
-                            <td className="px-6 py-4 text-center font-bold text-emerald-600">{qLog ? parseFloat(qLog.accepted_qty).toFixed(0) : 0}</td>
-                            <td className="px-6 py-4 text-center font-bold text-rose-600">{qLog ? parseFloat(qLog.rejected_qty).toFixed(0) : 0}</td>
-                            <td className="px-6 py-4 text-center font-bold text-amber-600">{qLog ? parseFloat(qLog.scrap_qty).toFixed(0) : 0}</td>
-                            <td className="px-6 py-4 text-center">
-                              <span className="font-bold text-slate-700">{totalDowntime}</span>
-                              <span className="ml-1 text-[9px] text-slate-400 font-normal">min</span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <button className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors">
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
+              <div className="p-12 flex items-center justify-center bg-slate-50/20">
+                {logs.timeLogs.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No data available</p>
+                ) : (
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date</th>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Shift</th>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Produced</th>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Operator</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {logs.timeLogs.slice(0, 10).map(log => (
+                          <tr key={log.id}>
+                            <td className="px-4 py-3 font-medium text-slate-700">{new Date(log.log_date).toLocaleDateString('en-GB')}</td>
+                            <td className="px-4 py-3 text-slate-600">{log.shift}</td>
+                            <td className="px-4 py-3 font-bold text-indigo-600">{parseFloat(log.produced_qty).toFixed(3)}</td>
+                            <td className="px-4 py-3 text-slate-600">{log.operator_name}</td>
                           </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               <div className="p-6 border-t border-slate-50 flex items-center justify-between">
@@ -2702,7 +2643,7 @@ const JobCard = () => {
                   <p className="text-slate-300 text-sm mt-1">Work Order: {viewingJobCard.wo_number}</p>
                 </div>
                 <span className="text-4xl font-bold text-indigo-300">
-                  {parseFloat(viewingJobCard.planned_qty) > 0 ? Math.round((parseFloat(viewingJobCard.accepted_qty || 0) / parseFloat(viewingJobCard.planned_qty)) * 100) : 0}%
+                  {viewingJobCard.planned_qty > 0 ? Math.round((parseFloat(viewingJobCard.accepted_qty || 0) / viewingJobCard.planned_qty) * 100) : 0}%
                 </span>
               </div>
 
@@ -2710,7 +2651,7 @@ const JobCard = () => {
               <div className="grid grid-cols-4 gap-4">
                 <div>
                   <p className="text-slate-400 text-xs uppercase tracking-wider">Planned Capacity</p>
-                  <p className="text-xl font-semibold mt-1">{parseFloat(viewingJobCard.planned_qty || 0).toFixed(2)} <span className="text-sm font-normal text-slate-300">Units</span></p>
+                  <p className="text-xl font-semibold mt-1">{viewingJobCard.planned_qty || 0}.00 <span className="text-sm font-normal text-slate-300">Units</span></p>
                 </div>
                 <div>
                   <p className="text-slate-400 text-xs uppercase tracking-wider">Accepted Output</p>
@@ -2725,7 +2666,7 @@ const JobCard = () => {
                 <div>
                   <p className="text-slate-400 text-xs uppercase tracking-wider">Production Progress</p>
                   <p className="text-xl font-semibold mt-1">
-                    {parseFloat(viewingJobCard.planned_qty) > 0 ? Math.round((parseFloat(viewingJobCard.produced_qty || 0) / parseFloat(viewingJobCard.planned_qty)) * 100) : 0}%
+                    {viewingJobCard.planned_qty > 0 ? Math.round((parseFloat(viewingJobCard.produced_qty || 0) / viewingJobCard.planned_qty) * 100) : 0}%
                   </p>
                   <p className="text-[10px] text-slate-400 mt-0.5">Available: {(parseFloat(viewingJobCard.accepted_qty || 0)).toFixed(2)}</p>
                 </div>

@@ -37,7 +37,6 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
   const [items, setItems] = useState([]);
   const [operations, setOperations] = useState([]);
   const [inventory, setInventory] = useState([]);
-  const [productionHistory, setProductionHistory] = useState([]);
 
   const isLocked = Boolean(formData.planId);
 
@@ -135,7 +134,6 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
           item_name: data.description || data.item_name || '',
           status: data.status || 'DRAFT'
         });
-        setProductionHistory(data.productionHistory || []);
         if (data.sales_order_id) {
           fetchSODetails(data.sales_order_id);
         }
@@ -676,30 +674,11 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                         </tr>
                       </thead>
                       <tbody>
-                        {productionHistory.length === 0 ? (
-                          <tr>
-                            <td colSpan="5" className="px-6 p-2 text-center text-slate-400 italic">
-                              No production logs found for this work order yet.
-                            </td>
-                          </tr>
-                        ) : (
-                          productionHistory.map((log, idx) => (
-                            <tr key={idx} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                              <td className="p-2 font-medium text-slate-700">{new Date(log.date).toLocaleDateString('en-GB')}</td>
-                              <td className="p-2">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-wider">
-                                  {log.shift === 'SHIFT_A' ? 'Shift A' : log.shift === 'SHIFT_B' ? 'Shift B' : log.shift === 'SHIFT_C' ? 'Shift C' : log.shift}
-                                </span>
-                              </td>
-                              <td className="p-2 text-slate-600">{log.operator || 'N/A'}</td>
-                              <td className="p-2 font-bold text-indigo-600">{parseFloat(log.produced || 0).toFixed(0)}</td>
-                              <td className="p-2 text-right">
-                                <span className="font-bold text-slate-700">{log.downtime || 0}</span>
-                                <span className="ml-1 text-[9px] text-slate-400">min</span>
-                              </td>
-                            </tr>
-                          ))
-                        )}
+                        <tr>
+                          <td colSpan="5" className="px-6 p-2 text-center text-slate-400  italic">
+                            No production logs found for this work order yet.
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
