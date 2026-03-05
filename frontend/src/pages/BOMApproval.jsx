@@ -57,7 +57,7 @@ const BOMApproval = () => {
       if (!response.ok) throw new Error('Failed to fetch orders');
       const data = await response.json();
       
-      setOrders(data.filter(order => order.status === 'BOM_SUBMITTED'));
+      setOrders(data.filter(order => (order.status || '').trim().toUpperCase() === 'BOM_SUBMITTED'));
     } catch (error) {
       console.error(error);
       errorToast(error.message);
@@ -222,8 +222,8 @@ const BOMApproval = () => {
                           {new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </div>
                       ) : (
-                        <span className={`px-2 py-1 rounded text-xs     ${item.status === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {item.status.replace(/_/g, ' ')}
+                        <span className={`px-2 py-1 rounded text-xs     ${(item.status || '').trim().toUpperCase() === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {(item.status || '').replace(/_/g, ' ')}
                         </span>
                       )}
                     </td>
