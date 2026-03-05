@@ -149,14 +149,14 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
       setOperations([]);
       setInventory([]);
     }
-  }, [formData.bomId, formData.planId]);
+  }, [formData.bomId, formData.planId, formData.quantity]);
 
   const fetchInitialData = async () => {
     try {
       const token = localStorage.getItem('authToken');
       const [soRes, bomRes, itemRes] = await Promise.all([
         fetch(`${API_BASE}/sales-orders`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/boms/approved`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/bom/approved`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${API_BASE}/items`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
       
@@ -171,13 +171,28 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
   const fetchBOMDetails = async (bomId) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/boms/${bomId}/materials`, {
+      const response = await fetch(`${API_BASE}/bom/items/${bomId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
-        setOperations(data.operations || []);
-        setInventory(data.materials || []);
+        // Map operations to include base_time (hrs)
+        const mappedOps = (data.operations || []).map(op => ({
+          ...op,
+          operation_name: op.operation_name || op.operationName,
+          base_time: ((parseFloat(op.cycle_time_min || 0) + parseFloat(op.setup_time_min || 0)) / 60).toFixed(2)
+        }));
+        
+        // Map materials to include required_qty
+        const mappedMats = (data.materials || []).map(m => ({
+          ...m,
+          item_code: m.item_code || m.itemCode,
+          material_name: m.material_name || m.materialName || m.description,
+          required_qty: (parseFloat(m.qty_per_pc || 0) * parseFloat(formData.quantity || 1)).toFixed(3)
+        }));
+
+        setOperations(mappedOps);
+        setInventory(mappedMats);
       }
     } catch (error) {
       console.error('Error fetching BOM details:', error);
