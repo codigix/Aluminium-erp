@@ -443,7 +443,7 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
   let department = null;
   if (status === 'BOM_APPROVED') {
     department = 'SALES';
-    status = 'QUOTATION_SENT'; // Automatically move to quotation sent status
+    // status = 'QUOTATION_SENT'; // REMOVE AUTO-TRANSITION TO QUOTATION_SENT
   } else if (status === 'BOM_SUBMITTED') {
     department = 'DESIGN_ENG'; // Stay in design for approval
   }
@@ -468,7 +468,7 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
         );
       }
       
-      // Auto-create quotation if BOM is approved
+      /* REMOVED AUTO-QUOTATION CREATION
       if (status === 'QUOTATION_SENT') {
         const [orderRows] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
         const order = orderRows[0];
@@ -492,6 +492,7 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
           );
         }
       }
+      */
     }
 
     await connection.commit();
@@ -765,7 +766,7 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE (TRIM(so.status) IN ('BOM_SUBMITTED', 'BOM_Approved', 'QUOTATION_SENT', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
+     WHERE (TRIM(UPPER(so.status)) IN ('BOM_SUBMITTED', 'BOM_APPROVED', 'QUOTATION_SENT', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
         AND so.quotation_id IS NULL`;
   
   const params = [];
@@ -792,7 +793,7 @@ const getApprovedDrawings = async (companyId = null) => {
        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
        WHERE soi.sales_order_id = ? 
-       AND (soi.item_group = 'FG' OR soi.item_type = 'FG' OR soi.item_group IS NULL OR soi.item_group = '')`,
+       AND (soi.item_group IN ('FG', 'FINISHED_GOODS') OR soi.item_type IN ('FG', 'FINISHED_GOODS') OR soi.item_group IS NULL OR soi.item_group = '' OR soi.item_group LIKE '%FINISHED%')`,
       [order.id]
     );
     order.items = items;
