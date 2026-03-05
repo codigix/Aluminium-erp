@@ -70,22 +70,34 @@ const processEmails = async () => {
         try {
             await client.mailboxOpen('INBOX');
 
-            // Search for unread messages
-            let messages = await client.search({ seen: false });
+            // Search for unread messages - fetch UIDs specifically
+            let messages = [];
+            const searchResult = await client.search({ seen: false });
             
-            // If no unread, check last 5 messages just in case
-            if (messages.length === 0) {
-                const list = await client.fetch('1:*', { uid: true }, { last: 5 });
+            // Convert sequence numbers to UIDs for consistent processing
+            if (searchResult.length > 0) {
+                const list = await client.fetch(searchResult.join(','), { uid: true });
                 for await (const msg of list) {
                     messages.push(msg.uid);
                 }
+                console.log(`[Email Receiver] Found ${messages.length} unread messages.`);
             }
             
-            console.log(`[Email Receiver] Found ${messages.length} messages to check.`);
-
+            // If no unread, check last 10 messages just in case (increased from 5)
+            if (messages.length === 0) {
+                const list = await client.fetch('1:*', { uid: true }, { last: 10 });
+                for await (const msg of list) {
+                    messages.push(msg.uid);
+                }
+                console.log(`[Email Receiver] Checking last ${messages.length} messages (fallback).`);
+            }
+            
             for (let uid of messages) {
                 try {
-                    let message = await client.fetchOne(uid, { source: true });
+                    // Always use { uid: true } when fetching by UID
+                    let message = await client.fetchOne(uid, { source: true }, { uid: true });
+                    if (!message) continue;
+                    
                     const parsed = await simpleParser(message.source);
                     const subject = parsed.subject || '';
                     let body = parsed.text || '';
@@ -97,9 +109,11 @@ const processEmails = async () => {
                     const from = parsed.from?.value[0]?.address || '';
                     const messageId = parsed.messageId;
 
+                    console.log(`[Email Receiver] Checking email: Subject: "${subject}", From: ${from}`);
+
                     // Match quotation ID or number from subject
-                    // Improved regex to handle both standard and bracketed formats
-                    const qrtMatch = subject.match(/(QRT|QT)-(\d+)/i) || subject.match(/\[((?:QRT|QT)-([^\]]+))\]/i);
+                    // Improved regex to handle various formats like QRT-0004, QRT 0004, [QRT-0004], QRT:0004
+                    const qrtMatch = subject.match(/(QRT|QT)[\s\-_:#]*(\d+)/i) || subject.match(/\[((?:QRT|QT)[\s\-_:#]*([^\]]+))\]/i);
                     
                     let quotationId = null;
                     let quotationType = 'CLIENT'; 
@@ -109,8 +123,10 @@ const processEmails = async () => {
                         
                         if (qrtMatch[0].startsWith('[')) {
                             fullMatch = qrtMatch[1];
-                            prefix = (fullMatch.split('-')[0] || '').toUpperCase();
-                            numericPart = fullMatch.split('-')[1];
+                            // Split by any non-alphanumeric char
+                            const parts = fullMatch.split(/[^a-zA-Z0-9]+/);
+                            prefix = (parts[0] || '').toUpperCase();
+                            numericPart = parts[1];
                         } else {
                             fullMatch = qrtMatch[0];
                             prefix = (qrtMatch[1] || '').toUpperCase();
@@ -119,9 +135,13 @@ const processEmails = async () => {
 
                         if (prefix === 'QT') {
                             quotationType = 'VENDOR';
+                            // Try matching by full quote number first (most reliable)
                             const [rows] = await pool.query('SELECT id FROM quotations WHERE quote_number = ?', [fullMatch]);
                             if (rows.length > 0) {
                                 quotationId = rows[0].id;
+                            } else if (numericPart && /^\d+$/.test(numericPart) && numericPart.length < 10) {
+                                // Fallback to ID ONLY if numericPart looks like a small integer (possible ID)
+                                quotationId = parseInt(numericPart);
                             }
                         } else if (prefix === 'QRT') {
                             quotationType = 'CLIENT';
@@ -132,6 +152,7 @@ const processEmails = async () => {
                     }
 
                     if (quotationId) {
+                        console.log(`[Email Receiver] Matched to Quotation ${quotationId} (${quotationType})`);
                         const cleanBody = stripReply(body);
                         
                         const [existing] = await pool.query(
@@ -140,6 +161,8 @@ const processEmails = async () => {
                         );
 
                         if (existing.length === 0) {
+                            console.log(`[Email Receiver] Found new reply for ${quotationType} Quote ${quotationId} from ${from}`);
+                            
                             let pdfPath = null;
                             if (quotationType === 'VENDOR' && parsed.attachments && parsed.attachments.length > 0) {
                                 for (let attachment of parsed.attachments) {
@@ -181,12 +204,13 @@ const processEmails = async () => {
                         }
                     }
 
-                    // Always mark as seen if we reached here
-                    await client.messageFlagsAdd(uid, ['\\Seen']);
+                    // Only mark as seen if it's actually an unread message from search
+                    // If it was picked up by fallback (already seen), we don't need to do anything
+                    if (searchResult.length > 0) {
+                        await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+                    }
                 } catch (msgError) {
                     console.error(`[Email Receiver] Error parsing message UID ${uid}:`, msgError.message);
-                    // Mark as seen anyway to avoid infinite loop on bad messages
-                    try { await client.messageFlagsAdd(uid, ['\\Seen']); } catch (e) {}
                 }
             }
         } finally {

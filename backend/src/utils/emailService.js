@@ -115,7 +115,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
             <div class="company-name">SP TECHPIONEER PVT. LTD.</div>
             <div class="company-info">
               Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026<br>
-              Email: sales@sptechpioneer.com | Mobile: +91 9876543210
+              Email: reactjscodigix@gmail.com | Mobile: +91 9876543210
             </div>
           </td>
         </tr>
@@ -505,7 +505,7 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
           <p style="font-size: 11px; color: #666; margin-top: 20px;">Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026</p>
         </div>
       `,
-      replyTo: process.env.REPLY_TO_EMAIL || 'sales@sptechpioneer.com',
+      replyTo: process.env.REPLY_TO_EMAIL || process.env.MAIL_FROM_ADDRESS || 'reactjscodigix@gmail.com',
       attachments: pdfBuffer ? [
         {
           filename: `Quotation_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
@@ -539,7 +539,7 @@ const sendReplyEmail = async (to, subject, message, replyToId) => {
           <p><strong>Sales Team</strong><br/>SP TECHPIONEER PVT. LTD.</p>
         </div>
       `,
-      replyTo: process.env.REPLY_TO_EMAIL || 'sales@sptechpioneer.com'
+      replyTo: process.env.REPLY_TO_EMAIL || process.env.MAIL_FROM_ADDRESS || 'reactjscodigix@gmail.com'
     };
 
     if (replyToId) {

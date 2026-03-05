@@ -1417,6 +1417,8 @@ const ClientQuotations = () => {
                       <div className="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
                       <div className={`text-[9px] mt-2 flex items-center gap-1.5 ${msg.sender_type === 'SYSTEM' ? 'text-blue-100' : 'text-slate-400'}`}>
                         {msg.sender_type === 'SYSTEM' ? <ShieldCheck className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                        {msg.sender_type === 'SYSTEM' ? 'Sales Team' : (msg.sender_email || 'Client')}
+                        <span className="mx-1">•</span>
                         {new Date(msg.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                         {msg.sender_type === 'SYSTEM' && msg.email_message_id && (
                           <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded ">✓ Sent via Email</span>
