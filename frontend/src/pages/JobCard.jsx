@@ -1553,10 +1553,30 @@ const JobCard = () => {
                   </FormControl>
                 </div>
                 
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between gap-6">
+                  <div className="flex-1">
+                    {logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED') && (
+                      <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                        <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-amber-800 tracking-tight uppercase tracking-widest">QC Verification Pending</p>
+                          <p className="text-[10px] text-amber-700 leading-relaxed mt-0.5 font-bold">
+                            Cannot record downtime while quality logs are pending approval. Please verify quality entries first.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <button 
                     onClick={() => addDowntimeLog(downtimeLogForm)}
-                    className="px-10 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 h-[38px]"
+                    disabled={logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')}
+                    className={`px-10 py-2.5 rounded-lg transition-all text-xs font-bold uppercase tracking-widest shadow-lg flex items-center gap-2 h-[38px] ${
+                      logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                        : 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-100'
+                    }`}
                   >
                     <Clock className="w-4 h-4" />
                     Record Downtime
@@ -1765,27 +1785,50 @@ const JobCard = () => {
             <p className="text-[11px] text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
 
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-              <div className="p-12 flex items-center justify-center bg-slate-50/20">
-                {logs.timeLogs.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">No data available</p>
+              <div className="p-0">
+                {consolidatedReport.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <p className="text-xs text-slate-400 italic">No data available</p>
+                  </div>
                 ) : (
                   <div className="w-full overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
-                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date</th>
-                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Shift</th>
-                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Produced</th>
-                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Operator</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px]">Date</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px]">Shift</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px]">Operator</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Mins</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Produced</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Accepted</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Rejected</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Scrap</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-right">Downtime</th>
+                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {logs.timeLogs.slice(0, 10).map(log => (
-                          <tr key={log.id}>
-                            <td className="px-4 py-3 font-medium text-slate-700">{new Date(log.log_date).toLocaleDateString('en-GB')}</td>
-                            <td className="px-4 py-3 text-slate-600">{log.shift}</td>
-                            <td className="px-4 py-3 font-bold text-indigo-600">{parseFloat(log.produced_qty).toFixed(3)}</td>
-                            <td className="px-4 py-3 text-slate-600">{log.operator_name}</td>
+                        {consolidatedReport.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-4 font-medium text-slate-900">{new Date(row.date).toLocaleDateString('en-GB')}</td>
+                            <td className="px-4 py-4">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-bold uppercase">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
+                            </td>
+                            <td className="px-4 py-4 text-slate-600 font-medium">{row.operator || 'N/A'}</td>
+                            <td className="px-4 py-4 text-center font-bold text-blue-600">{row.mins}</td>
+                            <td className="px-4 py-4 text-center font-bold text-slate-900">{row.produced}</td>
+                            <td className="px-4 py-4 text-center font-bold text-emerald-600">{row.accepted}</td>
+                            <td className="px-4 py-4 text-center font-bold text-rose-500">{row.rejected}</td>
+                            <td className="px-4 py-4 text-center font-bold text-slate-400">{row.scrap}</td>
+                            <td className="px-4 py-4 text-right">
+                              <span className="font-bold text-amber-600">{row.downtime}</span>
+                              <span className="text-[10px] text-slate-400 ml-1">min</span>
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <button className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all">
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2218,6 +2261,14 @@ const JobCard = () => {
   };
 
   const addDowntimeLog = async (logData) => {
+    // Check if there are any pending quality logs
+    const hasPendingQuality = logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED');
+    
+    if (hasPendingQuality) {
+      errorToast('Cannot record downtime. QC verification is pending for one or more records.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       

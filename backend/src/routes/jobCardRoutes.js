@@ -13,6 +13,7 @@ router.patch('/:id/progress', authorize(['PROD_MANAGE']), jobCardController.upda
 
 // Detailed logs
 router.get('/:id/logs', authorize(['PROD_VIEW']), jobCardController.getJobCardLogs);
+router.get('/work-order/:workOrderId/logs', authorize(['PROD_VIEW']), jobCardController.getWorkOrderLogs);
 
 router.post('/:id/time-logs', authorize(['PROD_MANAGE']), jobCardController.addTimeLog);
 router.put('/time-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.updateTimeLog);

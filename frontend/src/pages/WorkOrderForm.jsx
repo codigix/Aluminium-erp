@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   FileText, Clock, CheckCircle2, X, Play, Package, 
   Settings, Activity, BarChart3, List, History, 
@@ -37,6 +37,96 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
   const [items, setItems] = useState([]);
   const [operations, setOperations] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [logs, setLogs] = useState({ timeLogs: [], qualityLogs: [], downtimeLogs: [] });
+
+  const consolidatedReport = useMemo(() => {
+    const report = {};
+    
+    // Process Time Logs (Produced Qty & Operators)
+    logs.timeLogs.forEach(log => {
+      const date = new Date(log.log_date).toLocaleDateString('en-GB');
+      const shift = log.shift || 'N/A';
+      const key = `${date}-${shift}`;
+      
+      if (!report[key]) {
+        report[key] = { date, shift, produced: 0, accepted: 0, rejected: 0, scrap: 0, downtime: 0, operators: new Set(), mins: 0 };
+      }
+      
+      report[key].produced += parseFloat(log.produced_qty || 0);
+      if (log.operator_name) report[key].operators.add(log.operator_name);
+      
+      if (log.start_time && log.end_time) {
+        const start = new Date(log.start_time);
+        const end = new Date(log.end_time);
+        report[key].mins += Math.max(0, Math.floor((end - start) / (1000 * 60)));
+      }
+    });
+
+    // Process Quality Logs (Accepted/Rejected/Scrap)
+    logs.qualityLogs.forEach(log => {
+      const date = new Date(log.check_date).toLocaleDateString('en-GB');
+      const shift = log.shift || 'N/A';
+      const key = `${date}-${shift}`;
+      
+      if (!report[key]) {
+        report[key] = { date, shift, produced: 0, accepted: 0, rejected: 0, scrap: 0, downtime: 0, operators: new Set(), mins: 0 };
+      }
+      
+      report[key].accepted += parseFloat(log.accepted_qty || 0);
+      report[key].rejected += parseFloat(log.rejected_qty || 0);
+      report[key].scrap += parseFloat(log.scrap_qty || 0);
+    });
+
+    // Process Downtime Logs
+    logs.downtimeLogs.forEach(log => {
+      const date = new Date(log.downtime_date).toLocaleDateString('en-GB');
+      const shift = log.shift || 'N/A';
+      const key = `${date}-${shift}`;
+      
+      if (!report[key]) {
+        report[key] = { date, shift, produced: 0, accepted: 0, rejected: 0, scrap: 0, downtime: 0, operators: new Set(), mins: 0 };
+      }
+      
+      if (log.start_time && log.end_time) {
+        const start = new Date(log.start_time);
+        const end = new Date(log.end_time);
+        report[key].downtime += Math.max(0, Math.floor((end - start) / (1000 * 60)));
+      }
+    });
+
+    return Object.values(report).sort((a, b) => {
+      const dateA = new Date(a.date.split('/').reverse().join('-'));
+      const dateB = new Date(b.date.split('/').reverse().join('-'));
+      if (dateA - dateB !== 0) return dateB - dateA;
+      return a.shift.localeCompare(b.shift);
+    });
+  }, [logs]);
+
+  const stats = useMemo(() => {
+    const totalProduced = logs.timeLogs.reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
+    const totalAccepted = logs.qualityLogs.reduce((sum, log) => sum + parseFloat(log.accepted_qty || 0), 0);
+    const totalMins = logs.timeLogs.reduce((sum, log) => {
+      if (log.start_time && log.end_time) {
+        const start = new Date(log.start_time);
+        const end = new Date(log.end_time);
+        return sum + Math.max(0, Math.floor((end - start) / (1000 * 60)));
+      }
+      return sum;
+    }, 0);
+
+    const completionRate = formData.quantity > 0 ? (totalAccepted / formData.quantity) * 100 : 0;
+    const yieldRate = totalProduced > 0 ? (totalAccepted / totalProduced) * 100 : 0;
+    const actualHours = totalMins / 60;
+
+    return {
+      totalProduced,
+      totalAccepted,
+      totalMins,
+      completionRate: Math.min(100, completionRate),
+      yieldRate: Math.min(100, yieldRate),
+      actualHours
+    };
+  }, [logs, formData.quantity]);
 
   const isLocked = Boolean(formData.planId);
 
@@ -134,6 +224,15 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
           item_name: data.description || data.item_name || '',
           status: data.status || 'DRAFT'
         });
+        
+        // Fetch logs
+        const logRes = await fetch(`${API_BASE}/job-cards/work-order/${id}/logs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (logRes.ok) {
+          setLogs(await logRes.json());
+        }
+
         if (data.sales_order_id) {
           fetchSODetails(data.sales_order_id);
         }
@@ -344,7 +443,7 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                 <span className="text-[10px]   tracking-widest text-slate-400">Execution Pulse</span>
               </div>
               <div className="h-3 w-px bg-slate-700 mx-1" />
-              <span className="text-[10px]  text-indigo-400">0%</span>
+              <span className="text-[10px]  text-indigo-400">{stats.completionRate.toFixed(1)}%</span>
               <Activity className="w-3 h-3 text-indigo-400" />
             </div>
           </div>
@@ -666,19 +765,47 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="p-2   text-slate-400  tracking-widest">Date</th>
-                          <th className="p-2   text-slate-400  tracking-widest">Shift</th>
-                          <th className="p-2   text-slate-400  tracking-widest">Operator</th>
-                          <th className="p-2   text-slate-400  tracking-widest">Produced</th>
-                          <th className="p-2   text-slate-400  tracking-widest text-right">Downtime</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">DATE</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">SHIFT</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">OPERATOR</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">MINS</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">PRODUCED</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">ACCEPTED</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">REJECTED</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">SCRAP</th>
+                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">DOWNTIME</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr>
-                          <td colSpan="5" className="px-6 p-2 text-center text-slate-400  italic">
-                            No production logs found for this work order yet.
-                          </td>
-                        </tr>
+                        {consolidatedReport.length > 0 ? (
+                          consolidatedReport.map((row, idx) => (
+                            <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                              <td className="p-3 font-medium text-slate-700">{row.date}</td>
+                              <td className="p-3">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-medium tracking-wider">
+                                  {row.shift}
+                                </span>
+                              </td>
+                              <td className="p-3 text-slate-500">
+                                {Array.from(row.operators).join(', ') || 'N/A'}
+                              </td>
+                              <td className="p-3 font-medium text-indigo-600">{row.mins}</td>
+                              <td className="p-3 font-bold text-slate-900">{row.produced.toFixed(3)}</td>
+                              <td className="p-3 font-bold text-emerald-600">{row.accepted.toFixed(3)}</td>
+                              <td className="p-3 font-bold text-rose-600">{row.rejected.toFixed(3)}</td>
+                              <td className="p-3 font-bold text-amber-600">{row.scrap.toFixed(3)}</td>
+                              <td className="p-3 font-medium text-amber-600">
+                                {row.downtime > 0 ? `${row.downtime} min` : '--'}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="9" className="px-6 py-8 text-center text-slate-400 italic">
+                              No production logs found for this work order yet.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -712,11 +839,11 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 bg-indigo-500 rounded  animate-pulse" />
                   <span className="text-[8px]  text-indigo-400  tracking-widest">Execution Pulse</span>
-                  <span className="text-[8px]  text-slate-500 ml-2">0%</span>
+                  <span className="text-[8px]  text-slate-500 ml-2">{stats.completionRate.toFixed(1)}%</span>
                 </div>
               </div>
               <div className="mt-8 flex items-baseline gap-2">
-                <span className="text-4xl  text-white tracking-tighter">0.0h</span>
+                <span className="text-4xl  text-white tracking-tighter">{stats.actualHours.toFixed(1)}h</span>
               </div>
               <p className="text-[9px]  text-slate-500  tracking-widest mt-2">
                 Cumulative machine hours logged against this order.
@@ -734,9 +861,9 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                   <p className="text-[9px]  text-slate-400  tracking-widest mb-1">Completion Rate</p>
                   <div className="flex items-center gap-2 ">
                     <div className="w-12 h-1 bg-slate-100 rounded  overflow-hidden">
-                      <div className="h-full bg-indigo-500 w-[0%]" />
+                      <div className="h-full bg-indigo-500" style={{ width: `${stats.completionRate}%` }} />
                     </div>
-                    <span className="text-lg  text-slate-900">0%</span>
+                    <span className="text-lg  text-slate-900">{stats.completionRate.toFixed(0)}%</span>
                   </div>
                 </div>
                 <div className="flex items-end gap-1">
@@ -748,11 +875,11 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
               <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
                 <div>
                   <p className="text-[8px]  text-slate-400  tracking-widest mb-1">Yield</p>
-                  <p className="text-xs  text-slate-800">0%</p>
+                  <p className="text-xs  text-slate-800">{stats.yieldRate.toFixed(1)}%</p>
                 </div>
                 <div>
                   <p className="text-[8px]  text-slate-400  tracking-widest mb-1">Actual Hrs</p>
-                  <p className="text-xs  text-slate-800">0.0h</p>
+                  <p className="text-xs  text-slate-800">{stats.actualHours.toFixed(1)}h</p>
                 </div>
               </div>
             </Card>

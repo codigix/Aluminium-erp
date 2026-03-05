@@ -132,6 +132,16 @@ const deleteDowntimeLog = async (req, res) => {
   }
 };
 
+const getWorkOrderLogs = async (req, res) => {
+  try {
+    const { workOrderId } = req.params;
+    const logs = await jobCardService.getWorkOrderLogs(workOrderId);
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -139,6 +149,7 @@ module.exports = {
   updateJobCard,
   deleteJobCard,
   getJobCardLogs,
+  getWorkOrderLogs,
   addTimeLog,
   updateTimeLog,
   deleteTimeLog,

@@ -565,6 +565,39 @@ const deleteDowntimeLog = async (logId) => {
   await pool.execute('DELETE FROM job_card_downtime_logs WHERE id = ?', [logId]);
 };
 
+const getWorkOrderLogs = async (workOrderId) => {
+  const [timeLogs] = await pool.query(
+    `SELECT tl.*, u.username as operator_name, w.workstation_name, jc.job_card_no, o.operation_name
+     FROM job_card_time_logs tl
+     JOIN job_cards jc ON tl.job_card_id = jc.id
+     LEFT JOIN users u ON tl.operator_id = u.id
+     LEFT JOIN workstations w ON tl.workstation_id = w.id
+     LEFT JOIN operations o ON jc.operation_id = o.id
+     WHERE jc.work_order_id = ? ORDER BY tl.log_date DESC, tl.shift ASC`,
+    [workOrderId]
+  );
+
+  const [qualityLogs] = await pool.query(
+    `SELECT ql.*, jc.job_card_no, o.operation_name
+     FROM job_card_quality_logs ql
+     JOIN job_cards jc ON ql.job_card_id = jc.id
+     LEFT JOIN operations o ON jc.operation_id = o.id
+     WHERE jc.work_order_id = ? ORDER BY ql.check_date DESC, ql.shift ASC`,
+    [workOrderId]
+  );
+
+  const [downtimeLogs] = await pool.query(
+    `SELECT dl.*, jc.job_card_no, o.operation_name
+     FROM job_card_downtime_logs dl
+     JOIN job_cards jc ON dl.job_card_id = jc.id
+     LEFT JOIN operations o ON jc.operation_id = o.id
+     WHERE jc.work_order_id = ? ORDER BY dl.downtime_date DESC, dl.shift ASC`,
+    [workOrderId]
+  );
+
+  return { timeLogs, qualityLogs, downtimeLogs };
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -582,5 +615,6 @@ module.exports = {
   deleteQualityLog,
   getDowntimeLogs,
   addDowntimeLog,
-  deleteDowntimeLog
+  deleteDowntimeLog,
+  getWorkOrderLogs
 };
