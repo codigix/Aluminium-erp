@@ -858,20 +858,19 @@ const generatePurchaseOrderPDF = async (poId) => {
       <table>
         <thead>
           <tr>
-            <th style="width: 20%">Drawing No</th>
-            <th style="width: 25%">Material Name</th>
-            <th style="width: 15%">Type</th>
-            <th style="width: 10%">Qty</th>
-            <th style="width: 15%">Rate (₹)</th>
-            <th style="width: 15%">Amount</th>
+            <th style="width: 45%">Item Details</th>
+            <th style="width: 15%">Design Qty</th>
+            <th style="width: 20%">Rate (₹)</th>
+            <th style="width: 20%">Amount</th>
           </tr>
         </thead>
         <tbody>
           {{#items}}
           <tr>
-            <td>{{drawing_no}}</td>
-            <td>{{material_name}}</td>
-            <td>{{material_type}}</td>
+            <td>
+              <div style="font-weight: bold; font-size: 13px;">{{material_name}}</div>
+              <div style="font-size: 10px; color: #64748b;">{{drawing_no}} {{#material_type}}({{material_type}}){{/material_type}}</div>
+            </td>
             <td>{{quantity}} {{unit}}</td>
             <td>{{unit_rate}}</td>
             <td>{{amount}}</td>
@@ -880,19 +879,19 @@ const generatePurchaseOrderPDF = async (poId) => {
         </tbody>
         <tfoot style="background: #f8fafc; font-weight: bold;">
           <tr>
-            <td colspan="5" style="text-align: right; padding: 8px 8px;">Subtotal:</td>
+            <td colspan="3" style="text-align: right; padding: 8px 8px;">Subtotal:</td>
             <td style="padding: 8px 8px;">₹{{subtotal}}</td>
           </tr>
           <tr style="color: #64748b; font-size: 11px;">
-            <td colspan="5" style="text-align: right; padding: 4px 8px;">CGST (9%):</td>
+            <td colspan="3" style="text-align: right; padding: 4px 8px;">CGST (9%):</td>
             <td style="padding: 4px 8px;">₹{{cgst_total}}</td>
           </tr>
           <tr style="color: #64748b; font-size: 11px;">
-            <td colspan="5" style="text-align: right; padding: 4px 8px;">SGST (9%):</td>
+            <td colspan="3" style="text-align: right; padding: 4px 8px;">SGST (9%):</td>
             <td style="padding: 4px 8px;">₹{{sgst_total}}</td>
           </tr>
           <tr class="total-row">
-            <td colspan="5" style="text-align: right; padding: 12px 8px; font-size: 14px;">Grand Total:</td>
+            <td colspan="3" style="text-align: right; padding: 12px 8px; font-size: 14px;">Grand Total:</td>
             <td style="padding: 12px 8px; font-size: 14px; color: #2563eb;">₹{{total_amount}}</td>
           </tr>
         </tfoot>
@@ -980,31 +979,26 @@ const sendPurchaseOrderEmail = async (poId, emailData) => {
   try {
     let attachments = [];
     if (attachPDF) {
+      // Always generate and attach the latest PO PDF
+      const pdfBuffer = await generatePurchaseOrderPDF(poId);
+      attachments.push({
+        filename: `PurchaseOrder-${po.po_number}.pdf`,
+        content: pdfBuffer
+      });
+
+      // If there's an uploaded invoice, attach it as well
       if (po.invoice_url) {
-        // Use the existing invoice as the receipt/attachment
         const path = require('path');
         const fs = require('fs');
         const absolutePath = path.resolve(process.cwd(), po.invoice_url);
         
         if (fs.existsSync(absolutePath)) {
+          const extension = path.extname(po.invoice_url) || '.pdf';
           attachments.push({
-            filename: `Receipt-${po.po_number}.pdf`,
+            filename: `VendorInvoice-${po.po_number}${extension}`,
             path: absolutePath
           });
-        } else {
-          // Fallback to generating PO PDF if invoice file doesn't exist
-          const pdfBuffer = await generatePurchaseOrderPDF(poId);
-          attachments.push({
-            filename: `Receipt-${po.po_number}.pdf`,
-            content: pdfBuffer
-          });
         }
-      } else {
-        const pdfBuffer = await generatePurchaseOrderPDF(poId);
-        attachments.push({
-          filename: `Receipt-${po.po_number}.pdf`,
-          content: pdfBuffer
-        });
       }
     }
 

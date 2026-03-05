@@ -36,15 +36,21 @@ const generatePoPdf = async (data) => {
       isReceipt: type === 'receipt',
       isPO: type === 'po',
       isGRN: type === 'grn',
-      items: items.map((item, idx) => ({
-        sr: idx + 1,
-        itemCode: item.item_code || item.itemCode || '—',
-        description: item.description || '—',
-        qty: parseFloat(item.quantity || item.po_qty || 0).toFixed(3),
-        receivedQty: parseFloat(item.received_quantity || item.accepted_qty || 0).toFixed(3),
-        rate: formatCurrency(item.unit_rate || item.rate || 0),
-        amount: formatCurrency(item.amount || (parseFloat(item.quantity || item.po_qty || 0) * parseFloat(item.unit_rate || item.rate || 0)))
-      }))
+      items: items.map((item, idx) => {
+        const dQty = parseFloat(item.design_qty);
+        const qty = parseFloat(item.quantity || item.po_qty || 0);
+        const displayQty = (dQty && dQty !== 0) ? dQty : qty;
+
+        return {
+          sr: idx + 1,
+          itemCode: item.item_code || item.itemCode || '—',
+          description: item.description || '—',
+          qty: displayQty.toFixed(3),
+          receivedQty: parseFloat(item.received_quantity || item.accepted_qty || 0).toFixed(3),
+          rate: formatCurrency(item.unit_rate || item.rate || 0),
+          amount: formatCurrency(item.amount || (displayQty * parseFloat(item.unit_rate || item.rate || 0)))
+        };
+      })
     };
 
     if (type === 'grn' && grn) {
