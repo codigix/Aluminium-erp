@@ -106,14 +106,25 @@ const processEmails = async () => {
                         body = parsed.html.replace(/<[^>]*>?/gm, ''); 
                     }
 
-                    const from = parsed.from?.value[0]?.address || '';
+                    const from = (parsed.from?.value[0]?.address || '').toLowerCase();
                     const messageId = parsed.messageId;
+                    const systemEmail = (process.env.MAIL_FROM_ADDRESS || 'reactjscodigix@gmail.com').toLowerCase();
 
                     console.log(`[Email Receiver] Checking email: Subject: "${subject}", From: ${from}`);
 
+                    // Skip emails sent BY the system
+                    if (from === systemEmail) {
+                        console.log(`[Email Receiver] Skipping system-sent email.`);
+                        if (searchResult.length > 0) {
+                            await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+                        }
+                        continue;
+                    }
+
                     // Match quotation ID or number from subject
-                    // Improved regex to handle various formats like QRT-0004, QRT 0004, [QRT-0004], QRT:0004
-                    const qrtMatch = subject.match(/(QRT|QT)[\s\-_:#]*(\d+)/i) || subject.match(/\[((?:QRT|QT)[\s\-_:#]*([^\]]+))\]/i);
+                    // Enhanced regex to handle various formats and ensure it's not just a random number
+                    // Matches QRT-0005, [QRT-0005], Quotation Request QRT-0005, etc.
+                    const qrtMatch = subject.match(/(?:QRT|QT)[\s\-_:#]*(\d+)/i) || subject.match(/\[((?:QRT|QT)[\s\-_:#]*([^\]]+))\]/i);
                     
                     let quotationId = null;
                     let quotationType = 'CLIENT'; 

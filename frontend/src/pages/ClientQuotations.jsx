@@ -59,6 +59,7 @@ const ClientQuotations = () => {
   const [newMessage, setNewMessage] = useState('');
   const [unreadCounts, setUnreadCounts] = useState({});
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const chatEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -117,22 +118,25 @@ const ClientQuotations = () => {
   };
 
   const handleRefreshMessages = async () => {
-    if (!selectedQuoteForComm) return;
+    if (!selectedQuoteForComm || syncing) return;
     
     try {
+      setSyncing(true);
       const token = localStorage.getItem('authToken');
       // Trigger sync
       await fetch(`${API_BASE}/quotations/communications/sync`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      // Wait 1 second for sync to start processing
+      // Wait 3 seconds for sync to start processing
       setTimeout(() => {
         fetchMessages(selectedQuoteForComm.id);
-      }, 1000);
+        setSyncing(false);
+      }, 3000);
     } catch (error) {
       console.error('Error syncing messages:', error);
       fetchMessages(selectedQuoteForComm.id);
+      setSyncing(false);
     }
   };
 
@@ -1383,10 +1387,11 @@ const ClientQuotations = () => {
               <div className="flex items-center gap-2 ">
                 <button 
                   onClick={handleRefreshMessages}
-                  className="p-1.5 hover:bg-slate-200 rounded  transition-colors text-slate-500 hover:text-blue-600"
+                  disabled={syncing}
+                  className={`p-1.5 hover:bg-slate-200 rounded transition-colors text-slate-500 hover:text-blue-600 ${syncing ? 'opacity-50 cursor-not-allowed' : ''}`}
                   title="Refresh messages"
                 >
-                  <RotateCw className="w-4 h-4" />
+                  <RotateCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
                 </button>
                 <button 
                   onClick={() => setShowCommDrawer(false)}

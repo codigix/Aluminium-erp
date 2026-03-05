@@ -30,6 +30,8 @@ const getCommunications = async (req, res, next) => {
       idsToFetch = batchIds.map(row => row.id);
     }
 
+    console.log(`[Communications] Fetching for IDs: ${idsToFetch.join(', ')} (Type: ${type})`);
+
     const [rows] = await pool.query(
       `SELECT * FROM quotation_communications 
        WHERE quotation_id IN (${idsToFetch.map(() => '?').join(',')}) AND quotation_type = ? 

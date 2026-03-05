@@ -2105,7 +2105,7 @@ const CustomerDrawing = () => {
                     <p className="text-xs text-emerald-700 mt-0.5">Ready to be sent to the Design Engineering department</p>
                   </div>
                 </div>
-                <button
+                {/* <button
                   type="button"
                   onClick={() => sendBulkUploadedToDesign(lastUploadedDrawings.clientName, lastUploadedDrawings.count)}
                   disabled={loading}
@@ -2113,7 +2113,7 @@ const CustomerDrawing = () => {
                 >
                   <Send className="w-4 h-4" />
                   Send to Design Now
-                </button>
+                </button> */}
               </div>
             </div>
           )}
