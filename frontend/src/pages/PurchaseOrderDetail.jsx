@@ -125,9 +125,25 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
   });
 
-  const subtotal = filteredItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0) || 0;
-  const totalTax = filteredItems.reduce((sum, item) => sum + (parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)), 0) || 0;
-  const grandTotal = po.total_amount || (subtotal + totalTax);
+  const subtotal = filteredItems.reduce((sum, item) => {
+    const dQty = parseFloat(item.design_qty);
+    const qty = parseFloat(item.quantity);
+    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+    const rate = parseFloat(item.unit_rate) || 0;
+    return sum + (effectiveQty * rate);
+  }, 0) || 0;
+
+  const totalTax = filteredItems.reduce((sum, item) => {
+    const dQty = parseFloat(item.design_qty);
+    const qty = parseFloat(item.quantity);
+    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+    const rate = parseFloat(item.unit_rate) || 0;
+    const itemAmount = effectiveQty * rate;
+    const cgst = parseFloat(item.cgst_amount) || (itemAmount * 0.09);
+    const sgst = parseFloat(item.sgst_amount) || (itemAmount * 0.09);
+    return sum + cgst + sgst;
+  }, 0) || 0;
+  const grandTotal = subtotal + totalTax;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -227,7 +243,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                 <DollarSign className="w-24 h-24" />
               </div>
               <p className="text-[10px] text-slate-400   tracking-widest mb-4">Total Value</p>
-              <h3 className="text-2xl font-black text-slate-800 mb-2">{formatCurrency(po.total_amount, po.currency)}</h3>
+              <h3 className="text-2xl font-black text-slate-800 mb-2">{formatCurrency(grandTotal, po.currency)}</h3>
               <div className="flex items-center gap-1.5 text-emerald-500text-xs    tracking-widest">
                 <Check className="w-3 h-3" />
                 INCL. ALL TAXES
@@ -380,7 +396,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                                 const qty = parseFloat(item.quantity);
                                 const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
                                 const rate = parseFloat(item.unit_rate) || 0;
-                                return formatCurrency(parseFloat(item.amount) || (effectiveQty * rate), po.currency);
+                                return formatCurrency(effectiveQty * rate, po.currency);
                               })()}
                             </span>
                           </div>
@@ -396,12 +412,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
               <div className="flex justify-end gap-12 text-xs">
                 <span className="text-slate-400   tracking-widest">Subtotal</span>
                 <span className="text-slate-600 font-black w-32 text-right">
-                  {formatCurrency(filteredItems.reduce((sum, i) => {
-                    const dQty = parseFloat(i.design_qty);
-                    const qty = parseFloat(i.quantity);
-                    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
-                    return sum + (parseFloat(i.amount) || (effectiveQty * (parseFloat(i.unit_rate) || 0)));
-                  }, 0), po.currency)}
+                  {formatCurrency(subtotal, po.currency)}
                 </span>
               </div>
               <div className="flex justify-end gap-12 text-xs">
@@ -411,7 +422,8 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     const dQty = parseFloat(i.design_qty);
                     const qty = parseFloat(i.quantity);
                     const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
-                    const tax = parseFloat(i.cgst_amount) || (effectiveQty * (parseFloat(i.unit_rate) || 0) * 0.09);
+                    const rate = parseFloat(i.unit_rate) || 0;
+                    const tax = parseFloat(i.cgst_amount) || (effectiveQty * rate * 0.09);
                     return sum + tax;
                   }, 0), po.currency)}
                 </span>
@@ -423,7 +435,8 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     const dQty = parseFloat(i.design_qty);
                     const qty = parseFloat(i.quantity);
                     const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
-                    const tax = parseFloat(i.sgst_amount) || (effectiveQty * (parseFloat(i.unit_rate) || 0) * 0.09);
+                    const rate = parseFloat(i.unit_rate) || 0;
+                    const tax = parseFloat(i.sgst_amount) || (effectiveQty * rate * 0.09);
                     return sum + tax;
                   }, 0), po.currency)}
                 </span>
@@ -432,13 +445,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
             <div className="bg-blue-600 px-8 py-4 flex justify-between items-center text-white">
               <span className="text-xs font-black  tracking-[0.2em]">Grand Total</span>
               <span className="text-xl font-black">
-                {formatCurrency(parseFloat(po.total_amount) || filteredItems.reduce((sum, i) => {
-                    const dQty = parseFloat(i.design_qty);
-                    const qty = parseFloat(i.quantity);
-                    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
-                    const total = parseFloat(i.total_amount) || (effectiveQty * (parseFloat(i.unit_rate) || 0) * 1.18);
-                    return sum + total;
-                }, 0), po.currency)}
+                {formatCurrency(grandTotal, po.currency)}
               </span>
             </div>
           </div>

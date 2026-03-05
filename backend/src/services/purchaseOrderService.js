@@ -439,12 +439,6 @@ const getPurchaseOrders = async (filters = {}) => {
     const [items] = await pool.query(
       `SELECT 
         poi.*,
-        COALESCE(
-          (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = poi.item_code OR soi.drawing_no = poi.item_code) AND soi.bom_cost > 0),
-          (SELECT MAX(rate) FROM sales_order_item_materials som WHERE (som.item_code = poi.item_code OR som.drawing_no = poi.item_code) AND som.rate > 0),
-          (SELECT MAX(rate) FROM sales_order_item_components soc WHERE (soc.component_code = poi.item_code OR soc.drawing_no = poi.item_code) AND soc.rate > 0),
-          poi.unit_rate
-        ) as unit_rate,
         (SELECT status FROM sales_order_items soi 
          WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
          AND soi.sales_order_id = po.sales_order_id 
@@ -495,12 +489,7 @@ const getPurchaseOrderById = async (poId) => {
       poi.design_qty,
       poi.quantity,
       poi.unit,
-      COALESCE(
-        (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = poi.item_code OR soi.drawing_no = poi.item_code) AND soi.bom_cost > 0),
-        (SELECT MAX(rate) FROM sales_order_item_materials som WHERE (som.item_code = poi.item_code OR som.drawing_no = poi.item_code) AND som.rate > 0),
-        (SELECT MAX(rate) FROM sales_order_item_components soc WHERE (soc.component_code = poi.item_code OR soc.drawing_no = poi.item_code) AND soc.rate > 0),
-        poi.unit_rate
-      ) as unit_rate,
+      poi.unit_rate,
       poi.amount,
       poi.cgst_percent,
       poi.cgst_amount,
