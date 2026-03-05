@@ -34,6 +34,7 @@ const JobCard = () => {
   const [isOutwardModalOpen, setIsOutwardModalOpen] = useState(false);
   const [isInwardModalOpen, setIsInwardModalOpen] = useState(false);
   const [selectedJCOutward, setSelectedJCOutward] = useState(null);
+  const [logs, setLogs] = useState({ timeLogs: [], qualityLogs: [], downtimeLogs: [] });
 
   const [inwardFormData, setInwardFormData] = useState({
     receivedQty: 0,
@@ -87,6 +88,108 @@ const JobCard = () => {
     const totalStdTime = stdTimeInMinutes * parseFloat(jc.accepted_qty || 0);
     return Math.round((totalStdTime / actualTimeMinutes) * 100);
   };
+
+  const calculateISODuration = (startISO, endISO) => {
+    if (!startISO || !endISO) return 0;
+    const start = new Date(startISO);
+    const end = new Date(endISO);
+    let diff = Math.round((end - start) / (1000 * 60));
+    if (diff <= 0) diff += 24 * 60; 
+    return diff;
+  };
+
+  const calculateTotalMins = (start, startAMPM, end, endAMPM) => {
+    try {
+      if (!start || !end) return 0;
+      
+      const parseTime = (timeStr, ampm) => {
+        let [hours, minutes] = timeStr.split(':').map(Number);
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+        return hours * 60 + minutes;
+      };
+
+      const startMins = parseTime(start, startAMPM);
+      const endMins = parseTime(end, endAMPM);
+      
+      let diff = endMins - startMins;
+      if (diff <= 0) diff += 24 * 60; // Handle overnight shift or same time
+      return diff;
+    } catch (e) {
+      return 0;
+    }
+  };
+
+  const consolidatedReport = useMemo(() => {
+    if (!logs) return [];
+    
+    const reportMap = {};
+
+    // Process Time Logs
+    (logs.timeLogs || []).forEach(log => {
+      const key = `${log.log_date}_${log.shift}`;
+      if (!reportMap[key]) {
+        reportMap[key] = {
+          date: log.log_date,
+          shift: log.shift,
+          operator: log.operator_name,
+          mins: 0,
+          produced: 0,
+          accepted: 0,
+          rejected: 0,
+          scrap: 0,
+          downtime: 0,
+          id: log.id
+        };
+      }
+      reportMap[key].produced += parseFloat(log.produced_qty || 0);
+      reportMap[key].mins += calculateISODuration(log.start_time, log.end_time);
+    });
+
+    // Process Quality Logs
+    (logs.qualityLogs || []).forEach(log => {
+      const key = `${log.check_date}_${log.shift}`;
+      if (!reportMap[key]) {
+        reportMap[key] = {
+          date: log.check_date,
+          shift: log.shift,
+          operator: 'N/A',
+          mins: 0,
+          produced: 0,
+          accepted: 0,
+          rejected: 0,
+          scrap: 0,
+          downtime: 0,
+          id: `q-${log.id}`
+        };
+      }
+      reportMap[key].accepted += parseFloat(log.accepted_qty || 0);
+      reportMap[key].rejected += parseFloat(log.rejected_qty || 0);
+      reportMap[key].scrap += parseFloat(log.scrap_qty || 0);
+    });
+
+    // Process Downtime Logs
+    (logs.downtimeLogs || []).forEach(log => {
+      const key = `${log.downtime_date}_${log.shift}`;
+      if (!reportMap[key]) {
+        reportMap[key] = {
+          date: log.downtime_date,
+          shift: log.shift,
+          operator: 'N/A',
+          mins: 0,
+          produced: 0,
+          accepted: 0,
+          rejected: 0,
+          scrap: 0,
+          downtime: 0,
+          id: `d-${log.id}`
+        };
+      }
+      reportMap[key].downtime += calculateISODuration(log.start_time, log.end_time);
+    });
+
+    return Object.values(reportMap).sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [logs]);
 
   useEffect(() => {
     fetchJobCards();
@@ -402,7 +505,6 @@ const JobCard = () => {
   const [activeTab, setActiveTab] = useState('time');
   const [viewTab, setViewTab] = useState('timeline');
   const [viewingJobCard, setViewingJobCard] = useState(null);
-  const [logs, setLogs] = useState({ timeLogs: [], qualityLogs: [], downtimeLogs: [] });
   const [progressData, setProgressData] = useState({
     producedQty: 0,
     acceptedQty: 0,
@@ -450,37 +552,6 @@ const JobCard = () => {
     status: 'PENDING',
     day: 1
   });
-
-  const calculateISODuration = (startISO, endISO) => {
-    if (!startISO || !endISO) return 0;
-    const start = new Date(startISO);
-    const end = new Date(endISO);
-    let diff = Math.round((end - start) / (1000 * 60));
-    if (diff <= 0) diff += 24 * 60; 
-    return diff;
-  };
-
-  const calculateTotalMins = (start, startAMPM, end, endAMPM) => {
-    try {
-      if (!start || !end) return 0;
-      
-      const parseTime = (timeStr, ampm) => {
-        let [hours, minutes] = timeStr.split(':').map(Number);
-        if (ampm === 'PM' && hours < 12) hours += 12;
-        if (ampm === 'AM' && hours === 12) hours = 0;
-        return hours * 60 + minutes;
-      };
-
-      const startMins = parseTime(start, startAMPM);
-      const endMins = parseTime(end, endAMPM);
-      
-      let diff = endMins - startMins;
-      if (diff <= 0) diff += 24 * 60; // Handle overnight shift or same time
-      return diff;
-    } catch (e) {
-      return 0;
-    }
-  };
 
   const [downtimeLogForm, setDowntimeLogForm] = useState({
     downtimeDate: new Date().toISOString().slice(0, 10),
@@ -1007,6 +1078,7 @@ const JobCard = () => {
                                   >
                                     <option value="SHIFT_A">A</option>
                                     <option value="SHIFT_B">B</option>
+                                    <option value="SHIFT_C">C</option>
                                   </select>
                                 </td>
                                 <td className="px-4 py-3">
@@ -1143,6 +1215,8 @@ const JobCard = () => {
                     <div className="flex items-center gap-1">
                       <select value={qualityLogForm.shift} onChange={e => setQualityLogForm({...qualityLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 appearance-none">
                         <option value="SHIFT_A">A</option>
+                        <option value="SHIFT_B">B</option>
+                        <option value="SHIFT_C">C</option>
                       </select>
                       <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
                         <ChevronRight className="w-3 h-3" />
@@ -1251,6 +1325,7 @@ const JobCard = () => {
                                   >
                                     <option value="SHIFT_A">A</option>
                                     <option value="SHIFT_B">B</option>
+                                    <option value="SHIFT_C">C</option>
                                   </select>
                                 </td>
                                 <td className="px-4 py-3" colSpan="2">
@@ -1416,6 +1491,8 @@ const JobCard = () => {
                     <div className="flex items-center gap-1">
                       <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({...downtimeLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
                         <option value="SHIFT_A">A</option>
+                        <option value="SHIFT_B">B</option>
+                        <option value="SHIFT_C">C</option>
                       </select>
                       <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
                         <ChevronRight className="w-3 h-3" />
@@ -1570,19 +1647,21 @@ const JobCard = () => {
                 <button 
                   onClick={handleReadyForDispatch}
                   disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
-                  className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+                  className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg transition-all ${
                     logs.qualityLogs.some(log => log.status !== 'APPROVED')
                       ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
                       : 'bg-white border-emerald-100 text-emerald-600 shadow-sm hover:bg-emerald-50'
                   }`}
                   title={logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'Approve all quality records to proceed' : 'Mark Ready'}
                 >
-                  <CheckCircle className={`w-4 h-4 ${logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'text-slate-200' : 'text-emerald-500'}`} />
-                  <span className="text-xs font-bold uppercase tracking-widest">Ready for Dispatch</span>
+                  <Zap className={`w-3.5 h-3.5 ${logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'text-slate-200' : 'text-emerald-500 animate-pulse'}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Ready for Dispatch</span>
                 </button>
                 <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Transferred so far:</p>
-                  <p className="text-sm font-bold text-slate-700">{(selectedJC.transferred_qty || 0).toFixed(2)}</p>
+                  <p className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <Box className="w-3 h-3" />
+                    Transferred so far: <span className="text-slate-700">{ (selectedJC.transferred_qty || 0).toFixed(2) }</span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -1590,13 +1669,13 @@ const JobCard = () => {
             <p className="text-[11px] text-slate-400 italic px-1">Specify destination and operational parameters for the next manufacturing phase</p>
 
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <FormControl label="Next Operation" required>
                   <SearchableSelect
                     options={operations.map(o => ({ value: o.id, label: o.operation_name }))}
                     value={nextStageForm.nextOperationId}
                     onChange={(val) => setNextStageForm({ ...nextStageForm, nextOperationId: val })}
-                    placeholder="Welding"
+                    placeholder="Select Next Op"
                   />
                 </FormControl>
                 <FormControl label="Assign Operator">
@@ -1634,6 +1713,33 @@ const JobCard = () => {
                     </button>
                   </div>
                 </div>
+              </div>
+
+              <div className="flex items-center justify-start border-t border-slate-50 pt-6">
+                <button
+                  onClick={handleReadyForDispatch}
+                  disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
+                  className={`group relative flex items-center gap-4 px-8 py-3 rounded-xl transition-all ${
+                    logs.qualityLogs.some(log => log.status !== 'APPROVED')
+                      ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                      : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                    logs.qualityLogs.some(log => log.status !== 'APPROVED')
+                      ? 'bg-slate-100 text-slate-200'
+                      : 'bg-white/20 text-white'
+                  }`}>
+                    <CheckCircle className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Finalize & Dispatch</p>
+                    <p className="text-sm font-bold">Complete Production</p>
+                  </div>
+                  <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${
+                    logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'opacity-20' : 'opacity-100'
+                  }`} />
+                </button>
               </div>
             </div>
           </section>

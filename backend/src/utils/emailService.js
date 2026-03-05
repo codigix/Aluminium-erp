@@ -2,8 +2,9 @@ const nodemailer = require('nodemailer');
 const puppeteer = require('puppeteer');
 
 const createTransporter = () => {
+  const isGmail = process.env.MAIL_HOST === 'smtp.gmail.com';
+  
   const config = {
-    service: process.env.EMAIL_SERVICE,
     host: process.env.MAIL_HOST,
     port: Number(process.env.MAIL_PORT || 587),
     secure: process.env.MAIL_SECURE === 'true',
@@ -13,10 +14,15 @@ const createTransporter = () => {
     }
   };
 
-  // If service is provided (e.g. 'gmail'), nodemailer handles host/port
-  if (config.service) {
+  // Gmail specific configuration for better reliability
+  if (isGmail) {
+    config.service = 'gmail';
+    // If using service: 'gmail', nodemailer handles host/port/secure
     delete config.host;
     delete config.port;
+    if (process.env.MAIL_SECURE !== 'true') {
+      delete config.secure;
+    }
   }
 
   return nodemailer.createTransport(config);
@@ -36,7 +42,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
       
       // Calculate rates
       // item.quotedPrice already includes profit (it's the Unit Rate from UI)
-      const unitRate = item.quotedPrice || 0;
+      const unitRate = parseFloat(item.quotedPrice) || 0;
       const lineTotalBase = unitRate * quantity;
       const lineTax = lineTotalBase * (gstRate / 100);
       const lineTotalWithTax = lineTotalBase + lineTax;
@@ -68,7 +74,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
           ${isRejected ? `<div style="font-size: 10px; color: #dc2626; margin-top: 4px; font-weight: bold;">Reason: ${item.rejection_reason || 'Not specified'}</div>` : ''}
         </td>
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${quantity}</td>
-        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${profit}%</td>
+        <td style="padding: 10px; border: 1px solid #000; text-align: center;">${profitP}%</td>
         <td style="padding: 10px; border: 1px solid #000; text-align: right;">${unitPriceStr}</td>
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${gstRate}%</td>
         <td style="padding: 10px; border: 1px solid #000; text-align: right; font-weight: bold;">${totalLineStr}</td>

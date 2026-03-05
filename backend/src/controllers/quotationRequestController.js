@@ -244,13 +244,14 @@ const sendQuotationViaEmail = async (req, res, next) => {
     let emailMessageId = null;
     const firstQuotationId = quotationIds[0];
     const quoteNumber = `QRT-${String(firstQuotationId).padStart(4, '0')}`;
+    const totalAmountNum = parseFloat(totalAmount) || 0;
 
     try {
       const emailResult = await emailService.sendQuotationEmail(
         clientEmail,
         clientName,
         items,
-        totalAmount,
+        totalAmountNum,
         notes,
         clientId,
         quoteNumber
@@ -259,7 +260,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
       emailMessageId = emailResult.messageId;
 
       // Log to communications for ALL quotations in this batch
-      const messageText = `Quotation ${quoteNumber} sent to client.\nTotal Amount: ₹${(totalAmount * 1.18).toLocaleString('en-IN')}\nItems: ${items.length}`;
+      const messageText = `Quotation ${quoteNumber} sent to client.\nTotal Amount (Incl. GST): ₹${totalAmountNum.toLocaleString('en-IN')}\nItems: ${items.length}`;
       
       for (const qId of quotationIds) {
         await pool.execute(
