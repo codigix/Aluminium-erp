@@ -1084,7 +1084,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   };
 };
 
-const createMaterialRequestFromPlan = async (planId, userId) => {
+const createMaterialRequestFromPlan = async (planId, userId, customItems = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -1100,16 +1100,6 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
     }
 
     const plan = plans[0];
-
-    // Check if an MR already exists for this plan to avoid duplicates
-    const [existingMrs] = await connection.query(
-      "SELECT id FROM material_requests WHERE notes LIKE ?",
-      [`%Generated from Production Plan ${plan.plan_code}%`]
-    );
-    
-    if (existingMrs.length > 0) {
-      throw new Error(`A Material Request already exists for Production Plan ${plan.plan_code}`);
-    }
 
     // 2. Aggregate only materials into a single map
     const aggregatedMap = new Map();
@@ -1131,58 +1121,78 @@ const createMaterialRequestFromPlan = async (planId, userId) => {
           design_qty: Number(designQty || 0),
           uom: uom || 'Nos',
           material_name: name || code,
-          warehouse: warehouse,
+          warehouse: warehouse || 'Consumables Store',
           item_type: 'RAW_MATERIAL', // Only materials are requested
           unit_rate: rate || 0
         });
       }
     };
 
-    // Step 1: Add Materials (Skip FG and SA as per requirement)
-    const [materials] = await connection.query(`
-      SELECT ppm.*, 
-             COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
-             COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
-             COALESCE(actual_sb.current_balance, 0) as current_balance,
-             COALESCE(issued.issued_qty, 0) as issued_qty
-      FROM production_plan_materials ppm
-      LEFT JOIN (
-        SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate, SUM(current_balance) as current_balance
-        FROM stock_balance 
-        GROUP BY material_name
-      ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
-      LEFT JOIN (
-        SELECT 
-            mii.item_code, 
-            mii.material_name,
-            SUM(mii.quantity) as issued_qty
-        FROM material_issue_items mii
-        JOIN material_issues mi ON mii.issue_id = mi.id
-        JOIN work_orders wo ON mi.work_order_id = wo.id
-        WHERE wo.plan_id = ?
-        GROUP BY mii.item_code, mii.material_name
-      ) issued ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
-      WHERE ppm.plan_id = ?
-    `, [planId, planId]);
+    if (customItems && Array.isArray(customItems)) {
+      // Use items provided from frontend
+      for (const item of customItems) {
+        // Only include items that are not fulfilled or explicitly requested by user
+        // In the preview modal, user sees everything, but only shortage items are typically sent back
+        // However, if they manually added/kept items, we should include them
+        // If the item has a shortage or was manually added, it should be in customItems
+        addToMap(
+          item.item_code, 
+          item.quantity, 
+          item.uom, 
+          item.material_name, 
+          item.warehouse, 
+          'RAW_MATERIAL', 
+          item.unit_rate || 0, 
+          item.design_qty || 0
+        );
+      }
+    } else {
+      // Step 1: Add Materials (Skip FG and SA as per requirement)
+      const [materials] = await connection.query(`
+        SELECT ppm.*, 
+               COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
+               COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
+               COALESCE(actual_sb.current_balance, 0) as current_balance,
+               COALESCE(issued.issued_qty, 0) as issued_qty
+        FROM production_plan_materials ppm
+        LEFT JOIN (
+          SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate, SUM(current_balance) as current_balance
+          FROM stock_balance 
+          GROUP BY material_name
+        ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+        LEFT JOIN (
+          SELECT 
+              mii.item_code, 
+              mii.material_name,
+              SUM(mii.quantity) as issued_qty
+          FROM material_issue_items mii
+          JOIN material_issues mi ON mii.issue_id = mi.id
+          JOIN work_orders wo ON mi.work_order_id = wo.id
+          WHERE wo.plan_id = ?
+          GROUP BY mii.item_code, mii.material_name
+        ) issued ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
+        WHERE ppm.plan_id = ?
+      `, [planId, planId]);
 
-    for (const mat of materials) {
-      const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
-      if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
+      for (const mat of materials) {
+        const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
+        if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
 
-      const effectiveRate = mat.rate || mat.stock_rate || 0;
-      
-      // Calculate deficit: required - (available + issued)
-      const availableTotal = Number(mat.current_balance) + Number(mat.issued_qty);
-      const shortage = Math.max(0, Number(mat.required_qty) - availableTotal);
-      
-      // Only add to MR if there's a shortage
-      if (shortage > 0) {
-        addToMap(mat.actual_item_code, shortage, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
+        const effectiveRate = mat.rate || mat.stock_rate || 0;
+        
+        // Calculate deficit: required - (available + issued)
+        const availableTotal = Number(mat.current_balance) + Number(mat.issued_qty);
+        const shortage = Math.max(0, Number(mat.required_qty) - availableTotal);
+        
+        // Only add to MR if there's a shortage
+        if (shortage > 0) {
+          addToMap(mat.actual_item_code, shortage, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
+        }
       }
     }
 
     if (aggregatedMap.size === 0) {
-      throw new Error('No materials found in this Production Plan to request');
+      throw new Error('No materials found to request');
     }
 
     const aggregatedItems = Array.from(aggregatedMap.values());

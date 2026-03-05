@@ -95,7 +95,7 @@ const deleteProductionPlan = async (req, res, next) => {
 
 const createMaterialRequestFromPlan = async (req, res, next) => {
   try {
-    const result = await productionPlanService.createMaterialRequestFromPlan(req.params.id, req.user.id);
+    const result = await productionPlanService.createMaterialRequestFromPlan(req.params.id, req.user.id, req.body.items);
     res.status(201).json(result);
   } catch (error) {
     next(error);

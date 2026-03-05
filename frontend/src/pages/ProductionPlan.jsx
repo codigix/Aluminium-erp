@@ -5,7 +5,7 @@ import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   Eye, BarChart2, Settings, Send, Edit2, FileText, Trash2, 
   Search, Filter, Plus, Zap, CheckCircle2, FileJson, 
-  MoreVertical, Activity, Layers, Target, Clock, AlertCircle
+  MoreVertical, Activity, Layers, Target, Clock, AlertCircle, X
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -34,6 +34,10 @@ const ProductionPlan = () => {
   const [mrItems, setMrItems] = useState([]);
   const [mrPlanDetails, setMrPlanDetails] = useState(null);
   const [transmittingMr, setTransmittingMr] = useState(false);
+  const [allStockItems, setAllStockItems] = useState([]);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [selectedNewItem, setSelectedNewItem] = useState(null);
+  const [newItemQty, setNewItemQty] = useState(1);
 
   const [newPlan, setNewPlan] = useState({
     planCode: '',
@@ -237,7 +241,11 @@ const ProductionPlan = () => {
           planCode: data.plan_code,
           startDate: data.start_date
         });
+        setShowAddItem(false);
+        setSelectedNewItem(null);
+        setNewItemQty(1);
         setMrModalOpen(true);
+        fetchAllStockItems();
       } else {
         const error = await response.json();
         errorToast(error.message || 'Failed to fetch items for Material Request');
@@ -256,9 +264,25 @@ const ProductionPlan = () => {
     try {
       setTransmittingMr(true);
       const token = localStorage.getItem('authToken');
+      
+      // Only send items that actually need requesting (shortage or manual force)
+      // We filter out fulfilled items and those that already have requests
+      const itemsToRequest = mrItems.filter(item => 
+        !item.request_exists && (item.inventory < item.quantity || item.is_manual)
+      );
+
+      if (itemsToRequest.length === 0) {
+        errorToast('No items with shortage found to request');
+        return;
+      }
+
       const response = await fetch(`${API_BASE}/production-plans/transmit-mr/${mrPlanDetails.id}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ items: itemsToRequest })
       });
 
       if (response.ok) {
@@ -276,6 +300,57 @@ const ProductionPlan = () => {
     } finally {
       setTransmittingMr(false);
     }
+  };
+
+  const fetchAllStockItems = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/stock/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAllStockItems(data);
+      }
+    } catch (error) {
+      console.error('Error fetching stock items:', error);
+    }
+  };
+
+  const handleAddNewMrItem = () => {
+    if (!selectedNewItem || newItemQty <= 0) return;
+
+    // The stock API object uses item_name and item_code
+    const itemCode = selectedNewItem.item_code;
+    const itemName = selectedNewItem.item_name || selectedNewItem.material_name;
+
+    // Check if item already exists in mrItems
+    const exists = mrItems.some(item => 
+      item.item_code === itemCode || 
+      item.material_name === itemName
+    );
+
+    if (exists) {
+      errorToast('Item already exists in the request list');
+      return;
+    }
+
+    const newItem = {
+      item_code: itemCode,
+      material_name: itemName,
+      quantity: Number(newItemQty),
+      uom: selectedNewItem.unit || selectedNewItem.uom || 'Nos',
+      inventory: selectedNewItem.current_balance || 0,
+      is_fulfilled: false,
+      request_exists: false,
+      is_manual: true
+    };
+
+    setMrItems(prev => [...prev, newItem]);
+    setShowAddItem(false);
+    setSelectedNewItem(null);
+    setNewItemQty(1);
+    successToast('Item added to material request');
   };
 
   const handleCreateNew = () => {
@@ -1938,9 +2013,18 @@ const ProductionPlan = () => {
                 </span>
               </button>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
-              <span className="text-[11px] font-black text-slate-700">Items to Request ({mrItems.length})</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
+                <span className="text-[11px] font-black text-slate-700">Items to Request ({mrItems.length})</span>
+              </div>
+              <button 
+                onClick={() => setShowAddItem(!showAddItem)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-[10px] font-black shadow-sm"
+              >
+                <Plus className="w-3 h-3" />
+                Add Item
+              </button>
             </div>
           </div>
 
@@ -1953,14 +2037,22 @@ const ProductionPlan = () => {
                   <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Required</th>
                   <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Inventory</th>
                   <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Status</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right w-10">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {mrItems.map((item, idx) => (
                   <tr key={idx} className="group">
                     <td className="py-4">
-                      <div className="text-xs font-black text-slate-700">{item.material_name}</div>
-                      <div className="text-[10px] text-slate-400">({item.item_code})</div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col">
+                          <div className="text-xs font-black text-slate-700">{item.material_name}</div>
+                          <div className="text-[10px] text-slate-400">({item.item_code})</div>
+                        </div>
+                        {item.is_manual && (
+                          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-[8px] font-black uppercase rounded">Manual</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -1988,8 +2080,87 @@ const ProductionPlan = () => {
                         </div>
                       )}
                     </td>
+                    <td className="py-4 text-right">
+                      <button 
+                        onClick={() => setMrItems(prev => prev.filter((_, i) => i !== idx))}
+                        className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
+
+                {/* Blank Row for adding items */}
+                {showAddItem && (
+                  <tr className="bg-indigo-50/30">
+                    <td className="py-2 px-1">
+                      <SearchableSelect
+                        options={allStockItems.map(item => ({
+                          id: item.id,
+                          label: `${item.material_name} (${item.item_code})`,
+                          value: item.item_code
+                        }))}
+                        value={selectedNewItem?.item_code}
+                        onChange={(e) => {
+                          const code = e.target.value;
+                          const item = allStockItems.find(i => i.item_code === code);
+                          setSelectedNewItem(item || null);
+                        }}
+                        allowCustom={false}
+                        placeholder="Select material..."
+                        className="text-xs h-8 bg-white"
+                      />
+                      {selectedNewItem && (
+                        <div className="mt-1 px-1 text-[9px] text-indigo-600 font-bold uppercase truncate max-w-[200px]">
+                          {selectedNewItem.material_name}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      <input
+                        type="number"
+                        value={newItemQty}
+                        onChange={(e) => setNewItemQty(e.target.value)}
+                        placeholder="Qty"
+                        className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs font-black text-center outline-none focus:ring-1 focus:ring-indigo-500"
+                        min="0"
+                        step="0.01"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      <div className="text-[10px] text-slate-400 font-bold italic">
+                        {selectedNewItem ? Number(selectedNewItem.current_balance || 0).toFixed(2) : '--'}
+                      </div>
+                    </td>
+                    <td className="py-2 px-1 text-right">
+                       <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-[8px] font-black uppercase rounded">NEW</span>
+                    </td>
+                    <td className="py-2 px-1 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={handleAddNewMrItem}
+                          disabled={!selectedNewItem || newItemQty <= 0}
+                          className="p-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+                          title="Confirm Add"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowAddItem(false);
+                            setSelectedNewItem(null);
+                            setNewItemQty(1);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+                          title="Cancel"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -2003,7 +2174,7 @@ const ProductionPlan = () => {
             >
               Abort Request
             </button>
-            {mrItems.length > 0 && mrItems.some(item => !item.request_exists && item.inventory < item.quantity) && (
+            {mrItems.length > 0 && mrItems.some(item => !item.request_exists && (item.inventory < item.quantity || item.is_manual)) && (
               <button
                 onClick={confirmTransmitMR}
                 disabled={transmittingMr}
