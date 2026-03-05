@@ -138,7 +138,7 @@ const BOMApproval = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ status: 'BOM_Approved ' })
+          body: JSON.stringify({ status: 'BOM_Approved' })
         });
 
         if (!response.ok) throw new Error('Failed to approve BOM');
@@ -289,12 +289,15 @@ const BOMApproval = () => {
                           ₹{orderItems.reduce((total, item) => {
                             if (item.status === 'REJECTED') return total;
                             const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
-                            const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
+                            const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) || 0;
                             const labor = item.operations?.reduce((sum, o) => {
                               const cycle = parseFloat(o.cycle_time_min || 0);
                               const setup = parseFloat(o.setup_time_min || 0);
                               const rate = parseFloat(o.hourly_rate || 0);
-                              return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                              // BOM Form logic: (Cycle + Setup) is treated as per-unit if setup is small, 
+                              // or more accurately, Cycle is per unit and Setup is per batch.
+                              // To match BOM Form's "Cost Per Unit": (Cycle + Setup) / 60 * Rate
+                              return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
                             }, 0) || 0;
                             const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
                             return total + (mat + comp + labor - scrap);
@@ -352,7 +355,7 @@ const BOMApproval = () => {
                             <div className="text-right">
                               <div className="text-[9px] text-slate-400  ">Cost / Unit</div>
                               <div className="text-xs  text-slate-700">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
-                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) + 
                                      item.operations?.reduce((sum, o) => {
                                        const cycle = parseFloat(o.cycle_time_min || 0);
                                        const setup = parseFloat(o.setup_time_min || 0);
@@ -364,7 +367,7 @@ const BOMApproval = () => {
                             <div className="text-right">
                               <div className="text-[9px] text-indigo-400   ">Total Cost</div>
                               <div className="text-sm  text-indigo-600">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
-                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) + 
                                      item.operations?.reduce((sum, o) => {
                                        const cycle = parseFloat(o.cycle_time_min || 0);
                                        const setup = parseFloat(o.setup_time_min || 0);
@@ -421,7 +424,7 @@ const BOMApproval = () => {
                         {/* Components Section */}
                         <div className="p-2  bg-slate-50 border-y border-slate-200 flex justify-between items-center">
                           <h4 className="text-[10px]  text-slate-500  ">Components</h4>
-                          <span className="text-[10px]  text-slate-400">Total: ₹{item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0).toFixed(2)}</span>
+                          <span className="text-[10px]  text-slate-400">Total: ₹{item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0).toFixed(2)}</span>
                         </div>
                         <table className="min-w-full divide-y divide-slate-100">
                           <thead className="bg-white">
@@ -435,7 +438,7 @@ const BOMApproval = () => {
                           <tbody className="divide-y divide-slate-100">
                             {item.components?.length > 0 ? (
                               item.components.map((comp) => {
-                                const amount = parseFloat(comp.quantity || 0) * parseFloat(comp.rate || 0);
+                                const amount = parseFloat(comp.quantity || 0) * parseFloat(item.quantity) * parseFloat(comp.rate || 0);
                                 return (
                                   <tr key={comp.id}>
                                     <td className="p-2  text-xs text-slate-700">
@@ -461,7 +464,7 @@ const BOMApproval = () => {
                             const cycle = parseFloat(o.cycle_time_min || 0);
                             const setup = parseFloat(o.setup_time_min || 0);
                             const rate = parseFloat(o.hourly_rate || 0);
-                            return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                            return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
                           }, 0).toFixed(2)}</span>
                         </div>
                         <table className="min-w-full divide-y divide-slate-100">
@@ -477,9 +480,8 @@ const BOMApproval = () => {
                           <tbody className="divide-y divide-slate-100">
                             {item.operations?.length > 0 ? (
                               item.operations.map((op) => {
-                                const totalTimeMin = (parseFloat(op.cycle_time_min || 0) * parseFloat(item.quantity)) + parseFloat(op.setup_time_min || 0);
-                                const totalTimeHrs = totalTimeMin / 60;
-                                const cost = totalTimeHrs * parseFloat(op.hourly_rate || 0);
+                                const totalTimeHrs = (parseFloat(op.cycle_time_min || 0) + parseFloat(op.setup_time_min || 0)) / 60;
+                                const cost = totalTimeHrs * parseFloat(op.hourly_rate || 0) * parseFloat(item.quantity);
                                 return (
                                   <tr key={op.id}>
                                     <td className="p-2  text-xs text-slate-700">
@@ -539,24 +541,24 @@ const BOMApproval = () => {
                               <div className="text-right">
                                  <div className="text-[9px]  opacity-50 ">Total Item Cost</div>
                                  <div className="text-lg ">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
-                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) + 
                                      item.operations?.reduce((sum, o) => {
                                        const cycle = parseFloat(o.cycle_time_min || 0);
                                        const setup = parseFloat(o.setup_time_min || 0);
                                        const rate = parseFloat(o.hourly_rate || 0);
-                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                       return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
                                      }, 0) - 
                                      item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0).toFixed(2)}</div>
                               </div>
                               <div className="text-right border-l border-white/10 pl-8">
                                  <div className="text-[9px]  opacity-50 ">Cost Per Unit</div>
                                  <div className="text-lg  text-amber-400">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
-                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) + 
+                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) + 
                                      item.operations?.reduce((sum, o) => {
                                        const cycle = parseFloat(o.cycle_time_min || 0);
                                        const setup = parseFloat(o.setup_time_min || 0);
                                        const rate = parseFloat(o.hourly_rate || 0);
-                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                       return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
                                      }, 0) - 
                                      item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0) / parseFloat(item.quantity || 1)).toFixed(2)}</div>
                               </div>
@@ -576,12 +578,12 @@ const BOMApproval = () => {
                           {(() => {
                             const subtotal = orderItems.reduce((total, item) => {
                               const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
-                              const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
+                              const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) || 0;
                               const labor = item.operations?.reduce((sum, o) => {
                                 const cycle = parseFloat(o.cycle_time_min || 0);
                                 const setup = parseFloat(o.setup_time_min || 0);
                                 const rate = parseFloat(o.hourly_rate || 0);
-                                return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
+                                return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
                               }, 0) || 0;
                               const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
                               return total + (mat + comp + labor - scrap);

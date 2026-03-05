@@ -122,9 +122,9 @@ export const StatusBadge = ({ status }) => {
       case 'DRAFT':
       case 'CREATED':
         return 'bg-slate-50 border-slate-200 text-slate-600'
-      case 'Approved ':
-      case 'DESIGN_Approved ':
-      case 'BOM_Approved ':
+      case 'Approved':
+      case 'DESIGN_Approved':
+      case 'BOM_Approved':
         return 'bg-blue-50 border-blue-200 text-blue-600'
       case 'PROCESSING':
       case 'DESIGN_IN_REVIEW':

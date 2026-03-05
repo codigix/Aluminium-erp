@@ -439,8 +439,9 @@ const updateSalesOrder = async (id, orderData) => {
 };
 
 const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remarks = null) => {
+  status = (status || '').trim().toUpperCase();
   let department = null;
-  if (status === 'BOM_Approved') {
+  if (status === 'BOM_APPROVED') {
     department = 'SALES';
     status = 'QUOTATION_SENT'; // Automatically move to quotation sent status
   } else if (status === 'BOM_SUBMITTED') {
@@ -458,8 +459,8 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
     }
 
     // Log to BOM approval history if it's a BOM action
-    if (status === 'BOM_Approved' || status === 'QUOTATION_SENT' || status === 'REJECTED_BOM') {
-      const action = (status === 'BOM_Approved' || status === 'QUOTATION_SENT') ? 'APPROVED' : 'REJECTED';
+    if (status === 'BOM_APPROVED' || status === 'QUOTATION_SENT' || status === 'REJECTED_BOM') {
+      const action = (status === 'BOM_APPROVED' || status === 'QUOTATION_SENT') ? 'APPROVED' : 'REJECTED';
       if (userId) {
         await connection.execute(
           'INSERT INTO bom_approval_history (sales_order_id, user_id, action, remarks) VALUES (?, ?, ?, ?)',
