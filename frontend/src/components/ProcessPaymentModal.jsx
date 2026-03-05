@@ -322,17 +322,16 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
           {formData.paymentMode === 'BANK_TRANSFER' && (
             <>
               <FormControl label="Bank Account *">
-                <select
+                <SearchableSelect
+                  options={bankAccounts.map(account => ({
+                    value: account.id,
+                    label: `${account.bank_name} - ${account.account_number}`
+                  }))}
                   value={formData.bankAccount}
                   onChange={(e) => handleInputChange('bankAccount', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.bankAccount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
-                  style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
-                >
-                  <option value="">Select Bank Account</option>
-                  {bankAccounts.map(account => (
-                    <option key={account.id} value={account.id}>{account.bank_name} - {account.account_number}</option>
-                  ))}
-                </select>
+                  placeholder="Select or type bank account"
+                  allowCustom={true}
+                />
                 {errors.bankAccount && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.bankAccount}</span>}
               </FormControl>
             </>

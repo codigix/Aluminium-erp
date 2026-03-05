@@ -24,6 +24,7 @@ const recordPaymentReceived = async (payload) => {
     transactionRefNo,
     remarks,
     bankAccount,
+    manualBankAccount,
     upiApp,
     upiTransactionId,
     chequeNumber,
@@ -36,6 +37,9 @@ const recordPaymentReceived = async (payload) => {
   } = payload;
 
   const receiptNo = await generatePaymentReceiptNo();
+  const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
+  const bankAccountId = isNumericId ? parseInt(bankAccount) : null;
+  const actualManualBankAccount = isNumericId ? (manualBankAccount || null) : bankAccount;
 
   try {
     const [result] = await pool.execute(
@@ -50,6 +54,7 @@ const recordPaymentReceived = async (payload) => {
         payment_mode,
         transaction_ref_no,
         bank_account_id,
+        manual_bank_account,
         remarks,
         upi_app,
         upi_transaction_id,
@@ -61,7 +66,7 @@ const recordPaymentReceived = async (payload) => {
         authorization_code,
         status,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         receiptNo,
         invoiceId || null,
@@ -72,7 +77,8 @@ const recordPaymentReceived = async (payload) => {
         paymentDate,
         paymentMode,
         transactionRefNo || null,
-        bankAccount || null,
+        bankAccountId,
+        actualManualBankAccount,
         remarks || null,
         upiApp || null,
         upiTransactionId || null,
@@ -173,8 +179,9 @@ const getPaymentsReceived = async (filters = {}) => {
       END as so_number,
       c.company_name as customer_name,
       con.email as customer_email,
-      ba.bank_name,
-      ba.account_number
+      COALESCE(ba.bank_name, cp.manual_bank_account) as bank_name,
+      ba.account_number,
+      cp.manual_bank_account
     FROM customer_payments cp
     LEFT JOIN sales_orders so ON cp.sales_order_id = so.id AND cp.sales_order_source = 'SALES_ORDER'
     LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
@@ -221,8 +228,9 @@ const getPaymentReceivedById = async (paymentId) => {
         ELSE COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR))
       END as so_number,
       c.company_name as customer_name,
-      ba.bank_name,
-      ba.account_number
+      COALESCE(ba.bank_name, cp.manual_bank_account) as bank_name,
+      ba.account_number,
+      cp.manual_bank_account
     FROM customer_payments cp
     LEFT JOIN sales_orders so ON cp.sales_order_id = so.id AND cp.sales_order_source = 'SALES_ORDER'
     LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
@@ -461,6 +469,13 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
           <span class="info-value">{{transaction_ref_no}}</span>
         </div>
         {{/transaction_ref_no}}
+
+        {{#bank_name}}
+        <div class="info-row">
+          <span class="info-label">Bank Account</span>
+          <span class="info-value">{{bank_name}} {{#account_number}}({{account_number}}){{/account_number}}</span>
+        </div>
+        {{/bank_name}}
 
         {{#upi_transaction_id}}
         <div class="info-row">

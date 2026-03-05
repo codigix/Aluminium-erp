@@ -52,6 +52,10 @@ const processPayment = async (payload) => {
       }
     }
 
+    const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
+    const bankAccountId = isNumericId ? parseInt(bankAccount) : null;
+    const manualBankAccount = isNumericId ? null : bankAccount;
+
     const [result] = await pool.execute(
       `INSERT INTO payments (
         payment_voucher_no,
@@ -63,6 +67,7 @@ const processPayment = async (payload) => {
         payment_mode,
         transaction_ref_no,
         bank_account_id,
+        manual_bank_account,
         remarks,
         upi_app,
         upi_transaction_id,
@@ -74,7 +79,7 @@ const processPayment = async (payload) => {
         authorization_code,
         status,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         voucherNo,
         invoiceId || null,
@@ -84,7 +89,8 @@ const processPayment = async (payload) => {
         paymentDate,
         paymentMode,
         transactionRefNo || null,
-        bankAccount || null,
+        bankAccountId,
+        manualBankAccount || null,
         remarks || null,
         upiApp || null,
         upiTransactionId || null,
@@ -170,7 +176,7 @@ const getPayments = async (filters = {}) => {
       po.po_number,
       v.vendor_name,
       v.email as vendor_email,
-      ba.bank_name,
+      COALESCE(ba.bank_name, p.manual_bank_account) as bank_name,
       ba.account_number
     FROM payments p
     LEFT JOIN purchase_orders po ON p.po_id = po.id
@@ -212,7 +218,7 @@ const getPaymentById = async (paymentId) => {
       p.*,
       po.po_number,
       v.vendor_name,
-      ba.bank_name,
+      COALESCE(ba.bank_name, p.manual_bank_account) as bank_name,
       ba.account_number
     FROM payments p
     LEFT JOIN purchase_orders po ON p.po_id = po.id
@@ -380,6 +386,13 @@ const generatePaymentVoucherPDF = async (paymentId) => {
           <span class="info-value">{{transaction_ref_no}}</span>
         </div>
         {{/transaction_ref_no}}
+
+        {{#bank_name}}
+        <div class="info-row">
+          <span class="info-label">Bank Account</span>
+          <span class="info-value">{{bank_name}} {{#account_number}}({{account_number}}){{/account_number}}</span>
+        </div>
+        {{/bank_name}}
 
         {{#upi_transaction_id}}
         <div class="info-row">

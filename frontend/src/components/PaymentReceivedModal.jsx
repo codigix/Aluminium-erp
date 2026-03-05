@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, FormControl } from './ui.jsx';
+import { Modal, FormControl, SearchableSelect } from './ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -489,14 +489,14 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
             {formData.paymentMode === 'BANK_TRANSFER' && (
               <FormControl label="Bank Account *">
-                <select
+                <SearchableSelect
+                  options={bankAccounts.map(a => ({ value: a.id, label: `${a.bank_name} - ${a.account_number}` }))}
                   value={formData.bankAccount}
                   onChange={(e) => handleInputChange('bankAccount', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.bankAccount ? 'border-rose-500' : 'border-slate-300'}`}
-                >
-                  <option value="">Select Account</option>
-                  {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.bank_name} - {a.account_number}</option>)}
-                </select>
+                  placeholder="Select or enter account details"
+                  allowCustom={true}
+                  className={errors.bankAccount ? 'border-rose-500' : ''}
+                />
                 {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block">{errors.bankAccount}</span>}
               </FormControl>
             )}

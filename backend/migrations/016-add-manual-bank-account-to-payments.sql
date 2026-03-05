@@ -1,0 +1,1 @@
+ALTER TABLE payments ADD COLUMN manual_bank_account VARCHAR(255) NULL;

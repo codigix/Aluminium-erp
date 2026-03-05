@@ -1,0 +1,1 @@
+ALTER TABLE customer_payments ADD COLUMN manual_bank_account VARCHAR(255) NULL AFTER bank_account_id;
