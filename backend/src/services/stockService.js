@@ -599,18 +599,34 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
 
 const generateItemCode = async (itemName, itemGroup) => {
   let prefix = 'ITM';
-  const group = (itemGroup || '').toUpperCase();
   
-  if (group === 'FINISHED GOODS' || group === 'FG') {
+  // Try to find the actual group_type from the item_groups table first
+  const [groupRows] = await pool.query(
+    'SELECT group_type FROM item_groups WHERE name = ? OR id = ? LIMIT 1',
+    [itemGroup, itemGroup]
+  );
+
+  let groupType = itemGroup;
+  if (groupRows.length > 0) {
+    groupType = groupRows[0].group_type;
+  }
+
+  const group = (groupType || '').toUpperCase().trim();
+  
+  if (group === 'FINISHED GOODS' || group === 'FG' || group === 'FINISHED GOOD') {
     prefix = 'FG';
-  } else if (group === 'RAW MATERIAL' || group === 'RM') {
+  } else if (group === 'RAW MATERIAL' || group === 'RAW MATERIALS' || group === 'RM') {
     prefix = 'RM';
-  } else if (group === 'SEMI FINISHED GOODS' || group === 'SFG') {
+  } else if (group === 'SEMI FINISHED GOODS' || group === 'SFG' || group === 'SEMI-FINISHED GOODS') {
     prefix = 'SFG';
-  } else if (group === 'SUB ASSEMBLY' || group === 'SA') {
+  } else if (group === 'SUB ASSEMBLY' || group === 'SUB ASSEMBLIES' || group === 'SA' || group === 'SUB-ASSEMBLY') {
     prefix = 'SA';
   } else if (group === 'ASSEMBLY' || group === 'ASSY') {
     prefix = 'ASSY';
+  } else if (group === 'CONSUMABLES' || group === 'CONSUMABLE' || group === 'CON') {
+    prefix = 'CON';
+  } else if (group === 'PACKING MATERIAL' || group === 'PACKING MATERIALS' || group === 'PAC') {
+    prefix = 'PAC';
   } else if (group) {
     prefix = group.substring(0, 3).toUpperCase();
   }

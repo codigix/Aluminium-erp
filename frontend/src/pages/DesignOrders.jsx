@@ -77,7 +77,7 @@ const DesignOrders = () => {
   const [materialSubTab, setMaterialSubTab] = useState('add'); // 'add' or 'groups'
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [itemGroups, setItemGroups] = useState([]);
-  const [groupFormData, setGroupFormData] = useState({ name: '', status: 'Active' });
+  const [groupFormData, setGroupFormData] = useState({ name: '', group_type: '', status: 'ACTIVE' });
   const [isEditingGroup, setIsEditingGroup] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
@@ -122,7 +122,7 @@ const DesignOrders = () => {
       
       successToast(isEditingGroup ? 'Item group updated successfully' : 'Item group added successfully');
       fetchItemGroups();
-      setGroupFormData({ name: '', status: 'Active' });
+      setGroupFormData({ name: '', group_type: '', status: 'ACTIVE' });
       setIsEditingGroup(false);
       setEditingGroupId(null);
     } catch (error) {
@@ -133,7 +133,7 @@ const DesignOrders = () => {
   };
 
   const handleEditGroup = (group) => {
-    setGroupFormData({ name: group.name, status: group.status });
+    setGroupFormData({ name: group.name, group_type: group.group_type || 'OTHER', status: group.status || 'ACTIVE' });
     setIsEditingGroup(true);
     setEditingGroupId(group.id);
   };
@@ -178,7 +178,7 @@ const DesignOrders = () => {
             <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded text-xs font-bold">+</span>
             <h4 className="text-sm font-semibold">{isEditingGroup ? 'Edit Item Group' : 'Add New Item Group'}</h4>
           </div>
-          <form onSubmit={handleGroupSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+          <form onSubmit={handleGroupSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Group Name *</label>
               <input 
@@ -189,6 +189,25 @@ const DesignOrders = () => {
                 onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
                 required
               />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Group Type *</label>
+              <select 
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                value={groupFormData.group_type}
+                onChange={(e) => setGroupFormData({...groupFormData, group_type: e.target.value})}
+                required
+              >
+                <option value="">Select Group Type</option>
+                <option value="RM">RM (Raw Material)</option>
+                <option value="FG">FG (Finished Goods)</option>
+                <option value="SFG">SFG (Semi-Finished Goods)</option>
+                <option value="SA">SA (Sub-Assembly)</option>
+                <option value="CON">CON (Consumables)</option>
+                <option value="PAC">PAC (Packing Material)</option>
+                <option value="SCRAP">SCRAP</option>
+                <option value="OTHER">OTHER</option>
+              </select>
             </div>
             <div className="flex gap-3">
               <button 
@@ -203,7 +222,7 @@ const DesignOrders = () => {
                   type="button" 
                   onClick={() => {
                     setIsEditingGroup(false);
-                    setGroupFormData({ name: '', status: 'Active' });
+                    setGroupFormData({ name: '', group_type: '', status: 'ACTIVE' });
                   }}
                   className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded text-xs hover:bg-slate-50 transition-all"
                 >
@@ -227,6 +246,7 @@ const DesignOrders = () => {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Group Name</th>
+                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Type</th>
                   <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Status</th>
                   <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200 text-right">Actions</th>
                 </tr>
@@ -235,6 +255,11 @@ const DesignOrders = () => {
                 {itemGroups.map((group) => (
                   <tr key={group.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 text-xs font-medium text-slate-700">{group.name}</td>
+                    <td className="p-4 text-xs">
+                      <span className="px-2 py-1 bg-blue-50 text-blue-600 border border-blue-100 rounded text-[10px]">
+                        {group.group_type || 'OTHER'}
+                      </span>
+                    </td>
                     <td className="p-4 text-xs">
                       <span className="px-2 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded text-[10px]">
                         {group.status}
@@ -1149,12 +1174,13 @@ const DesignOrders = () => {
         throw new Error(errorData.message || `Failed to ${isEditingMaterial ? 'update' : 'create'} material`);
       }
 
-      // If we have a target order item, update its item_code ONLY IF it's empty/No Code
-      // This prevents overwriting the main FG item when adding raw materials/consumables
+      // If we have a target order item, update its item_code ONLY IF it's empty/No Code OR it's an FG item
+      // This ensures the main design task reflects the Finished Good
       const currentCode = (targetOrderItemCode || '').trim();
+      const isNewFG = ['FG', 'FINISHED GOOD', 'FINISHED_GOOD'].includes(materialFormData.itemGroup?.toUpperCase());
       const shouldLink = targetOrderItemId && 
                          !isEditingMaterial && 
-                         (!currentCode || currentCode === 'No Code');
+                         (!currentCode || currentCode === 'No Code' || isNewFG);
 
       if (shouldLink) {
         await fetch(`${API_BASE}/sales-orders/items/${targetOrderItemId}`, {
@@ -1163,7 +1189,10 @@ const DesignOrders = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ item_code: materialFormData.itemCode })
+          body: JSON.stringify({ 
+            item_code: materialFormData.itemCode,
+            item_type: isNewFG ? 'FG' : materialFormData.itemGroup 
+          })
         });
         setTargetOrderItemCode(materialFormData.itemCode); // Update current target code so next items don't overwrite
       }
@@ -2025,7 +2054,10 @@ const DesignOrders = () => {
                       <div className="p-5 bg-slate-50/50">
                         {viewMode === 'grid' ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                            {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order) => (
+                            {group.orders.filter(o => {
+                              const type = o.item_type?.toUpperCase();
+                              return !type || ['FG', 'FINISHED_GOOD', 'FINISHED GOOD', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
+                            }).map((order) => (
                               <div key={`${order.id}-${order.item_id}`} className="bg-white rounded  border border-slate-200  hover:shadow-md transition-all duration-300 group flex flex-col h-full">
                                 {/* Card Header */}
                                 <div className="p-2 border-b border-slate-100 flex justify-between items-start gap-3 bg-slate-50/30">
@@ -2135,7 +2167,10 @@ const DesignOrders = () => {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
-                                {group.orders.filter(o => o.item_type === 'FG' || !o.item_type).map((order) => (
+                                {group.orders.filter(o => {
+                                  const type = o.item_type?.toUpperCase();
+                                  return !type || ['FG', 'FINISHED_GOOD', 'FINISHED GOOD', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
+                                }).map((order) => (
                                   <tr key={`${order.id}-${order.item_id}`} className="hover:bg-slate-50 transition-colors">
                                     <td className="p-2 ">
                                       <div className="flex flex-col">

@@ -13,16 +13,16 @@ class ItemGroupService {
 
   async create(data) {
     const [result] = await pool.query(
-      'INSERT INTO item_groups (name, status) VALUES (?, ?)',
-      [data.name, data.status || 'ACTIVE']
+      'INSERT INTO item_groups (name, group_type, status) VALUES (?, ?, ?)',
+      [data.name, data.group_type || 'OTHER', data.status || 'ACTIVE']
     );
     return { id: result.insertId, ...data };
   }
 
   async update(id, data) {
     await pool.query(
-      'UPDATE item_groups SET name = ?, status = ? WHERE id = ?',
-      [data.name, data.status, id]
+      'UPDATE item_groups SET name = ?, group_type = ?, status = ? WHERE id = ?',
+      [data.name, data.group_type || 'OTHER', data.status, id]
     );
     return { id, ...data };
   }

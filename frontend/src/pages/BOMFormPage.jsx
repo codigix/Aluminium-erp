@@ -453,22 +453,31 @@ const BOMFormPage = () => {
   const getMaterialItemGroupFromType = (item) => {
     if (!item) return 'Raw Material';
     
-    const name = (item.material_name || '').toLowerCase();
-    const ig = (item.item_group || item.itemGroup || item.material_group || '').toLowerCase();
+    const name = (item.material_name || item.itemName || '').toLowerCase();
+    const ig = (item.item_group || item.itemGroup || item.material_group || item.material_type || '').toLowerCase();
     const t = (item.material_type || item.materialType || '').toLowerCase();
 
-    // Priority 1: Consumables (Check name, group and type)
-    if (name.includes('consumable') || ig.includes('consumable') || t.includes('consumable')) return 'Consumable';
+    // Priority 1: Consumables
+    if (name.includes('consumable') || ig.includes('consumable') || t.includes('consumable') || 
+        name.includes('con-') || t.includes('con-') || name.includes('grease') || 
+        name.includes('oil') || name.includes('lubricant') || name.includes('coolant')) return 'Consumables';
     
     // Priority 2: Sub-assemblies / SFG
-    if (name.includes('sub assembly') || name.includes('sub-assembly') || ig.includes('sub assembly') || t.includes('sub assembly') || t.includes('sub-assembly')) return 'Sub Assembly';
-    if (name.includes('sfg') || name.includes('semi') || ig.includes('sfg') || ig.includes('semi') || t.includes('sfg') || t.includes('semi')) return 'SFG';
+    if (name.includes('sub assembly') || name.includes('sub-assembly') || ig.includes('sub assembly') || 
+        t.includes('sub assembly') || t.includes('sub-assembly') || name.startsWith('sa-')) return 'Sub-Assembly';
+    if (name.includes('sfg') || name.includes('semi') || ig.includes('sfg') || ig.includes('semi') || 
+        t.includes('sfg') || t.includes('semi')) return 'Semi-Finished Goods';
     
-    // Priority 3: Other groups
-    if (name.includes('tool') || ig.includes('tool') || t.includes('tool')) return 'Tooling';
-    if (name.includes('service') || ig.includes('service') || t.includes('service')) return 'Service';
-    if (name.includes('pm') || ig.includes('pm') || t.includes('pm') || name.includes('packing') || ig.includes('packing') || t.includes('packing')) return 'PM';
-    if (name.includes('raw') || ig.includes('raw') || t.includes('raw')) return 'Raw Material';
+    // Priority 3: Packing Material
+    if (name.includes('packing') || ig.includes('packing') || t.includes('packing') || 
+        name.includes('pm') || ig.includes('pm') || t.includes('pm') || 
+        name.startsWith('pac-') || name.includes('box') || name.includes('carton') || 
+        name.includes('label') || name.includes('tape') || name.includes('wrap')) return 'Packing Material';
+
+    // Priority 4: Other groups
+    if (name.includes('tool') || ig.includes('tool') || t.includes('tool')) return 'Hardware & Accessories';
+    if (name.includes('scrap') || ig.includes('scrap') || t.includes('scrap')) return 'Scrap';
+    if (name.includes('raw') || ig.includes('raw') || t.includes('raw') || name.startsWith('rm-')) return 'Raw Material';
     
     return 'Raw Material';
   };
@@ -1228,6 +1237,15 @@ const BOMFormPage = () => {
                     <SearchableSelect
                       placeholder="Select Product"
                       options={[
+                        ...(selectedItem ? [{
+                          label: (selectedItem.material_name || selectedItem.description || '').replace(/\s*\($/, ''),
+                          value: `${selectedItem.source || 'order'}_${selectedItem.id}`,
+                          id: selectedItem.id,
+                          source: selectedItem.source || 'order',
+                          drawing_no: selectedItem.drawing_no,
+                          item_group: selectedItem.item_group || selectedItem.material_type,
+                          subLabel: `[${selectedItem.item_group || selectedItem.material_type || 'Item'}] • ${selectedItem.item_code} ${selectedItem.drawing_no && selectedItem.drawing_no !== 'N/A' ? `• Drg: ${selectedItem.drawing_no}` : ''}`
+                        }] : []),
                         ...approvedDrawings.map(item => {
                           const cleanName = (item.material_name || item.description || '').replace(/\s*\($/, '');
                           return {
@@ -1253,6 +1271,9 @@ const BOMFormPage = () => {
                           };
                         })
                       ].filter(opt => {
+                        // Always include selected item
+                        if (selectedItem && opt.value === `${selectedItem.source || 'order'}_${selectedItem.id}`) return true;
+
                         const group = (opt.item_group || '').toLowerCase();
                         const isFinishedOrSub = group.includes('finished') || 
                                               group.includes('sub') || 
@@ -1306,6 +1327,15 @@ const BOMFormPage = () => {
                     <SearchableSelect
                       placeholder="Select Item Code"
                       options={[
+                        ...(selectedItem ? [{
+                          label: selectedItem.item_code || selectedItem.itemCode || '',
+                          value: `${selectedItem.source || 'order'}_${selectedItem.id}`,
+                          id: selectedItem.id,
+                          source: selectedItem.source || 'order',
+                          drawing_no: selectedItem.drawing_no,
+                          item_group: selectedItem.item_group || selectedItem.material_type,
+                          subLabel: `[${selectedItem.item_group || selectedItem.material_type || 'Item'}] • ${selectedItem.item_code} ${selectedItem.drawing_no && selectedItem.drawing_no !== 'N/A' ? `• Drg: ${selectedItem.drawing_no}` : ''}`
+                        }] : []),
                         ...approvedDrawings.map(item => {
                           const cleanName = (item.material_name || item.description || '').replace(/\s*\($/, '');
                           return {
@@ -1331,6 +1361,9 @@ const BOMFormPage = () => {
                           };
                         })
                       ].filter(opt => {
+                        // Always include selected item
+                        if (selectedItem && opt.value === `${selectedItem.source || 'order'}_${selectedItem.id}`) return true;
+
                         const group = (opt.item_group || '').toLowerCase();
                         const isFinishedOrSub = group.includes('finished') || 
                                               group.includes('sub') || 
@@ -1768,10 +1801,20 @@ const BOMFormPage = () => {
                           const bomInfo = item ? approvedBOMs.find(b => b.item_code === item.item_code) : null;
                           const bomCost = bomInfo ? parseFloat(bomInfo.bom_cost) : 0;
 
+                          let autoGroup = materialForm.itemGroup;
+                          if (item) {
+                             const ig = (item.material_type || item.item_group || item.materialType || "").toLowerCase().replace(/_/g, ' ').trim();
+                             const matchingGroup = itemGroups.find(g => {
+                               const gName = g.name.toLowerCase().replace(/_/g, ' ').trim();
+                               return gName === ig || ig.includes(gName) || gName.includes(ig);
+                             });
+                             autoGroup = matchingGroup ? matchingGroup.name : getMaterialItemGroupFromType(item);
+                          }
+
                           setMaterialForm({
                             ...materialForm,
                             materialName: item ? item.material_name : e.target.value,
-                            itemGroup: item ? getMaterialItemGroupFromType(item) : materialForm.itemGroup,
+                            itemGroup: autoGroup,
                             rate: item ? (bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0))) : materialForm.rate,
                             uom: item ? (item.unit || 'Kg') : materialForm.uom,
                             description: item ? item.material_name : materialForm.description

@@ -1201,6 +1201,10 @@ const updateSalesOrderItem = async (itemId, data) => {
     fields.push('item_code = ?');
     params.push(data.item_code);
   }
+  if (data.item_type !== undefined) {
+    fields.push('item_type = ?');
+    params.push(data.item_type);
+  }
   if (data.drawing_no !== undefined) {
     fields.push('drawing_no = ?');
     params.push(data.drawing_no);

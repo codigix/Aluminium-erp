@@ -568,49 +568,7 @@ const BOMApproval = () => {
                     ))}
                     </div>
 
-                    {/* Overall Order Summary Breakdown */}
-                    <div className="mt-8 flex justify-end">
-                      <div className="w-80 bg-white border border-slate-200 rounded   overflow-hidden">
-                        <div className="bg-slate-50 p-2  border-b border-slate-200">
-                          <h4 className="text-xs  text-slate-700  ">Overall Cost Breakdown</h4>
-                        </div>
-                        <div className="p-4 space-y-3">
-                          {(() => {
-                            const subtotal = orderItems.reduce((total, item) => {
-                              const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
-                              const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) || 0;
-                              const labor = item.operations?.reduce((sum, o) => {
-                                const cycle = parseFloat(o.cycle_time_min || 0);
-                                const setup = parseFloat(o.setup_time_min || 0);
-                                const rate = parseFloat(o.hourly_rate || 0);
-                                return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
-                              }, 0) || 0;
-                              const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
-                              return total + (mat + comp + labor - scrap);
-                            }, 0);
-                            const gst = subtotal * 0.18;
-                            const total = subtotal + gst;
 
-                            return (
-                              <>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-slate-500 ">BOM Subtotal:</span>
-                                  <span className="text-slate-900 ">₹{subtotal.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-slate-500 ">GST (18.0%):</span>
-                                  <span className="text-slate-900 ">₹{gst.toFixed(2)}</span>
-                                </div>
-                                <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-                                  <span className="text-sm  text-slate-700">Sales Order Price:</span>
-                                  <span className="text-xl font-extrabold text-emerald-600">₹{total.toFixed(2)}</span>
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
