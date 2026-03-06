@@ -46,4 +46,21 @@ router.post('/', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
   }
 });
 
+router.get('/job-card/:jobCardId/items', authenticate, async (req, res) => {
+  try {
+    const { jobCardId } = req.params;
+    const [items] = await pool.execute(
+      `SELECT oci.*, oc.challan_number 
+       FROM outward_challan_items oci
+       JOIN outward_challans oc ON oci.challan_id = oc.id
+       WHERE oc.job_card_id = ?`,
+      [jobCardId]
+    );
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching outward challan items:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

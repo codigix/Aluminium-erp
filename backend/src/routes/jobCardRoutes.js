@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jobCardController = require('../controllers/jobCardController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
+const upload = require('../middleware/upload');
 
 router.use(authenticate);
 
@@ -19,7 +20,7 @@ router.post('/:id/time-logs', authorize(['PROD_MANAGE']), jobCardController.addT
 router.put('/time-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.updateTimeLog);
 router.delete('/time-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.deleteTimeLog);
 
-router.post('/:id/quality-logs', authorize(['PROD_MANAGE']), jobCardController.addQualityLog);
+router.post('/:id/quality-logs', authorize(['PROD_MANAGE']), upload.single('vendorInvoice'), jobCardController.addQualityLog);
 router.put('/quality-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.updateQualityLog);
 router.delete('/quality-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.deleteQualityLog);
 

@@ -80,7 +80,21 @@ const updateTimeLog = async (req, res) => {
 
 const addQualityLog = async (req, res) => {
   try {
-    const id = await jobCardService.addQualityLog({ ...req.body, jobCardId: req.params.id });
+    const data = { ...req.body, jobCardId: req.params.id };
+    
+    if (req.file) {
+      data.vendorInvoice = `uploads/${req.file.filename}`;
+    }
+
+    if (typeof data.inwardItems === 'string') {
+      try {
+        data.inwardItems = JSON.parse(data.inwardItems);
+      } catch (e) {
+        console.error('Error parsing inwardItems:', e);
+      }
+    }
+
+    const id = await jobCardService.addQualityLog(data);
     res.status(201).json({ id });
   } catch (error) {
     res.status(500).json({ error: error.message });

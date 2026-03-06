@@ -301,7 +301,7 @@ const getQualityLogs = async (jobCardId) => {
 };
 
 const addQualityLog = async (data) => {
-  const { jobCardId, day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status } = data;
+  const { jobCardId, day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status, inwardItems, vendorInvoice } = data;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -340,10 +340,24 @@ const addQualityLog = async (data) => {
 
     const [result] = await connection.execute(
       `INSERT INTO job_card_quality_logs 
-       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [jobCardId, finalDay, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status || 'PENDING']
+       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status, vendor_invoice)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [jobCardId, finalDay, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status || 'PENDING', vendorInvoice || null]
     );
+
+    const qualityLogId = result.insertId;
+
+    // 3. Handle Inward Item Rates
+    if (inwardItems && Array.isArray(inwardItems)) {
+      for (const item of inwardItems) {
+        await connection.execute(
+          `INSERT INTO job_card_inward_item_rates 
+           (quality_log_id, item_code, release_qty, rate)
+           VALUES (?, ?, ?, ?)`,
+          [qualityLogId, item.item_code, item.release_qty, item.rate || 0]
+        );
+      }
+    }
 
     // Update accepted and rejected qty in job card if approved
     if (status === 'APPROVED') {
