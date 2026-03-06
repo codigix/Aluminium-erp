@@ -228,17 +228,49 @@ const JobCard = () => {
   const fetchInwardItems = async (jobCardId) => {
     try {
       const token = localStorage.getItem('authToken');
+      
+      // 1. Fetch original outward items
       const response = await fetch(`${API_BASE}/outward-challans/job-card/${jobCardId}/items`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      // 2. Fetch existing quality logs to see if we already have a receipt
+      const logsRes = await fetch(`${API_BASE}/job-cards/${jobCardId}/logs`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
       if (response.ok) {
-        const data = await response.json();
-        // Add rate property to each item
-        const itemsWithRate = data.map(item => ({
-          ...item,
-          rate: 0
+        const outwardItems = await response.json();
+        let existingInwardItems = [];
+        let existingLog = null;
+
+        if (logsRes.ok) {
+          const logsData = await logsRes.json();
+          // Find the latest approved quality log which has inward items
+          existingLog = (logsData.qualityLogs || []).find(log => log.status === 'APPROVED' && log.inwardItems?.length > 0);
+          if (existingLog) {
+            existingInwardItems = existingLog.inwardItems;
+          }
+        }
+
+        // Map rates from existing record if found, otherwise default to 0
+        const itemsWithRate = outwardItems.map(item => {
+          const matched = existingInwardItems.find(ei => ei.item_code === item.item_code);
+          return {
+            ...item,
+            rate: matched ? matched.rate : 0
+          };
+        });
+
+        setInwardFormData(prev => ({ 
+          ...prev, 
+          inwardItems: itemsWithRate,
+          receivedDate: existingLog ? existingLog.check_date.split('T')[0] : prev.receivedDate,
+          remarks: existingLog ? existingLog.rejection_reason : prev.remarks,
+          acceptedQty: existingLog ? existingLog.accepted_qty : prev.acceptedQty,
+          receivedQty: existingLog ? existingLog.inspected_qty : prev.receivedQty,
+          scrapQty: existingLog ? existingLog.scrap_qty : prev.scrapQty
         }));
-        setInwardFormData(prev => ({ ...prev, inwardItems: itemsWithRate }));
       }
     } catch (error) {
       console.error('Error fetching inward items:', error);
@@ -2470,6 +2502,14 @@ const JobCard = () => {
       formData.append('notes', `Vendor Receipt from ${selectedJCOutward.outward_challan_no}`);
       formData.append('status', 'APPROVED');
       formData.append('inwardItems', JSON.stringify(inwardFormData.inwardItems));
+      
+      const subTotal = inwardFormData.inwardItems.reduce((sum, item) => sum + (Number(item.release_qty || 0) * Number(item.rate || 0)), 0);
+      const gstAmount = subTotal * 0.18;
+      const grandTotal = subTotal + gstAmount;
+
+      formData.append('subTotal', subTotal);
+      formData.append('gstAmount', gstAmount);
+      formData.append('grandTotal', grandTotal);
       
       if (inwardFormData.vendorInvoice) {
         formData.append('vendorInvoice', inwardFormData.vendorInvoice);

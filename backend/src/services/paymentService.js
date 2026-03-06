@@ -16,6 +16,7 @@ const processPayment = async (payload) => {
   const {
     invoiceId,
     poId,
+    jobCardQualityLogId,
     vendorId,
     paymentAmount,
     paymentDate,
@@ -34,7 +35,7 @@ const processPayment = async (payload) => {
     createdBy
   } = payload;
 
-  if (!poId || !vendorId || !paymentAmount || !paymentDate || !paymentMode) {
+  if ((!poId && !jobCardQualityLogId) || !vendorId || !paymentAmount || !paymentDate || !paymentMode) {
     const error = new Error('Missing required payment fields');
     error.statusCode = 400;
     throw error;
@@ -43,12 +44,24 @@ const processPayment = async (payload) => {
   const voucherNo = await generatePaymentVoucherNo();
 
   try {
-    // Get PO Number for reference if invoiceId is null
+    // Get Reference Number
     let referenceNo = invoiceId || '';
-    if (!invoiceId && poId) {
-      const [poRows] = await pool.query('SELECT po_number FROM purchase_orders WHERE id = ?', [poId]);
-      if (poRows.length > 0) {
-        referenceNo = poRows[0].po_number;
+    if (!invoiceId) {
+      if (poId) {
+        const [poRows] = await pool.query('SELECT po_number FROM purchase_orders WHERE id = ?', [poId]);
+        if (poRows.length > 0) {
+          referenceNo = poRows[0].po_number;
+        }
+      } else if (jobCardQualityLogId) {
+        const [qlRows] = await pool.query(`
+          SELECT jc.job_card_no 
+          FROM job_card_quality_logs ql
+          JOIN job_cards jc ON ql.job_card_id = jc.id
+          WHERE ql.id = ?
+        `, [jobCardQualityLogId]);
+        if (qlRows.length > 0) {
+          referenceNo = qlRows[0].job_card_no;
+        }
       }
     }
 
@@ -61,6 +74,7 @@ const processPayment = async (payload) => {
         payment_voucher_no,
         invoice_id,
         po_id,
+        job_card_quality_log_id,
         vendor_id,
         payment_amount,
         payment_date,
@@ -79,11 +93,12 @@ const processPayment = async (payload) => {
         authorization_code,
         status,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         voucherNo,
         invoiceId || null,
-        poId,
+        poId || null,
+        jobCardQualityLogId || null,
         vendorId,
         parseFloat(paymentAmount),
         paymentDate,
@@ -122,7 +137,7 @@ const processPayment = async (payload) => {
         paymentId,
         vendorId,
         parseFloat(paymentAmount),
-        `Payment for ${invoiceId ? 'Invoice ' + invoiceId : 'PO ' + referenceNo}: ${remarks || ''}`
+        `Payment for ${invoiceId ? 'Invoice ' + invoiceId : (poId ? 'PO ' + referenceNo : 'Job Card ' + referenceNo)}: ${remarks || ''}`
       ]
     );
 
@@ -142,18 +157,25 @@ const processPayment = async (payload) => {
         'PAYMENT',
         'CREDIT',
         parseFloat(paymentAmount),
-        `Payment against ${invoiceId ? 'Invoice ' + invoiceId : 'PO ' + referenceNo}`,
+        `Payment against ${invoiceId ? 'Invoice ' + invoiceId : (poId ? 'PO ' + referenceNo : 'Job Card ' + referenceNo)}`,
         paymentDate
       ]
     );
 
-    // Check if fully paid and update PO status
+    // Update status if fully paid
     if (poId) {
       const [poRows] = await pool.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [poId]);
       const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE po_id = ? AND status = ?', [poId, 'CONFIRMED']);
       
       if (poRows.length > 0 && paymentRows[0].total_paid >= poRows[0].total_amount) {
         await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', poId]);
+      }
+    } else if (jobCardQualityLogId) {
+      const [qlRows] = await pool.query('SELECT grand_total FROM job_card_quality_logs WHERE id = ?', [jobCardQualityLogId]);
+      const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE job_card_quality_log_id = ? AND status = ?', [jobCardQualityLogId, 'CONFIRMED']);
+      
+      if (qlRows.length > 0 && paymentRows[0].total_paid >= qlRows[0].grand_total) {
+        await pool.execute('UPDATE job_card_quality_logs SET status = ? WHERE id = ?', ['PAID', jobCardQualityLogId]);
       }
     }
 
@@ -173,13 +195,15 @@ const getPayments = async (filters = {}) => {
   let query = `
     SELECT 
       p.*,
-      po.po_number,
+      COALESCE(po.po_number, jc.job_card_no) as po_number,
       v.vendor_name,
       v.email as vendor_email,
       COALESCE(ba.bank_name, p.manual_bank_account) as bank_name,
       ba.account_number
     FROM payments p
     LEFT JOIN purchase_orders po ON p.po_id = po.id
+    LEFT JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
+    LEFT JOIN job_cards jc ON ql.job_card_id = jc.id
     LEFT JOIN vendors v ON p.vendor_id = v.id
     LEFT JOIN bank_accounts ba ON p.bank_account_id = ba.id
     WHERE 1=1
@@ -216,12 +240,14 @@ const getPaymentById = async (paymentId) => {
   const [rows] = await pool.query(
     `SELECT 
       p.*,
-      po.po_number,
+      COALESCE(po.po_number, jc.job_card_no) as po_number,
       v.vendor_name,
       COALESCE(ba.bank_name, p.manual_bank_account) as bank_name,
       ba.account_number
     FROM payments p
     LEFT JOIN purchase_orders po ON p.po_id = po.id
+    LEFT JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
+    LEFT JOIN job_cards jc ON ql.job_card_id = jc.id
     LEFT JOIN vendors v ON p.vendor_id = v.id
     LEFT JOIN bank_accounts ba ON p.bank_account_id = ba.id
     WHERE p.id = ?`,
@@ -253,24 +279,44 @@ const getVendorBalance = async (vendorId) => {
 };
 
 const getPendingPayments = async () => {
-  const [payments] = await pool.query(
+  const [poPayments] = await pool.query(
     `SELECT 
-      po.*,
+      po.id,
       po.po_number,
       po.total_amount,
       po.created_at,
       v.vendor_name,
       v.id as vendor_id,
+      'PURCHASE_ORDER' as type,
       COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0) as already_paid,
       (po.total_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0)) as outstanding
     FROM purchase_orders po
     LEFT JOIN vendors v ON po.vendor_id = v.id
-    WHERE po.status IN ('SENT', 'RECEIVED', 'PARTIALLY_RECEIVED')
-    HAVING outstanding > 0
-    ORDER BY po.created_at DESC`
+    WHERE po.status IN ('SENT', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'FULFILLED')
+    HAVING outstanding > 0`
   );
 
-  return payments;
+  const [subconPayments] = await pool.query(
+    `SELECT 
+      ql.id,
+      jc.job_card_no as po_number,
+      ql.grand_total as total_amount,
+      ql.check_date as created_at,
+      v.vendor_name,
+      v.id as vendor_id,
+      'SUBCONTRACTING' as type,
+      COALESCE((SELECT SUM(payment_amount) FROM payments WHERE job_card_quality_log_id = ql.id AND status = 'CONFIRMED'), 0) as already_paid,
+      (ql.grand_total - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE job_card_quality_log_id = ql.id AND status = 'CONFIRMED'), 0)) as outstanding
+    FROM job_card_quality_logs ql
+    JOIN job_cards jc ON ql.job_card_id = jc.id
+    JOIN outward_challans oc ON jc.id = oc.job_card_id
+    JOIN vendors v ON oc.vendor_id = v.id
+    WHERE ql.status IN ('PROCESSING', 'APPROVED') AND ql.grand_total > 0
+    HAVING outstanding > 0`
+  );
+
+  const allPayments = [...poPayments, ...subconPayments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  return allPayments;
 };
 
 const updatePaymentStatus = async (paymentId, status) => {

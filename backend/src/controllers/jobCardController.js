@@ -146,6 +146,35 @@ const deleteDowntimeLog = async (req, res) => {
   }
 };
 
+const getVendorReceipts = async (req, res) => {
+  try {
+    const receipts = await jobCardService.getVendorReceipts();
+    res.json(receipts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getVendorReceiptItems = async (req, res) => {
+  try {
+    const { logId } = req.params;
+    const items = await jobCardService.getVendorReceiptItems(logId);
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const sendVendorReceiptToPayment = async (req, res) => {
+  try {
+    const { logId } = req.params;
+    await jobCardService.sendVendorReceiptToPayment(logId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const getWorkOrderLogs = async (req, res) => {
   try {
     const { workOrderId } = req.params;
@@ -171,5 +200,8 @@ module.exports = {
   updateQualityLog,
   deleteQualityLog,
   addDowntimeLog,
-  deleteDowntimeLog
+  deleteDowntimeLog,
+  getVendorReceipts,
+  getVendorReceiptItems,
+  sendVendorReceiptToPayment
 };

@@ -297,11 +297,21 @@ const getQualityLogs = async (jobCardId) => {
     'SELECT * FROM job_card_quality_logs WHERE job_card_id = ? ORDER BY created_at DESC',
     [jobCardId]
   );
+  
+  // Fetch inward items for each log if they exist
+  for (const log of rows) {
+    const [items] = await pool.query(
+      'SELECT * FROM job_card_inward_item_rates WHERE quality_log_id = ?',
+      [log.id]
+    );
+    log.inwardItems = items;
+  }
+  
   return rows;
 };
 
 const addQualityLog = async (data) => {
-  const { jobCardId, day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status, inwardItems, vendorInvoice } = data;
+  const { jobCardId, day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status, inwardItems, vendorInvoice, subTotal, gstAmount, grandTotal } = data;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -340,9 +350,12 @@ const addQualityLog = async (data) => {
 
     const [result] = await connection.execute(
       `INSERT INTO job_card_quality_logs 
-       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status, vendor_invoice)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [jobCardId, finalDay, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status || 'PENDING', vendorInvoice || null]
+       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status, vendor_invoice, sub_total, gst_amount, grand_total)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        jobCardId, finalDay, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status || 'PENDING', 
+        vendorInvoice || null, subTotal || 0, gstAmount || 0, grandTotal || 0
+      ]
     );
 
     const qualityLogId = result.insertId;
@@ -612,6 +625,47 @@ const getWorkOrderLogs = async (workOrderId) => {
   return { timeLogs, qualityLogs, downtimeLogs };
 };
 
+const getVendorReceipts = async () => {
+  const [rows] = await pool.query(`
+    SELECT 
+      q.id,
+      q.job_card_id,
+      jc.job_card_no as job_card_number,
+      q.check_date as date,
+      q.sub_total,
+      q.gst_amount,
+      q.grand_total as amount,
+      q.status,
+      q.vendor_invoice as invoice_url,
+      v.vendor_name,
+      v.id as vendor_id
+    FROM job_card_quality_logs q
+    JOIN job_cards jc ON q.job_card_id = jc.id
+    JOIN outward_challans oc ON jc.id = oc.job_card_id
+    JOIN vendors v ON oc.vendor_id = v.id
+    WHERE q.grand_total > 0
+    ORDER BY q.created_at DESC
+  `);
+  
+  return rows;
+};
+
+const getVendorReceiptItems = async (logId) => {
+  const [rows] = await pool.query(`
+    SELECT * FROM job_card_inward_item_rates
+    WHERE quality_log_id = ?
+  `, [logId]);
+  return rows;
+};
+
+const sendVendorReceiptToPayment = async (logId) => {
+  await pool.execute(
+    "UPDATE job_card_quality_logs SET status = 'PROCESSING' WHERE id = ?",
+    [logId]
+  );
+  return { success: true };
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -630,5 +684,8 @@ module.exports = {
   getDowntimeLogs,
   addDowntimeLog,
   deleteDowntimeLog,
-  getWorkOrderLogs
+  getWorkOrderLogs,
+  getVendorReceipts,
+  getVendorReceiptItems,
+  sendVendorReceiptToPayment
 };

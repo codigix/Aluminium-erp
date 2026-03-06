@@ -6,6 +6,11 @@ const upload = require('../middleware/upload');
 
 router.use(authenticate);
 
+// Literal routes first to avoid collisions with :id
+router.get('/vendor-receipts', authorize(['PAYMENT_VIEW', 'PO_VIEW']), jobCardController.getVendorReceipts);
+router.get('/vendor-receipts/:logId/items', authorize(['PAYMENT_VIEW', 'PO_VIEW']), jobCardController.getVendorReceiptItems);
+router.patch('/vendor-receipts/:logId/send-to-payment', authorize(['PAYMENT_MANAGE', 'PAYMENT_PROCESS']), jobCardController.sendVendorReceiptToPayment);
+
 router.get('/', authorize(['PROD_VIEW']), jobCardController.listJobCards);
 router.post('/', authorize(['PROD_MANAGE']), jobCardController.createJobCard);
 router.put('/:id', authorize(['PROD_MANAGE']), jobCardController.updateJobCard);

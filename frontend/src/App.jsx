@@ -61,12 +61,13 @@ import PaymentHistory from "./pages/PaymentHistory";
 import PaymentReceived from "./pages/PaymentReceived";
 import CustomerPaymentHistory from "./pages/CustomerPaymentHistory";
 import AccountsDashboard from "./pages/AccountsDashboard";
+import VendorInwardChallans from "./pages/VendorInwardChallans";
 import { FormControl, StatusBadge } from "./components/ui.jsx";
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
+const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -163,7 +164,7 @@ const DEPARTMENT_MODULES = {
   PRODUCTION: ['project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'routing-operations', 'process-sheet', 'dashboard'],
   QUALITY: ['quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
   SHIPMENT: ['shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'dashboard'],
-  ACCOUNTS: ['accounts-dashboard', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'],
+  ACCOUNTS: ['accounts-dashboard', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'],
   INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
   PROCUREMENT: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
   ADMIN: [
@@ -172,7 +173,7 @@ const DEPARTMENT_MODULES = {
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
     'quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
     'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses',
-    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'accounts-dashboard', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard',
+    'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'accounts-dashboard', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard',
     'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'
   ]
 }
@@ -1016,6 +1017,7 @@ function App() {
     { label: 'ACCOUNTS', isGroup: true, groupId: 'accounts-main-group' },
     { label: 'Dashboard', moduleId: 'accounts-dashboard', icon: 'chart', indent: true },
     { label: 'Accounts Payable (Vendor)', isGroup: true, groupId: 'accounts-payable-group' },
+    { label: 'Vendor Inward Challans', moduleId: 'vendor-inward-challans', icon: 'clipboard', indent: true },
     { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'files', indent: true },
     { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'cart', indent: true },
     { label: 'Payment History', moduleId: 'payment-history', icon: 'book', indent: true },
@@ -1522,6 +1524,9 @@ function App() {
 
                 {activeModule === 'accounts-dashboard' && (
                   <AccountsDashboard />
+                )}
+                {activeModule === 'vendor-inward-challans' && (
+                  <VendorInwardChallans />
                 )}
 
                 {activeModule === 'invoice-received' && (
