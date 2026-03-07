@@ -1141,7 +1141,7 @@ const BOMFormPage = () => {
           </div>
           {!collapsedSections.productInfo && (
             <div className="p-4 bg-white">
-              {/* {!isReadOnly && (
+              {!isReadOnly && (
                 <div className="bg-blue-50/40 p-3 rounded  border border-blue-100/50 mb-4 flex flex-col md:flex-row items-end gap-4">
                   <div className="flex-1 space-y-1.5">
                     <label className="text-[10px]  text-blue-600  ml-1">Quick Filter by Drawing</label>
@@ -1225,7 +1225,7 @@ const BOMFormPage = () => {
                     </div>
                   )}
                 </div>
-              )} */}
+              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Product Name <span className="text-rose-500">*</span></label>
@@ -1282,14 +1282,21 @@ const BOMFormPage = () => {
                                               group === 'sfg' ||
                                               group === 'sub-assembly' ||
                                               group === 'semi finished' ||
-                                              group === 'semi-finished';
+                                              group === 'semi-finished' ||
+                                              group === 'raw' || // Allow raw materials if they want to BOM them (unlikely but possible)
+                                              group.includes('good');
 
-                        if (drawingFilter) {
-                          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
-                          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
-                          return cleanOptDwg === cleanFilterDwg && isFinishedOrSub;
-                        }
                         return isFinishedOrSub;
+                      }).sort((a, b) => {
+                        // Sort matching drawings to the top
+                        if (drawingFilter) {
+                          const cleanA = String(a.drawing_no || '').replace(/\s*\($/, '');
+                          const cleanB = String(b.drawing_no || '').replace(/\s*\($/, '');
+                          const cleanFilter = String(drawingFilter || '').replace(/\s*\($/, '');
+                          if (cleanA === cleanFilter && cleanB !== cleanFilter) return -1;
+                          if (cleanB === cleanFilter && cleanA !== cleanFilter) return 1;
+                        }
+                        return (a.label || '').localeCompare(b.label || '');
                       })}
                       value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
                       onChange={(e) => {
@@ -1372,14 +1379,21 @@ const BOMFormPage = () => {
                                               group === 'sfg' ||
                                               group === 'sub-assembly' ||
                                               group === 'semi finished' ||
-                                              group === 'semi-finished';
+                                              group === 'semi-finished' ||
+                                              group === 'raw' || // Allow raw materials if they want to BOM them (unlikely but possible)
+                                              group.includes('good');
 
-                        if (drawingFilter) {
-                          const cleanOptDwg = String(opt.drawing_no || '').replace(/\s*\($/, '');
-                          const cleanFilterDwg = String(drawingFilter || '').replace(/\s*\($/, '');
-                          return cleanOptDwg === cleanFilterDwg && isFinishedOrSub;
-                        }
                         return isFinishedOrSub;
+                      }).sort((a, b) => {
+                        // Sort matching drawings to the top
+                        if (drawingFilter) {
+                          const cleanA = String(a.drawing_no || '').replace(/\s*\($/, '');
+                          const cleanB = String(b.drawing_no || '').replace(/\s*\($/, '');
+                          const cleanFilter = String(drawingFilter || '').replace(/\s*\($/, '');
+                          if (cleanA === cleanFilter && cleanB !== cleanFilter) return -1;
+                          if (cleanB === cleanFilter && cleanA !== cleanFilter) return 1;
+                        }
+                        return (a.label || '').localeCompare(b.label || '');
                       })}
                       value={selectedItem ? `${selectedItem.source || 'order'}_${selectedItem.id}` : ''}
                       onChange={(e) => {
@@ -1756,23 +1770,28 @@ const BOMFormPage = () => {
                             if (type.includes("finished") || type.includes("assembly") || type.includes("sub")) return false;
 
                             // Type Filter
-                            const targetGroup = (materialForm.itemGroup || '').toLowerCase();
+                            const targetGroup = (materialForm.itemGroup || '').toLowerCase().replace(/_/g, ' ').trim();
+                            const normalizedType = type.replace(/_/g, ' ').trim();
 
                             // Filter by group logic
-                            if (targetGroup === 'raw material') {
-                              // For Raw Material selection, allow everything EXCEPT sub-assemblies/SFG/FG
-                              // PM and other miscellaneous items are often considered raw materials for BOM
-                              if (type.includes('sub assembly') || type.includes('semi') || type.includes('sfg') || type.includes('finished') || type.includes('assembly')) return false;
-                            } else if (targetGroup === 'consumable') {
-                              if (!type.includes('consumable')) return false;
-                            } else if (targetGroup === 'pm') {
-                              if (!type.includes('pm') && !type.includes('packing')) return false;
-                            } else if (targetGroup === 'sub assembly' || targetGroup === 'sfg') {
-                              if (!type.includes('sub assembly') && !type.includes('semi') && !type.includes('sfg')) return false;
-                            } else if (targetGroup === 'tooling') {
-                              if (!type.includes('tool')) return false;
-                            } else if (targetGroup === 'service') {
-                              if (!type.includes('service')) return false;
+                            if (targetGroup) {
+                              if (targetGroup.includes('raw material')) {
+                                // For Raw Material selection, allow everything EXCEPT sub-assemblies/SFG/FG
+                                if (normalizedType.includes('sub assembly') || normalizedType.includes('semi') || normalizedType.includes('sfg') || normalizedType.includes('finished') || normalizedType.includes('assembly')) return false;
+                              } else if (targetGroup.includes('consumable')) {
+                                if (!normalizedType.includes('consumable')) return false;
+                              } else if (targetGroup.includes('pm') || targetGroup.includes('packing')) {
+                                if (!normalizedType.includes('pm') && !normalizedType.includes('packing')) return false;
+                              } else if (targetGroup.includes('sub assembly') || targetGroup.includes('sfg') || targetGroup.includes('semi')) {
+                                if (!normalizedType.includes('sub assembly') && !normalizedType.includes('semi') && !normalizedType.includes('sfg')) return false;
+                              } else if (targetGroup.includes('tool')) {
+                                if (!normalizedType.includes('tool')) return false;
+                              } else if (targetGroup.includes('service')) {
+                                if (!normalizedType.includes('service')) return false;
+                              } else {
+                                // Direct match fallback
+                                if (!normalizedType.includes(targetGroup) && !targetGroup.includes(normalizedType)) return false;
+                              }
                             }
 
                             if (showAllDrawings) return true;
@@ -1782,8 +1801,10 @@ const BOMFormPage = () => {
 
                             if (!productDrawing) return true;
                             
-                            // Strict drawing filter when Global Search is off: only show items for THIS drawing
-                            // If drawing number is N/A or empty, it will be hidden unless Global Search is on
+                            // If item has no drawing or N/A, it's a generic raw material/consumable - ALWAYS show it
+                            if (!itemDrawing || itemDrawing === 'N/A') return true;
+
+                            // Otherwise, it must match the product drawing
                             return itemDrawing === productDrawing;
                           })
                           .map(item => ({
