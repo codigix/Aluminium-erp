@@ -28,7 +28,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DESIGN],
-    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'item-master'],
+    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
@@ -67,7 +67,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['dashboard', 'item-master', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
+    allowedModules: ['dashboard', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
     permissions: [
       'PO_VIEW',
       'ORDER_VIEW',
@@ -97,7 +97,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: ['sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DISPATCH_PENDING],
-    allowedModules: ['dashboard', 'item-master', 'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card'],
+    allowedModules: ['dashboard', 'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card'],
     permissions: [
       'ORDER_VIEW', 'ORDER_EDIT',
       'PO_VIEW',
@@ -183,7 +183,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['item-master', 'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
+    allowedModules: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',

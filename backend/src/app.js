@@ -58,8 +58,23 @@ const app = express();
 app.use((req, res, next) => {
   const url = (req.originalUrl || req.url).toLowerCase();
   if (url.includes('/uploads/')) {
+    // Add CORS headers for direct file access
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+
     const parts = url.split('/uploads/');
-    const fileName = parts[parts.length - 1].split('?')[0];
+    const fileName = decodeURIComponent(parts[parts.length - 1].split('?')[0]);
+    
+    // Set proper Content-Type for PDFs to help browser rendering
+    if (fileName.toLowerCase().endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="' + fileName + '"');
+    }
     
     // Try serving directly from configured uploadsPath
     return res.sendFile(path.join(uploadsPath, fileName), { headers: { 'X-Public-Upload': 'true' } }, (err) => {
@@ -144,8 +159,8 @@ app.use('/api', apiRouter);
 app.use('/', apiRouter);
 
 // Also serve at the root level just in case
-app.use('/uploads', express.static(uploadsPath));
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/uploads', cors(), express.static(uploadsPath));
+app.use('/uploads', cors(), express.static(path.join(process.cwd(), 'uploads')));
 
 app.use(notFound);
 app.use(errorHandler);

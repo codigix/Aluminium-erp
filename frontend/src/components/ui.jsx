@@ -245,7 +245,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
   )
 }
 
-export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false }) => {
+export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false, hideExpander = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
@@ -261,6 +261,17 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
     }
     setExpandedRows(newExpandedRows);
   };
+
+  const toggleRowExternal = (id) => {
+    toggleRow(id);
+  };
+
+  useEffect(() => {
+    window.toggleDataTableRow = toggleRowExternal;
+    return () => {
+      delete window.toggleDataTableRow;
+    };
+  }, [expandedRows]);
 
   const handleSort = (key) => {
     let direction = 'ascending';
@@ -316,7 +327,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
         <table className="w-full text-left bg-white text-sm border-collapse">
           <thead className={`${isDark ? 'bg-white text-slate-400' : 'bg-slate-50/50 text-slate-500'} text-xs    `}>
             <tr>
-              {renderExpanded && <th className={`p-2 border-b w-10 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}></th>}
+              {renderExpanded && !hideExpander && <th className={`p-2 border-b w-10 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}></th>}
               {columns.map((col, idx) => (
                 <th 
                   key={idx} 
@@ -338,7 +349,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
           <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-50'}`}>
             {loading ? (
               <tr>
-                <td colSpan={columns.length + (renderExpanded ? 1 : 0)} className="p-2 text-center">
+                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0)} className="p-2 text-center">
                   <div className="flex flex-col items-center gap-4">
                     <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
                     <span className="text-slate-400  animate-pulse">{loadingMessage}</span>
@@ -347,7 +358,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
               </tr>
             ) : filteredData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + (renderExpanded ? 1 : 0)} className="p-2 text-center">
+                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0)} className="p-2 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <FileText className="w-12 h-12 text-slate-200" />
                     <span className="text-slate-400 ">{emptyMessage}</span>
@@ -366,7 +377,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                         if (onRowClick) onRowClick(row);
                       }}
                     >
-                      {renderExpanded && (
+                      {renderExpanded && !hideExpander && (
                         <td className="p-2 text-slate-400">
                           <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
                         </td>
@@ -379,7 +390,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                     </tr>
                     {isExpanded && renderExpanded && (
                       <tr>
-                        <td colSpan={columns.length + 1} className={`p-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                        <td colSpan={columns.length + (hideExpander ? 0 : 1)} className={`p-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                           <div className=" animate-in slide-in-from-top-2 duration-200">
                             {renderExpanded(row)}
                           </div>

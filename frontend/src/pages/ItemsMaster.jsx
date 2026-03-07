@@ -302,7 +302,6 @@ const ItemsMaster = () => {
     { label: 'Item Name', key: 'material_name', sortable: true },
     { label: 'Group', key: 'material_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px]">{val}</span> },
     { label: 'UOM', key: 'unit', sortable: true },
-    { label: 'Drawing No', key: 'drawing_no', sortable: true },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
     { 
       label: 'Actions', 
@@ -387,7 +386,7 @@ const ItemsMaster = () => {
                 <RefreshCw size={18} className={itemsLoading ? 'animate-spin' : ''} />
               </button>
               <button 
-                onClick={() => { handleClearItemForm(); setShowItemForm(true); }}
+                onClick={() => { handleClearItemForm(); setShowItemForm(true); fetchNextItemCode(); }}
                 className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
               >
                 <Plus size={18} /> Add New Item
@@ -466,7 +465,11 @@ const ItemsMaster = () => {
                 <select 
                   className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none"
                   value={itemFormData.itemGroup}
-                  onChange={(e) => setItemFormData({...itemFormData, itemGroup: e.target.value})}
+                  onChange={(e) => {
+                    const group = e.target.value;
+                    setItemFormData({...itemFormData, itemGroup: group});
+                    if (!isEditingItem) fetchNextItemCode(itemFormData.itemName, group);
+                  }}
                   required
                 >
                   <option value="">Select Item Group</option>
@@ -476,7 +479,7 @@ const ItemsMaster = () => {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Default UOM</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">UOM</label>
                 <select 
                   className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   value={itemFormData.defaultUom}
@@ -487,6 +490,15 @@ const ItemsMaster = () => {
                   <option value="Mtr">Mtr</option>
                   <option value="Set">Set</option>
                   <option value="Pkt">Pkt</option>
+                  <option value="Litre (Ltr)">Litre (Ltr)</option>
+                  <option value="Millilitre (ml)">Millilitre (ml)</option>
+                  <option value="Cubic Meter (m³)">Cubic Meter (m³)</option>
+                  <option value="Millimeter (mm)">Millimeter (mm)</option>
+                  <option value="Feet (ft)">Feet (ft)</option>
+                  <option value="Inch (in)">Inch (in)</option>
+                  <option value="Gram (g)">Gram (g)</option>
+                  <option value="Ton">Ton</option>
+                  <option value="Metric Ton (MT)">Metric Ton (MT)</option>
                 </select>
               </div>
               <div className="space-y-2">
@@ -497,16 +509,6 @@ const ItemsMaster = () => {
                   className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   value={itemFormData.valuationRate}
                   onChange={(e) => setItemFormData({...itemFormData, valuationRate: parseFloat(e.target.value) || 0})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Selling Rate (₹)</label>
-                <input 
-                  type="number"
-                  step="0.01"
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={itemFormData.sellingRate}
-                  onChange={(e) => setItemFormData({...itemFormData, sellingRate: parseFloat(e.target.value) || 0})}
                 />
               </div>
               <div className="space-y-2">
@@ -525,30 +527,22 @@ const ItemsMaster = () => {
                     onChange={(e) => setItemFormData({...itemFormData, weightUom: e.target.value})}
                   >
                     <option value="">UOM</option>
+                    <option value="Nos">Nos</option>
                     <option value="Kg">Kg</option>
-                    <option value="gm">gm</option>
+                    <option value="Mtr">Mtr</option>
+                    <option value="Set">Set</option>
+                    <option value="Pkt">Pkt</option>
+                    <option value="Litre (Ltr)">Litre (Ltr)</option>
+                    <option value="Millilitre (ml)">Millilitre (ml)</option>
+                    <option value="Cubic Meter (m³)">Cubic Meter (m³)</option>
+                    <option value="Millimeter (mm)">Millimeter (mm)</option>
+                    <option value="Feet (ft)">Feet (ft)</option>
+                    <option value="Inch (in)">Inch (in)</option>
+                    <option value="Gram (g)">Gram (g)</option>
+                    <option value="Ton">Ton</option>
+                    <option value="Metric Ton (MT)">Metric Ton (MT)</option>
                   </select>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Drawing No</label>
-                <input 
-                  type="text"
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  placeholder="e.g. DWG-123"
-                  value={itemFormData.drawingNo}
-                  onChange={(e) => setItemFormData({...itemFormData, drawingNo: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Revision</label>
-                <input 
-                  type="text"
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  placeholder="0"
-                  value={itemFormData.revision}
-                  onChange={(e) => setItemFormData({...itemFormData, revision: e.target.value})}
-                />
               </div>
             </div>
             
