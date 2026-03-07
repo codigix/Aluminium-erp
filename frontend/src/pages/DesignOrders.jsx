@@ -46,761 +46,24 @@ const DesignOrders = () => {
   const [expandedIncomingPo, setExpandedIncomingPo] = useState({});
   const [expandedActivePo, setExpandedActivePo] = useState({});
 
-  const [showAddMaterialModal, setShowAddMaterialModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectData, setRejectData] = useState({
     id: null,
     type: '', // 'ITEM' or 'ORDER'
     reason: ''
   });
-  const [materialFormData, setMaterialFormData] = useState({
-    itemCode: '',
-    itemName: '',
-    itemGroup: '',
-    defaultUom: 'Nos',
-    valuationRate: 0,
-    sellingRate: 0,
-    noOfCavity: 1,
-    weightPerUnit: 0,
-    weightUom: '',
-    drawingNo: '',
-    revision: '',
-    materialGrade: ''
-  });
-  const [isSubmittingMaterial, setIsSubmittingMaterial] = useState(false);
-  const [targetOrderItemId, setTargetOrderItemId] = useState(null);
-  const [targetOrderItemCode, setTargetOrderItemCode] = useState(null);
-  const [itemsList, setItemsList] = useState([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
-  const [isEditingMaterial, setIsEditingMaterial] = useState(false);
-  const [editingMaterialId, setEditingMaterialId] = useState(null);
-  const [materialSubTab, setMaterialSubTab] = useState('add'); // 'add' or 'groups'
-  const [modalSearchTerm, setModalSearchTerm] = useState('');
-  const [itemGroups, setItemGroups] = useState([]);
-  const [groupFormData, setGroupFormData] = useState({ name: '', group_type: '', status: 'ACTIVE' });
-  const [isEditingGroup, setIsEditingGroup] = useState(false);
-  const [editingGroupId, setEditingGroupId] = useState(null);
-  const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
 
-  const fetchItemGroups = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/item-groups`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setItemGroups(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch item groups:', error);
-    }
-  };
-
-  const handleGroupSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      setIsSubmittingGroup(true);
-      const token = localStorage.getItem('authToken');
-      
-      const url = isEditingGroup 
-        ? `${API_BASE}/item-groups/${editingGroupId}`
-        : `${API_BASE}/item-groups`;
-        
-      const method = isEditingGroup ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(groupFormData)
-      });
-      
-      if (!response.ok) throw new Error('Failed to save item group');
-      
-      successToast(isEditingGroup ? 'Item group updated successfully' : 'Item group added successfully');
-      fetchItemGroups();
-      setGroupFormData({ name: '', group_type: '', status: 'ACTIVE' });
-      setIsEditingGroup(false);
-      setEditingGroupId(null);
-    } catch (error) {
-      errorToast(error.message);
-    } finally {
-      setIsSubmittingGroup(false);
-    }
-  };
-
-  const handleEditGroup = (group) => {
-    setGroupFormData({ name: group.name, group_type: group.group_type || 'OTHER', status: group.status || 'ACTIVE' });
-    setIsEditingGroup(true);
-    setEditingGroupId(group.id);
-  };
-
-  const handleDeleteGroup = (id) => {
-    Swal.fire({
-      title: 'Are you sure?',
-      text: "You want to delete this item group?",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#64748b',
-      confirmButtonText: 'Yes, delete it!'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          const token = localStorage.getItem('authToken');
-          const response = await fetch(`${API_BASE}/item-groups/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!response.ok) throw new Error('Failed to delete item group');
-          successToast('Item group deleted');
-          fetchItemGroups();
-        } catch (error) {
-          errorToast(error.message);
-        }
-      }
-    });
+  const openAddMaterialModal = (item = null) => {
+    navigate('/item-master', { state: { addItem: true, item } });
   };
 
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
 
-  const renderItemGroups = () => {
-    return (
-      <div className="p-8 space-y-8 animate-in fade-in duration-300">
-        {/* Add/Edit Group Form */}
-        <div className="bg-slate-50 p-6 rounded border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-6 text-slate-800">
-            <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded text-xs font-bold">+</span>
-            <h4 className="text-sm font-semibold">{isEditingGroup ? 'Edit Item Group' : 'Add New Item Group'}</h4>
-          </div>
-          <form onSubmit={handleGroupSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Group Name *</label>
-              <input 
-                type="text" 
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                placeholder="e.g. Raw Material"
-                value={groupFormData.name}
-                onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Group Type *</label>
-              <select 
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                value={groupFormData.group_type}
-                onChange={(e) => setGroupFormData({...groupFormData, group_type: e.target.value})}
-                required
-              >
-                <option value="">Select Group Type</option>
-                <option value="RM">RM (Raw Material)</option>
-                <option value="FG">FG (Finished Goods)</option>
-                <option value="SFG">SFG (Semi-Finished Goods)</option>
-                <option value="SA">SA (Sub-Assembly)</option>
-                <option value="CON">CON (Consumables)</option>
-                <option value="PAC">PAC (Packing Material)</option>
-                <option value="SCRAP">SCRAP</option>
-                <option value="OTHER">OTHER</option>
-              </select>
-            </div>
-            <div className="flex gap-3">
-              <button 
-                type="submit" 
-                disabled={isSubmittingGroup}
-                className="flex-1 py-2.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
-              >
-                {isSubmittingGroup ? 'Saving...' : (isEditingGroup ? 'Update Group' : 'Add Group')}
-              </button>
-              {isEditingGroup && (
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setIsEditingGroup(false);
-                    setGroupFormData({ name: '', group_type: '', status: 'ACTIVE' });
-                  }}
-                  className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded text-xs hover:bg-slate-50 transition-all"
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-
-        {/* Groups List */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-indigo-500 rounded"></span>
-              Item Groups Master
-            </h4>
-          </div>
-          <div className="overflow-hidden border border-slate-200 rounded shadow-sm">
-            <table className="w-full text-left border-collapse bg-white">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Group Name</th>
-                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Type</th>
-                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200">Status</th>
-                  <th className="p-4 text-xs font-semibold text-slate-500 border-b border-slate-200 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {itemGroups.map((group) => (
-                  <tr key={group.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 text-xs font-medium text-slate-700">{group.name}</td>
-                    <td className="p-4 text-xs">
-                      <span className="px-2 py-1 bg-blue-50 text-blue-600 border border-blue-100 rounded text-[10px]">
-                        {group.group_type || 'OTHER'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-xs">
-                      <span className="px-2 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded text-[10px]">
-                        {group.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => handleEditGroup(group)}
-                          className="p-1.5 text-amber-500 hover:bg-amber-50 rounded transition-all"
-                        >
-                          ✏️
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteGroup(group.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const handlePreview = (item) => {
     setPreviewDrawing(item);
     setShowPreviewModal(true);
-  };
-
-  const renderMaterialForm = () => {
-    return (
-      <div className="bg-white rounded border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300 mb-6 shadow-sm">
-        {/* Sub-Header with Back Button and Title */}
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-          <button 
-            onClick={() => setShowAddMaterialModal(false)}
-            className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 transition-all px-3 py-2 bg-white border border-slate-200 rounded text-xs font-semibold shadow-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Tasks
-          </button>
-          <div className="flex items-center gap-3">
-            <span className="p-2 bg-emerald-100 text-emerald-600 rounded-lg text-sm">📦</span>
-            <h3 className="text-base font-bold text-slate-800 tracking-tight">
-              {isEditingMaterial ? 'Edit Material / Item' : 'Add New Material / Item'}
-            </h3>
-          </div>
-          <div className="w-[120px]"></div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="px-8 border-b border-slate-100 bg-white">
-          <div className="flex gap-8">
-            <button
-              onClick={() => setMaterialSubTab('add')}
-              className={`py-4 text-xs font-bold transition-all relative ${materialSubTab === 'add' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              Add Material
-              {materialSubTab === 'add' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
-            </button>
-            <button
-              onClick={() => setMaterialSubTab('groups')}
-              className={`py-4 text-xs font-bold transition-all relative ${materialSubTab === 'groups' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              Item Groups
-              {materialSubTab === 'groups' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
-            </button>
-          </div>
-        </div>
-
-        {materialSubTab === 'add' ? (
-          <>
-            <form onSubmit={handleMaterialSubmit} className="p-8 space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Row 1 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Item Code *</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      className="flex-1 p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                      placeholder="ITM-0001"
-                      value={materialFormData.itemCode}
-                      onChange={(e) => setMaterialFormData({...materialFormData, itemCode: e.target.value})}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const code = await fetchNextItemCode(materialFormData.itemName, materialFormData.itemGroup);
-                        if (code) setMaterialFormData(prev => ({ ...prev, itemCode: code }));
-                      }}
-                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-xs   transition-all border border-slate-200"
-                      title="Generate Next Code"
-                    >
-                      🔄
-                    </button>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Item Name *</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    placeholder="Enter item name"
-                    value={materialFormData.itemName}
-                    onChange={(e) => setMaterialFormData({...materialFormData, itemName: e.target.value})}
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Item Group *</label>
-                  <select 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    value={materialFormData.itemGroup}
-                    onChange={(e) => setMaterialFormData({...materialFormData, itemGroup: e.target.value})}
-                    required
-                  >
-                    <option value="">Select item group</option>
-                    {itemGroups.map(group => (
-                      <option key={group.id} value={group.name}>{group.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Row 2 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Default UOM *</label>
-                  <select 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    value={materialFormData.defaultUom}
-                    onChange={(e) => setMaterialFormData({...materialFormData, defaultUom: e.target.value})}
-                    required
-                  >
-                    <option value="Nos">Nos</option>
-                    <option value="Kg">Kg</option>
-                    <option value="Mtr">Mtr</option>
-                    <option value="Set">Set</option>
-                    <option value="Ltr">Litre (Ltr)</option>
-                    <option value="ml">Millilitre (ml)</option>
-                    <option value="m³">Cubic Meter (m³)</option>
-                    <option value="mm">Millimeter (mm)</option>
-                    <option value="ft">Feet (ft)</option>
-                    <option value="in">Inch (in)</option>
-                    <option value="g">Gram (g)</option>
-                    <option value="Ton">Ton</option>
-                    <option value="MT">Metric Ton (MT)</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Valuation Rate</label>
-                  <input 
-                    type="number" 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    value={materialFormData.valuationRate}
-                    onChange={(e) => setMaterialFormData({...materialFormData, valuationRate: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">No. of Cavity (for mould items)</label>
-                  <input 
-                    type="number" 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    value={materialFormData.noOfCavity}
-                    onChange={(e) => setMaterialFormData({...materialFormData, noOfCavity: e.target.value})}
-                  />
-                </div>
-
-                {/* Row 3 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Weight per Unit</label>
-                  <input 
-                    type="number" 
-                    step="0.001"
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    placeholder="0.00"
-                    value={materialFormData.weightPerUnit}
-                    onChange={(e) => setMaterialFormData({...materialFormData, weightPerUnit: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Weight UOM</label>
-                  <select 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    value={materialFormData.weightUom}
-                    onChange={(e) => setMaterialFormData({...materialFormData, weightUom: e.target.value})}
-                  >
-                    <option value="">Select weight UOM</option>
-                    <option value="Kg">Kg</option>
-                    <option value="g">Gram (g)</option>
-                    <option value="Ltr">Litre (Ltr)</option>
-                    <option value="ml">Millilitre (ml)</option>
-                    <option value="Ton">Ton</option>
-                    <option value="MT">Metric Ton (MT)</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Drawing No (Optional)</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    placeholder="Enter drawing number"
-                    value={materialFormData.drawingNo}
-                    onChange={(e) => setMaterialFormData({...materialFormData, drawingNo: e.target.value})}
-                  />
-                </div>
-
-                {/* Row 4 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Revision (Optional)</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    placeholder="Enter revision"
-                    value={materialFormData.revision}
-                    onChange={(e) => setMaterialFormData({...materialFormData, revision: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs  text-slate-500  ">Material Grade (Optional)</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
-                    placeholder="Enter material grade"
-                    value={materialFormData.materialGrade}
-                    onChange={(e) => setMaterialFormData({...materialFormData, materialGrade: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6 border-t border-slate-100">
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                  <button 
-                    type="button"
-                    onClick={handleClearMaterialForm}
-                    className="p-2.5 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all border border-slate-200"
-                  >
-                    Clear Form
-                  </button>
-                  <button 
-                    type="button"
-                    className="p-2.5 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
-                  >
-                    Generate EAN Barcode
-                  </button>
-                </div>
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                  <button 
-                    type="button"
-                    onClick={() => setShowAddMaterialModal(false)}
-                    className="flex-1 md:flex-none p-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    disabled={isSubmittingMaterial}
-                    className="flex-1 md:flex-none px-10 py-2.5 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
-                  >
-                    {isSubmittingMaterial ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded  animate-spin"></div>
-                        {isEditingMaterial ? 'Updating...' : 'Saving...'}
-                      </>
-                    ) : (isEditingMaterial ? 'Update Material' : 'Save Material')}
-                  </button>
-                </div>
-              </div>
-            </form>
-
-            {/* Items List Section */}
-            <div className="px-8 pb-8 animate-in fade-in duration-300">
-              <div className="border-t border-slate-100 pt-6">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                  <h4 className="text-sm  text-slate-700 flex items-center gap-2 ">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded "></span>
-                    {materialFormData.drawingNo ? `Materials for Drawing: ${materialFormData.drawingNo}` : 'Recently Added Materials'}
-                  </h4>
-                  <div className="flex items-center gap-2  w-full md:w-auto">
-                    <div className="relative flex-1 md:w-64">
-                      <input
-                        type="text"
-                        placeholder="Search items or drawing..."
-                        className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                        value={modalSearchTerm}
-                        onChange={(e) => setModalSearchTerm(e.target.value)}
-                      />
-                      <svg className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    {materialFormData.drawingNo && (
-                      <button
-                        type="button"
-                        onClick={() => setModalSearchTerm(materialFormData.drawingNo)}
-                        className="px-3 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded text-xs   hover:bg-blue-100 transition-all whitespace-nowrap"
-                      >
-                        This Drawing
-                      </button>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="overflow-hidden border border-slate-200 rounded ">
-                  <div className="overflow-x-auto max-h-[400px]">
-                    <table className="w-full text-left border-collapse">
-                      <thead className="bg-slate-50 sticky top-0 z-10">
-                        <tr>
-                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Item Code</th>
-                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Material Name</th>
-                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Group</th>
-                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">UOM</th>
-                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-center">Valuation Rate</th>
-                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-center">Weight/Unit</th>
-                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200">Drawing No</th>
-                          <th className="p-2 text-xs   text-slate-500   border-b border-slate-200 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {itemsLoading ? (
-                          <tr>
-                            <td colSpan="8" className="px-4 py-8 text-center text-slate-400 text-xs italic">
-                              Loading materials...
-                            </td>
-                          </tr>
-                        ) : itemsList.length === 0 ? (
-                          <tr>
-                            <td colSpan="8" className="px-4 py-8 text-center text-slate-400 text-xs italic">
-                              No materials found
-                            </td>
-                          </tr>
-                        ) : (
-                          [...itemsList]
-                            .filter(item => {
-                              const search = modalSearchTerm.toLowerCase();
-                              return (
-                                item.item_code?.toLowerCase().includes(search) ||
-                                item.material_name?.toLowerCase().includes(search) ||
-                                item.drawing_no?.toLowerCase().includes(search)
-                              );
-                            })
-                            .sort((a, b) => b.id - a.id)
-                            .map((item) => {
-                              const isCurrentDrawing = materialFormData.drawingNo && item.drawing_no === materialFormData.drawingNo;
-                              return (
-                                <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isCurrentDrawing ? 'bg-emerald-50/40' : ''}`}>
-                                  <td className="p-2  text-xs  text-slate-700">
-                                    {item.item_code}
-                                    {isCurrentDrawing && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-[8px]  ">Current Drg</span>}
-                                  </td>
-                                  <td className="p-2  text-xs text-slate-600">{item.material_name}</td>
-                                  <td className="p-2  text-xs text-slate-600">
-                                    <span className="p-1  bg-slate-100 text-slate-600 rounded text-[10px]">{item.material_type}</span>
-                                  </td>
-                                  <td className="p-2  text-xs text-slate-600">{item.unit}</td>
-                                  <td className="p-2  text-xs text-slate-600 text-center">₹{parseFloat(item.valuation_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-2  text-xs text-slate-600 text-center">{parseFloat(item.weight_per_unit || 0).toFixed(3)} {item.weight_uom}</td>
-                                  <td className="p-2  text-xs text-slate-600">{item.drawing_no || '—'}</td>
-                                  <td className="p-2  text-right">
-                                    <div className="flex justify-end gap-1">
-                                      <button 
-                                        onClick={() => handleCopyMaterial(item)}
-                                        className="p-1 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                        title="Copy Details"
-                                      >
-                                        📋
-                                      </button>
-                                      <button 
-                                        onClick={() => handleEditMaterialInModal(item)}
-                                        className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
-                                        title="Edit"
-                                      >
-                                        ✏️
-                                      </button>
-                                      <button 
-                                        onClick={() => handleDeleteMaterialInModal(item.id)}
-                                        className="p-1 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                                        title="Delete"
-                                      >
-                                        🗑️
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        ) : (
-          renderItemGroups()
-        )}
-      </div>
-    );
-  };
-
-  const fetchItemsList = async (drawingNo = null) => {
-    try {
-      setItemsLoading(true);
-      const token = localStorage.getItem('authToken');
-      let url = `${API_BASE}/stock/balance`;
-      if (drawingNo) {
-        url += `?drawingNo=${encodeURIComponent(drawingNo)}`;
-      }
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setItemsList(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch items list:', error);
-    } finally {
-      setItemsLoading(false);
-    }
-  };
-
-  const toggleIncomingPo = (po) => {
-    setExpandedIncomingPo(prev => ({ ...prev, [po]: !prev[po] }));
-  };
-
-  const toggleActivePo = (po) => {
-    setExpandedActivePo(prev => ({ ...prev, [po]: !prev[po] }));
-  };
-
-  const groupedIncoming = incomingOrders.reduce((acc, order) => {
-    const poKey = order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : 'NO-PO');
-    const companyKey = order.company_name || 'Unknown';
-    const key = `${companyKey}_${poKey}`;
-
-    if (!acc[key]) {
-      acc[key] = {
-        po_number: poKey,
-        company_name: companyKey,
-        project_name: order.project_name || '',
-        orders: []
-      };
-    }
-    acc[key].orders.push(order);
-    return acc;
-  }, {});
-
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/design-orders`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch design orders');
-      const data = await response.json();
-      setOrders(data);
-    } catch (error) {
-      console.error(error);
-      errorToast(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchIncomingOrders = async () => {
-    try {
-      setIncomingLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/incoming?department=DESIGN_ENG`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch incoming orders');
-      const data = await response.json();
-      setIncomingOrders(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIncomingLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
-    fetchIncomingOrders();
-    fetchItemGroups();
-  }, []);
-
-  useEffect(() => {
-    if (showAddMaterialModal) {
-      fetchItemsList(materialFormData.drawingNo);
-    }
-  }, [materialFormData.drawingNo, showAddMaterialModal]);
-
-  useEffect(() => {
-    const autoGenerateCode = async () => {
-      if (!isEditingMaterial && showAddMaterialModal && materialFormData.itemName && materialFormData.itemGroup && !materialFormData.itemCode) {
-        const nextCode = await fetchNextItemCode(materialFormData.itemName, materialFormData.itemGroup);
-        if (nextCode) {
-          setMaterialFormData(prev => ({ ...prev, itemCode: nextCode }));
-        }
-      }
-    };
-    autoGenerateCode();
-  }, [materialFormData.itemName, materialFormData.itemGroup, materialFormData.itemCode, isEditingMaterial, showAddMaterialModal]);
-
-  const handleViewOrder = async (order) => {
-    try {
-      setReviewLoading(true);
-      setReviewOrder(order);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/${order.id}/items`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error('Failed to fetch order items');
-      const items = await response.json();
-      
-      // Filter items to show only the specific drawing that was clicked
-      const filteredItems = items.filter(item => item.drawing_no === order.drawing_no);
-      setReviewDetails(filteredItems || []);
-      
-      setShowReviewModal(true);
-    } catch (error) {
-      errorToast(error.message);
-    } finally {
-      setReviewLoading(false);
-    }
   };
 
   const handleUpdateStatus = async (id, status) => {
@@ -897,32 +160,156 @@ const DesignOrders = () => {
             status: 'REJECTED', 
             item_status: 'REJECTED',
             rejection_reason: rejectData.reason,
-            item_rejection_reason: rejectData.reason,
-            reason: rejectData.reason 
+            item_rejection_reason: rejectData.reason
           } : item
         ));
 
-        // Update local state for incoming orders
         setIncomingOrders(prev => prev.map(order => 
           order.item_id === rejectData.id ? { 
             ...order, 
-            item_status: 'REJECTED', 
-            status: 'REJECTED',
-            item_rejection_reason: rejectData.reason,
-            rejection_reason: rejectData.reason 
+            status: 'REJECTED', 
+            item_status: 'REJECTED',
+            rejection_reason: rejectData.reason,
+            item_rejection_reason: rejectData.reason
           } : order
         ));
+
+        fetchOrders();
+        fetchIncomingOrders();
+        setShowRejectModal(false);
       }
-      
-      setShowRejectModal(false);
-      setRejectData({ id: null, type: '', reason: '' });
-      fetchOrders();
-      fetchIncomingOrders();
     } catch (error) {
       errorToast(error.message);
     }
   };
 
+  const handleApproveItem = async (itemId) => {
+    try {
+      setBulkOperationLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'Approved ' })
+      });
+
+      if (!response.ok) throw new Error('Failed to approve item');
+
+      successToast('Item approved');
+      
+      // Update local state if in review modal
+      setReviewDetails(prev => prev.map(item => 
+        item.id === itemId ? { ...item, status: 'Approved ', item_status: 'Approved ' } : item
+      ));
+
+      // Update local state for incoming orders
+      setIncomingOrders(prev => prev.map(order => 
+        order.item_id === itemId ? { ...order, item_status: 'Approved ', status: 'Approved ' } : order
+      ));
+
+      fetchOrders();
+      fetchIncomingOrders();
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setBulkOperationLoading(false);
+    }
+  };
+
+  const toggleIncomingPo = (po) => {
+    setExpandedIncomingPo(prev => ({ ...prev, [po]: !prev[po] }));
+  };
+
+  const toggleActivePo = (po) => {
+    setExpandedActivePo(prev => ({ ...prev, [po]: !prev[po] }));
+  };
+
+  const groupedIncoming = incomingOrders.reduce((acc, order) => {
+    const poKey = order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : 'NO-PO');
+    const companyKey = order.company_name || 'Unknown';
+    const key = `${companyKey}_${poKey}`;
+
+    if (!acc[key]) {
+      acc[key] = {
+        po_number: poKey,
+        company_name: companyKey,
+        project_name: order.project_name || '',
+        orders: []
+      };
+    }
+    acc[key].orders.push(order);
+    return acc;
+  }, {});
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/design-orders`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch design orders');
+      const data = await response.json();
+      setOrders(data);
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchIncomingOrders = async () => {
+    try {
+      setIncomingLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/incoming?department=DESIGN_ENG`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch incoming orders');
+      const data = await response.json();
+      setIncomingOrders(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIncomingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    fetchIncomingOrders();
+  }, []);
+
+  const handleViewOrder = async (order) => {
+    try {
+      setReviewLoading(true);
+      setReviewOrder(order);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/${order.id}/items`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch order items');
+      const items = await response.json();
+      
+      // Filter items to show only the specific drawing that was clicked
+      const filteredItems = items.filter(item => item.drawing_no === order.drawing_no);
+      setReviewDetails(filteredItems || []);
+      
+      setShowReviewModal(true);
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
   const toggleSelectOrder = (orderId) => {
     const newSelected = new Set(selectedIncomingOrders);
     if (newSelected.has(orderId)) {
@@ -982,42 +369,6 @@ const DesignOrders = () => {
       } finally {
         setBulkOperationLoading(false);
       }
-    }
-  };
-
-  const handleApproveItem = async (itemId) => {
-    try {
-      setBulkOperationLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: 'Approved ' })
-      });
-
-      if (!response.ok) throw new Error('Failed to approve item');
-
-      successToast('Item approved');
-      
-      // Update local state if in review modal
-      setReviewDetails(prev => prev.map(item => 
-        item.id === itemId ? { ...item, status: 'Approved ', item_status: 'Approved ' } : item
-      ));
-
-      // Update local state for incoming orders
-      setIncomingOrders(prev => prev.map(order => 
-        order.item_id === itemId ? { ...order, item_status: 'Approved ', status: 'Approved ' } : order
-      ));
-
-      fetchOrders();
-      fetchIncomingOrders();
-    } catch (error) {
-      errorToast(error.message);
-    } finally {
-      setBulkOperationLoading(false);
     }
   };
 
@@ -1147,228 +498,6 @@ const DesignOrders = () => {
     });
   };
 
-  const handleMaterialSubmit = async (e) => {
-    e.preventDefault();
-    if (!materialFormData.itemCode || !materialFormData.itemName || !materialFormData.itemGroup) {
-      errorToast('Please fill all required fields');
-      return;
-    }
-    
-    setIsSubmittingMaterial(true);
-    try {
-      const token = localStorage.getItem('authToken');
-      const url = isEditingMaterial ? `${API_BASE}/stock/items/${editingMaterialId}` : `${API_BASE}/stock/items`;
-      const method = isEditingMaterial ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(materialFormData)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to ${isEditingMaterial ? 'update' : 'create'} material`);
-      }
-
-      // If we have a target order item, update its item_code ONLY IF it's empty/No Code OR it's an FG item
-      // This ensures the main design task reflects the Finished Good
-      const currentCode = (targetOrderItemCode || '').trim();
-      const isNewFG = ['FG', 'FINISHED GOOD', 'FINISHED_GOOD'].includes(materialFormData.itemGroup?.toUpperCase());
-      const shouldLink = targetOrderItemId && 
-                         !isEditingMaterial && 
-                         (!currentCode || currentCode === 'No Code' || isNewFG);
-
-      if (shouldLink) {
-        await fetch(`${API_BASE}/sales-orders/items/${targetOrderItemId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ 
-            item_code: materialFormData.itemCode,
-            item_type: isNewFG ? 'FG' : materialFormData.itemGroup 
-          })
-        });
-        setTargetOrderItemCode(materialFormData.itemCode); // Update current target code so next items don't overwrite
-      }
-      
-      successToast(`Material ${isEditingMaterial ? 'updated' : 'created'} successfully`);
-      await fetchItemsList(materialFormData.drawingNo);
-      setTargetOrderItemId(null);
-      setIsEditingMaterial(false);
-      setEditingMaterialId(null);
-      fetchOrders();
-      fetchIncomingOrders();
-      if (showDetails && selectedOrder) {
-        handleViewDetails(selectedOrder);
-      }
-      setMaterialFormData({
-        itemCode: '',
-        itemName: '',
-        itemGroup: '',
-        defaultUom: 'Nos',
-        valuationRate: 0,
-        sellingRate: 0,
-        noOfCavity: 1,
-        weightPerUnit: 0,
-        weightUom: '',
-        drawingNo: materialFormData.drawingNo,
-        revision: materialFormData.revision,
-        materialGrade: ''
-      });
-    } catch (error) {
-      console.error('Material Submit Error:', error);
-      errorToast(error.message);
-    } finally {
-      setIsSubmittingMaterial(false);
-    }
-  };
-
-  const fetchNextItemCode = async (itemName = '', itemGroup = '') => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/stock/items/next-code?itemName=${encodeURIComponent(itemName)}&itemGroup=${encodeURIComponent(itemGroup)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return data.itemCode;
-      }
-    } catch (error) {
-      console.error('Failed to fetch next item code:', error);
-    }
-    return '';
-  };
-
-  const openAddMaterialModal = async (item = null) => {
-    if (item) {
-      setTargetOrderItemId(item.item_id || item.id || null);
-      setTargetOrderItemCode(item.item_code || '');
-      setMaterialFormData({
-        itemCode: '',
-        itemName: '',
-        itemGroup: '',
-        defaultUom: item.unit || 'Nos',
-        valuationRate: 0,
-        sellingRate: 0,
-        noOfCavity: 1,
-        weightPerUnit: 0,
-        weightUom: '',
-        drawingNo: item.drawing_no || '',
-        revision: item.revision_no || '',
-        materialGrade: ''
-      });
-    } else {
-      setTargetOrderItemId(null);
-      setMaterialFormData({
-        itemCode: '',
-        itemName: '',
-        itemGroup: '',
-        defaultUom: 'Nos',
-        valuationRate: 0,
-        sellingRate: 0,
-        noOfCavity: 1,
-        weightPerUnit: 0,
-        weightUom: '',
-        drawingNo: '',
-        revision: '',
-        materialGrade: ''
-      });
-    }
-    setShowAddMaterialModal(true);
-    setIsEditingMaterial(false);
-    setEditingMaterialId(null);
-  };
-
-  const handleEditMaterialInModal = (item) => {
-    setIsEditingMaterial(true);
-    setEditingMaterialId(item.id);
-    setMaterialFormData({
-      itemCode: item.item_code || '',
-      itemName: item.material_name || '',
-      itemGroup: item.material_type || '',
-      defaultUom: item.unit || 'Nos',
-      valuationRate: item.valuation_rate || 0,
-      sellingRate: item.selling_rate || 0,
-      noOfCavity: item.no_of_cavity || 1,
-      weightPerUnit: item.weight_per_unit || 0,
-      weightUom: item.weight_uom || '',
-      drawingNo: item.drawing_no || '',
-      revision: item.revision || '',
-      materialGrade: item.material_grade || ''
-    });
-  };
-
-  const handleCopyMaterial = (item) => {
-    setMaterialFormData(prev => ({
-      ...prev,
-      itemName: item.material_name || '',
-      itemGroup: item.material_type || '',
-      defaultUom: item.unit || 'Nos',
-      valuationRate: item.valuation_rate || 0,
-      sellingRate: item.selling_rate || 0,
-      noOfCavity: item.no_of_cavity || 1,
-      weightPerUnit: item.weight_per_unit || 0,
-      weightUom: item.weight_uom || '',
-      // drawingNo and revision are usually kept from the current order context
-      materialGrade: item.material_grade || ''
-    }));
-    successToast('Material details copied!');
-  };
-
-  const handleClearMaterialForm = async () => {
-    setMaterialFormData({
-      itemCode: '',
-      itemName: '',
-      itemGroup: '',
-      defaultUom: 'Nos',
-      valuationRate: 0,
-      sellingRate: 0,
-      noOfCavity: 1,
-      weightPerUnit: 0,
-      weightUom: '',
-      drawingNo: '',
-      revision: '',
-      materialGrade: ''
-    });
-    setIsEditingMaterial(false);
-    setEditingMaterialId(null);
-  };
-
-  const handleDeleteMaterialInModal = async (id) => {
-    const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: "You won't be able to revert this!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#3085d6',
-      confirmButtonText: 'Yes, delete it!'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/stock/items/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!response.ok) throw new Error('Failed to delete material');
-
-        successToast('Material has been deleted.');
-        fetchItemsList(materialFormData.drawingNo);
-      } catch (error) {
-        errorToast(error.message);
-      }
-    }
-  };
-
   const handleSaveItem = async (itemId) => {
     try {
       setItemSaveLoading(true);
@@ -1479,39 +608,35 @@ const DesignOrders = () => {
               <h1 className="text-xl text-slate-900">Design Engineering Hub</h1>
               <p className="text-xs text-slate-600">Review customer drawings and create technical specifications</p>
             </div>
-            {!showAddMaterialModal && (
-              <div className="flex bg-slate-200 p-1 rounded ">
-                <button
-                  onClick={() => setActiveTab('incoming')}
-                  className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'incoming' ? 'bg-white text-indigo-600 ' : 'text-slate-600 hover:text-slate-900'}`}
-                >
-                  Incoming Requests
-                </button>
-                <button
-                  onClick={() => setActiveTab('progress')}
-                  className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'progress' ? 'bg-white text-indigo-600 ' : 'text-slate-600 hover:text-slate-900'}`}
-                >
-                  In Progress
-                </button>
-              </div>
-            )}
+            <div className="flex bg-slate-200 p-1 rounded ">
+              <button
+                onClick={() => setActiveTab('incoming')}
+                className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'incoming' ? 'bg-white text-indigo-600 ' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                Incoming Requests
+              </button>
+              <button
+                onClick={() => setActiveTab('progress')}
+                className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'progress' ? 'bg-white text-indigo-600 ' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                In Progress
+              </button>
+            </div>
           </div>
 
           {/* INFO BANNER */}
-          {!showAddMaterialModal && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded  p-3 flex items-start gap-2">
-              <div className="flex-shrink-0 mt-0.5">
-                <svg className="h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <p className="text-xs text-blue-900 ">
-                {activeTab === 'incoming' 
-                  ? 'Review incoming drawings from sales and accept them for design engineering review.'
-                  : 'Manage active design tasks, create technical specifications, and track progress of approved drawings.'}
-              </p>
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded  p-3 flex items-start gap-2">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg className="h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2z" clipRule="evenodd" />
+              </svg>
             </div>
-          )}
+            <p className="text-xs text-blue-900 ">
+              {activeTab === 'incoming' 
+                ? 'Review incoming drawings from sales and accept them for design engineering review.'
+                : 'Manage active design tasks, create technical specifications, and track progress of approved drawings.'}
+            </p>
+          </div>
         </div>
 
         {/* INCOMING REQUESTS SECTION */}
@@ -1926,66 +1051,62 @@ const DesignOrders = () => {
         {/* ACTIVE DESIGN TASKS SECTION */}
         {activeTab === 'progress' && (
           <div className="bg-white rounded   overflow-hidden border border-slate-200">
-            {!showAddMaterialModal && (
-              <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 border-b border-purple-700">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <h2 className="text-base  text-white flex items-center gap-2 mb-1">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                         Design Tasks in Progress
-                      </h2>
-                      <p className="text-purple-100 text-xs">Manage active design orders and technical specifications</p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search tasks..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="bg-white/10 border border-white/20 text-white placeholder-purple-200 text-xs rounded  p-2 .5 w-64 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
-                      />
-                      <svg className="w-3.5 h-3.5 text-purple-200 absolute right-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    </div>
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 border-b border-purple-700">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <h2 className="text-base  text-white flex items-center gap-2 mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                       Design Tasks in Progress
+                    </h2>
+                    <p className="text-purple-100 text-xs">Manage active design orders and technical specifications</p>
                   </div>
-                  <div className="flex items-center gap-2 ">
-                    <div className="flex bg-white/10 p-1 rounded  backdrop-blur-sm border border-white/20 mr-2">
-                      <button
-                        onClick={() => setViewMode('list')}
-                        className={`p-1.5 rounded  transition-all ${viewMode === 'list' ? 'bg-white text-purple-600 ' : 'text-purple-100 hover:text-white'}`}
-                        title="List View"
-                      >
-                        <LayoutList className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setViewMode('grid')}
-                        className={`p-1.5 rounded  transition-all ${viewMode === 'grid' ? 'bg-white text-purple-600 ' : 'text-purple-100 hover:text-white'}`}
-                        title="Card View"
-                      >
-                        <LayoutGrid className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <button
-                      onClick={fetchOrders}
-                      disabled={loading}
-                      className="p-2 .5 bg-white rounded text-xs text-purple-600  transition-colors disabled:opacity-50 "
-                    >
-                      ↻ Refresh
-                    </button>
-                    {orders.length > 0 && (
-                      <span className="p-2  bg-white text-purple-600 rounded  text-xs ">
-                        {filteredOrders.length} {filteredOrders.length !== orders.length ? `of ${orders.length}` : ''}
-                      </span>
-                    )}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search tasks..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="bg-white/10 border border-white/20 text-white placeholder-purple-200 text-xs rounded  p-2 .5 w-64 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
+                    />
+                    <svg className="w-3.5 h-3.5 text-purple-200 absolute right-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                   </div>
                 </div>
+                <div className="flex items-center gap-2 ">
+                  <div className="flex bg-white/10 p-1 rounded  backdrop-blur-sm border border-white/20 mr-2">
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-1.5 rounded  transition-all ${viewMode === 'list' ? 'bg-white text-purple-600 ' : 'text-purple-100 hover:text-white'}`}
+                      title="List View"
+                    >
+                      <LayoutList className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-1.5 rounded  transition-all ${viewMode === 'grid' ? 'bg-white text-purple-600 ' : 'text-purple-100 hover:text-white'}`}
+                      title="Card View"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <button
+                    onClick={fetchOrders}
+                    disabled={loading}
+                    className="p-2 .5 bg-white rounded text-xs text-purple-600  transition-colors disabled:opacity-50 "
+                  >
+                    ↻ Refresh
+                  </button>
+                  {orders.length > 0 && (
+                    <span className="p-2  bg-white text-purple-600 rounded  text-xs ">
+                      {filteredOrders.length} {filteredOrders.length !== orders.length ? `of ${orders.length}` : ''}
+                    </span>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
         
           <div className="space-y-4 p-4">
-            {showAddMaterialModal ? (
-              renderMaterialForm()
-            ) : loading ? (
+            {loading ? (
               <div className="py-24 text-center">
                 <div className="flex justify-center mb-4">
                   <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
@@ -2479,20 +1600,20 @@ const DesignOrders = () => {
                           </div>
                         </div>
                           {((item.item_status || item.status) === 'REJECTED') ? (
-                            <span className="px-2 py-1 bg-red-100 text-red-700 roundedtext-xs   border border-red-200">Rejected</span>
+                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs   border border-red-200">Rejected</span>
                           ) : ((item.item_status || item.status) === 'Approved ') ? (
-                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 roundedtext-xs   border border-emerald-200">Approved</span>
+                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs   border border-emerald-200">Approved</span>
                           ) : (
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleApproveItem(item.id)}
-                                className="px-2 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white roundedtext-xs   border border-emerald-200 transition-all "
+                                className="px-2 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded text-xs   border border-emerald-200 transition-all "
                               >
                                 Approve
                               </button>
                               <button
                                 onClick={() => handleRejectItem(item.id)}
-                                className="px-2 py-1 text-slate-400 hover:text-red-600 hover:bg-red-50 roundedtext-xs   border border-transparent hover:border-red-200 transition-all"
+                                className="px-2 py-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded text-xs   border border-transparent hover:border-red-200 transition-all"
                               >
                                 Reject
                               </button>

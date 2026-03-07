@@ -32,6 +32,7 @@ import Warehouses from './pages/Warehouses'
 import DrawingMaster from './pages/DrawingMaster'
 import CustomerDrawing from './pages/CustomerDrawing'
 import DesignOrders from './pages/DesignOrders'
+import ItemsMaster from './pages/ItemsMaster'
 import ClientQuotations from './pages/ClientQuotations'
 import BOMCreation from './pages/BOMCreation'
 import RoutingOperations from './pages/RoutingOperations'
@@ -67,7 +68,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
+const MODULE_IDS = ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -159,16 +160,16 @@ const getContactStatusActionLabel = status => {
 }
 
 const DEPARTMENT_MODULES = {
-  SALES: ['company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'dashboard'],
-  DESIGN_ENG: ['design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet', 'dashboard'],
-  PRODUCTION: ['project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'routing-operations', 'process-sheet', 'dashboard'],
-  QUALITY: ['quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
-  SHIPMENT: ['shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'dashboard'],
-  ACCOUNTS: ['accounts-dashboard', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'],
-  INVENTORY: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
-  PROCUREMENT: ['suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
+  SALES: ['item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'dashboard'],
+  DESIGN_ENG: ['item-master', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet', 'dashboard'],
+  PRODUCTION: ['item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'routing-operations', 'process-sheet', 'dashboard'],
+  QUALITY: ['item-master', 'quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections', 'dashboard'],
+  SHIPMENT: ['item-master', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'dashboard'],
+  ACCOUNTS: ['item-master', 'accounts-dashboard', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'dashboard'],
+  INVENTORY: ['item-master', 'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'dashboard'],
+  PROCUREMENT: ['item-master', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'dashboard'],
   ADMIN: [
-    'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations',
+    'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations',
     'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet',
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
     'quality-dashboard', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
@@ -977,6 +978,7 @@ function App() {
   }
 
   const allNavigationItems = [
+    { label: 'Items Master', moduleId: 'item-master', icon: 'package' },
     { label: 'Company Master', moduleId: 'company-master', icon: 'building' },
     { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'handshake' },
     { label: 'Client Requirements ', moduleId: 'customer-drawing', icon: 'clipboard' },
@@ -1435,6 +1437,10 @@ function App() {
                   <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-2  rounded  text-sm ">
                     {toast}
                   </div>
+                )}
+
+                {activeModule === 'item-master' && (
+                  <ItemsMaster />
                 )}
 
                 {activeModule === 'company-master' && (
