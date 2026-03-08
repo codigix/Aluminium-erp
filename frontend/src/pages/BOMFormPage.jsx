@@ -1141,92 +1141,7 @@ const BOMFormPage = () => {
           </div>
           {!collapsedSections.productInfo && (
             <div className="p-4 bg-white">
-              {!isReadOnly && (
-                <div className="bg-blue-50/40 p-3 rounded  border border-blue-100/50 mb-4 flex flex-col md:flex-row items-end gap-4">
-                  <div className="flex-1 space-y-1.5">
-                    <label className="text-[10px]  text-blue-600  ml-1">Quick Filter by Drawing</label>
-                    <SearchableSelect
-                      placeholder="Type drawing number or name..."
-                      options={drawingOptions}
-                      subLabelField="subLabel"
-                      value={drawingFilter}
-                      onChange={async (e) => {
-                        const newDwg = e.target.value;
-                        setDrawingFilter(newDwg);
-                        if (newDwg) {
-                          const dwgInfo = approvedDrawings.find(i => i.drawing_no === newDwg) ||
-                            stockItems.find(i => i.drawing_no === newDwg);
-
-                          let dwgName = dwgInfo ? (dwgInfo.material_name || dwgInfo.description || dwgInfo.item_description || '') : '';
-
-                          if (!dwgName) {
-                            dwgName = await fetchDrawingName(newDwg);
-                          } else {
-                            setFetchedDrawingName(dwgName);
-                          }
-
-                          setSelectedItem(null);
-                          setProductForm(prev => ({
-                            ...prev,
-                            itemCode: '',
-                            description: cleanText(dwgName),
-                            drawingNo: newDwg,
-                            drawing_id: dwgInfo?.drawing_id || '',
-                            quantity: 1
-                          }));
-                          setBomData({ materials: [], components: [], operations: [], scrap: [] });
-                        } else {
-                          setFetchedDrawingName('');
-                        }
-                      }}
-                    />
-                  </div>
-                  {drawingFilter && (
-                    <div className="flex items-center gap-3 pb-1 px-1">
-                      <div className="h-8 w-px bg-blue-200 hidden md:block"></div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-slate-400 ">Selected Drawing</span>
-                        <div className="text-xs text-blue-700  truncate max-w-[200px]">
-                          {(() => {
-                            if (fetchedDrawingName) return cleanText(fetchedDrawingName);
-                            const opt = drawingOptions.find(o => o.value === drawingFilter);
-                            return opt ? opt.label : '';
-                          })()}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handlePreviewByNo(drawingFilter)}
-                        className="p-1.5 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors"
-                        title="Preview Drawing"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setDrawingFilter('');
-                          setFetchedDrawingName('');
-                          setSelectedItem(null);
-                          setProductForm(prev => ({
-                            ...prev,
-                            itemCode: '',
-                            description: '',
-                            drawingNo: '',
-                            drawing_id: '',
-                            quantity: 1
-                          }));
-                          setBomData({ materials: [], components: [], operations: [], scrap: [] });
-                        }}
-                        className="p-2 text-rose-500 hover:bg-rose-50 rounded  transition-colors group"
-                        title="Clear Filter"
-                      >
-                        <X className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Product Name <span className="text-rose-500">*</span></label>
                   {isReadOnly ? (
@@ -1420,6 +1335,12 @@ const BOMFormPage = () => {
                       subLabelField="subLabel"
                     />
                   )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-slate-500 ml-1">Drawing No</label>
+                  <div className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 font-medium">
+                    {productForm.drawingNo || 'N/A'}
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Item Group</label>
