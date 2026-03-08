@@ -955,6 +955,17 @@ const getOrderTimeline = async salesOrderId => {
     // Fix: has_bom should only be true if an order-specific BOM exists. 
     // This prevents "template leakage" and makes the delete button work correctly (by only showing it for order-specific BOMs).
     item.has_bom = hasOrderSpecific;
+
+    // Add has_master_bom to indicate if a template exists for this code or drawing
+    item.has_master_bom = (
+                         (item.item_code && materialsByItem[`code_${item.item_code}`]?.length > 0) || 
+                         (item.drawing_no && materialsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
+                         (item.item_code && componentsByItem[`code_${item.item_code}`]?.length > 0) || 
+                         (item.drawing_no && componentsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
+                         (item.item_code && operationsByItem[`code_${item.item_code}`]?.length > 0) || 
+                         (item.drawing_no && operationsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
+                         (item.item_code && scrapByItem[`code_${item.item_code}`]?.length > 0) || 
+                         (item.drawing_no && scrapByItem[`dwg_${item.drawing_no}`]?.length > 0));
   }
   
   return items;

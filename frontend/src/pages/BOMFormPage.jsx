@@ -243,7 +243,7 @@ const BOMFormPage = () => {
       // Strict FG check by code prefix
       if (item.item_code && item.item_code.startsWith("FG-")) return;
 
-      const isSA = (item.item_code || "").startsWith("SA-") || type.includes("assembly") || type.includes("sub") || type.includes("consumable");
+      const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable");
       
       if (!showAllDrawings) {
         if (productDrawing && item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== productDrawing) return;
@@ -273,7 +273,7 @@ const BOMFormPage = () => {
     // 2. Add Approved Drawings (Sales Order Items)
     approvedDrawings.forEach(item => {
       const type = (item.item_group || "").toLowerCase();
-      const isSA = (item.item_code || "").startsWith("SA-") || type.includes("assembly") || type.includes("sub") || type.includes("consumable");
+      const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable");
       
       if (!isSA && !showAllDrawings) return; 
       // Strict FG check
@@ -700,7 +700,7 @@ const BOMFormPage = () => {
         ? itemId 
         : (selectedItem?.source === 'order' ? selectedItem?.id : null);
 
-      if (!effectiveItemId && !productForm.drawingNo) {
+      if (!effectiveItemId && !productForm.drawingNo && !productForm.itemCode) {
         throw new Error('Please select a Product/Item or Drawing first before adding details.');
       }
 
@@ -925,7 +925,7 @@ const BOMFormPage = () => {
       const isDraft = status === 'Draft';
 
       if (!isDraft) {
-        if (!selectedItem?.id && !productForm.drawingNo) {
+        if (!selectedItem?.id && !productForm.drawingNo && !productForm.itemCode) {
           throw new Error('Product/Item or Drawing not selected');
         }
         if (!productForm.quantity || productForm.quantity <= 0) {

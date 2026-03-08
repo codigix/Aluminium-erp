@@ -243,7 +243,7 @@ const BOMCreation = () => {
       drawings.forEach(dwgNo => {
         const dwgItems = drawingsMap[dwgNo];
         const hasFGBOM = dwgItems.some(i => 
-          i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
+          (i.has_bom || i.has_master_bom) && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
         );
         if (hasFGBOM) completedDrawings++;
       });
@@ -484,9 +484,9 @@ const BOMCreation = () => {
                                       const isDwgExpanded = expandedDrawings[dwgKey];
                                       
                                       // Drawing status is COMPLETED if at least one FG item has a BOM
-                                      const itemsWithBOM = dwgItems.filter(i => i.has_bom);
+                                      const itemsWithBOM = dwgItems.filter(i => i.has_bom || i.has_master_bom);
                                       const hasFGBOM = dwgItems.some(i => 
-                                        i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
+                                        (i.has_bom || i.has_master_bom) && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
                                       );
                                       const dwgStatus = hasFGBOM ? 'COMPLETED' : 'PENDING';
                                       
@@ -548,7 +548,7 @@ const BOMCreation = () => {
                                                       </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100 bg-white">
-                                                      {dwgItems.filter(item => item.has_bom).map((item, idx) => (
+                                                      {dwgItems.filter(item => item.has_bom || item.has_master_bom).map((item, idx) => (
                                                         <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                                           <td className="p-2 ">
                                                             <div className="flex flex-col">
@@ -572,11 +572,11 @@ const BOMCreation = () => {
                                                             </span>
                                                           </td>
                                                           <td className="p-2 text-center">
-                                                            <StatusBadge status={item.status === 'DRAFT' ? 'DRAFT' : (item.has_bom ? "FINALIZED" : "PENDING")} />
+                                                            <StatusBadge status={item.status === 'DRAFT' ? 'DRAFT' : ((item.has_bom || item.has_master_bom) ? "FINALIZED" : "PENDING")} />
                                                           </td>
                                                           <td className="p-2 ">
                                                             <div className="flex justify-center gap-2">
-                                                              {item.has_bom ? (
+                                                              {(item.has_bom || item.has_master_bom) ? (
                                                                 <>
                                                                   <Link to={`/bom-form/${item.id}?view=true`} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="View BOM">
                                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
