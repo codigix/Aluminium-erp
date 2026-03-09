@@ -7,6 +7,7 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 router.use(authenticate);
 
 router.get('/', authorize(['PO_VIEW']), quotationRequestController.getQuotationRequests);
+router.get('/download-pdf/:id', authorize(['PO_VIEW']), quotationRequestController.downloadQuotationPDF);
 router.post('/send', authorize(['PO_EDIT']), quotationRequestController.sendQuotationViaEmail);
 router.post('/batch-approve', authorize(['PO_EDIT']), upload.single('reply_pdf'), quotationRequestController.batchApproveQuotationRequests);
 router.post('/batch-send-to-design', authorize(['PO_EDIT']), quotationRequestController.batchSendToDesign);

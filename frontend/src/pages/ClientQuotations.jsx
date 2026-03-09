@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2 } from 'lucide-react';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Download } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -654,18 +654,17 @@ const ClientQuotations = () => {
     const total = calculateClientTotal(clientName);
     
     const result = await Swal.fire({
-      title: 'Send Quotation',
+      title: 'Create Quotation',
       html: `
         <div style="text-align: left; font-size: 14px;">
           <p><strong>Client:</strong> ${clientData.company_name}</p>
-          <p><strong>Email:</strong> ${clientData.email || 'N/A'}</p>
           <p><strong>Items:</strong> ${allItems.length}</p>
           <p><strong>Total Amount:</strong> ₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-          <p style="color: #666; margin-top: 8px;">The quotation will be sent via email with a professional PDF attachment.</p>
+          <p style="color: #666; margin-top: 8px;">A professional quotation PDF will be generated for this client.</p>
         </div>
       `,
       showCancelButton: true,
-      confirmButtonText: 'Send Quotation',
+      confirmButtonText: 'Create Quotation',
       confirmButtonColor: '#10b981'
     });
 
@@ -678,6 +677,7 @@ const ClientQuotations = () => {
           clientId: clientData.company_id,
           clientName: clientData.company_name,
           clientEmail: clientData.email,
+          emailRequired: false,
           items: allItems.map(item => {
             const order = clientData.orders.find(o => o.items?.some(i => i.id === item.id));
             const profits = profitMap[clientName] || {};
@@ -712,15 +712,10 @@ const ClientQuotations = () => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || errorData.message || 'Failed to send quotation');
+          throw new Error(errorData.error || errorData.message || 'Failed to create quotation');
         }
 
-        const responseData = await response.json();
-        const successMessage = responseData.emailSent 
-          ? 'Quotation sent to client via email with PDF attachment' 
-          : 'Quotation created successfully (email pending)';
-        
-        successToast(successMessage);
+        successToast('Quotation created successfully');
         setExpandedClientName(null);
         setQuotePricesMap(prev => ({
           ...prev,
@@ -738,6 +733,40 @@ const ClientQuotations = () => {
       } finally {
         setSendingClientName(null);
       }
+    }
+  };
+
+  const handleDownloadPDF = async (group) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests/download-pdf/${group.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch PDF');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Open in new tab
+      const newWindow = window.open(url, '_blank');
+      
+      // Fallback if popup blocked: download directly
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Quotation_QRT-${String(group.id).padStart(4, '0')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      
+      // Note: We don't revokeObjectURL immediately if opening in new tab
+      // as it might break the view. Revoking after a timeout or let browser handle.
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      console.error('PDF error:', error);
+      errorToast('Failed to load quotation PDF');
     }
   };
 
@@ -1098,12 +1127,12 @@ const ClientQuotations = () => {
                                               {sendingClientName === clientName ? (
                                                 <>
                                                   <Loader2 className="w-4 h-4 animate-spin" />
-                                                  Sending...
+                                                  Creating...
                                                 </>
                                               ) : (
                                                 <>
-                                                  <Send className="w-4 h-4" />
-                                                  Send Quote to Client
+                                                  <Save className="w-4 h-4" />
+                                                  Create Quotation
                                                 </>
                                               )}
                                             </button>
@@ -1237,6 +1266,13 @@ const ClientQuotations = () => {
                                     Approve
                                   </button>
                                 )}
+                                <button
+                                  onClick={() => handleDownloadPDF(group)}
+                                  className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded  transition-all"
+                                  title="Download Quotation PDF"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
                                 <button
                                   onClick={() => setExpandedSentKey(expandedSentKey === key ? null : key)}
                                   className="p-2  bg-indigo-600 text-white rounded text-[10px]  hover:bg-indigo-700 transition-colors"

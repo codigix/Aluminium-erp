@@ -555,9 +555,27 @@ const sendReplyEmail = async (to, subject, message, replyToId) => {
   }
 };
 
+const generateQuotationPDF = async (clientName, items, totalAmount, notes, clientId, quoteNumber) => {
+  const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber);
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({
+    format: 'A4',
+    margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' },
+    printBackground: true
+  });
+  await browser.close();
+  return pdf;
+};
+
 module.exports = {
   sendQuotationEmail,
   generateQuotationHTML,
+  generateQuotationPDF,
   sendReplyEmail,
   sendShipmentStatusEmail,
   generateChallanHTML

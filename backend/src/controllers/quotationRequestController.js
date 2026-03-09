@@ -180,11 +180,17 @@ const rejectQuotationRequest = async (req, res, next) => {
 const sendQuotationViaEmail = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { clientId, clientEmail, clientName, items, totalAmount, notes } = req.body;
+    const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true } = req.body;
 
-    if (!clientEmail || !clientName || !items || items.length === 0) {
+    if (!clientId || !items || items.length === 0) {
       return res.status(400).json({ 
-        error: 'Missing required fields: clientEmail, clientName, items' 
+        error: 'Missing required fields: clientId, items' 
+      });
+    }
+
+    if (emailRequired && (!clientEmail || !clientName)) {
+      return res.status(400).json({ 
+        error: 'Missing required fields for email: clientEmail, clientName' 
       });
     }
 
@@ -239,6 +245,9 @@ const sendQuotationViaEmail = async (req, res, next) => {
     }
 
     await connection.commit();
+    
+    // Refresh connection to ensure we can use it after commit for further queries if needed
+    // or use pool for read-only queries later.
 
     let emailSent = false;
     let emailMessageId = null;
@@ -246,33 +255,35 @@ const sendQuotationViaEmail = async (req, res, next) => {
     const quoteNumber = `QRT-${String(firstQuotationId).padStart(4, '0')}`;
     const totalAmountNum = parseFloat(totalAmount) || 0;
 
-    try {
-      const emailResult = await emailService.sendQuotationEmail(
-        clientEmail,
-        clientName,
-        items,
-        totalAmountNum,
-        notes,
-        clientId,
-        quoteNumber
-      );
-      emailSent = true;
-      emailMessageId = emailResult.messageId;
-
-      // Log to communications for ALL quotations in this batch
-      const messageText = `Quotation ${quoteNumber} sent to client.\nTotal Amount (Incl. GST): ₹${totalAmountNum.toLocaleString('en-IN')}\nItems: ${items.length}`;
-      
-      for (const qId of quotationIds) {
-        await pool.execute(
-          `INSERT INTO quotation_communications 
-           (quotation_id, quotation_type, sender_type, message, email_message_id, created_at, is_read) 
-           VALUES (?, ?, ?, ?, ?, NOW(), 1)`,
-          [qId, 'CLIENT', 'SYSTEM', messageText, emailMessageId]
+    if (emailRequired) {
+      try {
+        const emailResult = await emailService.sendQuotationEmail(
+          clientEmail,
+          clientName,
+          items,
+          totalAmountNum,
+          notes,
+          clientId,
+          quoteNumber
         );
-      }
+        emailSent = true;
+        emailMessageId = emailResult.messageId;
 
-    } catch (emailError) {
-      console.error('[Quotation Controller] Email sending failed:', emailError.message);
+        // Log to communications for ALL quotations in this batch
+        const messageText = `Quotation ${quoteNumber} sent to client.\nTotal Amount (Incl. GST): ₹${totalAmountNum.toLocaleString('en-IN')}\nItems: ${items.length}`;
+        
+        for (const qId of quotationIds) {
+          await pool.execute(
+            `INSERT INTO quotation_communications 
+             (quotation_id, quotation_type, sender_type, message, email_message_id, created_at, is_read) 
+             VALUES (?, ?, ?, ?, ?, NOW(), 1)`,
+            [qId, 'CLIENT', 'SYSTEM', messageText, emailMessageId]
+          );
+        }
+
+      } catch (emailError) {
+        console.error('[Quotation Controller] Email sending failed:', emailError.message);
+      }
     }
 
     res.json({
@@ -335,8 +346,75 @@ const updateQuotationRates = async (req, res, next) => {
   }
 };
 
+const downloadQuotationPDF = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    // 1. Fetch the representative quotation to get client info and timestamp
+    const [quotes] = await pool.query(
+      `SELECT qr.*, c.company_name, c.id as client_id 
+       FROM quotation_requests qr 
+       JOIN companies c ON qr.company_id = c.id 
+       WHERE qr.id = ?`,
+      [id]
+    );
+
+    if (quotes.length === 0) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    const representative = quotes[0];
+    
+    // 2. Fetch all quotations in this batch (same client, same approx timestamp)
+    // We use a 10-second window to match the frontend grouping logic
+    const [batchQuotes] = await pool.query(
+      `SELECT qr.*, soi.drawing_no, soi.description
+       FROM quotation_requests qr
+       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+       WHERE qr.company_id = ? 
+       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10`,
+      [representative.company_id, representative.created_at]
+    );
+
+    const items = batchQuotes.map(q => ({
+      drawing_no: q.drawing_no || '—',
+      description: q.description || '',
+      quantity: q.item_qty || 1,
+      quotedPrice: (parseFloat(q.total_amount) / (q.item_qty || 1)) || 0,
+      profit_percentage: q.profit_percentage || 0,
+      gst_percentage: q.gst_percentage || 18,
+      status: q.status
+    }));
+
+    const totalAmount = batchQuotes.reduce((sum, q) => {
+      if (q.status === 'REJECTED') return sum;
+      return sum + (parseFloat(q.total_amount) || 0);
+    }, 0);
+
+    const quoteNumber = `QRT-${String(representative.id).padStart(4, '0')}`;
+    
+    const pdfBuffer = await emailService.generateQuotationPDF(
+      representative.company_name,
+      items,
+      totalAmount,
+      representative.notes,
+      representative.client_id,
+      quoteNumber
+    );
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Quotation_${quoteNumber}.pdf`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('[Quotation Controller] PDF download failed:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getQuotationRequests,
+  downloadQuotationPDF,
   approveQuotationRequest,
   batchApproveQuotationRequests,
   batchSendToDesign,
