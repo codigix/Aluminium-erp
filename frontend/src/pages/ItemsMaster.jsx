@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Card, StatusBadge, DataTable } from '../components/ui.jsx';
+import { Card, StatusBadge, DataTable, SearchableSelect } from '../components/ui.jsx';
 import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
@@ -14,6 +14,7 @@ const ItemsMaster = () => {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemGroups, setItemGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [approvedDrawings, setApprovedDrawings] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Item Form State
@@ -45,6 +46,7 @@ const ItemsMaster = () => {
   useEffect(() => {
     fetchItemsList();
     fetchItemGroups();
+    fetchApprovedDrawings();
     
     // Check if we have initial data from navigation
     if (location.state?.addItem) {
@@ -98,6 +100,21 @@ const ItemsMaster = () => {
     }
   };
 
+  const fetchApprovedDrawings = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings/approved`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setApprovedDrawings(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch approved drawings:', error);
+    }
+  };
+
   const fetchNextItemCode = async (itemName = '', itemGroup = '') => {
     try {
       const token = localStorage.getItem('authToken');
@@ -110,6 +127,52 @@ const ItemsMaster = () => {
       }
     } catch (error) {
       console.error('Failed to fetch next item code:', error);
+    }
+  };
+
+  const handleItemNameSelect = (e) => {
+    const value = e.target.value;
+    const drawing = approvedDrawings.find(d => d.drawing_no === value);
+    const existingItem = itemsList.find(i => i.item_code === value || i.material_name === value);
+    
+    if (drawing) {
+      const newFormData = {
+        ...itemFormData,
+        itemName: drawing.material_name || drawing.item_description || drawing.drawing_no,
+        itemGroup: drawing.item_group || itemFormData.itemGroup,
+        drawingNo: drawing.drawing_no || '',
+        revision: drawing.revision_no || '',
+        defaultUom: drawing.unit || itemFormData.defaultUom
+      };
+      setItemFormData(newFormData);
+      
+      if (!isEditingItem) {
+        fetchNextItemCode(newFormData.itemName, newFormData.itemGroup);
+      }
+    } else if (existingItem) {
+      const newFormData = {
+        ...itemFormData,
+        itemName: existingItem.material_name || existingItem.item_name,
+        itemGroup: existingItem.material_type || existingItem.item_group || itemFormData.itemGroup,
+        drawingNo: existingItem.drawing_no || '',
+        revision: existingItem.revision || '',
+        defaultUom: existingItem.unit || existingItem.uom || itemFormData.defaultUom,
+        valuationRate: existingItem.valuation_rate || 0
+      };
+      setItemFormData(newFormData);
+      
+      if (!isEditingItem) {
+        fetchNextItemCode(newFormData.itemName, newFormData.itemGroup);
+      }
+    } else {
+      setItemFormData(prev => ({ 
+        ...prev, 
+        itemName: value,
+        drawingNo: '' 
+      }));
+      if (!isEditingItem) {
+        fetchNextItemCode(value, itemFormData.itemGroup);
+      }
     }
   };
 
@@ -458,13 +521,24 @@ const ItemsMaster = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Item Name *</label>
-                <input 
-                  type="text"
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  placeholder="Enter item name"
-                  value={itemFormData.itemName}
-                  onChange={(e) => setItemFormData({...itemFormData, itemName: e.target.value})}
-                  required
+                <SearchableSelect 
+                  options={[
+                    ...approvedDrawings.map(d => ({
+                      label: d.material_name || d.item_description || d.drawing_no,
+                      value: d.drawing_no,
+                      subLabel: `Drawing: ${d.drawing_no} | Client: ${d.client_name || 'N/A'}`
+                    })),
+                    ...itemsList.map(item => ({
+                      label: item.material_name || item.item_name,
+                      value: item.item_code,
+                      subLabel: `Item: ${item.item_code} | Group: ${item.material_type || item.item_group}`
+                    }))
+                  ]}
+                  value={itemFormData.drawingNo || itemFormData.itemName}
+                  onChange={handleItemNameSelect}
+                  placeholder="Enter or select item name"
+                  allowCustom={true}
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
