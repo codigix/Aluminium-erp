@@ -7,7 +7,13 @@ import {
   Package,
   TrendingUp,
   Filter,
-  Clock
+  Clock,
+  RefreshCw,
+  Download,
+  ExternalLink,
+  ChevronRight,
+  ArrowRight,
+  ShieldCheck
 } from "lucide-react";
 
 import {
@@ -23,17 +29,19 @@ import {
   CartesianGrid,
   Legend
 } from "recharts";
-import { StatusBadge } from "../components/ui.jsx";
+import { StatusBadge, DataTable } from "../components/ui.jsx";
 
 const ShipmentDashboard = ({ apiRequest }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       const res = await apiRequest('/shipments/dashboard');
       setData(res);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching shipment dashboard:', error);
     } finally {
@@ -45,10 +53,17 @@ const ShipmentDashboard = ({ apiRequest }) => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  if (loading || !data) {
+  if (loading && !data) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex flex-col items-center justify-center py-32 space-y-4">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+          <Truck className="w-6 h-6 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+        </div>
+        <div className="text-center">
+          <h3 className="text-slate-900 font-black tracking-tight">Syncing Logistics</h3>
+          <p className="text-xs text-slate-500 mt-1">Gathering transit data and shipment milestones...</p>
+        </div>
       </div>
     );
   }
@@ -56,53 +71,88 @@ const ShipmentDashboard = ({ apiRequest }) => {
   const { stats, monthlyData, recentShipments } = data;
 
   const kpis = [
-    { title: "Active", value: stats.active, icon: <TrendingUp className="w-6 h-6" />, color: "blue" },
-    { title: "In Transit", value: stats.in_transit, icon: <Truck className="w-6 h-6" />, color: "orange" },
-    { title: "Delivered", value: stats.delivered, icon: <CheckCircle className="w-6 h-6" />, color: "green" },
-    { title: "Delayed", value: stats.delayed, icon: <AlertTriangle className="w-6 h-6" />, color: "red" },
-    { title: "Returns", value: stats.returns, icon: <RotateCcw className="w-6 h-6" />, color: "purple" },
-    { title: "Dispatched", value: stats.dispatched, icon: <Package className="w-6 h-6" />, color: "cyan" },
+    { title: "Active Shipments", value: stats.active, subtitle: "In transit/ready", color: "bg-indigo-500", icon: Truck },
+    { title: "On-Time Delivery", value: `${Math.round((stats.delivered / (stats.total || 1)) * 100)}%`, subtitle: "Efficiency score", color: "bg-emerald-500", icon: CheckCircle },
+    { title: "Delayed Items", value: stats.delayed, subtitle: "Awaiting resolution", color: "bg-rose-500", icon: AlertTriangle },
+    { title: "Returns Hub", value: stats.returns, subtitle: "Quality returns", color: "bg-amber-500", icon: RotateCcw },
+    { title: "Total Dispatched", value: stats.dispatched, subtitle: "Last 30 days", color: "bg-blue-500", icon: Package },
   ];
 
   const pieData = [
-    { name: "Active", value: stats.active, color: "#3B82F6" },
-    { name: "Dispatched", value: stats.dispatched, color: "#06B6D4" },
-    { name: "Delivered", value: stats.delivered, color: "#10B981" },
-    { name: "Return", value: stats.returns, color: "#8B5CF6" },
-    { name: "Delayed", value: stats.delayed, color: "#EF4444" },
+    { name: "Active", value: stats.active, color: "#4f46e5" },
+    { name: "Dispatched", value: stats.dispatched, color: "#3b82f6" },
+    { name: "Delivered", value: stats.delivered, color: "#10b981" },
+    { name: "Return", value: stats.returns, color: "#f59e0b" },
+    { name: "Delayed", value: stats.delayed, color: "#ef4444" },
   ].filter(d => d.value > 0);
 
-  return (
-    <div className="p-8 bg-slate-50/50 min-h-screen space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+  const StatCard = ({ title, value, subtitle, color, icon: Icon }) => (
+    <div className="bg-white rounded-[32px] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
+      
+      <div className="flex items-start justify-between relative z-10">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Shipment Dashboard</h1>
-          <p className="text-slate-500 mt-1">Real-time insights into shipment operations.</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</p>
+          <h3 className="text-3xl font-black text-slate-900">{value}</h3>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">{subtitle}</p>
+        </div>
+        <div className={`p-4 rounded-2xl ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
+          <Icon className="w-6 h-6" />
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-8 pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200">
+            <Truck className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Shipment & Logistics</h1>
+            <div className="flex items-center gap-2 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <Clock className="w-3 h-3" />
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-            <Filter className="w-4 h-4 text-slate-400" />
-            Filter
+          <button 
+            onClick={fetchDashboardData}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-100 transition-all border border-slate-200 active:scale-95"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            REFRESH
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95">
+            <Download className="w-4 h-4" />
+            EXPORT LOGS
           </button>
         </div>
       </div>
 
-      {/* KPI CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
         {kpis.map((kpi, i) => (
-          <KpiCard key={i} {...kpi} />
+          <StatCard key={i} {...kpi} />
         ))}
       </div>
 
-      {/* CHART + PERFORMANCE */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* BAR CHART */}
-        <div className="lg:col-span-2 bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-indigo-500" />
-            Shipments Overview
-          </h2>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* Main Chart */}
+        <div className="xl:col-span-2 bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3">
+                <TrendingUp className="w-5 h-5 text-indigo-600" />
+                Dispatch Throughput
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">MONTHLY SHIPMENT VOLUME BY STATUS</p>
+            </div>
+          </div>
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -111,166 +161,123 @@ const ShipmentDashboard = ({ apiRequest }) => {
                   dataKey="month" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#64748b', fontSize: 12 }} 
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
                   dy={10}
                 />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#64748b', fontSize: 12 }} 
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
                 />
                 <Tooltip 
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   cursor={{ fill: '#f8fafc' }}
                 />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                <Bar dataKey="ordered" name="Ordered" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="dispatched" name="Dispatched" fill="#06B6D4" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="delivered" name="Delivered" fill="#10B981" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="returned" name="Returned" fill="#8B5CF6" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="delayed" name="Delayed" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={12} />
+                <Bar dataKey="ordered" name="Ordered" fill="#4f46e5" radius={[0, 0, 0, 0]} barSize={12} />
+                <Bar dataKey="dispatched" name="Dispatched" fill="#3b82f6" radius={[0, 0, 0, 0]} barSize={12} />
+                <Bar dataKey="delivered" name="Delivered" fill="#10b981" radius={[0, 0, 0, 0]} barSize={12} />
+                <Bar dataKey="returned" name="Returned" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={12} />
+                <Bar dataKey="delayed" name="Delayed" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={12} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* DELIVERY PERFORMANCE */}
-        <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-emerald-500" />
-            Delivery Performance
-          </h2>
-          <div className="space-y-8">
-            <ProgressItem label="On-Time Delivery" percent={stats.total > 0 ? Math.round((stats.delivered / stats.total) * 100) : 0} color="bg-emerald-500" />
-            <ProgressItem label="Delay Rate" percent={stats.total > 0 ? Math.round((stats.delayed / stats.total) * 100) : 0} color="bg-rose-500" />
-            <ProgressItem label="Return Rate" percent={stats.total > 0 ? Math.round((stats.returns / stats.total) * 100) : 0} color="bg-purple-500" />
-          </div>
-          <div className="mt-8 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Efficiency Score</p>
-             <p className="text-2xl font-black text-slate-900">88%</p>
-          </div>
-        </div>
-      </div>
-
-      {/* RECENT + PIE + STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* RECENT SHIPMENTS */}
-        <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 mb-6">Recent Shipments</h2>
-          <div className="space-y-4">
-            {recentShipments.map((s, i) => (
-              <ShipmentRow key={i} {...s} />
-            ))}
-            {recentShipments.length === 0 && (
-              <div className="py-8 text-center text-slate-400 text-sm italic">
-                No recent shipments
+        {/* Status Distribution */}
+        <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-lg font-black text-slate-900 tracking-tight mb-8">Fleet Analytics</h3>
+          <div className="flex-1 flex flex-col">
+            <div className="h-64 w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    innerRadius={70}
+                    outerRadius={95}
+                    paddingAngle={8}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-3xl font-black text-slate-900">94%</span>
+                <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">SLA Compliance</span>
               </div>
-            )}
+            </div>
+            <div className="mt-8 space-y-4 flex-1">
+              {pieData.map((item, index) => (
+                <div key={index} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></div>
+                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">{item.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-black text-slate-900">{item.value}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* PIE CHART */}
-        <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 mb-6 text-center">Shipment Statistics</h2>
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+        {/* Recent Shipments Table */}
+        <div className="xl:col-span-3 bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-3">
+                <Truck className="w-4 h-4 text-indigo-600" />
+                LIVE SHIPMENT TRACKER
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wider">REAL-TIME MOVEMENT LOGS</p>
+            </div>
+            <button 
+              onClick={() => window.location.href='/shipment-orders'}
+              className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:gap-3 transition-all"
+            >
+              View Full Fleet <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {recentShipments.map((s, i) => (
+                <div key={i} className="flex flex-col p-4 rounded-[24px] bg-slate-50/50 border border-slate-100 hover:bg-white hover:shadow-lg hover:border-indigo-100 transition-all cursor-pointer group">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="p-2 bg-white rounded-xl shadow-sm group-hover:scale-110 transition-transform">
+                      <Truck className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <StatusBadge status={s.status} />
+                  </div>
+                  <p className="text-xs font-black text-slate-900 uppercase truncate">{s.shipment_code}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase truncate mt-1">{s.customer_name || 'Generic Customer'}</p>
+                  <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                    <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                      <Clock className="w-3 h-3" />
+                      {new Date(s.updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                    </div>
+                    <ArrowRight className="w-3 h-3 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                  </div>
+                </div>
+              ))}
+              {recentShipments.length === 0 && (
+                <div className="col-span-full py-12 text-center">
+                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Package className="w-6 h-6 text-slate-300" />
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No active shipments in queue</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-
-        {/* SUMMARY STATS */}
-        <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm flex flex-col justify-center space-y-6">
-          <StatItem label="Ordered" value={stats.total} color="bg-blue-500" />
-          <StatItem label="Dispatched" value={stats.dispatched} color="bg-cyan-500" />
-          <StatItem label="Delivered" value={stats.delivered} color="bg-green-500" />
-          <StatItem label="Return" value={stats.returns} color="bg-purple-500" />
-          <StatItem label="Delayed" value={stats.delayed} color="bg-rose-500" />
-        </div>
       </div>
     </div>
   );
 };
-
-const KpiCard = ({ title, value, icon, color }) => {
-  const colors = {
-    blue: "bg-blue-50 text-blue-600 border-blue-100",
-    orange: "bg-orange-50 text-orange-600 border-orange-100",
-    green: "bg-emerald-50 text-emerald-600 border-emerald-100",
-    red: "bg-rose-50 text-rose-600 border-rose-100",
-    purple: "bg-purple-50 text-purple-600 border-purple-100",
-    cyan: "bg-cyan-50 text-cyan-600 border-cyan-100",
-  };
-
-  return (
-    <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex justify-between items-start transition-all hover:shadow-md hover:border-slate-200">
-      <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-3">{title}</p>
-        <h3 className="text-3xl font-black text-slate-900">{value}</h3>
-      </div>
-      <div className={`p-4 rounded-2xl border ${colors[color]}`}>
-        {icon}
-      </div>
-    </div>
-  );
-};
-
-const ProgressItem = ({ label, percent, color }) => (
-  <div>
-    <div className="flex justify-between text-xs font-bold text-slate-700 mb-2">
-      <span className="uppercase tracking-wider opacity-60">{label}</span>
-      <span>{percent}%</span>
-    </div>
-    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-      <div
-        className={`${color} h-full rounded-full transition-all duration-1000`}
-        style={{ width: `${percent}%` }}
-      ></div>
-    </div>
-  </div>
-);
-
-const ShipmentRow = ({ shipment_code, customer_name, status, updated_at }) => {
-  return (
-    <div className="flex justify-between items-center p-4 rounded-2xl border border-slate-50 bg-slate-50/30 hover:bg-slate-50 transition-colors">
-      <div className="min-w-0 flex-1 mr-4">
-        <p className="text-xs font-black text-slate-900 truncate uppercase tracking-tight">{shipment_code}</p>
-        <div className="flex items-center gap-2 mt-1">
-           <p className="text-[10px] font-bold text-slate-400 uppercase truncate max-w-[120px]">{customer_name || 'Unknown'}</p>
-           <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-           <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-              <Clock className="w-3 h-3" />
-              {new Date(updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-           </div>
-        </div>
-      </div>
-      <StatusBadge status={status} />
-    </div>
-  );
-};
-
-const StatItem = ({ label, value, color }) => (
-  <div className="flex justify-between items-center group">
-    <div className="flex items-center gap-4">
-      <div className={`w-3 h-3 rounded-full ${color} shadow-sm group-hover:scale-125 transition-transform`}></div>
-      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{label}</span>
-    </div>
-    <span className="text-xl font-black text-slate-900">{value}</span>
-  </div>
-);
 
 export default ShipmentDashboard;

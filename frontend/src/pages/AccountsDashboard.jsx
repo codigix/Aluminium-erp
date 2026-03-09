@@ -1,28 +1,31 @@
-import { useState, useEffect } from 'react';
-import { Card } from '../components/ui.jsx';
+import React, { useState, useEffect } from 'react';
+import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  PieChart, Pie, Cell, BarChart, Bar, ResponsiveContainer as ResponsiveContainerBar
+  PieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
 import { 
-  FileText, IndianRupee, CheckCircle, Clock, AlertCircle, TrendingUp, Filter, Download, Eye, Calendar
+  FileText, IndianRupee, CheckCircle, Clock, AlertCircle, TrendingUp, Filter, 
+  Download, Eye, Calendar, RefreshCw, ArrowRight, Wallet, ArrowUpRight, ArrowDownRight,
+  TrendingDown, Search
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-// Colors from requirements
 const COLORS = {
-  blue: '#2563eb',
-  green: '#16a34a',
-  orange: '#f59e0b',
-  red: '#dc2626',
-  darkRed: '#7f1d1d',
-  slate: '#64748b'
+  blue: '#4f46e5',
+  emerald: '#10b981',
+  amber: '#f59e0b',
+  rose: '#ef4444',
+  indigo: '#6366f1',
+  slate: '#94a3b8',
+  chart: ['#4f46e5', '#10b981', '#f59e0b', '#6366f1', '#f43f5e']
 };
 
 const AccountsDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   useEffect(() => {
     fetchDashboardData();
@@ -43,6 +46,7 @@ const AccountsDashboard = () => {
       if (!response.ok) throw new Error('Failed to fetch dashboard data');
       const data = await response.json();
       setStats(data);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching accounts dashboard:', error);
     } finally {
@@ -50,300 +54,269 @@ const AccountsDashboard = () => {
     }
   };
 
-  if (loading || !stats) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
-          <p className="text-xs text-slate-500 mt-4">Fetching financial insights...</p>
+  const StatCard = ({ title, amount, subtitle, icon: Icon, color, trend, trendValue }) => (
+    <div className="bg-white rounded-[32px] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
+      
+      <div className="flex items-start justify-between relative z-10">
+        <div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</p>
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-2xl font-black text-slate-900">{amount}</h3>
+            {trendValue && (
+              <span className={`flex items-center text-[10px] font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                {trendValue}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">{subtitle}</p>
         </div>
-      </div>
-    );
-  }
-
-  // Map API data to chart formats
-  const cashFlowData = stats.cashFlow || [];
-  
-  const statusData = (stats.statusBreakdown || []).map(item => {
-    let color = COLORS.slate;
-    if (item.name === 'PAID') color = COLORS.green;
-    if (item.name === 'SENT' || item.name === 'RECEIVED') color = COLORS.orange;
-    if (item.name === 'FULFILLED') color = COLORS.blue;
-    return { name: item.name, value: item.count, color };
-  });
-
-  const vendorPayableData = (stats.vendorPayables || []).map((v, i) => ({
-    ...v,
-    color: [COLORS.blue, '#38bdf8', '#4ade80', '#fbbf24', '#f87171'][i % 5]
-  }));
-
-  const paymentModeData = (stats.paymentModes || []).map((p, i) => ({
-    ...p,
-    color: ['#60a5fa', '#34d399', '#fbbf24', '#818cf8', '#f472b6'][i % 5]
-  }));
-
-  const recentActivity = stats.recentActivity || [];
-
-  const tableData = (stats.recentActivity || []).filter(a => a.type === 'INVOICE').slice(0, 5);
-
-  const StatCard = ({ title, amount, subtext, icon: Icon, color, trend }) => (
-    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
-      <div className="flex justify-between items-start mb-2">
-        <div className={`p-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-600`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        {trend && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center gap-0.5`}>
-            {trend}
-          </span>
-        )}
-      </div>
-      <div>
-        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">{title}</p>
-        <div className="flex items-baseline gap-1">
-          <h3 className="text-lg font-bold text-slate-900">{amount}</h3>
+        <div className={`p-4 rounded-2xl ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
+          <Icon className="w-6 h-6" />
         </div>
       </div>
     </div>
   );
 
-  return (
-    <div className="space-y-4 bg-slate-50/50 p-2 min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Accounts Dashboard</h1>
-          <p className="text-[11px] text-slate-500">Vendor payment overview & liability tracking</p>
+  if (loading || !stats) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 space-y-4">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+          <IndianRupee className="w-6 h-6 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] text-slate-600 cursor-pointer hover:bg-slate-50">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Last 30 Days</span>
-            <Filter className="w-3.5 h-3.5 ml-1 opacity-50" />
+        <div className="text-center">
+          <h3 className="text-slate-900 font-black tracking-tight">Financial Sync in Progress</h3>
+          <p className="text-xs text-slate-500 mt-1">Calculating payables, receipts and cash flow trends...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const tableColumns = [
+    { key: 'no', label: 'REFERENCE', render: (val) => <span className="font-black text-slate-900">{val}</span> },
+    { key: 'vendor', label: 'ENTITY', render: (val) => <span className="font-bold text-slate-600">{val}</span> },
+    { key: 'amount', label: 'AMOUNT', className: 'text-right', render: (val) => <span className="font-black text-indigo-600">₹{parseFloat(val || 0).toLocaleString('en-IN')}</span> },
+    { key: 'status', label: 'STATUS', render: (val) => <StatusBadge status={val} /> },
+    { key: 'date', label: 'DATE', render: (val) => <span className="text-slate-500 font-medium">{val}</span> },
+    { 
+      key: 'actions', 
+      label: 'ACTION', 
+      className: 'text-right',
+      render: () => (
+        <div className="flex justify-end gap-2">
+          <button className="p-2 hover:bg-slate-50 text-slate-400 rounded-xl transition-colors border border-transparent hover:border-slate-100">
+            <Eye className="w-4 h-4" />
+          </button>
+          <button className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors border border-transparent hover:border-indigo-100">
+            <FileText className="w-4 h-4" />
+          </button>
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <div className="space-y-8 pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-emerald-600 rounded-2xl shadow-lg shadow-emerald-200">
+            <Wallet className="w-8 h-8 text-white" />
           </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] text-slate-600 hover:bg-slate-50">
-            <Download className="w-3.5 h-3.5" />
-            <span>Export</span>
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Accounts & Finance</h1>
+            <div className="flex items-center gap-2 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <Clock className="w-3 h-3" />
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:bg-slate-100">
+            <Calendar className="w-3.5 h-3.5" />
+            Last 30 Days
+          </div>
+          <button 
+            onClick={fetchDashboardData}
+            className="p-2 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 transition-all border border-slate-200"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95">
+            <Download className="w-4 h-4" />
+            GENERATE REPORT
           </button>
         </div>
       </div>
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard title="Total Vendor Invoices" amount={stats.kpis.totalInvoices} icon={FileText} />
-        <StatCard title="Total Payable Amount" amount={`₹${Number(stats.kpis.totalPayable).toLocaleString('en-IN')}`} icon={IndianRupee} />
-        <StatCard title="Paid Amount" amount={`₹${Number(stats.kpis.paidAmount).toLocaleString('en-IN')}`} icon={CheckCircle} />
-        <StatCard title="Pending Payable" amount={`₹${Number(stats.kpis.pendingPayable).toLocaleString('en-IN')}`} icon={Clock} />
-        <StatCard title="Overdue Invoices" amount={stats.kpis.overdueCount} icon={AlertCircle} />
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+        <StatCard 
+          title="Total Invoices" 
+          amount={stats.kpis.totalInvoices} 
+          subtitle="Processed this period"
+          color="bg-indigo-500"
+          icon={FileText}
+          trend="up"
+          trendValue="8.4%"
+        />
+        <StatCard 
+          title="Total Payables" 
+          amount={`₹${Number(stats.kpis.totalPayable).toLocaleString('en-IN')}`} 
+          subtitle="Total liability"
+          color="bg-rose-500"
+          icon={IndianRupee}
+        />
+        <StatCard 
+          title="Paid to Vendors" 
+          amount={`₹${Number(stats.kpis.paidAmount).toLocaleString('en-IN')}`} 
+          subtitle="Cleared payments"
+          color="bg-emerald-500"
+          icon={CheckCircle}
+          trend="up"
+          trendValue="12.1%"
+        />
+        <StatCard 
+          title="Pending Payments" 
+          amount={`₹${Number(stats.kpis.pendingPayable).toLocaleString('en-IN')}`} 
+          subtitle="Awaiting clearance"
+          color="bg-amber-500"
+          icon={Clock}
+        />
+        <StatCard 
+          title="Overdue Items" 
+          amount={stats.kpis.overdueCount} 
+          subtitle="Requires attention"
+          color="bg-rose-600"
+          icon={AlertCircle}
+        />
       </div>
 
-      {/* Middle Row: Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Cash Flow Line Chart */}
-        <div className="lg:col-span-2 bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold text-slate-900">Monthly Cash Flow</h3>
-            <div className="flex items-center gap-3 text-[10px]">
-              <div className="flex items-center gap-1.5 text-slate-500">
-                <span className="w-3 h-0.5 bg-blue-500 rounded-full"></span>
-                <span>Customer Receipts</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-slate-500">
-                <span className="w-3 h-0.5 bg-emerald-500 rounded-full"></span>
-                <span>Vendor Payments</span>
-              </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* Cash Flow Chart */}
+        <div className="xl:col-span-2 bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-600" />
+                Financial Performance
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">MONTHLY CASH FLOW: RECEIPTS VS PAYMENTS</p>
             </div>
           </div>
-          <div className="h-[220px] w-full">
+          <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={cashFlowData}>
+              <LineChart data={stats.cashFlow}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} tickFormatter={(v) => `${v/1000}K`} />
-                <Tooltip 
-                  contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '11px'}}
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
+                  dy={10} 
                 />
-                <Line type="monotone" dataKey="receipts" stroke={COLORS.blue} strokeWidth={2} dot={{ r: 3, fill: COLORS.blue, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="payments" stroke={COLORS.green} strokeWidth={2} dot={{ r: 3, fill: COLORS.green, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
+                  tickFormatter={(v) => `₹${v/1000}K`} 
+                />
+                <Tooltip 
+                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px'}}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="receipts" 
+                  stroke={COLORS.blue} 
+                  strokeWidth={4} 
+                  dot={{ r: 4, fill: COLORS.blue, strokeWidth: 2, stroke: '#fff' }} 
+                  activeDot={{ r: 6 }} 
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="payments" 
+                  stroke={COLORS.emerald} 
+                  strokeWidth={4} 
+                  dot={{ r: 4, fill: COLORS.emerald, strokeWidth: 2, stroke: '#fff' }} 
+                  activeDot={{ r: 6 }} 
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Invoice Status Pie Chart */}
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="text-sm font-bold text-slate-900 mb-4">Invoice Status Breakdown</h3>
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="h-[180px] w-full relative">
+        {/* Invoice Status Distribution */}
+        <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-lg font-black text-slate-900 tracking-tight mb-8">Status Analytics</h3>
+          <div className="flex-1 flex flex-col">
+            <div className="h-64 w-full relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={statusData}
-                    innerRadius={55}
-                    outerRadius={75}
-                    paddingAngle={5}
+                    data={stats.statusBreakdown.map(item => ({
+                      name: item.name,
+                      value: item.count,
+                      color: item.name === 'PAID' ? COLORS.emerald : (item.name === 'OVERDUE' ? COLORS.rose : COLORS.amber)
+                    }))}
+                    innerRadius={70}
+                    outerRadius={95}
+                    paddingAngle={8}
                     dataKey="value"
                   >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    {stats.statusBreakdown.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.name === 'PAID' ? COLORS.emerald : (entry.name === 'OVERDUE' ? COLORS.rose : COLORS.amber)} />
                     ))}
                   </Pie>
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-lg font-bold text-slate-900">52%</span>
-                <span className="text-[9px] text-slate-400">Paid Invoices</span>
+                <span className="text-3xl font-black text-slate-900">72%</span>
+                <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Collection Rate</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 mt-4 w-full px-4">
-              {statusData.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span>
-                  <span className="text-[10px] text-slate-500 font-medium">{item.name}</span>
-                  <span className="ml-auto text-[10px] font-bold text-slate-700">{item.value}%</span>
+            <div className="mt-8 space-y-4 flex-1">
+              {stats.statusBreakdown.map((item, index) => (
+                <div key={index} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.name === 'PAID' ? COLORS.emerald : (item.name === 'OVERDUE' ? COLORS.rose : COLORS.amber) }}></div>
+                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">{item.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-black text-slate-900">{item.count}</span>
+                    <span className="text-[10px] font-black text-slate-400 w-8 text-right">{item.percentage}%</span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Third Row: Vendor Payable & Recent Activity & Payment Distribution */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Vendor Wise Payable */}
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 mb-5">Vendor Wise Payable</h3>
-          <div className="space-y-4">
-            {vendorPayableData.map((vendor) => (
-              <div key={vendor.name} className="space-y-1.5">
-                <div className="flex justify-between text-[10px]">
-                  <span className="font-semibold text-slate-700 uppercase">{vendor.name}</span>
-                  <span className="font-bold text-slate-900">₹{vendor.amount.toLocaleString()}</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full rounded-full transition-all duration-500" 
-                    style={{
-                      backgroundColor: vendor.color,
-                      width: `${(vendor.amount / 200000) * 100}%`
-                    }}
-                  ></div>
-                </div>
-              </div>
-            ))}
+        {/* Recent Financial Activity Table */}
+        <div className="xl:col-span-3 bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <IndianRupee className="w-4 h-4 text-indigo-600" />
+                RECENT FINANCIAL OPERATIONS
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wider">LATEST INVOICES AND PAYMENTS</p>
+            </div>
+            <button className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:gap-3 transition-all">
+              View All Transactions <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="text-sm font-bold text-slate-900 mb-5">Recent Activity</h3>
-          <div className="flex-1 space-y-4">
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start gap-3">
-                <div className={`mt-0.5 p-1.5 rounded-lg bg-slate-50 border border-slate-100`}>
-                  <FileText className="w-3.5 h-3.5 text-slate-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start">
-                    <p className="text-[11px] font-bold text-slate-900 truncate">{activity.ref}</p>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                      activity.status === 'Overdue' ? 'bg-rose-50 text-rose-600' :
-                      activity.status === 'Fulfilled' ? 'bg-emerald-50 text-emerald-600' :
-                      'bg-amber-50 text-amber-600'
-                    }`}>
-                      {activity.status}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mb-1">{activity.vendor}</p>
-                  <div className="flex justify-between text-[10px]">
-                    <span className="font-bold text-slate-700">₹{activity.amount.toLocaleString()}</span>
-                    <span className="text-slate-400 italic">{activity.time}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="p-4">
+            <DataTable
+              columns={tableColumns}
+              data={stats.recentActivity.filter(a => a.type === 'INVOICE').slice(0, 8)}
+              loading={loading}
+              hideHeader
+              emptyMessage="No recent financial activity recorded."
+            />
           </div>
-        </div>
-
-        {/* Payment Mode Distribution */}
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 mb-4">Payment Mode Distribution</h3>
-          <div className="h-[200px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={paymentModeData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={0}
-                  outerRadius={70}
-                  dataKey="value"
-                >
-                  {paymentModeData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-2 gap-4 px-4 pb-2">
-            {paymentModeData.map((item) => (
-              <div key={item.name} className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span>
-                <span className="text-[10px] text-slate-500">{item.name}</span>
-                <span className="text-[10px] font-bold text-slate-700 ml-auto">{item.value}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Footer Table */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-[11px] text-left">
-            <thead className="bg-slate-50/50 border-b border-slate-100 text-slate-400 uppercase tracking-wider font-semibold">
-              <tr>
-                <th className="px-5 py-3">PO / Invoice No</th>
-                <th className="px-5 py-3">Vendor/ Customer</th>
-                <th className="px-5 py-3 text-right">Amount</th>
-                <th className="px-5 py-3 text-center">Status</th>
-                <th className="px-5 py-3">Date</th>
-                <th className="px-5 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {tableData.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3 font-bold text-slate-900">{row.no}</td>
-                  <td className="px-5 py-3 text-slate-600">{row.vendor}</td>
-                  <td className="px-5 py-3 text-right font-bold text-slate-900">₹{row.amount.toLocaleString()}</td>
-                  <td className="px-5 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                      row.status === 'Overdue' ? 'bg-rose-50 text-rose-600' :
-                      row.status === 'Paid' ? 'bg-emerald-50 text-emerald-600' :
-                      'bg-blue-50 text-blue-600'
-                    }`}>
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-slate-500">{row.date}</td>
-                  <td className="px-5 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded border border-slate-100" title="View Detail">
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded border border-slate-100" title="View PDF">
-                        <FileText className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

@@ -126,6 +126,7 @@ module.exports = {
   getIncomingOrders,
   getPendingGRNs,
   getLowStockItems,
+  getMaterialRequests,
   getQCPendingItems,
   getSummaryMetrics
 };

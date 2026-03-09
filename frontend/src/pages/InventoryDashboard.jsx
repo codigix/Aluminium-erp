@@ -1,5 +1,17 @@
-import { useState, useEffect } from 'react';
-import { Card } from '../components/ui.jsx';
+import React, { useState, useEffect } from 'react';
+import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
+import { 
+  Package, 
+  ClipboardList, 
+  Truck, 
+  AlertTriangle, 
+  ArrowRight, 
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
+  Clock,
+  ExternalLink
+} from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -11,6 +23,7 @@ const InventoryDashboard = () => {
     materialRequests: []
   });
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   useEffect(() => {
     fetchDashboardData();
@@ -51,258 +64,262 @@ const InventoryDashboard = () => {
         lowStockItems: filteredStockData,
         materialRequests: Array.isArray(mrData) ? mrData : []
       });
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching inventory dashboard:', error);
-      setStats({
-        incomingPos: [],
-        pendingGRNs: [],
-        lowStockItems: [],
-        materialRequests: []
-      });
     } finally {
       setLoading(false);
     }
   };
 
-  const StatCard = ({ title, count, color, icon }) => (
-    <div className={`${color} rounded  p-5 border border-slate-200 transition-all hover:`}>
-      <div className="flex items-center justify-between">
+  const StatCard = ({ title, count, subtitle, color, icon: Icon, trend }) => (
+    <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
+      
+      <div className="flex items-start justify-between relative z-10">
         <div>
-          <p className="text-[10px] text-slate-500    mb-1">{title}</p>
-          <p className="text-xl text-slate-900">{count}</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</p>
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-3xl font-black text-slate-900">{count}</h3>
+            {trend && (
+              <span className={`flex items-center text-[10px] font-bold ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {trend > 0 ? <TrendingUp className="w-3 h-3 mr-0.5" /> : <TrendingDown className="w-3 h-3 mr-0.5" />}
+                {Math.abs(trend)}%
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">{subtitle}</p>
         </div>
-        <div className="p-2 bg-white rounded   border border-slate-100">
-          {icon}
+        <div className={`p-3 rounded-xl ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12`}>
+          <Icon className="w-6 h-6" />
         </div>
+      </div>
+      
+      <div className="mt-4 flex items-center text-[10px] font-black text-slate-400 group-hover:text-indigo-600 transition-colors cursor-pointer">
+        VIEW DETAILS <ArrowRight className="w-3 h-3 ml-1 transition-transform group-hover:translate-x-1" />
       </div>
     </div>
   );
 
-  if (loading) {
+  const incomingColumns = [
+    { key: 'order_code', label: 'Order Code', sortable: true, render: (val) => <span className="font-bold text-slate-900">{val}</span> },
+    { key: 'company_name', label: 'Customer', sortable: true },
+    { key: 'project_name', label: 'Project', className: 'max-w-xs truncate' },
+    { key: 'amount', label: 'Amount', sortable: true, className: 'text-right', render: (val) => <span className="font-bold text-indigo-600">₹{parseFloat(val || 0).toLocaleString('en-IN')}</span> },
+    { key: 'target_dispatch_date', label: 'Target Dispatch', sortable: true, render: (val) => val ? new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—' },
+    { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> }
+  ];
+
+  const mrColumns = [
+    { key: 'request_no', label: 'Request No', sortable: true, render: (val) => <span className="font-bold text-slate-900">{val}</span> },
+    { key: 'department', label: 'Department', sortable: true },
+    { key: 'purpose', label: 'Purpose' },
+    { key: 'items_count', label: 'Items', className: 'text-right font-medium' },
+    { key: 'required_date', label: 'Required By', sortable: true, render: (val) => val ? new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—' },
+    { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> }
+  ];
+
+  const grnColumns = [
+    { key: 'id', label: 'GRN ID', sortable: true, render: (val) => <span className="font-bold text-slate-900">GRN-{String(val).padStart(4, '0')}</span> },
+    { key: 'po_number', label: 'PO Number', sortable: true },
+    { key: 'received_quantity', label: 'Qty Received', className: 'text-right font-medium', render: (val) => parseFloat(val || 0).toFixed(3) },
+    { key: 'grn_date', label: 'Date', sortable: true, render: (val) => new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) },
+    { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> }
+  ];
+
+  const lowStockColumns = [
+    { key: 'item_code', label: 'Item Code', sortable: true, render: (val) => <span className="font-bold text-slate-900">{val}</span> },
+    { key: 'item_description', label: 'Description', className: 'max-w-xs truncate' },
+    { key: 'warehouse', label: 'Warehouse', sortable: true },
+    { key: 'current_balance', label: 'Balance', sortable: true, className: 'text-right', render: (val) => (
+      <span className="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg font-bold border border-rose-100">
+        {parseFloat(val || 0).toFixed(3)}
+      </span>
+    )},
+    { key: 'unit', label: 'Unit' }
+  ];
+
+  if (loading && !stats.incomingPos.length) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center ">
-          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded  animate-spin mx-auto" />
-          <p className="text-xs text-slate-500 ">Fetching inventory insights...</p>
+      <div className="flex flex-col items-center justify-center py-32 space-y-4">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+          <Package className="w-6 h-6 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+        </div>
+        <div className="text-center">
+          <h3 className="text-slate-900 font-black tracking-tight">Syncing Inventory</h3>
+          <p className="text-xs text-slate-500 mt-1">Gathering real-time stock insights...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="space-y-8 pb-12">
+      {/* Dashboard Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200">
+            <Package className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Inventory Dashboard</h1>
+            <div className="flex items-center gap-2 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <Clock className="w-3 h-3" />
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={fetchDashboardData}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-100 transition-all border border-slate-200 active:scale-95"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            REFRESH DATA
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           title="Incoming Orders" 
           count={stats.incomingPos.length} 
-          color="bg-indigo-50"
-          icon={
-            <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          }
+          subtitle="Active in pipeline"
+          color="bg-indigo-500"
+          icon={Truck}
+          trend={12}
         />
         <StatCard 
           title="Material Requests" 
           count={stats.materialRequests.length} 
-          color="bg-emerald-50"
-          icon={
-            <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-          }
+          subtitle="Pending fulfillment"
+          color="bg-emerald-500"
+          icon={ClipboardList}
         />
         <StatCard 
           title="Pending GRNs" 
           count={stats.pendingGRNs.length} 
-          color="bg-amber-50"
-          icon={
-            <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
+          subtitle="Awaiting inspection"
+          color="bg-amber-500"
+          icon={RefreshCw}
         />
         <StatCard 
-          title="Low Stock Items" 
+          title="Low Stock Alert" 
           count={stats.lowStockItems.length} 
-          color="bg-rose-50"
-          icon={
-            <svg className="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          }
+          subtitle="Below reorder level"
+          color="bg-rose-500"
+          icon={AlertTriangle}
+          trend={-5}
         />
       </div>
 
-      <Card title="Incoming Orders" subtitle="Active orders in production pipeline">
-        {stats.incomingPos.length === 0 ? (
-          <div className="text-center py-8 text-slate-500">
-            <p className="text-sm">No incoming orders</p>
+      {/* Main Content Sections */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        {/* Incoming Orders Section */}
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Truck className="w-4 h-4 text-indigo-600" />
+                ACTIVE PRODUCTION PIPELINE
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold mt-0.5">INCOMING ORDERS FROM SALES</p>
+            </div>
+            <button className="p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-100">
+              <ExternalLink className="w-4 h-4 text-slate-400" />
+            </button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
-                <tr>
-                  <th className="p-2 text-left ">Order Code</th>
-                  <th className="p-2 text-left ">Customer</th>
-                  <th className="p-2 text-left ">Project</th>
-                  <th className="p-2  text-right ">Amount</th>
-                  <th className="p-2 text-left ">Target Dispatch</th>
-                  <th className="p-2 text-left ">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.incomingPos.map((order) => (
-                  <tr key={order.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-4  text-slate-900">{order.order_code}</td>
-                    <td className="px-4 py-4 text-slate-600">{order.company_name}</td>
-                    <td className="px-4 py-4 text-slate-600 text-xs max-w-xs truncate">{order.project_name || '—'}</td>
-                    <td className="px-4 py-4 text-right text-slate-600">
-                      ₹{parseFloat(order.amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">
-                      {order.target_dispatch_date ? new Date(order.target_dispatch_date).toLocaleDateString() : '—'}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="px-2 py-1 rounded  text-xs  bg-blue-100 text-blue-700">
-                        {order.status?.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-4 flex-1">
+            <DataTable 
+              columns={incomingColumns} 
+              data={stats.incomingPos.slice(0, 5)} 
+              loading={loading}
+              hideHeader
+              emptyMessage="No incoming orders currently"
+            />
           </div>
-        )}
-      </Card>
+        </div>
 
-      <Card title="Material Requests" subtitle="Recent purchase requests from production/inventory">
-        {stats.materialRequests.length === 0 ? (
-          <div className="text-center py-8 text-slate-500">
-            <p className="text-sm">No pending material requests</p>
+        {/* Material Requests Section */}
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-emerald-600" />
+                PURCHASE REQUISITIONS
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold mt-0.5">RECENT MATERIAL REQUESTS</p>
+            </div>
+            <button 
+              onClick={() => window.location.href='/po-material-request'}
+              className="p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-100"
+            >
+              <ExternalLink className="w-4 h-4 text-slate-400" />
+            </button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
-                <tr>
-                  <th className="p-2 text-left ">Request No</th>
-                  <th className="p-2 text-left ">Department</th>
-                  <th className="p-2 text-left ">Purpose</th>
-                  <th className="p-2  text-right ">Items</th>
-                  <th className="p-2 text-left ">Req. Date</th>
-                  <th className="p-2 text-left ">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.materialRequests.slice(0, 5).map((req) => (
-                  <tr key={req.id} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => window.location.href='/po-material-request'}>
-                    <td className="px-4 py-4  text-slate-900">{req.request_no}</td>
-                    <td className="px-4 py-4 text-slate-600">{req.department}</td>
-                    <td className="px-4 py-4 text-slate-600">{req.purpose}</td>
-                    <td className="px-4 py-4 text-right text-slate-600">
-                      {req.items_count}
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">
-                      {req.required_date ? new Date(req.required_date).toLocaleDateString() : '—'}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`px-2 py-1 rounded text-xs     ${
-                        req.status === 'DRAFT' ? 'bg-slate-100 text-slate-600' : 
-                        req.status === 'Approved ' ? 'bg-blue-100 text-blue-600' : 
-                        req.status === 'ORDERED' ? 'bg-emerald-100 text-emerald-600' :
-                        'bg-orange-100 text-orange-600'
-                      }`}>
-                        {req.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-4 flex-1">
+            <DataTable 
+              columns={mrColumns} 
+              data={stats.materialRequests.slice(0, 5)} 
+              loading={loading}
+              hideHeader
+              emptyMessage="No pending material requests"
+            />
           </div>
-        )}
-      </Card>
+        </div>
 
-      <Card title="Pending GRNs" subtitle="Goods received awaiting inspection">
-        {stats.pendingGRNs.length === 0 ? (
-          <div className="text-center py-8 text-slate-500">
-            <p className="text-sm">No pending GRNs</p>
+        {/* Pending GRNs Section */}
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600" />
+                AWAITING QUALITY CHECK
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold mt-0.5">GOODS RECEIVED MANAGEMENT</p>
+            </div>
+            <button className="p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-100">
+              <ExternalLink className="w-4 h-4 text-slate-400" />
+            </button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
-                <tr>
-                  <th className="p-2 text-left ">GRN ID</th>
-                  <th className="p-2 text-left ">PO Number</th>
-                  <th className="p-2  text-right ">Qty Received</th>
-                  <th className="p-2 text-left ">Date</th>
-                  <th className="p-2 text-left ">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.pendingGRNs.map((grn) => (
-                  <tr key={grn.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-4  text-slate-900">GRN-{String(grn.id).padStart(4, '0')}</td>
-                    <td className="px-4 py-4 text-slate-600">{grn.po_number}</td>
-                    <td className="px-4 py-4 text-right text-slate-600">
-                      {parseFloat(grn.received_quantity || 0).toFixed(3)}
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">
-                      {new Date(grn.grn_date).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="px-2 py-1 rounded  text-xs  bg-amber-100 text-amber-700">
-                        {grn.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-4 flex-1">
+            <DataTable 
+              columns={grnColumns} 
+              data={stats.pendingGRNs.slice(0, 5)} 
+              loading={loading}
+              hideHeader
+              emptyMessage="No pending GRNs for inspection"
+            />
           </div>
-        )}
-      </Card>
+        </div>
 
-      <Card title="Low Stock Items" subtitle="Items below reorder level">
-        {stats.lowStockItems.length === 0 ? (
-          <div className="text-center py-8 text-slate-500">
-            <p className="text-sm">All items in stock</p>
+        {/* Low Stock Items Section */}
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30 text-rose-600">
+            <div>
+              <h3 className="text-sm font-black tracking-tight flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+                CRITICAL STOCK ALERTS
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase">ITEMS BELOW REORDER LEVEL</p>
+            </div>
+            <button className="p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-100">
+              <ExternalLink className="w-4 h-4 text-slate-400" />
+            </button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
-                <tr>
-                  <th className="p-2 text-left ">Item Code</th>
-                  <th className="p-2 text-left ">Description</th>
-                  <th className="p-2 text-left ">Warehouse</th>
-                  <th className="p-2  text-right ">Balance</th>
-                  <th className="p-2 text-left ">Unit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.lowStockItems.map((item) => (
-                  <tr key={`${item.item_code}-${item.warehouse}`} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-4  text-slate-900">{item.item_code}</td>
-                    <td className="px-4 py-4 text-slate-600 text-xs max-w-xs truncate">{item.item_description}</td>
-                    <td className="px-4 py-4 text-slate-600">{item.warehouse || 'General'}</td>
-                    <td className="px-4 py-4 text-right">
-                      <span className="px-2 py-1 rounded  text-xs  bg-rose-50 text-rose-600 border border-rose-100">
-                        {parseFloat(item.current_balance || 0).toFixed(3)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">{item.unit}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-4 flex-1">
+            <DataTable 
+              columns={lowStockColumns} 
+              data={stats.lowStockItems.slice(0, 5)} 
+              loading={loading}
+              hideHeader
+              emptyMessage="All items are above reorder level"
+            />
           </div>
-        )}
-      </Card>
-
+        </div>
+      </div>
     </div>
   );
 };
