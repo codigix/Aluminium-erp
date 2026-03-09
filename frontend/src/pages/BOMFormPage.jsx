@@ -149,6 +149,7 @@ const BOMFormPage = () => {
     uom: 'Kg',
     revision: '1',
     description: '',
+    notes: '',
     isActive: true,
     isDefault: false,
     quantity: 1
@@ -685,8 +686,8 @@ const BOMFormPage = () => {
         itemCode: selectedItem.item_code || selectedItem.itemCode || prev.itemCode,
         description: cleanDescription || prev.description,
         itemGroup: selectedItem.item_group || getItemGroupFromMaterialType(selectedItem.material_type) || prev.itemGroup,
-        drawingNo: selectedItem.drawing_no || prev.drawingNo,
-        drawing_id: selectedItem.drawing_id || prev.drawing_id,
+        drawingNo: (selectedItem.drawing_no && selectedItem.drawing_no !== 'N/A') ? selectedItem.drawing_no : (prev.drawingNo || ''),
+        drawing_id: (selectedItem.drawing_id && selectedItem.drawing_id !== 'N/A') ? selectedItem.drawing_id : (prev.drawing_id || ''),
         quantity: selectedItem.quantity || prev.quantity,
         uom: selectedItem.unit || selectedItem.uom || prev.uom,
         revision: selectedItem.revision_no || selectedItem.revision || prev.revision
@@ -1227,8 +1228,8 @@ const BOMFormPage = () => {
                             description: (item.material_name || item.description || item.item_description || '').replace(/\s*\($/, ''),
                             itemCode: item.item_code,
                             itemGroup: item.item_group || item.material_type || getItemGroupFromMaterialType(item.material_type),
-                            drawingNo: item.drawing_no || '',
-                            drawing_id: item.drawing_id || '',
+                            drawingNo: (item.drawing_no && item.drawing_no !== 'N/A') ? item.drawing_no : (prev.drawingNo || ''),
+                            drawing_id: (item.drawing_id && item.drawing_id !== 'N/A') ? item.drawing_id : (prev.drawing_id || ''),
                             uom: item.unit || item.uom || 'Kg',
                             revision: item.revision_no || item.revision || '1',
                             quantity: item.quantity || 1
@@ -1324,8 +1325,8 @@ const BOMFormPage = () => {
                             description: (item.material_name || item.description || item.item_description || '').replace(/\s*\($/, ''),
                             itemCode: item.item_code,
                             itemGroup: item.item_group || item.material_type || getItemGroupFromMaterialType(item.material_type),
-                            drawingNo: item.drawing_no || '',
-                            drawing_id: item.drawing_id || '',
+                            drawingNo: (item.drawing_no && item.drawing_no !== 'N/A') ? item.drawing_no : (prev.drawingNo || ''),
+                            drawing_id: (item.drawing_id && item.drawing_id !== 'N/A') ? item.drawing_id : (prev.drawing_id || ''),
                             uom: item.unit || item.uom || 'Kg',
                             revision: item.revision_no || item.revision || '1',
                             quantity: item.quantity || 1
@@ -1337,7 +1338,7 @@ const BOMFormPage = () => {
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs text-slate-500 ml-1">Drawing No</label>
+                  <label className="text-xs  text-slate-500 ml-1">Drawing No</label>
                   <div className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 font-medium">
                     {productForm.drawingNo || 'N/A'}
                   </div>
@@ -1418,8 +1419,8 @@ const BOMFormPage = () => {
                     rows="2"
                     className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 resize-none"
                     placeholder="Enter any additional technical details or manufacturing notes..."
-                    value={productForm.description}
-                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    value={productForm.notes}
+                    onChange={(e) => setProductForm({ ...productForm, notes: e.target.value })}
                   />
                 </div>
                 <div className="flex flex-col justify-center gap-4">

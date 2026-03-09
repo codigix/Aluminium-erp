@@ -296,9 +296,13 @@ const createBOMRequest = async (bomData) => {
   const { itemId, salesOrderId, status, productForm, materials, components, operations, scrap, source, costing } = bomData;
   console.log(`[createBOMRequest] ItemID: ${itemId}, SOID: ${salesOrderId}, Status: ${status}, Source: ${source}, Drawing: ${productForm.drawingNo}`);
   
-  const { itemCode, itemGroup, uom, revision, description, isActive, isDefault, quantity, drawingNo, drawing_id } = productForm;
+  const { itemCode, itemGroup, uom, revision, description, notes, isActive, isDefault, quantity, drawingNo, drawing_id } = productForm;
   const bom_cost = costing?.costPerUnit || 0;
   const finalStatus = status || 'Active';
+  
+  // If notes are provided separately, we should prioritize them for 'description' or merge if needed
+  // Since DB currently uses 'description' column, we use notes if they exist, or fallback to description
+  const effectiveDescription = (notes && notes.trim()) ? notes : description;
 
   const connection = await pool.getConnection();
   try {
@@ -331,7 +335,7 @@ const createBOMRequest = async (bomData) => {
           itemGroup || null, 
           uom || null, 
           revision || null, 
-          description || null, 
+          effectiveDescription || null, 
           isActive ? 1 : 0, 
           isDefault ? 1 : 0, 
           drawingNo || null, 
@@ -367,7 +371,7 @@ const createBOMRequest = async (bomData) => {
             itemGroup || null, 
             uom || null, 
             revision || null, 
-            description || null, 
+            effectiveDescription || null, 
             isActive ? 1 : 0, 
             isDefault ? 1 : 0, 
             drawingNo || null, 
@@ -394,7 +398,7 @@ const createBOMRequest = async (bomData) => {
             itemGroup || null,
             uom || null,
             revision || null,
-            description || null,
+            effectiveDescription || null,
             isActive ? 1 : 0,
             isDefault ? 1 : 0,
             quantity || 0,

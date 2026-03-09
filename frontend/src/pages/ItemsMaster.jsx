@@ -302,6 +302,13 @@ const ItemsMaster = () => {
     { label: 'Item Name', key: 'material_name', sortable: true },
     { label: 'Group', key: 'material_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px]">{val}</span> },
     { label: 'UOM', key: 'unit', sortable: true },
+    { 
+      label: 'Valuation Rate (₹)', 
+      key: 'valuation_rate', 
+      sortable: true, 
+      className: 'text-right font-medium text-slate-700',
+      render: (val) => `₹${(parseFloat(val) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
+    },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
     { 
       label: 'Actions', 
