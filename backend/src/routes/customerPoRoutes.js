@@ -9,6 +9,7 @@ router.post('/parse', authorize(['PO_CREATE', 'PO_EDIT']), upload.single('poPdf'
 router.post('/', authorize(['PO_CREATE']), upload.single('poPdf'), customerPoController.createCustomerPo);
 router.get('/', authorize(['PO_VIEW']), customerPoController.listCustomerPos);
 router.get('/:id', authorize(['PO_VIEW']), customerPoController.getCustomerPo);
+router.get('/:id/pdf', authorize(['PO_VIEW']), customerPoController.generateCustomerPoPdf);
 router.put('/:id', authorize(['PO_EDIT']), upload.single('poPdf'), customerPoController.updateCustomerPo);
 router.delete('/:id', authorize(['PO_DELETE']), customerPoController.deleteCustomerPo);
 

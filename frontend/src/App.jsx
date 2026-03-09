@@ -279,6 +279,8 @@ function App() {
   const [showOperationForm, setShowOperationForm] = useState(false)
   const [quotationRequests, setQuotationRequests] = useState([])
   const [quotationRequestsLoading, setQuotationRequestsLoading] = useState(false)
+  const [customerPos, setCustomerPos] = useState([])
+  const [customerPosLoading, setCustomerPosLoading] = useState(false)
   const [poQuotePrices, setPoQuotePrices] = useState({})
   const [poDetailDrawerOpen, setPoDetailDrawerOpen] = useState(false)
   const [poDetailLoading, setPoDetailLoading] = useState(false)
@@ -1467,13 +1469,14 @@ function App() {
                 {activeModule === 'customer-po' && (
                   <CustomerPO
                     formatCurrency={formatCurrency}
-                    onQuotePriceChange={handlePoQuotePriceChange}
-                    onApproveQuotation={handleApproveQuotationGroup}
-                    onSendToDesign={handleSendToDesignGroup}
-                    onUpdateQuotationRates={handleUpdateQuotationRates}
+                    customerPos={customerPos}
+                    customerPosLoading={customerPosLoading}
+                    companies={companies}
+                    apiRequest={apiRequest}
+                    showToast={showToast}
+                    onRefresh={loadCustomerPos}
                     quotationRequests={quotationRequests}
                     quotationRequestsLoading={quotationRequestsLoading}
-                    poQuotePrices={poQuotePrices}
                   />
                 )}
 

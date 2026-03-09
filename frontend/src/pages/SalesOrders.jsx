@@ -138,11 +138,14 @@ const SalesOrders = () => {
     if (!companyId) return;
     try {
       const token = localStorage.getItem('authToken');
-      const [quotesRes, approvedRes] = await Promise.all([
+      const [quotesRes, approvedRes, customerPosRes] = await Promise.all([
         fetch(`${API_BASE}/quotation-requests?status=Approved,Approved ,COMPLETED,Completed,ACCEPTED,Accepted,Approval,APPROVAL&company_id=${companyId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
         fetch(`${API_BASE}/order/approved-drawings?company_id=${companyId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/customer-pos?company_id=${companyId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -151,7 +154,6 @@ const SalesOrders = () => {
 
       if (quotesRes.ok) {
         const data = await quotesRes.json();
-        // Ensure data is array before filtering
         const companyQuotes = Array.isArray(data) ? data.filter(q => String(q.company_id) === String(companyId)) : [];
         
         const grouped = {};
@@ -175,6 +177,25 @@ const SalesOrders = () => {
           grouped[key].items.push(quote);
         });
         allOptions = Object.values(grouped);
+      }
+
+      if (customerPosRes.ok) {
+        const data = await customerPosRes.json();
+        const companyPos = Array.isArray(data) ? data : [];
+        
+        companyPos.forEach(po => {
+          allOptions.push({
+            id: po.id,
+            dbId: po.id,
+            uniqueKey: `PO_${po.id}`,
+            company_id: po.company_id,
+            created_at: po.created_at,
+            status: po.status,
+            po_number: po.po_number,
+            isCustomerPo: true,
+            items: [] // Items will be fetched when selected if needed, or we can fetch them here
+          });
+        });
       }
 
       if (approvedRes.ok) {
@@ -213,39 +234,92 @@ const SalesOrders = () => {
     }
   };
 
-  const handleCustomerPoChange = (uniqueKey) => {
+  const handleCustomerPoChange = async (uniqueKey) => {
     const group = quotations.find(q => q.uniqueKey === uniqueKey);
     if (!group) return;
 
-    // Filter out rejected items for calculation
-    const activeItems = group.items.filter(item => item.status !== 'REJECTED');
-    if (activeItems.length === 0) return;
-
-    // Calculate average profit and gst from all active items
-    const avgProfit = activeItems.reduce((sum, item) => sum + (Number(item.profit_percentage) || 0), 0) / activeItems.length;
-    const avgGst = activeItems.reduce((sum, item) => sum + (Number(item.gst_percentage) || 0), 0) / activeItems.length;
-
+    let items = [];
+    let avgProfit = 0;
+    let avgGst = 18;
     let totalProfitVal = 0;
-    const items = group.items.map(item => {
-      const qty = Number(item.item_qty) || 1;
-      const totalAmount = Number(item.total_amount) || 0;
-      const profitP = Number(item.profit_percentage) || avgProfit;
-      
-      const quotedPrice = qty > 0 ? totalAmount / qty : 0;
-      const baseRate = quotedPrice / (1 + (profitP / 100));
-      const itemProfit = (quotedPrice - baseRate) * qty;
-      totalProfitVal += itemProfit;
-      
-      return {
-        item_code: item.drawing_no || 'Standard',
-        drawing_no: item.drawing_no,
-        description: item.item_description,
-        type: item.item_group || 'Standard',
-        quantity: qty,
-        rate: baseRate,
-        amount: baseRate * qty
-      };
-    });
+    let sourceType = 'QUOTATION';
+    let quotationId = group.dbId;
+    let bomId = null;
+    let projectName = '';
+
+    if (group.isCustomerPo) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/customer-pos/${group.dbId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const poData = await response.json();
+          sourceType = 'DIRECT';
+          projectName = poData.remarks || `Order for ${poData.company_name}`;
+          
+          const poItems = poData.items || [];
+          items = poItems.map(item => {
+            const qty = Number(item.quantity) || 1;
+            const rate = Number(item.rate) || 0;
+            const cgst = Number(item.cgst_percent) || 0;
+            const sgst = Number(item.sgst_percent) || 0;
+            const igst = Number(item.igst_percent) || 0;
+            
+            avgGst = cgst + sgst + igst;
+            
+            return {
+              item_code: item.item_code || item.drawing_no || 'Standard',
+              drawing_no: item.drawing_no,
+              description: item.description,
+              type: 'Standard',
+              quantity: qty,
+              rate: rate,
+              amount: rate * qty,
+              cgst_percent: cgst,
+              sgst_percent: sgst,
+              igst_percent: igst
+            };
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching PO details:', err);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Filter out rejected items for calculation
+      const activeItems = group.items.filter(item => item.status !== 'REJECTED');
+      if (activeItems.length === 0) return;
+
+      avgProfit = activeItems.reduce((sum, item) => sum + (Number(item.profit_percentage) || 0), 0) / activeItems.length;
+      avgGst = activeItems.reduce((sum, item) => sum + (Number(item.gst_percentage) || 0), 0) / activeItems.length;
+      sourceType = group.isApprovedDrawing ? 'DRAWING' : 'QUOTATION';
+      bomId = group.items[0]?.bom_id;
+      projectName = group.items[0]?.project_name;
+
+      items = group.items.map(item => {
+        const qty = Number(item.item_qty) || 1;
+        const totalAmount = Number(item.total_amount) || 0;
+        const profitP = Number(item.profit_percentage) || avgProfit;
+        
+        const quotedPrice = qty > 0 ? totalAmount / qty : 0;
+        const baseRate = quotedPrice / (1 + (profitP / 100));
+        const itemProfit = (quotedPrice - baseRate) * qty;
+        totalProfitVal += itemProfit;
+        
+        return {
+          item_code: item.drawing_no || 'Standard',
+          drawing_no: item.drawing_no,
+          description: item.item_description,
+          type: item.item_group || 'Standard',
+          quantity: qty,
+          rate: baseRate,
+          amount: baseRate * qty
+        };
+      });
+    }
 
     setFormData(prev => ({
       ...prev,
@@ -255,10 +329,11 @@ const SalesOrders = () => {
       totalProfit: parseFloat(totalProfitVal.toFixed(2)),
       cgstRate: parseFloat((avgGst / 2).toFixed(2)),
       sgstRate: parseFloat((avgGst / 2).toFixed(2)),
-      sourceType: group.isApprovedDrawing ? 'DRAWING' : 'QUOTATION',
-      quotation_id: !group.isApprovedDrawing ? (group.id || group.dbId) : null,
-      bomId: group.items[0]?.bom_id || prev.bomId,
-      projectName: group.items[0]?.project_name || prev.projectName
+      sourceType,
+      quotation_id: sourceType !== 'DIRECT' ? quotationId : null,
+      customer_po_id: sourceType === 'DIRECT' ? quotationId : null,
+      bomId: bomId || prev.bomId,
+      projectName: projectName || prev.projectName
     }));
   };
 
@@ -424,6 +499,28 @@ const SalesOrders = () => {
       } catch (err) {
         errorToast(err.message);
       }
+    }
+  };
+
+  const handleViewPoPdf = async () => {
+    const selectedPo = quotations.find(q => q.uniqueKey === formData.customerPoId);
+    if (!selectedPo || !selectedPo.isCustomerPo) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/customer-pos/${selectedPo.dbId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to generate PDF');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      // Note: We don't revokeObjectURL immediately so the new tab can load it
+    } catch (err) {
+      console.error('Error downloading PDF:', err);
+      errorToast('Failed to download PO PDF');
     }
   };
 
@@ -780,10 +877,12 @@ const SalesOrders = () => {
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <SearchableSelect 
-                      options={quotations.map(q => ({ 
-                        value: q.uniqueKey, 
-                        label: `${q.isApprovedDrawing ? `DRW: ${q.id}` : `QRT-${q.id.toString().padStart(4, '0')}`} ${q.po_number ? `(PO: ${q.po_number})` : ''} - ${q.status}` 
-                      }))}
+                      options={quotations
+                        .filter(q => q.isCustomerPo)
+                        .map(q => ({
+                          value: q.uniqueKey, 
+                          label: `PO: ${q.po_number} - ${q.status}`
+                        }))}
                       value={formData.customerPoId}
                       onChange={(e) => handleCustomerPoChange(e.target.value)}
                       placeholder="Select Customer PO..."
@@ -794,7 +893,8 @@ const SalesOrders = () => {
                     <button
                       type="button"
                       className="p-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors border border-indigo-100"
-                      title="View Details"
+                      title="View PO PDF"
+                      onClick={handleViewPoPdf}
                     >
                       <FileText className="w-5 h-5" />
                     </button>

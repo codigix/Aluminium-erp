@@ -154,7 +154,10 @@ const parseCustomerPoPdf = async (req, res, next) => {
 
 const listCustomerPos = async (req, res, next) => {
   try {
-    const rows = await customerPoService.listCustomerPos();
+    const filters = {
+      companyId: req.query.company_id
+    };
+    const rows = await customerPoService.listCustomerPos(filters);
     res.json(rows);
   } catch (error) {
     next(error);
@@ -168,6 +171,17 @@ const getCustomerPo = async (req, res, next) => {
       return res.status(404).json({ message: 'Customer PO not found' });
     }
     res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const generateCustomerPoPdf = async (req, res, next) => {
+  try {
+    const pdfBuffer = await customerPoService.generateCustomerPoPDF(req.params.id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=CustomerPO-${req.params.id}.pdf`);
+    res.send(pdfBuffer);
   } catch (error) {
     next(error);
   }
@@ -247,6 +261,7 @@ module.exports = {
   parseCustomerPoPdf,
   listCustomerPos,
   getCustomerPo,
+  generateCustomerPoPdf,
   updateCustomerPo,
   deleteCustomerPo
 };
