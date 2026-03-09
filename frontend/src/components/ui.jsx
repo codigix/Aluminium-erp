@@ -156,6 +156,7 @@ export const StatusBadge = ({ status }) => {
       case 'BLOCKED':
       case 'CANCELLED':
         return 'bg-rose-50 border-rose-200 text-rose-600'
+      case 'RFQ_REQUESTED':
       case 'ON_HOLD':
       case 'OUT_FOR_DELIVERY':
       case 'RETURN_PICKUP_ASSIGNED':

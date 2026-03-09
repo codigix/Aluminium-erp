@@ -28,6 +28,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const rfqStatusColors = {
   DRAFT: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'Draft' },
+  RFQ_REQUESTED: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', label: 'RFQ Requested' },
   SENT: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Sent' },
   EMAIL_RECEIVED: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-600', badge: 'bg-sky-100 text-sky-700', label: 'Email Received' },
   RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
@@ -72,6 +73,7 @@ const Quotations = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('sent');
   const [quotations, setQuotations] = useState([]);
+  const [rawRfqs, setRawRfqs] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [vendors, setVendors] = useState([]);
@@ -85,6 +87,7 @@ const Quotations = () => {
   const [formData, setFormData] = useState({
     vendorId: '',
     salesOrderId: '',
+    rfq_id: null,
     validUntil: '',
     notes: '',
     items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
@@ -154,22 +157,47 @@ const Quotations = () => {
 
   useEffect(() => {
     fetchQuotations();
+    fetchRawRfqs();
     fetchStats();
     fetchVendors();
     fetchSalesOrders();
     fetchMaterialRequests();
   }, []);
 
+  const fetchRawRfqs = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/rfqs`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRawRfqs(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching raw RFQs:', error);
+    }
+  };
+
   useEffect(() => {
     const mrId = searchParams.get('mr');
-    if (mrId) {
-      // Auto open create modal for this MR
+    const rfqId = searchParams.get('rfq');
+
+    if (mrId && materialRequests.length > 0) {
       handleSalesOrderChange({ target: { value: `MR-${mrId}` } });
       setShowCreateModal(true);
-      // Clean up the URL
+      setSearchParams({});
+    } else if (rfqId && rawRfqs.length > 0) {
+      const rfq = rawRfqs.find(r => String(r.id) === String(rfqId));
+      if (rfq) {
+        openRFQSendModal(rfq);
+      }
       setSearchParams({});
     }
-  }, [searchParams, materialRequests]);
+  }, [searchParams, materialRequests, rawRfqs]);
 
   const fetchQuotations = async () => {
     try {
@@ -314,7 +342,7 @@ const Quotations = () => {
             })
             .map(item => ({
             drawing_no: item.item_code || '—',
-            material_name: item.name || item.item_description || '',
+            material_name: item.name || item.material_name || '',
             material_type: getCorrectMaterialType(item.item_code || item.drawing_no, item.material_type),
             design_qty: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0, // Prefer requested quantity
             planned_qty: parseFloat(item.design_qty) || 0, // Keep actual design qty as planned_qty
@@ -742,10 +770,16 @@ const Quotations = () => {
       setFormData({
         vendorId: '',
         salesOrderId: '',
+        rfq_id: null,
         validUntil: '',
         notes: '',
         items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
       });
+
+      // Refresh data
+      fetchQuotations();
+      fetchRawRfqs();
+      fetchStats();
 
       // Open email modal for the newly created quotation
       if (vendor) {
@@ -759,8 +793,6 @@ const Quotations = () => {
         setShowEmailModal(true);
       } else {
         successToast('Quotation created successfully');
-        fetchQuotations();
-        fetchStats();
       }
     } catch (error) {
       errorToast(error.message || 'Failed to create quotation');
@@ -1095,15 +1127,57 @@ const Quotations = () => {
     }
   };
 
+  const openRFQSendModal = (rfq) => {
+    // 1. Pre-fill formData with RFQ data
+    const mrId = rfq.mr_id;
+    const mrItems = (rfq.items || []).map(item => ({
+      drawing_no: item.drawing_no || item.item_code || '—',
+      material_name: item.material_name || item.name || item.description || '',
+      material_type: item.material_type || 'RAW_MATERIAL',
+      quantity: parseFloat(item.quantity) || 0,
+      design_qty: parseFloat(item.quantity) || 0,
+      uom: item.uom || 'NOS',
+      unit_rate: 0
+    }));
+
+    setFormData({
+      vendorId: '',
+      salesOrderId: `MR-${mrId}`,
+      rfq_id: rfq.id,
+      validUntil: '',
+      notes: `RFQ Ref: ${rfq.rfq_number}`,
+      items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+    });
+
+    // 2. Open create modal
+    setShowCreateModal(true);
+  };
+
   const displayQuotations = useMemo(() => {
-    return quotations.filter(q => {
+    let combined = [...quotations];
+    
+    // In 'sent' tab, also show RFQs that don't have linked quotations yet
+    if (activeTab === 'sent') {
+      const rfqsWithNoQuotes = rawRfqs.filter(r => (r.quotations || []).length === 0);
+      const rfqPlaceholders = rfqsWithNoQuotes.map(r => ({
+        ...r,
+        isRFQOnly: true,
+        quote_number: r.rfq_number,
+        status: r.status === 'DRAFT' ? 'RFQ_REQUESTED' : r.status,
+        vendor_id: null,
+        grand_total: 0
+      }));
+      combined = [...combined, ...rfqPlaceholders];
+    }
+
+    return combined.filter(q => {
       const isTabMatch = activeTab === 'sent' 
-        ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING'].includes(q.status)
+        ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'RFQ_REQUESTED'].includes(q.status)
         : ['RECEIVED', 'REVIEWED', 'CLOSED'].includes(q.status);
       const matchesStatus = filterStatus === 'All Quotations' || q.status === filterStatus;
       return isTabMatch && matchesStatus;
     });
-  }, [quotations, activeTab, filterStatus]);
+  }, [quotations, rawRfqs, activeTab, filterStatus]);
 
   const getVendorName = (vendorId) => {
     return vendors.find(v => v.id === vendorId)?.vendor_name || 'Unknown Vendor';
@@ -1117,10 +1191,13 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className=" text-slate-900">
-            <div className="text-sm  tracking-tight">{val}</div>
-            {q.sales_order_id && (
+            <div className="text-sm  tracking-tight flex items-center gap-2">
+              {val}
+              {q.isRFQOnly && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded text-[9px] font-black uppercase tracking-wider">No Vendor Assigned</span>}
+            </div>
+            {(q.sales_order_id || q.mr_number) && (
               <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-                <span className="px-1.5 py-0.5 bg-slate-100 rounded ">SO-{q.sales_order_id}</span>
+                <span className="px-1.5 py-0.5 bg-slate-100 rounded ">{q.mr_number || `SO-${q.sales_order_id}`}</span>
                 {q.project_name && <span className="truncate max-w-[120px]">{q.project_name}</span>}
               </div>
             )}
@@ -1131,10 +1208,11 @@ const Quotations = () => {
         key: 'vendor_id',
         label: 'Vendor',
         sortable: true,
-        render: (val) => (
+        render: (val, q) => (
           <div className="flex flex-col">
-            <span className="text-slate-900 ">{getVendorName(val)}</span>
-            <span className="text-[10px] text-slate-400   ">Vendor ID: #{val}</span>
+            <span className="text-slate-900 ">{val ? getVendorName(val) : (q.isRFQOnly ? 'Unassigned' : 'Unknown')}</span>
+            {val && <span className="text-[10px] text-slate-400   ">Vendor ID: #{val}</span>}
+            {q.isRFQOnly && <span className="text-[9px] text-amber-500 italic">Select vendor below</span>}
           </div>
         )
       },
@@ -1176,14 +1254,26 @@ const Quotations = () => {
         className: 'text-right',
         render: (_, q) => (
           <div className="flex justify-end gap-1.5">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
-              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
-              title="View RFQ PDF"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            {q.received_pdf_path && (
+            {!q.isRFQOnly && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
+                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
+                title="View RFQ PDF"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+            )}
+            {q.isRFQOnly && (
+              <button
+                onClick={(e) => { e.stopPropagation(); openRFQSendModal(q); }}
+                className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded text-[10px] font-black uppercase tracking-wider hover:bg-amber-100 transition-all"
+                title="Assign Vendor & Send"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Assign & Send
+              </button>
+            )}
+            {!q.isRFQOnly && q.received_pdf_path && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleViewReceivedPDF(q.id); }}
                 className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded  transition-all border border-transparent hover:border-cyan-100"
@@ -1305,13 +1395,36 @@ const Quotations = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => fetchQuotations()}
+            onClick={() => { fetchQuotations(); fetchRawRfqs(); }}
             className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              if (activeTab === 'sent') {
+                setFormData({
+                  vendorId: '',
+                  salesOrderId: '',
+                  rfq_id: null,
+                  validUntil: '',
+                  notes: '',
+                  items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+                });
+              } else {
+                setRecordData({
+                  projectId: '',
+                  vendorId: '',
+                  quotationId: '',
+                  amount: 0,
+                  validUntil: '',
+                  items: [],
+                  notes: '',
+                  recordFile: null
+                });
+              }
+              setShowCreateModal(true);
+            }}
             className="flex items-center gap-2  px-5 py-2.5 bg-blue-600 text-white rounded  text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
             <Plus className="w-5 h-5" />
@@ -1400,6 +1513,7 @@ const Quotations = () => {
               className="p-2  bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
             >
               <option value="All Quotations">All Statuses</option>
+              <option value="RFQ_REQUESTED">RFQ Requested</option>
               <option value="DRAFT">Draft</option>
               <option value="SENT">Sent</option>
               <option value="RECEIVED">Received</option>

@@ -81,6 +81,7 @@ const createQuotation = async (payload) => {
     vendorId,
     salesOrderId,
     mrId,
+    rfq_id,
     validUntil,
     notes,
     items = [],
@@ -100,13 +101,21 @@ const createQuotation = async (payload) => {
     const quoteNumber = await generateQuoteNumber();
 
     const [result] = await connection.execute(
-      `INSERT INTO quotations (quote_number, vendor_id, sales_order_id, mr_id, status, valid_until, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO quotations (quote_number, vendor_id, sales_order_id, mr_id, rfq_id, status, valid_until, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       ,
-      [quoteNumber, vendorId, salesOrderId || null, mrId || null, status, validUntil || null, notes || null]
+      [quoteNumber, vendorId, salesOrderId || null, mrId || null, rfq_id || null, status, validUntil || null, notes || null]
     );
 
     const quotationId = result.insertId;
+
+    // Update RFQ status if rfq_id is provided
+    if (rfq_id) {
+      await connection.execute(
+        'UPDATE procurement_rfqs SET status = ? WHERE id = ?',
+        ['SENT', rfq_id]
+      );
+    }
 
     // Update Material Request status to PROCESSING if mrId is provided
     if (mrId) {
@@ -181,10 +190,11 @@ const createQuotation = async (payload) => {
 
 const getQuotations = async (filters = {}) => {
   let query = `
-    SELECT q.*, so.project_name, mr.mr_number 
+    SELECT q.*, so.project_name, mr.mr_number, r.rfq_number
     FROM quotations q
     LEFT JOIN sales_orders so ON so.id = q.sales_order_id
     LEFT JOIN material_requests mr ON mr.id = q.mr_id
+    LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
     WHERE 1=1
   `;
   const params = [];
@@ -213,10 +223,11 @@ const getQuotations = async (filters = {}) => {
 
 const getQuotationById = async (quotationId) => {
   const [rows] = await pool.query(
-    `SELECT q.*, mr.mr_number, so.project_name 
+    `SELECT q.*, mr.mr_number, so.project_name, r.rfq_number
      FROM quotations q 
      LEFT JOIN material_requests mr ON mr.id = q.mr_id
      LEFT JOIN sales_orders so ON so.id = q.sales_order_id
+     LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
      WHERE q.id = ?`,
     [quotationId]
   );

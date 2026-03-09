@@ -13,6 +13,7 @@ const POMaterialRequest = () => {
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [rfqs, setRfqs] = useState([]);
   const [fulfillmentWarehouse, setFulfillmentWarehouse] = useState('');
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
@@ -44,6 +45,28 @@ const POMaterialRequest = () => {
       fetchInitialData();
     }
   }, []);
+
+  const fetchRfqs = async (mrId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/rfqs/mr/${mrId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setRfqs(await response.json());
+      }
+    } catch (error) {
+      console.error('Error fetching RFQs:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedRequest?.id) {
+      fetchRfqs(selectedRequest.id);
+    } else {
+      setRfqs([]);
+    }
+  }, [selectedRequest?.id]);
 
   const fetchInitialData = async () => {
     try {
@@ -161,12 +184,12 @@ const POMaterialRequest = () => {
     try {
       const result = await Swal.fire({
         title: 'Request for Quote',
-        text: `Are you sure you want to send an RFQ request for ${mr.mr_number}?`,
+        text: `Are you sure you want to generate a new RFQ for ${mr.mr_number}? This will notify the procurement team.`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#6366f1',
         cancelButtonColor: '#64748b',
-        confirmButtonText: 'Yes, Send Request'
+        confirmButtonText: 'Yes, Generate RFQ'
       });
 
       if (!result.isConfirmed) return;
@@ -174,32 +197,36 @@ const POMaterialRequest = () => {
       setLoading(true);
       const token = localStorage.getItem('authToken');
       
-      // Update status to PROCESSING via API
-      const response = await fetch(`${API_BASE}/material-requests/${mr.id}/status`, {
-        method: 'PATCH',
+      const response = await fetch(`${API_BASE}/rfqs`, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'PROCESSING' })
+        body: JSON.stringify({
+          mr_id: mr.id,
+          items: (mr.items || []).map(item => ({
+            ...item,
+            material_name: item.name || item.material_name // Ensure name is passed correctly
+          }))
+        })
       });
 
-      if (!response.ok) throw new Error('Failed to update request status');
+      if (!response.ok) throw new Error('Failed to generate RFQ');
 
       await Swal.fire({
-        title: 'Sent Successfully!',
-        text: 'The RFQ request has been sent to the procurement team.',
+        title: 'RFQ Generated!',
+        text: 'A new RFQ has been created. You can now view it in the requests list.',
         icon: 'success',
         confirmButtonColor: '#10b981'
       });
 
       fetchRequests();
-      setShowViewModal(false);
-      navigate(`/quotations?mr=${mr.id}`);
+      if (mr.id) fetchRfqs(mr.id);
 
     } catch (error) {
       console.error('Error initiating RFQ:', error);
-      errorToast(error.message || 'Failed to send request');
+      errorToast(error.message || 'Failed to generate RFQ');
     } finally {
       setLoading(false);
     }
@@ -866,6 +893,15 @@ const POMaterialRequest = () => {
       >
         <div className="p-6 bg-slate-50/30">
           {/* Header Stats */}
+          {(() => {
+             const filteredItems = selectedRequest?.items?.filter(item => {
+               const type = (item.material_type || '').toUpperCase();
+               return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+             }) || [];
+             const allAvailable = filteredItems.length > 0 && filteredItems.every(item => item.total_stock >= (item.quantity || item.design_qty));
+             
+             return (
+          <>
           <div className="grid grid-cols-5 gap-4 mb-8">
             <div className="bg-white p-4 rounded  border border-slate-100  flex items-center gap-4 transition-all hover:shadow-md">
               <div className="w-12 h-12 rounded  bg-orange-50 flex items-center justify-center text-orange-500  shadow-orange-100/50">
@@ -1012,15 +1048,67 @@ const POMaterialRequest = () => {
 
             {/* Right Side - Fulfillment & Summary */}
             <div className="w-96 space-y-6">
-              {/* Fulfillment Source */}
-              {(() => {
-                const filteredItems = selectedRequest?.items?.filter(item => {
-                  const type = (item.material_type || '').toUpperCase();
-                  return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-                }) || [];
-                const allAvailable = filteredItems.length > 0 && filteredItems.every(item => item.total_stock >= (item.quantity || item.design_qty));
-                return (
-                  <div className="bg-white rounded-3xl border border-slate-100  overflow-hidden flex flex-col">
+              {/* Sent Requests (RFQ) */}
+              <div className="bg-white rounded-3xl border border-slate-100  overflow-hidden flex flex-col">
+                <div className="p-5 border-b border-slate-50 bg-indigo-600 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded  bg-white/20 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    </div>
+                    <h4 className="text-xs  text-white  tracking-widest">SENT REQUESTS (RFQ)</h4>
+                  </div>
+                  <span className="p-1  bg-white/20 text-white rounded text-[9px]   ">
+                    {rfqs.length} REQUESTS
+                  </span>
+                </div>
+                <div className="p-4 space-y-4 max-h-[300px] overflow-y-auto">
+                  {rfqs.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-xs text-slate-400">No RFQs generated yet</p>
+                    </div>
+                  ) : (
+                    rfqs.map((rfq, ridx) => (
+                      <div key={ridx} className="p-3 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="text-xs  text-slate-900">{rfq.rfq_number}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{formatDate(rfq.created_at)}</p>
+                          </div>
+                          <StatusBadge status={rfq.status} />
+                        </div>
+                        
+                        {rfq.quotations && rfq.quotations.length > 0 ? (
+                          <div className="mt-2 pt-2 border-t border-slate-50 space-y-2">
+                            <p className="text-[10px]  text-slate-400 tracking-wider">RECEIVED QUOTES</p>
+                            {rfq.quotations.map((q, qidx) => (
+                              <div key={qidx} className="flex justify-between items-center">
+                                <span className="text-[11px] text-slate-600 truncate max-w-[120px]">{q.vendor_name}</span>
+                                <span className="text-[11px]  text-indigo-600">{q.quote_number}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-2 pt-2 border-t border-slate-50">
+                            <p className="text-[10px] text-amber-500 italic">Waiting for vendor responses...</p>
+                          </div>
+                        )}
+                        
+                        <div className="mt-3 flex gap-2">
+                          <button 
+                            onClick={() => navigate(`/quotations?rfq=${rfq.id}`)}
+                            className="flex-1 py-1.5 bg-indigo-50 text-indigo-600 rounded text-[10px]   hover:bg-indigo-100 transition-colors"
+                          >
+                            Send Quotation
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Fulfillment Summary */}
+              <div className="bg-white rounded-3xl border border-slate-100  overflow-hidden flex flex-col">
                     <div className={`p-5 border-b border-slate-50 flex justify-between items-center transition-colors ${allAvailable ? 'bg-emerald-500' : 'bg-amber-500'}`}>
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded  bg-white/20 flex items-center justify-center">
@@ -1074,8 +1162,6 @@ const POMaterialRequest = () => {
                       </div>
                     </div>
                   </div>
-                );
-              })()}
 
               {/* Request Summary */}
               <div className="bg-white rounded-3xl border border-slate-100  overflow-hidden flex flex-col">
@@ -1172,6 +1258,9 @@ const POMaterialRequest = () => {
               );
             })()}
           </div>
+          </>
+             );
+          })()}
         </div>
       </Modal>
     </div>
