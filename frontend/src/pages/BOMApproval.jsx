@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Card } from '../components/ui.jsx';
+import { Card, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { Eye, RotateCw, Clock, History, Check, X, ExternalLink } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -150,441 +150,288 @@ const BOMApproval = () => {
     }
   };
 
-  return (
-    <div className="">
-      <div className="flex justify-between items-center mb-6">
+  const columns = [
+    { 
+      label: 'PO / SO Ref', 
+      key: 'po_ref',
+      render: (_, item) => (
         <div>
-          <h1 className="text-xl text-slate-900">BOM Approval</h1>
-          <p className="text-xs text-slate-500">Review and approve finalized Bill of Materials</p>
+          <div className="text-sm font-medium text-slate-900">{item.po_number || (item.customer_po_id ? `PO-${item.customer_po_id}` : `SO-${item.id || item.sales_order_id}`)}</div>
+          <div className="text-[10px] text-slate-500">Sales Order Ref</div>
+        </div>
+      )
+    },
+    { 
+      label: 'Customer / Project', 
+      key: 'customer',
+      render: (_, item) => (
+        <div>
+          <div className="text-sm font-medium text-slate-900">{item.company_name}</div>
+          <div className="text-xs text-slate-500">{item.project_name}</div>
+        </div>
+      )
+    },
+    ...(activeTab === 'history' ? [
+      { 
+        label: 'Approver', 
+        key: 'approver_name',
+        render: (val) => <div className="text-sm text-slate-700">{val}</div>
+      }
+    ] : []),
+    { 
+      label: activeTab === 'history' ? 'Approval Date' : 'Status', 
+      key: 'status_date',
+      render: (_, item) => activeTab === 'history' ? (
+        <div className="text-xs text-slate-600">
+          {new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </div>
+      ) : (
+        <span className={`px-2 py-1 rounded text-xs font-medium ${(item.status || '').trim().toUpperCase() === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+          {(item.status || '').replace(/_/g, ' ')}
+        </span>
+      )
+    },
+    { 
+      label: 'Actions', 
+      key: 'actions', 
+      className: 'text-right',
+      render: (_, item) => (
+        <div className="flex justify-end gap-2">
+          <button 
+            onClick={() => handleViewBOM(activeTab === 'history' ? { id: item.sales_order_id, ...item } : item)}
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all shadow-sm"
+            title="View Details"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          {activeTab === 'pending' && (
+            <button 
+              onClick={() => handleApproveBOM(item.id)}
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm"
+              title="Approve"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <div className="p-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">BOM Approval</h1>
+          <p className="text-sm text-slate-500 font-medium">Review and approve finalized Bill of Materials</p>
         </div>
         <button 
           onClick={fetchOrders}
-          className="flex items-center gap-2  p-2  bg-white border border-slate-200 rounded  text-sm  text-slate-600 hover:bg-slate-50  transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
         >
-          <RotateCw className="w-4 h-4" />
+          <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-2 bg-slate-100 p-1.5 rounded-2xl w-fit">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`flex items-center gap-2  p-2 rounded-md text-xs  transition-all ${activeTab === 'pending' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${activeTab === 'pending' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           <Clock className="w-4 h-4" />
           Pending Approval
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-2  p-2 rounded-md text-xs  transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           <History className="w-4 h-4" />
           Approval History
         </button>
       </div>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 bg-white">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="p-2 text-left text-xs  text-slate-500 ">PO / SO Ref</th>
-                <th className="p-2 text-left text-xs  text-slate-500 ">Customer / Project</th>
-                {activeTab === 'history' && <th className="p-2 text-left text-xs  text-slate-500 ">Approver</th>}
-                <th className="p-2 text-left text-xs  text-slate-500 ">{activeTab === 'history' ? 'Approval Date' : 'Status'}</th>
-                <th className="p-2 text-right text-xs  text-slate-500 ">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
-              {loading ? (
-                <tr><td colSpan={activeTab === 'history' ? "5" : "4"} className="px-6 py-10 text-center text-slate-500">Loading BOMs...</td></tr>
-              ) : (activeTab === 'pending' ? orders : history).length === 0 ? (
-                <tr><td colSpan={activeTab === 'history' ? "5" : "4"} className="p-6 text-center text-slate-400">No {activeTab === 'pending' ? 'pending' : 'approved'} BOMs found</td></tr>
-              ) : (
-                (activeTab === 'pending' ? orders : history).map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm  text-slate-900">{item.po_number || (item.customer_po_id ? `PO-${item.customer_po_id}` : `SO-${item.id || item.sales_order_id}`)}</div>
-                      <div className="text-[10px] text-slate-500">Sales Order Ref</div>
-                    </td>
-                    <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm  text-slate-900">{item.company_name}</div>
-                      <div className="text-xs text-slate-500">{item.project_name}</div>
-                    </td>
-                    {activeTab === 'history' && (
-                      <td className="p-2 whitespace-nowrap">
-                        <div className="text-sm text-slate-700">{item.approver_name}</div>
-                      </td>
-                    )}
-                    <td className="p-2 whitespace-nowrap text-left">
-                      {activeTab === 'history' ? (
-                        <div className="text-xs text-slate-600">
-                          {new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      ) : (
-                        <span className={`px-2 py-1 rounded text-xs     ${(item.status || '').trim().toUpperCase() === 'BOM_SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {(item.status || '').replace(/_/g, ' ')}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-2 whitespace-nowrap text-right text-sm ">
-                      <div className="flex justify-center gap-2">
-                        <button 
-                          onClick={() => handleViewBOM(activeTab === 'history' ? { id: item.sales_order_id, ...item } : item)}
-                          className="p-1.5 rounded  border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {activeTab === 'pending' && (
-                          <button 
-                            onClick={() => handleApproveBOM(item.id)}
-                            className="p-1.5 rounded  border border-slate-200 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                            title="Approve"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-2">
+          <DataTable 
+            columns={columns}
+            data={activeTab === 'pending' ? orders : history}
+            loading={loading}
+            pageSize={5}
+            hideHeader={true}
+            emptyMessage={`No ${activeTab === 'pending' ? 'pending' : 'approved'} BOMs found`}
+          />
         </div>
       </Card>
 
       {/* Details Modal */}
       {showDetails && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-slate-900/75 transition-opacity" onClick={() => setShowDetails(false)}></div>
+          <div className="flex items-center justify-center min-h-screen px-4 py-8">
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowDetails(false)}></div>
             
-            <div className="relative bg-white rounded  shadow-xl max-w-5xl w-full overflow-hidden">
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <div>
-                  <h3 className="text-sm  text-slate-900">BOM Details: {selectedOrder?.po_number || (selectedOrder?.customer_po_id ? `PO-${selectedOrder.customer_po_id}` : `SO-${selectedOrder?.id}`)}</h3>
-                  <p className="text-xs text-slate-500">{selectedOrder?.company_name} • {selectedOrder?.project_name}</p>
+            <div className="relative bg-white rounded-3xl shadow-2xl max-w-6xl w-full overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-600 text-white rounded-2xl">
+                    <Eye size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">BOM Details: {selectedOrder?.po_number || (selectedOrder?.customer_po_id ? `PO-${selectedOrder.customer_po_id}` : `SO-${selectedOrder?.id}`)}</h3>
+                    <p className="text-sm font-medium text-slate-500">{selectedOrder?.company_name} • {selectedOrder?.project_name}</p>
+                  </div>
                 </div>
-                <button onClick={() => setShowDetails(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded  transition-colors">
+                <button onClick={() => setShowDetails(false)} className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
                   <X className="w-6 h-6" />
                 </button>
               </div>
 
-              <div className="p-6 max-h-[70vh] overflow-y-auto">
+              <div className="p-8 max-h-[75vh] overflow-y-auto">
                 {detailsLoading ? (
-                  <div className="p-2 text-center text-slate-500">Loading details...</div>
+                  <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <RotateCw className="w-10 h-10 text-indigo-600 animate-spin" />
+                    <p className="text-slate-500 font-medium">Loading details...</p>
+                  </div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-8">
                     {/* Summary Bar */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      <div className="bg-slate-50 p-4 rounded  border border-slate-200">
-                        <div className="text-[10px] text-slate-400 mb-1   ">Total Drawings</div>
-                        <div className="text-xl text-slate-900">{orderItems.filter(i => i.status !== 'REJECTED').length}</div>
-                      </div>
-                      <div className="bg-indigo-50 p-4 rounded  border border-indigo-100">
-                        <div className="text-[10px] text-indigo-400 mb-1   ">Total Est. Cost</div>
-                        <div className="text-xl  text-indigo-600">
-                          ₹{orderItems.reduce((total, item) => {
-                            if (item.status === 'REJECTED') return total;
-                            const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
-                            const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) || 0;
-                            const labor = item.operations?.reduce((sum, o) => {
-                              const cycle = parseFloat(o.cycle_time_min || 0);
-                              const setup = parseFloat(o.setup_time_min || 0);
-                              const rate = parseFloat(o.hourly_rate || 0);
-                              // BOM Form logic: (Cycle + Setup) is treated as per-unit if setup is small, 
-                              // or more accurately, Cycle is per unit and Setup is per batch.
-                              // To match BOM Form's "Cost Per Unit": (Cycle + Setup) / 60 * Rate
-                              return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
-                            }, 0) || 0;
-                            const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
-                            return total + (mat + comp + labor - scrap);
-                          }, 0).toFixed(2)}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Drawings</p>
+                          <p className="text-3xl font-bold text-slate-900">{orderItems.filter(i => i.status !== 'REJECTED').length}</p>
                         </div>
-                        <p className="text-[8px] text-indigo-400 mt-1">* Estimated cost excludes rejected items as they have no BOM analysis.</p>
+                        <div className="p-4 bg-slate-50 text-slate-400 rounded-2xl">
+                          <History size={24} />
+                        </div>
+                      </div>
+                      <div className="bg-indigo-600 p-6 rounded-3xl shadow-lg shadow-indigo-100 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-indigo-200 uppercase tracking-wider mb-1">Total Est. Cost</p>
+                          <p className="text-3xl font-bold text-white">
+                            ₹{orderItems.reduce((total, item) => {
+                              if (item.status === 'REJECTED') return total;
+                              const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
+                              const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) || 0;
+                              const labor = item.operations?.reduce((sum, o) => {
+                                const cycle = parseFloat(o.cycle_time_min || 0);
+                                const setup = parseFloat(o.setup_time_min || 0);
+                                const rate = parseFloat(o.hourly_rate || 0);
+                                return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
+                              }, 0) || 0;
+                              const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
+                              return total + (mat + comp + labor - scrap);
+                            }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-white/10 text-white rounded-2xl">
+                          <Check size={24} />
+                        </div>
                       </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                     {orderItems.map((item) => (
-                      <div key={item.id} className="border border-slate-200 rounded  overflow-hidden">
-                        <div className="bg-slate-50 p-2  border-b border-slate-200 flex justify-between items-center">
-                          <div>
-                            <div className="flex items-center gap-4">
-                              {item.status !== 'REJECTED' && (
-                                <span className="text-sm  text-slate-900">{item.item_code || item.drawing_no}</span>
-                              )}
-                              {item.status !== 'REJECTED' && (
-                                <div className="flex items-center gap-2 ">
-                                  <Link 
-                                    to={`/bom-form/${item.id}?view=true`} 
-                                    target="_blank"
-                                    className="text-[10px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1  bg-indigo-50 p-1  rounded border border-indigo-100 transition-all "
-                                  >
-                                    View Full BOM
-                                    <ExternalLink className="w-3 h-3" />
-                                  </Link>
-                                  <button
-                                    onClick={() => handlePreviewByNo(item.item_code || item.drawing_no)}
-                                    className="p-1 text-indigo-600 hover:bg-indigo-100 rounded border border-indigo-100 transition-all  flex items-center gap-1"
-                                    title="Preview Drawing"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              )}
-                              {item.status === 'REJECTED' && (
-                                <span className="px-1.5 py-0.5 rounded text-[8px]  bg-rose-100 text-rose-600 border border-rose-200 animate-pulse ">
-                                  Rejected
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2  mt-1">
-                              <span className="text-xs text-slate-600">{item.drawing_name || item.description}</span>
-                              {item.status === 'REJECTED' && item.rejection_reason && (
-                                <>
-                                  <span className="mx-2 text-slate-300">|</span>
-                                  <span className="text-[10px] text-rose-500 italic">Reason: {item.rejection_reason}</span>
-                                </>
-                              )}
-                            </div>
+                      <div key={item.id} className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        <div className="bg-slate-50/50 p-5 border-b border-slate-100 flex justify-between items-center">
+                          <div className="flex items-center gap-4">
+                            {item.status !== 'REJECTED' ? (
+                              <h4 className="font-bold text-slate-900">{item.item_code || item.drawing_no}</h4>
+                            ) : (
+                              <h4 className="font-bold text-rose-500 line-through">{item.item_code || item.drawing_no}</h4>
+                            )}
+                            {item.status !== 'REJECTED' && (
+                              <Link 
+                                to={`/bom-form/${item.id}?view=true`} 
+                                target="_blank"
+                                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-bold hover:bg-indigo-100 transition-all border border-indigo-100"
+                              >
+                                VIEW FULL BOM
+                                <ExternalLink size={12} />
+                              </Link>
+                            )}
                           </div>
-                          <div className="flex items-center gap-6">
+                          
+                          <div className="flex items-center gap-4">
                             <div className="text-right">
-                              <div className="text-[9px] text-slate-400  ">Cost / Unit</div>
-                              <div className="text-xs  text-slate-700">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
-                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) + 
-                                     item.operations?.reduce((sum, o) => {
-                                       const cycle = parseFloat(o.cycle_time_min || 0);
-                                       const setup = parseFloat(o.setup_time_min || 0);
-                                       const rate = parseFloat(o.hourly_rate || 0);
-                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
-                                     }, 0) - 
-                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0) / parseFloat(item.quantity || 1)).toFixed(2)}</div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Item Status</p>
+                              <span className={`text-xs font-bold ${item.status === 'REJECTED' ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                {item.status?.replace(/_/g, ' ') || 'ACTIVE'}
+                              </span>
                             </div>
-                            <div className="text-right">
-                              <div className="text-[9px] text-indigo-400   ">Total Cost</div>
-                              <div className="text-sm  text-indigo-600">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
-                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) + 
-                                     item.operations?.reduce((sum, o) => {
-                                       const cycle = parseFloat(o.cycle_time_min || 0);
-                                       const setup = parseFloat(o.setup_time_min || 0);
-                                       const rate = parseFloat(o.hourly_rate || 0);
-                                       return sum + (((cycle * parseFloat(item.quantity)) + setup) / 60 * rate);
-                                     }, 0) - 
-                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0).toFixed(2)}</div>
-                            </div>
-                            <div className="text-xs  text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                              QTY: {item.quantity} {item.unit}
-                            </div>
+                            {item.drawing_no && (
+                              <button 
+                                onClick={() => handlePreviewByNo(item.drawing_no)}
+                                className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"
+                                title="Preview Drawing"
+                              >
+                                <Eye size={18} />
+                              </button>
+                            )}
                           </div>
                         </div>
-                        
-                        {/* Materials Section */}
-                        <div className="p-2  bg-slate-50 border-y border-slate-200 flex justify-between items-center">
-                          <h4 className="text-[10px]  text-slate-500  ">Raw Materials</h4>
-                          <span className="text-[10px]  text-slate-400">Total: ₹{item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0).toFixed(2)}</span>
-                        </div>
-                        <table className="min-w-full divide-y divide-slate-100">
-                          <thead className="bg-white">
-                            <tr>
-                              <th className="p-2  text-lefttext-xs   text-slate-400 ">Material</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Qty/pc</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Total Qty</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Rate</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {item.materials?.length > 0 ? (
-                              item.materials.map((mat) => {
-                                const totalQty = parseFloat(mat.qty_per_pc) * parseFloat(item.quantity);
-                                const amount = totalQty * parseFloat(mat.rate || 0);
-                                return (
-                                  <tr key={mat.id}>
-                                    <td className="p-2  text-xs text-slate-700">
-                                      <div className="">{mat.material_name}</div>
-                                      <div className="text-[9px] text-slate-400">{mat.material_type}</div>
-                                    </td>
-                                    <td className="p-2  text-xs text-right text-slate-500">{parseFloat(mat.qty_per_pc).toFixed(4)}</td>
-                                    <td className="p-2  text-xs text-right text-slate-900 ">{totalQty.toFixed(2)} {mat.uom}</td>
-                                    <td className="p-2  text-xs text-right text-slate-500">₹{parseFloat(mat.rate || 0).toFixed(2)}</td>
-                                    <td className="p-2  text-xs text-right  text-indigo-600">₹{amount.toFixed(2)}</td>
-                                  </tr>
-                                );
-                              })
-                            ) : (
-                              <tr><td colSpan="5" className="px-4 py-4 text-left text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No materials defined'}</td></tr>
-                            )}
-                          </tbody>
-                        </table>
 
-                        {/* Components Section */}
-                        <div className="p-2  bg-slate-50 border-y border-slate-200 flex justify-between items-center">
-                          <h4 className="text-[10px]  text-slate-500  ">Components</h4>
-                          <span className="text-[10px]  text-slate-400">Total: ₹{item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0).toFixed(2)}</span>
-                        </div>
-                        <table className="min-w-full divide-y divide-slate-100">
-                          <thead className="bg-white">
-                            <tr>
-                              <th className="p-2  text-lefttext-xs   text-slate-400 ">Component</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Qty</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Rate</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {item.components?.length > 0 ? (
-                              item.components.map((comp) => {
-                                const amount = parseFloat(comp.quantity || 0) * parseFloat(item.quantity) * parseFloat(comp.rate || 0);
-                                return (
-                                  <tr key={comp.id}>
-                                    <td className="p-2  text-xs text-slate-700">
-                                      <div className="">{comp.component_code}</div>
-                                      <div className="text-[9px] text-slate-400">{comp.description}</div>
-                                    </td>
-                                    <td className="p-2  text-xs text-right text-slate-900 ">{comp.quantity} {comp.uom}</td>
-                                    <td className="p-2  text-xs text-right text-slate-500">₹{parseFloat(comp.rate || 0).toFixed(2)}</td>
-                                    <td className="p-2  text-xs text-right  text-indigo-600">₹{amount.toFixed(2)}</td>
-                                  </tr>
-                                );
-                              })
-                            ) : (
-                              <tr><td colSpan="4" className="px-4 py-4 text-left text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No components defined'}</td></tr>
-                            )}
-                          </tbody>
-                        </table>
-
-                        {/* Operations Section */}
-                        <div className="p-2  bg-slate-50 border-y border-slate-200 flex justify-between items-center">
-                          <h4 className="text-[10px]  text-slate-500  ">Operations</h4>
-                          <span className="text-[10px]  text-slate-400">Total: ₹{item.operations?.reduce((sum, o) => {
-                            const cycle = parseFloat(o.cycle_time_min || 0);
-                            const setup = parseFloat(o.setup_time_min || 0);
-                            const rate = parseFloat(o.hourly_rate || 0);
-                            return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
-                          }, 0).toFixed(2)}</span>
-                        </div>
-                        <table className="min-w-full divide-y divide-slate-100">
-                          <thead className="bg-white">
-                            <tr>
-                              <th className="p-2  text-lefttext-xs   text-slate-400 ">Operation</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Cycle (m)</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Rate/hr</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Time (h)</th>
-                              <th className="p-2  text-righttext-xs   text-slate-400 ">Cost</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {item.operations?.length > 0 ? (
-                              item.operations.map((op) => {
-                                const totalTimeHrs = (parseFloat(op.cycle_time_min || 0) + parseFloat(op.setup_time_min || 0)) / 60;
-                                const cost = totalTimeHrs * parseFloat(op.hourly_rate || 0) * parseFloat(item.quantity);
-                                return (
-                                  <tr key={op.id}>
-                                    <td className="p-2  text-xs text-slate-700">
-                                      <div className="">{op.operation_name}</div>
-                                      <div className="text-[9px] text-slate-400">{op.workstation}</div>
-                                    </td>
-                                    <td className="p-2  text-xs text-right text-slate-500">{op.cycle_time_min}</td>
-                                    <td className="p-2  text-xs text-right text-slate-500">₹{parseFloat(op.hourly_rate || 0).toFixed(2)}</td>
-                                    <td className="p-2  text-xs text-right text-slate-500">{totalTimeHrs.toFixed(2)} hrs</td>
-                                    <td className="p-2  text-xs text-right  text-indigo-600">₹{cost.toFixed(2)}</td>
-                                  </tr>
-                                );
-                              })
-                            ) : (
-                              <tr><td colSpan="5" className="px-4 py-4 text-left text-xs text-slate-400 italic">{item.status === 'REJECTED' ? 'No analysis available for rejected item' : 'No operations defined'}</td></tr>
-                            )}
-                          </tbody>
-                        </table>
-
-                        {/* Scrap Section */}
-                        {item.scrap?.length > 0 && (
-                          <>
-                            <div className="p-2  bg-slate-50 border-y border-slate-200 flex justify-between items-center">
-                              <h4 className="text-[10px]  text-slate-500  ">Scrap Recovery</h4>
-                              <span className="text-[10px]  text-rose-400">Recovery: ₹{item.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0).toFixed(2)}</span>
+                        {item.status !== 'REJECTED' && (
+                          <div className="p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Order Qty</p>
+                                <p className="text-lg font-bold text-slate-900">{item.quantity} {item.unit || 'Nos'}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Material Cost</p>
+                                <p className="text-lg font-bold text-slate-900">
+                                  ₹{(item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Labor Cost</p>
+                                <p className="text-lg font-bold text-slate-900">
+                                  ₹{(item.operations?.reduce((sum, o) => {
+                                    const cycle = parseFloat(o.cycle_time_min || 0);
+                                    const setup = parseFloat(o.setup_time_min || 0);
+                                    const rate = parseFloat(o.hourly_rate || 0);
+                                    return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
+                                  }, 0) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                              <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100/50">
+                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Estimated Profit</p>
+                                <p className="text-lg font-bold text-emerald-700">₹{((parseFloat(item.selling_rate || 0) - parseFloat(item.valuation_rate || 0)) * parseFloat(item.quantity)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                              </div>
                             </div>
-                            <table className="min-w-full divide-y divide-slate-100">
-                              <thead className="bg-white">
-                                <tr>
-                                  <th className="p-2  text-lefttext-xs   text-slate-400 ">Scrap Item</th>
-                                  <th className="p-2  text-righttext-xs   text-slate-400 ">Input</th>
-                                  <th className="p-2  text-righttext-xs   text-slate-400 ">Loss %</th>
-                                  <th className="p-2  text-righttext-xs   text-slate-400 ">Value</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {item.scrap.map((s) => {
-                                  const value = parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0);
-                                  return (
-                                    <tr key={s.id}>
-                                      <td className="p-2  text-xs text-slate-700">{s.item_name}</td>
-                                      <td className="p-2  text-xs text-right text-slate-500">{s.input_qty}</td>
-                                      <td className="p-2  text-xs text-right text-rose-500 ">{s.loss_percent}%</td>
-                                      <td className="p-2  text-xs text-right  text-rose-600">₹{value.toFixed(2)}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </>
+                          </div>
                         )}
-                        
-                        {/* Item Total Breakdown */}
-                        <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
-                           <div className="text-xs    opacity-60">Item Cost Summary</div>
-                           <div className="flex gap-8">
-                              <div className="text-right">
-                                 <div className="text-[9px]  opacity-50 ">Total Item Cost</div>
-                                 <div className="text-lg ">₹{((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
-                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) + 
-                                     item.operations?.reduce((sum, o) => {
-                                       const cycle = parseFloat(o.cycle_time_min || 0);
-                                       const setup = parseFloat(o.setup_time_min || 0);
-                                       const rate = parseFloat(o.hourly_rate || 0);
-                                       return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
-                                     }, 0) - 
-                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0).toFixed(2)}</div>
-                              </div>
-                              <div className="text-right border-l border-white/10 pl-8">
-                                 <div className="text-[9px]  opacity-50 ">Cost Per Unit</div>
-                                 <div className="text-lg  text-amber-400">₹{(((item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) + 
-                                     item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) + 
-                                     item.operations?.reduce((sum, o) => {
-                                       const cycle = parseFloat(o.cycle_time_min || 0);
-                                       const setup = parseFloat(o.setup_time_min || 0);
-                                       const rate = parseFloat(o.hourly_rate || 0);
-                                       return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
-                                     }, 0) - 
-                                     item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0)) || 0) / parseFloat(item.quantity || 1)).toFixed(2)}</div>
-                              </div>
-                           </div>
-                        </div>
                       </div>
                     ))}
                     </div>
-
-
                   </div>
                 )}
               </div>
-              <div className="p-2 bg-slate-50 border-t border-slate-100 flex justify-end">
+              
+              <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
                 <button 
                   onClick={() => setShowDetails(false)}
-                  className="p-2 bg-white border border-slate-200 rounded  text-sm  text-slate-600 hover:bg-slate-50"
+                  className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-100 transition-all shadow-sm"
                 >
                   Close
                 </button>
+                {activeTab === 'pending' && (
+                  <button 
+                    onClick={() => { handleApproveBOM(selectedOrder.id); setShowDetails(false); }}
+                    className="px-10 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                  >
+                    Approve BOM
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
-      <DrawingPreviewModal 
+
+      {/* Preview Modal Component */}
+      <DrawingPreviewModal
         isOpen={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}
         drawing={previewDrawing}
@@ -594,4 +441,3 @@ const BOMApproval = () => {
 };
 
 export default BOMApproval;
-

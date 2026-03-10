@@ -472,6 +472,7 @@ const ItemsMaster = () => {
                 item.drawing_no?.toLowerCase().includes(searchTerm.toLowerCase())
               )}
               loading={itemsLoading}
+              pageSize={5}
               hideHeader={true}
             />
           </div>

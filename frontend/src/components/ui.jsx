@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, Search, FileText, ChevronRight, Loader2, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, Search, FileText, ChevronRight, ChevronLeft, Loader2, Check, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 export const Card = ({ id, title, subtitle, action, children, className = '' }) => (
   <div id={id} className={className}>
@@ -359,10 +359,98 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
   )
 }
 
-export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false, hideExpander = false }) => {
+export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, pageSize }) => {
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      let start = Math.max(1, currentPage - 2);
+      let end = Math.min(totalPages, start + maxVisible - 1);
+      
+      if (end === totalPages) {
+        start = Math.max(1, end - maxVisible + 1);
+      }
+      
+      for (let i = start; i <= end; i++) pages.push(i);
+    }
+    return pages;
+  };
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-50 bg-white">
+      <div className="text-xs text-slate-500 font-medium">
+        Showing <span className="text-slate-900 font-bold">{startItem}</span> to <span className="text-slate-900 font-bold">{endItem}</span> of <span className="text-slate-900 font-bold">{totalItems}</span> entries
+      </div>
+      
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+          title="First Page"
+        >
+          <ChevronsLeft size={16} />
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+          title="Previous Page"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        <div className="flex items-center gap-1 mx-2">
+          {getPageNumbers().map(page => (
+            <button
+              key={page}
+              onClick={() => onPageChange(page)}
+              className={`min-w-[32px] h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                currentPage === page 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                  : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+          title="Next Page"
+        >
+          <ChevronRight size={16} />
+        </button>
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+          title="Last Page"
+        >
+          <ChevronsRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false, hideExpander = false, pageSize: initialPageSize = 10 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
 
   const isDark = className.includes('bg-[#1e293b]') || className.includes('bg-slate-900') || className.includes('bg-[#0f172a]');
 
@@ -411,13 +499,25 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
     return sortableData;
   }, [data, sortConfig]);
 
-  const filteredData = sortedData.filter(item => {
-    if (hideHeader) return true;
-    const searchLower = String(searchTerm || '').toLowerCase();
-    return Object.values(item).some(val => 
-      String(val).toLowerCase().includes(searchLower)
-    );
-  });
+  const filteredData = React.useMemo(() => {
+    return sortedData.filter(item => {
+      if (hideHeader) return true;
+      const searchLower = String(searchTerm || '').toLowerCase();
+      return Object.values(item).some(val => 
+        String(val).toLowerCase().includes(searchLower)
+      );
+    });
+  }, [sortedData, searchTerm, hideHeader]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, data.length]);
+
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  const paginatedData = filteredData.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   return (
     <div className={`flex flex-col h-full rounded    overflow-hidden ${isDark ? 'border-slate-800' : 'border-slate-100 '} ${className}`}>
@@ -470,7 +570,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                   </div>
                 </td>
               </tr>
-            ) : filteredData.length === 0 ? (
+            ) : paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0)} className="p-2 text-center">
                   <div className="flex flex-col items-center gap-2">
@@ -480,7 +580,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                 </td>
               </tr>
             ) : (
-              filteredData.map((row, rowIdx) => {
+              paginatedData.map((row, rowIdx) => {
                 const isExpanded = expandedRows.has(row.id || rowIdx);
                 return (
                   <React.Fragment key={row.id || rowIdx}>
@@ -518,6 +618,16 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
           </tbody>
         </table>
       </div>
+
+      {!loading && filteredData.length > 0 && (
+        <Pagination 
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={filteredData.length}
+          pageSize={pageSize}
+        />
+      )}
     </div>
   );
 };

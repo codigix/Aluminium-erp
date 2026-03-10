@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Card, StatusBadge, Modal } from '../components/ui.jsx';
+import { Card, StatusBadge, Modal, DataTable } from '../components/ui.jsx';
 import { Package, CheckCircle, XCircle, Search, Eye, ListTodo, Filter, Download, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -100,6 +100,91 @@ const ShipmentOrders = ({ apiRequest }) => {
     o.company_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const columns = [
+    { 
+      label: 'Shipment Code', 
+      key: 'shipment_code',
+      className: 'font-bold text-indigo-600'
+    },
+    { 
+      label: 'SO Number', 
+      key: 'so_number',
+      render: (_, row) => (
+        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+          {row.so_number || `SO-${String(row.sales_order_id || row.id).padStart(4, '0')}`}
+        </span>
+      )
+    },
+    { 
+      label: 'Customer', 
+      key: 'company_name',
+      className: 'font-semibold text-slate-700'
+    },
+    { 
+      label: 'Target Date', 
+      key: 'dispatch_target_date',
+      className: 'text-center text-slate-600',
+      render: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '—'
+    },
+    { 
+      label: 'Priority', 
+      key: 'priority',
+      className: 'text-center',
+      render: (val) => (
+        <span className={`text-[10px] font-bold ${val === 'HIGH' ? 'text-rose-600' : 'text-slate-500'}`}>
+          {val}
+        </span>
+      )
+    },
+    { 
+      label: 'Status', 
+      key: 'shipment_status',
+      className: 'text-center',
+      render: (val) => <StatusBadge status={val} />
+    },
+    { 
+      label: 'Actions', 
+      key: 'actions',
+      className: 'text-right',
+      render: (_, order) => (
+        <div className="flex justify-end gap-2">
+          {order.shipment_status === 'PENDING_ACCEPTANCE' && (
+            <>
+              <button
+                onClick={() => handleAction(order.id || order.shipment_order_id, 'ACCEPTED')}
+                className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors border border-blue-100"
+                title="Accept"
+              >
+                <CheckCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleAction(order.id || order.shipment_order_id, 'REJECTED')}
+                className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors border border-rose-100"
+                title="Reject"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => handleViewDetails(order.id || order.shipment_order_id)}
+            className="p-1.5 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+            title="View Details"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleDelete(order.id || order.shipment_order_id)}
+            className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors border border-rose-100"
+            title="Delete Shipment"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
+    }
+  ];
+
   return (
     <div className="p-6 space-y-8 bg-white/50 min-h-screen">
       {/* Header Section */}
@@ -139,96 +224,15 @@ const ShipmentOrders = ({ apiRequest }) => {
             </div>
           </div>
 
-          {loading ? (
-            <div className="flex justify-center py-20">
-              <div className="w-8 h-8 border-4 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
-            </div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="text-center py-20 bg-slate-50 rounded-[24px] border border-dashed border-slate-200">
-              <Package className="w-12 h-12 text-indigo-500 mx-auto mb-3 opacity-20" />
-              <p className="text-slate-500 italic">No shipment orders found.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50/50 border-y border-slate-100">
-                  <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="px-6 py-4">Shipment Code</th>
-                    <th className="px-6 py-4">SO Number</th>
-                    <th className="px-6 py-4">Customer</th>
-                    <th className="px-6 py-4 text-center">Target Date</th>
-                    <th className="px-6 py-4 text-center">Priority</th>
-                    <th className="px-6 py-4 text-center">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {filteredOrders.map(order => (
-                    <tr key={order.id || order.shipment_order_id} className="hover:bg-slate-50/80 transition-all duration-200 group">
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-bold text-indigo-600 group-hover:underline cursor-pointer">{order.shipment_code}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                          {order.so_number || `SO-${String(order.sales_order_id || order.id).padStart(4, '0')}`}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-semibold text-slate-700">{order.company_name}</span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="text-xs text-slate-600">{order.dispatch_target_date ? new Date(order.dispatch_target_date).toLocaleDateString('en-IN') : '—'}</span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`text-[10px] font-bold ${order.priority === 'HIGH' ? 'text-rose-600' : 'text-slate-500'}`}>
-                          {order.priority}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <StatusBadge status={order.shipment_status} />
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          {order.shipment_status === 'PENDING_ACCEPTANCE' && (
-                            <>
-                              <button
-                                onClick={() => handleAction(order.id || order.shipment_order_id, 'ACCEPTED')}
-                                className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors border border-blue-100"
-                                title="Accept"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleAction(order.id || order.shipment_order_id, 'REJECTED')}
-                                className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors border border-rose-100"
-                                title="Reject"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => handleViewDetails(order.id || order.shipment_order_id)}
-                            className="p-1.5 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(order.id || order.shipment_order_id)}
-                            className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors border border-rose-100"
-                            title="Delete Shipment"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="p-2">
+            <DataTable 
+              columns={columns}
+              data={filteredOrders}
+              loading={loading}
+              hideHeader={true}
+              emptyMessage="No shipment orders found."
+            />
+          </div>
         </div>
       </Card>
 
@@ -316,15 +320,6 @@ const ShipmentOrders = ({ apiRequest }) => {
                   </tbody>
                 </table>
               </div>
-            </div>
-
-            <div className="flex justify-end pt-4 border-t border-slate-100">
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="px-6 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all active:scale-95"
-              >
-                Close
-              </button>
             </div>
           </div>
         ) : null}
