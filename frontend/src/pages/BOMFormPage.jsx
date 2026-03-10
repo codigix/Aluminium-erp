@@ -1953,10 +1953,11 @@ const BOMFormPage = () => {
                         onChange={(e) => {
                           const op = operationsList.find(o => o.operation_name === e.target.value);
                           if (op) {
+                            const wsCodes = op.workstation_codes ? op.workstation_codes.split(', ') : [];
                             setOperationForm({
                               ...operationForm,
                               operationName: e.target.value,
-                              workstation: op.workstation_code || op.workstation || '',
+                              workstation: wsCodes.length === 1 ? wsCodes[0] : '',
                               hourlyRate: op.hourly_rate || 0
                             });
                           } else {
@@ -1982,11 +1983,18 @@ const BOMFormPage = () => {
                         }}
                       >
                         <option value="">Select Resource</option>
-                        {workstations.map(ws => (
-                          <option key={ws.id} value={ws.workstation_code}>
-                            {ws.workstation_code} - {ws.workstation_name}
-                          </option>
-                        ))}
+                        {(() => {
+                          const op = operationsList.find(o => o.operation_name === operationForm.operationName);
+                          const filteredWS = op && op.workstation_codes 
+                            ? workstations.filter(ws => op.workstation_codes.split(', ').includes(ws.workstation_code))
+                            : workstations;
+                          
+                          return filteredWS.map(ws => (
+                            <option key={ws.id} value={ws.workstation_code}>
+                              {ws.workstation_code} - {ws.workstation_name}
+                            </option>
+                          ));
+                        })()}
                       </select>
                     </div>
 
