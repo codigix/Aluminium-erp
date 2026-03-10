@@ -404,15 +404,17 @@ const getSalesDashboardStats = async () => {
 };
 
 const getShipmentDashboardStats = async () => {
-  const [[shipmentStats]] = await pool.query(`
+  const [shipmentRows] = await pool.query(`
     SELECT 
       SUM(CASE WHEN status NOT IN ('DELIVERED', 'CANCELLED') THEN 1 ELSE 0 END) as active,
       SUM(CASE WHEN status = 'DELIVERED' THEN 1 ELSE 0 END) as delivered,
       SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelled,
-      SUM(CASE WHEN (status = 'IN_TRANSIT' OR status = 'DELAYED') AND estimated_delivery_date < CURRENT_DATE THEN 1 ELSE 0 END) as \`delayed\`,
+      SUM(CASE WHEN (status = 'IN_TRANSIT' OR status = 'DELAYED') AND estimated_delivery_date < CURRENT_DATE THEN 1 ELSE 0 END) as is_delayed,
       COUNT(*) as total
     FROM shipment_orders
   `);
+  
+  const shipmentStats = shipmentRows[0] || {};
 
   const [recentShipments] = await pool.query(`
     SELECT 
@@ -430,7 +432,7 @@ const getShipmentDashboardStats = async () => {
       COUNT(so.id) as ordered,
       SUM(CASE WHEN so.status = 'DISPATCHED' THEN 1 ELSE 0 END) as dispatched,
       SUM(CASE WHEN so.status = 'DELIVERED' THEN 1 ELSE 0 END) as delivered,
-      SUM(CASE WHEN so.status = 'DELAYED' THEN 1 ELSE 0 END) as delayed
+      SUM(CASE WHEN so.status = 'DELAYED' THEN 1 ELSE 0 END) as is_delayed
     FROM (
       SELECT CURRENT_DATE - INTERVAL 2 MONTH as month UNION 
       SELECT CURRENT_DATE - INTERVAL 1 MONTH UNION 
@@ -445,7 +447,7 @@ const getShipmentDashboardStats = async () => {
     stats: {
       active: shipmentStats.active || 0,
       delivered: shipmentStats.delivered || 0,
-      delayed: shipmentStats.delayed || 0,
+      delayed: shipmentStats.is_delayed || 0,
       returns: 0,
       dispatched: shipmentStats.delivered || 0,
       total: shipmentStats.total || 0,
@@ -457,7 +459,10 @@ const getShipmentDashboardStats = async () => {
         { label: 'Returns', value: 0, color: '#f59e0b' }
       ]
     },
-    monthlyData,
+    monthlyData: monthlyData.map(d => ({
+      ...d,
+      delayed: d.is_delayed || 0
+    })),
     recentShipments
   };
 };

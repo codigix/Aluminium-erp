@@ -84,13 +84,11 @@ const ShipmentDashboard = ({ apiRequest }) => {
     );
   }
 
-  const { stats, monthlyData, recentShipments } = data || { 
-    stats: { active: 0, delivered: 0, delayed: 0, returns: 0, dispatched: 0, total: 0 },
-    monthlyData: [],
-    recentShipments: []
-  };
-
-  const safeStats = stats || { active: 0, delivered: 0, delayed: 0, returns: 0, dispatched: 0, total: 0 };
+  const { stats, monthlyData, recentShipments } = data || {};
+  
+  const safeStats = stats || { active: 0, delivered: 0, delayed: 0, returns: 0, dispatched: 0, total: 0, sla: 0, health: [] };
+  const safeMonthlyData = monthlyData || [];
+  const safeRecentShipments = recentShipments || [];
 
   const kpis = [
     { title: "Active Shipments", value: safeStats.active || 0, subtitle: "In transit/ready", color: "bg-indigo-500", icon: Truck },
@@ -101,11 +99,11 @@ const ShipmentDashboard = ({ apiRequest }) => {
   ];
 
   const pieData = [
-    { name: "Active", value: stats?.active || 0, color: "#4f46e5" },
-    { name: "Dispatched", value: stats?.dispatched || 0, color: "#3b82f6" },
-    { name: "Delivered", value: stats?.delivered || 0, color: "#10b981" },
-    { name: "Return", value: stats?.returns || 0, color: "#f59e0b" },
-    { name: "Delayed", value: stats?.delayed || 0, color: "#ef4444" },
+    { name: "Active", value: safeStats.active || 0, color: "#4f46e5" },
+    { name: "Dispatched", value: safeStats.dispatched || 0, color: "#3b82f6" },
+    { name: "Delivered", value: safeStats.delivered || 0, color: "#10b981" },
+    { name: "Return", value: safeStats.returns || 0, color: "#f59e0b" },
+    { name: "Delayed", value: safeStats.delayed || 0, color: "#ef4444" },
   ].filter(d => d.value > 0);
 
   const StatCard = ({ title, value, subtitle, color, icon: Icon }) => (
@@ -177,7 +175,7 @@ const ShipmentDashboard = ({ apiRequest }) => {
           </div>
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={safeMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="month" 
@@ -228,12 +226,12 @@ const ShipmentDashboard = ({ apiRequest }) => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-3xl font-black text-slate-900">{stats?.sla || 0}%</span>
+                <span className="text-3xl font-black text-slate-900">{safeStats.sla || 0}%</span>
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">SLA Compliance</span>
               </div>
             </div>
             <div className="mt-8 space-y-4 flex-1">
-              {(stats.health || [
+              {(safeStats.health || [
                 { label: 'Active', value: 0, color: '#4f46e5' },
                 { label: 'Delivered', value: 0, color: '#10b981' },
                 { label: 'Delayed', value: 0, color: '#ef4444' },
@@ -272,7 +270,7 @@ const ShipmentDashboard = ({ apiRequest }) => {
           </div>
           <div className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {recentShipments.map((s, i) => (
+              {safeRecentShipments.map((s, i) => (
                 <div key={i} className="flex flex-col p-4 rounded-[24px] bg-slate-50/50 border border-slate-100 hover:bg-white hover:shadow-lg hover:border-indigo-100 transition-all cursor-pointer group">
                   <div className="flex justify-between items-start mb-3">
                     <div className="p-2 bg-white rounded-xl shadow-sm group-hover:scale-110 transition-transform">
@@ -291,7 +289,7 @@ const ShipmentDashboard = ({ apiRequest }) => {
                   </div>
                 </div>
               ))}
-              {recentShipments.length === 0 && (
+              {safeRecentShipments.length === 0 && (
                 <div className="col-span-full py-12 text-center">
                   <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Package className="w-6 h-6 text-slate-300" />
