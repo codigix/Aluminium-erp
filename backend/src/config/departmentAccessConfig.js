@@ -120,7 +120,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['quality-dashboard', 'incoming-qc', 'in-process-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
+    allowedModules: ['dashboard', 'quality-dashboard', 'incoming-qc', 'in-process-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
@@ -183,7 +183,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
+    allowedModules: ['dashboard', 'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
