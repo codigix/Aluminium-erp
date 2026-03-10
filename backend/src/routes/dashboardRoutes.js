@@ -10,5 +10,6 @@ router.get('/procurement', authorize(['DASHBOARD_VIEW']), dashboardController.ge
 router.get('/production', authorize(['DASHBOARD_VIEW']), dashboardController.getProductionDashboard);
 router.get('/design', authorize(['DASHBOARD_VIEW']), dashboardController.getDesignDashboard);
 router.get('/sales', authorize(['DASHBOARD_VIEW']), dashboardController.getSalesDashboard);
+router.get('/shipment', authorize(['DASHBOARD_VIEW']), dashboardController.getShipmentDashboard);
 
 module.exports = router;

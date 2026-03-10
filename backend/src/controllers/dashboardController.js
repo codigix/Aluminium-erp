@@ -54,11 +54,21 @@ const getSalesDashboard = async (req, res, next) => {
   }
 };
 
+const getShipmentDashboard = async (req, res, next) => {
+  try {
+    const stats = await dashboardService.getShipmentDashboardStats();
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = { 
   getDashboard, 
   getAccountsDashboard,
   getProcurementDashboard,
   getProductionDashboard,
   getDesignDashboard,
-  getSalesDashboard
+  getSalesDashboard,
+  getShipmentDashboard
 };

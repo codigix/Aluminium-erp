@@ -52,20 +52,8 @@ const QualityDashboard = () => {
     passedQc: 0,
     failedQc: 0,
     qcPendingItems: [],
-    rejectionReasons: [
-      { name: 'Surface Scratches', value: 45, percentage: 38, color: '#ef4444' },
-      { name: 'Dimension Variation', value: 35, percentage: 30, color: '#f59e0b' },
-      { name: 'Material Purity', value: 25, percentage: 20, color: '#10b981' },
-      { name: 'Other Issues', value: 15, percentage: 12, color: '#6366f1' },
-    ],
-    statusOverview: [
-      { month: 'JAN', accepted: 40, rejected: 10, returned: 5 },
-      { month: 'FEB', accepted: 45, rejected: 12, returned: 3 },
-      { month: 'MAR', accepted: 50, rejected: 8, returned: 4 },
-      { month: 'APR', accepted: 42, rejected: 15, returned: 6 },
-      { month: 'MAY', accepted: 55, rejected: 9, returned: 2 },
-      { month: 'JUN', accepted: 48, rejected: 11, returned: 5 },
-    ],
+    rejectionReasons: [],
+    statusOverview: [],
   });
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -214,45 +202,44 @@ const QualityDashboard = () => {
         </div>
       </div>
 
-      {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
         <StatCard 
           title="Total Inspections" 
-          count={stats.totalQc || 23} 
+          count={stats.totalQc || 0} 
           subtitle="Completed this month"
           color="bg-indigo-500"
           icon={ClipboardList}
-          trend={12}
+          trend={stats.totalTrend}
         />
         <StatCard 
           title="Awaiting QC" 
-          count={stats.pendingQc || 8} 
+          count={stats.pendingQc || 0} 
           subtitle="Pending in queue"
           color="bg-amber-500"
           icon={Clock}
         />
         <StatCard 
           title="In Progress" 
-          count={stats.inProgressQc || 4} 
+          count={stats.inProgressQc || 0} 
           subtitle="Currently testing"
           color="bg-blue-500"
           icon={RotateCcw}
         />
         <StatCard 
           title="Passed Inspections" 
-          count={stats.passedQc || 9} 
+          count={stats.passedQc || 0} 
           subtitle="Quality approved"
           color="bg-emerald-500"
           icon={CheckCircle}
-          trend={14}
+          trend={stats.passedTrend}
         />
         <StatCard 
           title="Failed / Rejections" 
-          count={stats.failedQc || 2} 
+          count={stats.failedQc || 0} 
           subtitle="Non-conforming items"
           color="bg-rose-500"
           icon={XCircle}
-          trend={-5}
+          trend={stats.failedTrend}
         />
       </div>
 

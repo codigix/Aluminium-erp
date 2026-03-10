@@ -242,6 +242,15 @@ const shareDrawingsBulk = async (req, res, next) => {
   }
 };
 
+const getApprovedDrawings = async (req, res, next) => {
+  try {
+    const drawings = await drawingService.getApprovedDrawings();
+    res.json(drawings);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listDrawings,
   getDrawingRevisions,
@@ -250,5 +259,6 @@ module.exports = {
   createDrawing,
   deleteDrawing,
   shareDrawing,
-  shareDrawingsBulk
+  shareDrawingsBulk,
+  getApprovedDrawings
 };

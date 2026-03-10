@@ -31,6 +31,8 @@ import {
 } from "recharts";
 import { StatusBadge, DataTable } from "../components/ui.jsx";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+
 const ShipmentDashboard = ({ apiRequest }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -39,7 +41,21 @@ const ShipmentDashboard = ({ apiRequest }) => {
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await apiRequest('/shipments/dashboard');
+      let res;
+      if (apiRequest) {
+        res = await apiRequest('/dashboard/shipment');
+      } else {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/dashboard/shipment`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-ERP-Request': 'true'
+          }
+        });
+        if (!response.ok) throw new Error('Failed to fetch shipment stats');
+        res = await response.json();
+      }
       setData(res);
       setLastUpdated(new Date());
     } catch (error) {
@@ -53,7 +69,7 @@ const ShipmentDashboard = ({ apiRequest }) => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  if (loading && !data) {
+  if (loading || !data) {
     return (
       <div className="flex flex-col items-center justify-center py-32 space-y-4">
         <div className="relative">
@@ -68,22 +84,28 @@ const ShipmentDashboard = ({ apiRequest }) => {
     );
   }
 
-  const { stats, monthlyData, recentShipments } = data;
+  const { stats, monthlyData, recentShipments } = data || { 
+    stats: { active: 0, delivered: 0, delayed: 0, returns: 0, dispatched: 0, total: 0 },
+    monthlyData: [],
+    recentShipments: []
+  };
+
+  const safeStats = stats || { active: 0, delivered: 0, delayed: 0, returns: 0, dispatched: 0, total: 0 };
 
   const kpis = [
-    { title: "Active Shipments", value: stats.active, subtitle: "In transit/ready", color: "bg-indigo-500", icon: Truck },
-    { title: "On-Time Delivery", value: `${Math.round((stats.delivered / (stats.total || 1)) * 100)}%`, subtitle: "Efficiency score", color: "bg-emerald-500", icon: CheckCircle },
-    { title: "Delayed Items", value: stats.delayed, subtitle: "Awaiting resolution", color: "bg-rose-500", icon: AlertTriangle },
-    { title: "Returns Hub", value: stats.returns, subtitle: "Quality returns", color: "bg-amber-500", icon: RotateCcw },
-    { title: "Total Dispatched", value: stats.dispatched, subtitle: "Last 30 days", color: "bg-blue-500", icon: Package },
+    { title: "Active Shipments", value: safeStats.active || 0, subtitle: "In transit/ready", color: "bg-indigo-500", icon: Truck },
+    { title: "On-Time Delivery", value: `${Math.round(((safeStats.delivered || 0) / (safeStats.total || 1)) * 100)}%`, subtitle: "Efficiency score", color: "bg-emerald-500", icon: CheckCircle },
+    { title: "Delayed Items", value: safeStats.delayed || 0, subtitle: "Awaiting resolution", color: "bg-rose-500", icon: AlertTriangle },
+    { title: "Returns Hub", value: safeStats.returns || 0, subtitle: "Quality returns", color: "bg-amber-500", icon: RotateCcw },
+    { title: "Total Dispatched", value: safeStats.dispatched || 0, subtitle: "Last 30 days", color: "bg-blue-500", icon: Package },
   ];
 
   const pieData = [
-    { name: "Active", value: stats.active, color: "#4f46e5" },
-    { name: "Dispatched", value: stats.dispatched, color: "#3b82f6" },
-    { name: "Delivered", value: stats.delivered, color: "#10b981" },
-    { name: "Return", value: stats.returns, color: "#f59e0b" },
-    { name: "Delayed", value: stats.delayed, color: "#ef4444" },
+    { name: "Active", value: stats?.active || 0, color: "#4f46e5" },
+    { name: "Dispatched", value: stats?.dispatched || 0, color: "#3b82f6" },
+    { name: "Delivered", value: stats?.delivered || 0, color: "#10b981" },
+    { name: "Return", value: stats?.returns || 0, color: "#f59e0b" },
+    { name: "Delayed", value: stats?.delayed || 0, color: "#ef4444" },
   ].filter(d => d.value > 0);
 
   const StatCard = ({ title, value, subtitle, color, icon: Icon }) => (
@@ -206,19 +228,24 @@ const ShipmentDashboard = ({ apiRequest }) => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-3xl font-black text-slate-900">94%</span>
+                <span className="text-3xl font-black text-slate-900">{stats?.sla || 0}%</span>
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">SLA Compliance</span>
               </div>
             </div>
             <div className="mt-8 space-y-4 flex-1">
-              {pieData.map((item, index) => (
+              {(stats.health || [
+                { label: 'Active', value: 0, color: '#4f46e5' },
+                { label: 'Delivered', value: 0, color: '#10b981' },
+                { label: 'Delayed', value: 0, color: '#ef4444' },
+                { label: 'Returns', value: 0, color: '#f59e0b' }
+              ]).map((item, index) => (
                 <div key={index} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></div>
-                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">{item.name}</span>
+                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">{item.label}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-black text-slate-900">{item.value}</span>
+                    <span className="text-xs font-black text-slate-900">{item.value}%</span>
                   </div>
                 </div>
               ))}

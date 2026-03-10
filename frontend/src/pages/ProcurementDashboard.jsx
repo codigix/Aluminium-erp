@@ -132,6 +132,26 @@ const ProcurementDashboard = () => {
         </div>
       </div>
 
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'New RFQ', icon: FileText, path: '/procurement/quotations', color: 'bg-indigo-600' },
+          { label: 'Create PO', icon: ShoppingCart, path: '/procurement/purchase-orders', color: 'bg-emerald-600' },
+          { label: 'New Supplier', icon: Users, path: '/procurement/suppliers', color: 'bg-blue-600' },
+          { label: 'View Stock', icon: Box, path: '/inventory', color: 'bg-amber-600' }
+        ].map((action, idx) => (
+          <button
+            key={idx}
+            onClick={() => window.location.href = action.path}
+            className="flex items-center gap-3 p-4 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group"
+          >
+            <div className={`p-2 rounded-xl ${action.color} text-white group-hover:scale-110 transition-transform`}>
+              <action.icon className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">{action.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Open RFQs" count={stats.openRfqs || 0} subtitle="Awaiting vendor response" color="bg-indigo-500" icon={FileText} trend={12} />
@@ -147,9 +167,9 @@ const ProcurementDashboard = () => {
             <div>
               <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
                 <TrendingUp className="w-6 h-6 text-indigo-600" />
-                Procurement velocity
+                Procurement Analytics
               </h3>
-              <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">RFQ TO PO CONVERSION RATE</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">DAILY SPENDING TREND (LAST 5 DAYS)</p>
             </div>
           </div>
           <div className="h-[300px]">
@@ -171,16 +191,54 @@ const ProcurementDashboard = () => {
           </div>
         </div>
 
+        {/* Category Breakdown */}
+        <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Category Split</h3>
+          <div className="flex-1 h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={stats.categorySpend || []}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {(stats.categorySpend || []).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={['#4f46e5', '#10b981', '#f59e0b', '#3b82f6', '#ef4444'][index % 5]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 space-y-2">
+            {(stats.categorySpend || []).map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-blue-500', 'bg-rose-500'][idx % 5]}`} />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">{item.name}</span>
+                </div>
+                <span className="text-xs font-black text-slate-900">₹{item.value.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {/* Supplier Performance */}
         <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Supply Chain Health</h3>
           <div className="space-y-6 flex-1">
-            {[
-              { label: 'On-Time Delivery', value: 92, color: 'bg-indigo-500' },
-              { label: 'Quality Compliance', value: 98, color: 'bg-emerald-500' },
-              { label: 'Cost Variance', value: 15, color: 'bg-amber-500' },
-              { label: 'Vendor Lead Time', value: 85, color: 'bg-blue-500' }
-            ].map((item, idx) => (
+            {(stats.health || [
+              { label: 'On-Time Delivery', value: 0, color: 'bg-indigo-500' },
+              { label: 'Quality Compliance', value: 0, color: 'bg-emerald-500' },
+              { label: 'Cost Variance', value: 0, color: 'bg-amber-500' },
+              { label: 'Vendor Lead Time', value: 0, color: 'bg-blue-500' }
+            ]).map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <div className="flex justify-between items-end">
                   <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{item.label}</span>
@@ -193,47 +251,29 @@ const ProcurementDashboard = () => {
             ))}
           </div>
         </div>
-      </div>
 
-      {/* Recent RFQs */}
-      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-3">
-              <ClipboardList className="w-4 h-4 text-indigo-600" />
-              RECENT RFQ PIPELINE
-            </h3>
-            <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-widest">ACTIVE VENDOR NEGOTIATIONS</p>
+        {/* Recent RFQs */}
+        <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-3">
+                <ClipboardList className="w-4 h-4 text-indigo-600" />
+                RECENT RFQ PIPELINE
+              </h3>
+              <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-widest">ACTIVE VENDOR NEGOTIATIONS</p>
+            </div>
           </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-50 bg-slate-50/20">
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">RFQ Code</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Supplier</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Items</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {(stats.recentRfqs || []).map((rfq, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-8 py-4 text-xs font-black text-slate-900">{rfq.rfq_code}</td>
-                  <td className="px-8 py-4 text-xs font-medium text-slate-600">{rfq.vendor_name || 'Unassigned'}</td>
-                  <td className="px-8 py-4 text-xs font-medium text-slate-600">{rfq.item_count} items</td>
-                  <td className="px-8 py-4">
-                    <StatusBadge status={rfq.status} />
-                  </td>
-                </tr>
-              ))}
-              {(!stats.recentRfqs || stats.recentRfqs.length === 0) && (
-                <tr>
-                  <td colSpan="4" className="px-8 py-12 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">No active RFQs found</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <DataTable
+            columns={[
+              { label: 'RFQ Code', key: 'rfq_code', render: (val) => <span className="font-black text-slate-900">{val}</span> },
+              { label: 'Supplier', key: 'vendor_name', render: (val) => val || 'Unassigned' },
+              { label: 'Items', key: 'item_count', render: (val) => `${val} items` },
+              { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val} /> }
+            ]}
+            data={stats.recentRfqs || []}
+            hideHeader={true}
+            className="border-none"
+          />
         </div>
       </div>
     </div>

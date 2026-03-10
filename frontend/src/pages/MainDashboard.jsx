@@ -22,7 +22,7 @@ const AdminDashboard = lazy(() => import('./AdminDashboard'));
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const MainDashboard = () => {
+const MainDashboard = ({ apiRequest }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,27 +45,28 @@ const MainDashboard = () => {
 
   // Map department codes to their respective dashboards
   const renderDepartmentDashboard = () => {
+    const props = { apiRequest };
     switch (dept) {
       case 'SALES':
-        return <SalesDashboard />;
+        return <SalesDashboard {...props} />;
       case 'DESIGN_ENG':
-        return <DesignDashboard />;
+        return <DesignDashboard {...props} />;
       case 'PROCUREMENT':
-        return <ProcurementDashboard />;
+        return <ProcurementDashboard {...props} />;
       case 'PRODUCTION':
-        return <ProductionDashboard />;
+        return <ProductionDashboard {...props} />;
       case 'INVENTORY':
-        return <InventoryDashboard />;
+        return <InventoryDashboard {...props} />;
       case 'QUALITY':
-        return <QualityDashboard />;
+        return <QualityDashboard {...props} />;
       case 'SHIPMENT':
-        return <ShipmentDashboard />;
+        return <ShipmentDashboard {...props} />;
       case 'ACCOUNTS':
-        return <AccountsDashboard />;
+        return <AccountsDashboard {...props} />;
       case 'ADMIN':
-        return <AdminDashboard />;
+        return <AdminDashboard {...props} />;
       default:
-        return <AdminDashboard />; 
+        return <AdminDashboard {...props} />; 
     }
   };
 

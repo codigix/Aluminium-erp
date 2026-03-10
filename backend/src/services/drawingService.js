@@ -416,6 +416,24 @@ const shareDrawingsBulk = async (ids) => {
   }
 };
 
+const getApprovedDrawings = async () => {
+  const [rows] = await pool.query(
+    `SELECT 
+      soi.drawing_no, 
+      soi.revision_no, 
+      soi.drawing_pdf, 
+      soi.description as material_name,
+      soi.item_group,
+      soi.unit
+     FROM sales_order_items soi
+     JOIN sales_orders so ON so.id = soi.sales_order_id
+     WHERE so.status IN ('PRODUCTION', 'COMPLETED')
+     GROUP BY soi.drawing_no, soi.revision_no
+     ORDER BY soi.created_at DESC`
+  );
+  return rows;
+};
+
 module.exports = {
   listDrawings,
   getDrawingRevisions,
@@ -425,5 +443,6 @@ module.exports = {
   createBatchCustomerDrawings,
   deleteCustomerDrawing,
   shareWithDesign,
-  shareDrawingsBulk
+  shareDrawingsBulk,
+  getApprovedDrawings
 };

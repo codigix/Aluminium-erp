@@ -5,6 +5,7 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/upload');
 
 router.get('/', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.listDrawings);
+router.get('/approved', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.getApprovedDrawings);
 router.post('/', authorize(['DESIGN_MANAGE']), upload.fields([{ name: 'file', maxCount: 1 }, { name: 'zipFile', maxCount: 1 }]), drawingController.createDrawing);
 router.post('/share/bulk', authorize(['DESIGN_MANAGE']), drawingController.shareDrawingsBulk);
 router.post('/:id/share', authorize(['DESIGN_MANAGE']), drawingController.shareDrawing);

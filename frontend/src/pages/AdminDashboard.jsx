@@ -147,10 +147,10 @@ const AdminDashboard = () => {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Revenue" count="₹4.2M" subtitle="This quarter" color="bg-indigo-500" icon={IndianRupee} trend={12} />
-        <StatCard title="Fulfillment Rate" count="94%" subtitle="Order accuracy" color="bg-emerald-500" icon={CheckCircle} trend={4} />
+        <StatCard title="Total Revenue" count={`₹${(stats.totalRevenue / 100000).toFixed(1)}L`} subtitle="Total so far" color="bg-indigo-500" icon={IndianRupee} trend={0} />
+        <StatCard title="Fulfillment Rate" count="0%" subtitle="Order accuracy" color="bg-emerald-500" icon={CheckCircle} trend={0} />
         <StatCard title="Active Jobs" count={stats.productionOrders || 0} subtitle="Manufacturing floor" color="bg-amber-500" icon={Factory} />
-        <StatCard title="Total Users" count="12" subtitle="Active system users" color="bg-blue-500" icon={Users} />
+        <StatCard title="Total Users" count={stats.totalUsers || 0} subtitle="Active system users" color="bg-blue-500" icon={Users} />
       </div>
 
       {/* Main Charts Row */}
@@ -168,15 +168,7 @@ const AdminDashboard = () => {
           
           <div className="h-[380px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={[
-                { name: 'Mon', sales: 4000, production: 2400 },
-                { name: 'Tue', sales: 3000, production: 1398 },
-                { name: 'Wed', sales: 2000, production: 9800 },
-                { name: 'Thu', sales: 2780, production: 3908 },
-                { name: 'Fri', sales: 1890, production: 4800 },
-                { name: 'Sat', sales: 2390, production: 3800 },
-                { name: 'Sun', sales: 3490, production: 4300 },
-              ]}>
+              <AreaChart data={stats.chartData || []}>
                 <defs>
                   <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
@@ -204,12 +196,12 @@ const AdminDashboard = () => {
           <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Ecosystem Health</h3>
           <div className="flex-1 flex flex-col justify-between">
             <div className="space-y-6">
-              {[
-                { label: 'Sales Fulfillment', value: 85, color: 'bg-indigo-500' },
-                { label: 'Production Accuracy', value: 94, color: 'bg-emerald-500' },
-                { label: 'Inventory Turnover', value: 62, color: 'bg-amber-500' },
-                { label: 'Quality Acceptance', value: 98, color: 'bg-blue-500' }
-              ].map((item, idx) => (
+              {(stats.health || [
+                { label: 'Sales Fulfillment', value: 0, color: 'bg-indigo-500' },
+                { label: 'Production Accuracy', value: 0, color: 'bg-emerald-500' },
+                { label: 'Inventory Turnover', value: 0, color: 'bg-amber-500' },
+                { label: 'Quality Acceptance', value: 0, color: 'bg-blue-500' }
+              ]).map((item, idx) => (
                 <div key={idx} className="space-y-2">
                   <div className="flex justify-between items-end">
                     <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{item.label}</span>

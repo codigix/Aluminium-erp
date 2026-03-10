@@ -27,7 +27,7 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const ProductionDashboard = () => {
+const ProductionDashboard = ({ apiRequest }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -39,18 +39,23 @@ const ProductionDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/dashboard/production`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-ERP-Request': 'true'
-        }
-      });
+      if (apiRequest) {
+        const data = await apiRequest('/dashboard/production');
+        setStats(data);
+      } else {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/dashboard/production`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-ERP-Request': 'true'
+          }
+        });
 
-      if (!response.ok) throw new Error('Failed to fetch production stats');
-      const data = await response.json();
-      setStats(data);
+        if (!response.ok) throw new Error('Failed to fetch production stats');
+        const data = await response.json();
+        setStats(data);
+      }
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching production dashboard:', error);
@@ -176,12 +181,12 @@ const ProductionDashboard = () => {
         <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Operational Health</h3>
           <div className="space-y-6 flex-1">
-            {[
-              { label: 'Schedule Adherence', value: 88, color: 'bg-indigo-500' },
-              { label: 'Yield Quality', value: 96, color: 'bg-emerald-500' },
-              { label: 'Downtime Variance', value: 12, color: 'bg-amber-500' },
-              { label: 'Scrap Rate', value: 3, color: 'bg-rose-500' }
-            ].map((item, idx) => (
+            {(stats.health || [
+              { label: 'Schedule Adherence', value: 0, color: 'bg-indigo-500' },
+              { label: 'Yield Quality', value: 0, color: 'bg-emerald-500' },
+              { label: 'Downtime Variance', value: 0, color: 'bg-amber-500' },
+              { label: 'Scrap Rate', value: 0, color: 'bg-rose-500' }
+            ]).map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <div className="flex justify-between items-end">
                   <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{item.label}</span>

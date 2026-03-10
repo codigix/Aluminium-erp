@@ -175,12 +175,12 @@ const SalesDashboard = () => {
         <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Pipeline Health</h3>
           <div className="space-y-6 flex-1">
-            {[
-              { label: 'Quote fulfillment', value: 85, color: 'bg-indigo-500' },
-              { label: 'Customer Retention', value: 94, color: 'bg-emerald-500' },
-              { label: 'Market Penetration', value: 62, color: 'bg-amber-500' },
-              { label: 'Lead Velocity', value: 78, color: 'bg-blue-500' }
-            ].map((item, idx) => (
+            {(stats.health || [
+              { label: 'Quote fulfillment', value: 0, color: 'bg-indigo-500' },
+              { label: 'Customer Retention', value: 0, color: 'bg-emerald-500' },
+              { label: 'Market Penetration', value: 0, color: 'bg-amber-500' },
+              { label: 'Lead Velocity', value: 0, color: 'bg-blue-500' }
+            ]).map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <div className="flex justify-between items-end">
                   <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{item.label}</span>

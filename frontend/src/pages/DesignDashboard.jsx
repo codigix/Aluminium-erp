@@ -27,7 +27,7 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const DesignDashboard = () => {
+const DesignDashboard = ({ apiRequest }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -39,18 +39,23 @@ const DesignDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/dashboard/design`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-ERP-Request': 'true'
-        }
-      });
+      if (apiRequest) {
+        const data = await apiRequest('/dashboard/design');
+        setStats(data);
+      } else {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/dashboard/design`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-ERP-Request': 'true'
+          }
+        });
 
-      if (!response.ok) throw new Error('Failed to fetch design stats');
-      const data = await response.json();
-      setStats(data);
+        if (!response.ok) throw new Error('Failed to fetch design stats');
+        const data = await response.json();
+        setStats(data);
+      }
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching design dashboard:', error);
@@ -176,12 +181,12 @@ const DesignDashboard = () => {
         <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Engineering Health</h3>
           <div className="space-y-6 flex-1">
-            {[
-              { label: 'BOM Accuracy', value: 98, color: 'bg-indigo-500' },
-              { label: 'Timeline Adherence', value: 92, color: 'bg-emerald-500' },
-              { label: 'Revision Rate', value: 15, color: 'bg-amber-500' },
-              { label: 'Technical Compliance', value: 100, color: 'bg-blue-500' }
-            ].map((item, idx) => (
+            {(stats.health || [
+              { label: 'BOM Accuracy', value: 0, color: 'bg-indigo-500' },
+              { label: 'Timeline Adherence', value: 0, color: 'bg-emerald-500' },
+              { label: 'Revision Rate', value: 0, color: 'bg-amber-500' },
+              { label: 'Technical Compliance', value: 0, color: 'bg-blue-500' }
+            ]).map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <div className="flex justify-between items-end">
                   <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{item.label}</span>
