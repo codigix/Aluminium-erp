@@ -990,14 +990,12 @@ function App() {
     { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'handshake', indent: true },
 
     { label: 'SALES', isGroup: true, groupId: 'sales-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', deptCode: 'SALES', icon: 'chart', indent: true },
     { label: 'Client Requirements ', moduleId: 'customer-drawing', icon: 'clipboard', indent: true },
     { label: 'Client Quotations', moduleId: 'client-quotations', icon: 'clipboard', indent: true },
     { label: 'Customer PO', moduleId: 'customer-po', icon: 'document', indent: true },
     { label: 'Sales Order', moduleId: 'sales-order', icon: 'package', indent: true },
 
     { label: 'DESIGN & ENG', isGroup: true, groupId: 'design-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', deptCode: 'DESIGN_ENG', icon: 'chart', indent: true },
     { label: 'Design Orders', moduleId: 'design-orders', icon: 'palette', indent: true },
     { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'pencil', indent: true },
     { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'clipboard', indent: true },
@@ -1006,7 +1004,6 @@ function App() {
     { label: 'BOM Approval', moduleId: 'bom-approval', icon: 'check', indent: true },
 
     { label: 'PRODUCTION', isGroup: true, groupId: 'production-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', deptCode: 'PRODUCTION', icon: 'chart', indent: true },
     { label: 'Project Requests', moduleId: 'project-requests', icon: 'clipboard', indent: true },
     { label: 'Material Requirements', moduleId: 'material-requirements', icon: 'package', indent: true },
     { label: 'Production Plan', moduleId: 'production-plan', icon: 'chart', indent: true },
@@ -1016,13 +1013,11 @@ function App() {
     { label: 'Operations', moduleId: 'operation-master', icon: 'settings', indent: true },
 
     { label: 'PROCUREMENT', isGroup: true, groupId: 'procurement-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', deptCode: 'PROCUREMENT', icon: 'chart', indent: true },
     { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: 'clipboard', indent: true },
     { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'cart', indent: true },
     { label: 'Purchase Receipt', moduleId: 'po-receipts', icon: 'inbox', indent: true },
 
     { label: 'INVENTORY', isGroup: true, groupId: 'inventory-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', deptCode: 'INVENTORY', icon: 'chart', indent: true },
     { label: 'Suppliers', moduleId: 'suppliers', icon: 'handshake', indent: true },
     { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard', indent: true },
     { label: 'GRN Management', moduleId: 'grn', icon: 'refresh', indent: true },
@@ -1032,13 +1027,11 @@ function App() {
     { label: 'Warehouses', moduleId: 'warehouses', icon: 'factory', indent: true },
 
     { label: 'QUALITY', isGroup: true, groupId: 'quality-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', deptCode: 'QUALITY', icon: 'chart', indent: true },
     { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
     { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
     { label: 'Quality Reports', moduleId: 'quality-reports', icon: 'files', indent: true },
 
     { label: 'ACCOUNTS', isGroup: true, groupId: 'accounts-main-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', deptCode: 'ACCOUNTS', icon: 'chart', indent: true },
     { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'files', indent: true },
     { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'cart', indent: true },
     { label: 'Payment History', moduleId: 'payment-history', icon: 'book', indent: true },
@@ -1046,7 +1039,6 @@ function App() {
     { label: 'Customer History', moduleId: 'customer-payment-history', icon: 'book', indent: true },
 
     { label: 'SHIPMENT', isGroup: true, groupId: 'shipment-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', deptCode: 'SHIPMENT', icon: 'chart', indent: true },
     { label: 'Shipment Orders', moduleId: 'shipment-orders', icon: 'package', indent: true },
     { label: 'Shipment Planning', moduleId: 'shipment-planning', icon: 'clipboard', indent: true },
     { label: 'Dispatch Management', moduleId: 'dispatch-management', icon: 'settings', indent: true },
