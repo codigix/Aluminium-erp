@@ -1016,9 +1016,9 @@ function App() {
     { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: 'clipboard', indent: true },
     { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'cart', indent: true },
     { label: 'Purchase Receipt', moduleId: 'po-receipts', icon: 'inbox', indent: true },
+    { label: 'Suppliers', moduleId: 'suppliers', icon: 'handshake', indent: true },
 
     { label: 'INVENTORY', isGroup: true, groupId: 'inventory-group' },
-    { label: 'Suppliers', moduleId: 'suppliers', icon: 'handshake', indent: true },
     { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard', indent: true },
     { label: 'GRN Management', moduleId: 'grn', icon: 'refresh', indent: true },
     { label: 'Stock Entries', moduleId: 'stock-entries', icon: 'package', indent: true },
