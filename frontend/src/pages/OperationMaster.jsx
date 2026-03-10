@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Modal, DataTable, Badge, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
+import { Card, Modal, DataTable, Badge, FormControl, StatusBadge, SearchableSelect, MultiSelect } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -16,7 +16,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
   const [formData, setFormData] = useState({
     operation_code: '',
     operation_name: '',
-    workstation_id: '',
+    workstation_ids: [],
     std_time: 0,
     time_uom: 'Hr',
     hourly_rate: 0,
@@ -130,7 +130,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
     setFormData({
       operation_code: '',
       operation_name: '',
-      workstation_id: '',
+      workstation_ids: [],
       std_time: 0,
       time_uom: 'Hr',
       hourly_rate: 0,
@@ -142,7 +142,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
     setFormData({
       operation_code: op.operation_code,
       operation_name: op.operation_name,
-      workstation_id: op.workstation_id || '',
+      workstation_ids: op.workstation_ids || [],
       std_time: op.std_time,
       time_uom: op.time_uom,
       hourly_rate: op.operation_rate || op.hourly_rate || 0,
@@ -234,13 +234,13 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       render: (val) => <span className=" text-slate-900">{val}</span>
     },
     { 
-      label: 'Workstation', 
-      key: 'workstation_name', 
+      label: 'Workstations', 
+      key: 'workstation_names', 
       sortable: true,
       render: (val, row) => (
         <div>
-          <div className="text-slate-900 ">{val}</div>
-          <div className="text-[10px] text-slate-400  ">{row.workstation_code}</div>
+          <div className="text-slate-900 ">{val || 'No workstation assigned'}</div>
+          <div className="text-[10px] text-slate-400  ">{row.workstation_codes}</div>
         </div>
       )
     },
@@ -380,18 +380,17 @@ const OperationMaster = ({ showForm, setShowForm }) => {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs  text-slate-500">Workstation *</label>
-              <SearchableSelect 
-                placeholder="Select Workstation"
+              <label className="text-xs  text-slate-500">Workstations *</label>
+              <MultiSelect 
+                placeholder="Select Workstations"
                 options={workstations.map(ws => ({
                   label: ws.workstation_name,
                   value: ws.id,
                   subLabel: ws.workstation_code
                 }))}
-                value={formData.workstation_id}
-                onChange={(e) => setFormData(prev => ({ ...prev, workstation_id: e.target.value }))}
+                value={formData.workstation_ids}
+                onChange={(e) => setFormData(prev => ({ ...prev, workstation_ids: e.target.value }))}
                 subLabelField="subLabel"
-                allowCustom={false}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">

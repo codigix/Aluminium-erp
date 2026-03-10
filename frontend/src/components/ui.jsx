@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, Search, FileText, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, Search, FileText, ChevronRight, Loader2, Check } from 'lucide-react';
 
 export const Card = ({ id, title, subtitle, action, children, className = '' }) => (
   <div id={id} className={className}>
@@ -99,6 +99,119 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
               <div className="px-3 py-4 text-xs text-center text-slate-400">
                 {allowCustom ? 'Custom value entered' : 'No results found'}
               </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const MultiSelect = ({ options, value = [], onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, disabled = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef(null);
+
+  const selectedValues = Array.isArray(value) ? value.map(v => String(v)) : [];
+  
+  const toggleOption = (val) => {
+    const stringVal = String(val);
+    let newValue;
+    if (selectedValues.includes(stringVal)) {
+      newValue = selectedValues.filter(v => v !== stringVal);
+    } else {
+      newValue = [...selectedValues, stringVal];
+    }
+    onChange({ target: { value: newValue } });
+  };
+
+  const safeSearchTerm = String(searchTerm || '').toLowerCase();
+  const filteredOptions = options.filter(opt => 
+    String(opt[labelField] || '').toLowerCase().includes(safeSearchTerm) ||
+    String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
+    (subLabelField && String(opt[subLabelField] || '').toLowerCase().includes(safeSearchTerm))
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div 
+        className={`min-h-[38px] w-full px-3 py-1.5 border border-slate-200 rounded text-xs text-slate-900 flex flex-wrap gap-1 items-center cursor-pointer focus-within:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+      >
+        {selectedValues.length > 0 ? (
+          selectedValues.map(val => {
+            const opt = options.find(o => String(o[valueField]) === val);
+            return (
+              <span key={val} className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md flex items-center gap-1 font-bold">
+                {opt ? opt[labelField] : val}
+                <X 
+                  className="w-3 h-3 cursor-pointer hover:text-indigo-800" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleOption(val);
+                  }}
+                />
+              </span>
+            );
+          })
+        ) : (
+          <span className="text-slate-400">{placeholder}</span>
+        )}
+        <div className="ml-auto text-slate-400">
+          {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </div>
+      </div>
+      
+      {isOpen && !disabled && (
+        <div className="absolute z-[100] w-full mt-1 bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden">
+          <div className="p-2 border-b border-slate-50">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border-none rounded text-xs focus:ring-0 outline-none"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, idx) => {
+                const isSelected = selectedValues.includes(String(opt[valueField]));
+                return (
+                  <div
+                    key={idx}
+                    className={`px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 flex items-center justify-between ${isSelected ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleOption(opt[valueField]);
+                    }}
+                  >
+                    <div className="flex flex-col">
+                      <span>{opt[labelField]}</span>
+                      {subLabelField && opt[subLabelField] && (
+                        <span className="text-[9px] text-slate-400 font-normal">{opt[subLabelField]}</span>
+                      )}
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="px-3 py-4 text-xs text-center text-slate-400">No results found</div>
             )}
           </div>
         </div>
