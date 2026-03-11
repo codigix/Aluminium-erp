@@ -1225,6 +1225,15 @@ const ClientQuotations = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right">
                                 <div className="flex items-center justify-end gap-2">
+                                  {group.status === 'Sent' && (
+                                    <button
+                                      onClick={() => handleApproveQuote(group)}
+                                      className="p-2 bg-emerald-50 border border-emerald-100 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all active:scale-95 shadow-sm"
+                                      title="Approve Quotation"
+                                    >
+                                      <CheckCircle size={18} />
+                                    </button>
+                                  )}
                                   {group.reply_pdf && (
                                     <a
                                       href={getFileUrl(group.reply_pdf)}
