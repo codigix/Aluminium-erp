@@ -603,35 +603,51 @@ const DesignOrders = () => {
       <div className="max-w-7xl mx-auto">
         {/* HEADER SECTION */}
         <div className="mb-4">
-          <div className="flex justify-between items-end mb-3 gap-4">
-            <div>
-              <h1 className="text-xl text-slate-900">Design Engineering Hub</h1>
-              <p className="text-xs text-slate-600">Review customer drawings and create technical specifications</p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-100 rounded-xl text-indigo-600 shadow-sm border border-indigo-50">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-xl font-extrabold text-slate-900 tracking-tight leading-none">Design Engineering Hub</h1>
+                <p className="text-[11px] text-slate-500 mt-1 font-medium italic">Review customer drawings and create technical specifications</p>
+              </div>
             </div>
-            <div className="flex bg-slate-200 p-1 rounded ">
+
+            <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/60 shadow-inner">
               <button
                 onClick={() => setActiveTab('incoming')}
-                className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'incoming' ? 'bg-white text-indigo-600 ' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 ${
+                  activeTab === 'incoming' 
+                    ? 'bg-white text-indigo-600 shadow-md ring-1 ring-slate-200/50' 
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                }`}
               >
+                <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'incoming' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
                 Incoming Requests
               </button>
               <button
                 onClick={() => setActiveTab('progress')}
-                className={`px-4 py-1.5 rounded  text-xs  transition-all ${activeTab === 'progress' ? 'bg-white text-indigo-600 ' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 ${
+                  activeTab === 'progress' 
+                    ? 'bg-white text-indigo-600 shadow-md ring-1 ring-slate-200/50' 
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                }`}
               >
+                <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'progress' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
                 In Progress
               </button>
             </div>
           </div>
 
           {/* INFO BANNER */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded  p-3 flex items-start gap-2">
-            <div className="flex-shrink-0 mt-0.5">
-              <svg className="h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2z" clipRule="evenodd" />
+          <div className="bg-white/60 backdrop-blur-md border border-indigo-100 rounded-xl p-2.5 flex items-center gap-3 shadow-sm group hover:shadow-md transition-all duration-500">
+            <div className="flex-shrink-0 w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 group-hover:rotate-12 transition-transform">
+               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
             </div>
-            <p className="text-xs text-blue-900 ">
+            <p className="text-[10px] text-slate-600 font-medium leading-relaxed">
               {activeTab === 'incoming' 
                 ? 'Review incoming drawings from sales and accept them for design engineering review.'
                 : 'Manage active design tasks, create technical specifications, and track progress of approved drawings.'}
@@ -642,79 +658,97 @@ const DesignOrders = () => {
         {/* INCOMING REQUESTS SECTION */}
         {activeTab === 'incoming' && (
           <div className="space-y-4">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-2  rounded   border border-blue-700 mb-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <h2 className="text-lg  text-white flex items-center gap-2 ">
-                    <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                    Incoming Design Requests
-                  </h2>
-                  <p className="text-blue-100 text-xs mt-1  opacity-90">Review and approve customer drawings from sales department</p>
-                </div>
-                
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                  <div className="flex bg-white/10 p-1 rounded  backdrop-blur-sm border border-white/20 mr-2">
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`p-1.5 rounded  transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 ' : 'text-blue-100 hover:text-white'}`}
-                      title="List View"
-                    >
-                      <LayoutList className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`p-1.5 rounded  transition-all ${viewMode === 'grid' ? 'bg-white text-blue-600 ' : 'text-blue-100 hover:text-white'}`}
-                      title="Card View"
-                    >
-                      <LayoutGrid className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <button
-                    onClick={fetchIncomingOrders}
-                    disabled={incomingLoading}
-                    className="flex-1 md:flex-none p-2  bg-white/10 hover:bg-white/20 border border-white/30 rounded  text-xs  text-white transition-all backdrop-blur-sm flex items-center justify-center gap-2"
-                  >
-                    <svg className={`w-3.5 h-3.5 ${incomingLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    Refresh
-                  </button>
-                  
-                  {incomingOrders.length > 0 && (
-                    <div className="p-2  bg-white text-blue-600 rounded  text-xs  shadow-lg shadow-blue-900/20">
-                      {incomingOrders.length} REQUESTS
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+              <div className="bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 p-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/20">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                      </svg>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {selectedIncomingOrders.size > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/20 flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="p-2 .5 bg-white/20 rounded  border border-white/30 flex items-center gap-2 ">
-                    <span className="w-2 h-2 bg-emerald-400 rounded  animate-pulse"></span>
-                    <span className="text-white text-xs   ">
-                      {selectedIncomingOrders.size} Selected
-                    </span>
+                    <div>
+                      <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                        Incoming Design Requests
+                        {incomingOrders.length > 0 && (
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/30 backdrop-blur-sm">
+                            {incomingOrders.length} Pending
+                          </span>
+                        )}
+                      </h2>
+                      <p className="text-blue-100/80 text-[11px] mt-0.5 font-medium">Review and approve drawings from sales department</p>
+                    </div>
                   </div>
                   
-                  <div className="flex items-center gap-2  ml-auto">
+                  <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                    <div className="flex bg-black/10 p-1 rounded-lg backdrop-blur-md border border-white/10">
+                      <button
+                        onClick={() => setViewMode('list')}
+                        className={`p-1.5 rounded-md transition-all duration-300 ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-lg' : 'text-white/70 hover:text-white'}`}
+                        title="List View"
+                      >
+                        <LayoutList className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setViewMode('grid')}
+                        className={`p-1.5 rounded-md transition-all duration-300 ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-lg' : 'text-white/70 hover:text-white'}`}
+                        title="Card View"
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <button
-                      onClick={handleBulkApprove}
-                      disabled={bulkOperationLoading}
-                      className="p-2  bg-emerald-500 hover:bg-emerald-600 text-white rounded  text-xs  shadow-lg shadow-emerald-900/20 transition-all flex items-center gap-2  border border-emerald-400"
+                      onClick={fetchIncomingOrders}
+                      disabled={incomingLoading}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[10px] font-bold text-white transition-all backdrop-blur-md flex items-center gap-1.5 group active:scale-95"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
-                      Approve Selected
-                    </button>
-                    <button
-                      onClick={handleBulkReject}
-                      disabled={bulkOperationLoading}
-                      className="p-2  bg-red-500 hover:bg-red-600 text-white rounded  text-xs  shadow-lg shadow-red-900/20 transition-all flex items-center gap-2  border border-red-400"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
-                      Reject Selected
+                      <RefreshCw className={`w-3.5 h-3.5 ${incomingLoading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                      Refresh
                     </button>
                   </div>
                 </div>
-              )}
+
+                {selectedIncomingOrders.size > 0 && (
+                  <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center gap-3">
+                      <div className="px-3 py-1.5 bg-white/10 rounded-lg border border-white/20 flex items-center gap-2 backdrop-blur-md">
+                        <div className="relative">
+                          <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping absolute inset-0" />
+                          <div className="w-2 h-2 bg-emerald-400 rounded-full relative" />
+                        </div>
+                        <span className="text-white text-xs font-bold tracking-tight">
+                          {selectedIncomingOrders.size} Selected
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => setSelectedIncomingOrders(new Set())}
+                        className="text-white/60 hover:text-white text-[10px] font-bold underline underline-offset-4 decoration-white/20"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleBulkApprove}
+                        disabled={bulkOperationLoading}
+                        className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl shadow-emerald-900/20 transition-all flex items-center gap-1.5 border border-emerald-400/50 active:scale-95 disabled:opacity-50"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={handleBulkReject}
+                        disabled={bulkOperationLoading}
+                        className="px-4 py-1.5 bg-rose-500 hover:bg-rose-400 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl shadow-rose-900/20 transition-all flex items-center gap-1.5 border border-rose-400/50 active:scale-95 disabled:opacity-50"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -726,14 +760,16 @@ const DesignOrders = () => {
                   </div>
                 </div>
               ) : incomingOrders.length === 0 ? (
-                <div className="p-2 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200 shadow-inner">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 bg-slate-50 rounded  flex items-center justify-center text-slate-300">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                <div className="py-12 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200 shadow-inner group hover:border-indigo-300 transition-colors duration-500">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200 group-hover:scale-110 group-hover:bg-indigo-50 group-hover:text-indigo-200 transition-all duration-500 shadow-sm">
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                      </svg>
                     </div>
-                    <div>
-                      <h3 className="text-lg  text-slate-900">Inbox is Clear</h3>
-                      <p className="text-sm text-slate-500 mt-1 ">No new design requests waiting for review.</p>
+                    <div className="max-w-xs">
+                      <h3 className="text-lg font-black text-slate-900 tracking-tight">Inbox is Clear</h3>
+                      <p className="text-[10px] text-slate-500 mt-1 font-medium leading-relaxed uppercase tracking-wider">No new design requests waiting.</p>
                     </div>
                   </div>
                 </div>
@@ -1050,61 +1086,69 @@ const DesignOrders = () => {
 
         {/* ACTIVE DESIGN TASKS SECTION */}
         {activeTab === 'progress' && (
-          <div className="bg-white rounded   overflow-hidden border border-slate-200">
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 border-b border-purple-700">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <h2 className="text-base  text-white flex items-center gap-2 mb-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                       Design Tasks in Progress
-                    </h2>
-                    <p className="text-purple-100 text-xs">Manage active design orders and technical specifications</p>
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+              <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-indigo-700 p-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/20">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                        Design Tasks in Progress
+                        {orders.length > 0 && (
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/30 backdrop-blur-sm">
+                            {filteredOrders.length} Active
+                          </span>
+                        )}
+                      </h2>
+                      <p className="text-purple-100/80 text-[11px] mt-0.5 font-medium">Manage active design orders and technical specifications</p>
+                    </div>
                   </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Search tasks..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="bg-white/10 border border-white/20 text-white placeholder-purple-200 text-xs rounded  p-2 .5 w-64 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
-                    />
-                    <svg className="w-3.5 h-3.5 text-purple-200 absolute right-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 ">
-                  <div className="flex bg-white/10 p-1 rounded  backdrop-blur-sm border border-white/20 mr-2">
+                  
+                  <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                    <div className="relative group">
+                      <Search className="w-3.5 h-3.5 text-purple-200 absolute left-2.5 top-1/2 -translate-y-1/2 group-focus-within:text-white transition-colors" />
+                      <input
+                        type="text"
+                        placeholder="Search tasks..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="bg-white/10 border border-white/20 text-white placeholder-purple-200/50 text-[10px] font-bold rounded-lg pl-8 pr-3 py-1.5 w-48 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all backdrop-blur-md"
+                      />
+                    </div>
+                    <div className="flex bg-black/10 p-1 rounded-lg backdrop-blur-md border border-white/10">
+                      <button
+                        onClick={() => setViewMode('list')}
+                        className={`p-1.5 rounded-md transition-all duration-300 ${viewMode === 'list' ? 'bg-white text-purple-600 shadow-lg' : 'text-white/70 hover:text-white'}`}
+                        title="List View"
+                      >
+                        <LayoutList className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setViewMode('grid')}
+                        className={`p-1.5 rounded-md transition-all duration-300 ${viewMode === 'grid' ? 'bg-white text-purple-600 shadow-lg' : 'text-white/70 hover:text-white'}`}
+                        title="Card View"
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <button
-                      onClick={() => setViewMode('list')}
-                      className={`p-1.5 rounded  transition-all ${viewMode === 'list' ? 'bg-white text-purple-600 ' : 'text-purple-100 hover:text-white'}`}
-                      title="List View"
+                      onClick={fetchOrders}
+                      disabled={loading}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[10px] font-bold text-white transition-all backdrop-blur-md flex items-center gap-1.5 group active:scale-95"
                     >
-                      <LayoutList className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`p-1.5 rounded  transition-all ${viewMode === 'grid' ? 'bg-white text-purple-600 ' : 'text-purple-100 hover:text-white'}`}
-                      title="Card View"
-                    >
-                      <LayoutGrid className="w-4 h-4" />
+                      <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                      Refresh
                     </button>
                   </div>
-                  <button
-                    onClick={fetchOrders}
-                    disabled={loading}
-                    className="p-2 .5 bg-white rounded text-xs text-purple-600  transition-colors disabled:opacity-50 "
-                  >
-                    ↻ Refresh
-                  </button>
-                  {orders.length > 0 && (
-                    <span className="p-2  bg-white text-purple-600 rounded  text-xs ">
-                      {filteredOrders.length} {filteredOrders.length !== orders.length ? `of ${orders.length}` : ''}
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
-        
+
           <div className="space-y-4 p-4">
             {loading ? (
               <div className="py-24 text-center">
@@ -1114,15 +1158,15 @@ const DesignOrders = () => {
                 <p className="text-slate-600 ">Loading design tasks...</p>
               </div>
             ) : Object.keys(groupedActive).length === 0 ? (
-              <div className="py-24 text-center bg-slate-50 rounded  border-2 border-dashed border-slate-200">
-                <div className="flex flex-col items-center">
-                  <div className="p-4 bg-white rounded   mb-4">
-                    <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                    </svg>
+              <div className="py-12 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200 shadow-inner group hover:border-indigo-300 transition-colors duration-500">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200 group-hover:scale-110 group-hover:bg-indigo-50 group-hover:text-indigo-200 transition-all duration-500 shadow-sm">
+                    <Search className="w-8 h-8" strokeWidth={1} />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900">No active tasks found</h3>
-                  <p className="text-sm text-slate-500 mt-1">Try adjusting your search or refresh to see newly added orders.</p>
+                  <div className="max-w-xs">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">No active tasks</h3>
+                    <p className="text-[10px] text-slate-500 mt-1 font-medium leading-relaxed uppercase tracking-wider">Try adjusting search or refresh.</p>
+                  </div>
                 </div>
               </div>
             ) : (

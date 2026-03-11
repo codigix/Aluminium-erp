@@ -420,16 +420,16 @@ const getApprovedDrawings = async () => {
   const [rows] = await pool.query(
     `SELECT 
       soi.drawing_no, 
-      soi.revision_no, 
-      soi.drawing_pdf, 
-      soi.description as material_name,
-      soi.item_group,
-      soi.unit
+      MAX(soi.revision_no) as revision_no, 
+      MAX(soi.drawing_pdf) as drawing_pdf, 
+      MAX(soi.description) as material_name,
+      MAX(soi.item_group) as item_group,
+      MAX(soi.unit) as unit
      FROM sales_order_items soi
      JOIN sales_orders so ON so.id = soi.sales_order_id
      WHERE so.status IN ('PRODUCTION', 'COMPLETED')
-     GROUP BY soi.drawing_no, soi.revision_no
-     ORDER BY soi.created_at DESC`
+     GROUP BY soi.drawing_no
+     ORDER BY MAX(soi.created_at) DESC`
   );
   return rows;
 };
