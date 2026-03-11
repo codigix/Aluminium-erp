@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Modal, DataTable, StatusBadge, FormControl } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Plus, Search, RefreshCw, Filter, FileText, Send, Loader2 } from 'lucide-react';
+import { Plus, Search, RefreshCw, Filter, FileText, Send, Loader2, Check, X, Package, ChevronDown, ChevronUp, Trash2, Edit2, Eye, History } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast, infoToast } from '../utils/toast';
 
@@ -958,101 +958,100 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 ">
-      <div className="max-w-7xl mx-auto">
-        {/* HEADER SECTION */}
-        <div className="mb-4">
-          <div className="flex justify-between items-center mb-3 gap-4">
-            <div>
-              <h1 className="text-xl text-slate-900">Customer Drawing Master</h1>
-              <p className="text-xs text-slate-600">Manage customer reference drawings and technical documentation</p>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setShowFormModal(true)}
-                className="p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-colors flex items-center gap-2 "
-              >
-                <Plus className="w-4 h-4" />
-                Client Requirement
-              </button>
-              <button 
-                onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
-                className="p-2  bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-colors flex items-center gap-2 "
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                Approved Drawings
-              </button>
-            </div>
+    <div className="p-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-200">
+            <FileText size={24} />
           </div>
-          <div className="flex gap-2">
-            <form onSubmit={handleSearch} className="flex gap-2 flex-1 max-w-md">
-              <div className="relative flex-1">
-                <input 
-                  type="text" 
-                  placeholder="Search drawings, clients..." 
-                  className="w-full px-3 py-2 border border-slate-300 rounded  text-xs outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <svg className="absolute right-2 top-2 w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <button 
-                type="submit"
-                className="px-3 py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-colors"
-              >
-                Search
-              </button>
-              <button 
-                type="button"
-                onClick={() => { setSearchTerm(''); fetchDrawings(''); }}
-                className="px-3 py-2 bg-white text-slate-600 rounded  text-xs  hover:bg-slate-50 border border-slate-300 transition-colors"
-              >
-                Reset
-              </button>
-            </form>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Drawing Master</h1>
+            <p className="text-sm text-slate-500 font-medium">Manage customer reference drawings and technical documentation</p>
           </div>
-
-          {/* INFO BANNER */}
-          
         </div>
+        
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowFormModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+          >
+            <Plus size={18} /> Client Requirement
+          </button>
+          <button 
+            onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
+            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+          >
+            <Check size={18} /> Approved Drawings
+          </button>
+        </div>
+      </div>
+
+      {/* SEARCH SECTION */}
+      <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-6 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <form onSubmit={handleSearch} className="relative flex-1 max-w-md group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
+            <input 
+              type="text"
+              placeholder="Search drawings, clients..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </form>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => { setSearchTerm(''); fetchDrawings(''); }}
+              className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all active:scale-95"
+            >
+              Reset
+            </button>
+            <button 
+              onClick={handleSearch}
+              className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+            >
+              Search
+            </button>
+          </div>
+        </div>
+      </Card>
 
         {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
-        <div className="mb-2">
-          <Card>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg  text-slate-800 flex items-center gap-2 ">
-                <FileText className="w-5 h-5 text-indigo-600" />
-                Client Requirements
-              </h2>
-            </div>
+        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 ">
+              <FileText className="w-5 h-5 text-indigo-600" />
+              Client Requirements
+            </h2>
+          </div>
+          <div className="p-2">
             <DataTable 
               columns={requirementColumns}
               data={requirements}
               loading={reqLoading}
+              pageSize={5}
             />
-          </Card>
-        </div>
+          </div>
+        </Card>
 
         {/* SECTION 3: CUSTOMER DRAWINGS TABLE */}
-        <div className="mb-4">
-          <div className="bg-white rounded   overflow-hidden border border-slate-200">
-            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
-              <div>
-                <h2 className="text-base text-slate-900 flex items-center gap-2  mb-0.5">
-                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                  Drawings Database
-                </h2>
-                <p className="text-xs text-slate-600"><span className="">{drawings.length}</span> drawings | <span className="">{Object.keys(groupedDrawings).length}</span> clients</p>
-              </div>
-            <div className="flex items-center gap-2 ">
+        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Package className="w-5 h-5 text-indigo-600" />
+                Drawings Database
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">{drawings.length} drawings | {Object.keys(groupedDrawings).length} clients</p>
+            </div>
+            <div className="flex items-center gap-2">
               <select 
-                className="p-2 .5 bg-white border border-slate-300 rounded text-xs  text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
+                className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
                 value={clientFilter}
                 onChange={(e) => setClientFilter(e.target.value)}
               >
-                <option value="ALL">👥 All</option>
+                <option value="ALL">👥 All Clients</option>
                 {Object.keys(drawings.reduce((acc, d) => {
                   if (d.client_name) acc[d.client_name] = true;
                   return acc;
@@ -1060,67 +1059,61 @@ const CustomerDrawing = () => {
                   <option key={client} value={client}>{client}</option>
                 ))}
               </select>
-              <button 
-                onClick={() => {
-                  const allExpanded = Object.keys(groupedDrawings).reduce((acc, client) => {
-                    acc[client] = true;
-                    return acc;
-                  }, {});
-                  setExpandedClients(allExpanded);
-                }}
-                className="p-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-                title="Expand All"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              <button 
-                onClick={() => setExpandedClients({})}
-                className="p-1.5 bg-white border border-slate-300 text-slate-700 rounded hover:bg-slate-50 transition-colors"
-                title="Collapse All"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                <button 
+                  onClick={() => {
+                    const allExpanded = Object.keys(groupedDrawings).reduce((acc, client) => {
+                      acc[client] = true;
+                      return acc;
+                    }, {});
+                    setExpandedClients(allExpanded);
+                  }}
+                  className="p-2 bg-white text-indigo-600 rounded-lg shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+                  title="Expand All"
+                >
+                  <ChevronDown size={18} />
+                </button>
+                <button 
+                  onClick={() => setExpandedClients({})}
+                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-lg transition-all active:scale-95"
+                  title="Collapse All"
+                >
+                  <ChevronUp size={18} />
+                </button>
+              </div>
             </div>
           </div>
         
-          <div className="p-3">
+          <div className="p-6">
             {loading ? (
-              <div className="py-8 text-center">
-                <div className="flex justify-center mb-2">
-                  <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
-                </div>
-                <p className="text-slate-600  text-xs">Loading...</p>
+              <div className="py-12 text-center">
+                <Loader2 className="mx-auto h-8 w-8 text-indigo-600 animate-spin mb-4" />
+                <p className="text-slate-500 font-medium">Loading drawings...</p>
               </div>
             ) : Object.keys(groupedDrawings).length === 0 ? (
-              <div className="py-8 text-center">
-                <svg className="mx-auto w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6v12m6-6H6"/></svg>
-                <p className="text-slate-500  text-xs">No drawings found</p>
-                <p className="text-slate-400 text-xs">Add drawings using the form above</p>
+              <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <Package className="mx-auto h-12 w-12 text-slate-200 mb-4" />
+                <p className="text-slate-500 font-bold">No drawings found</p>
+                <p className="text-slate-400 text-sm">Add drawings using the Client Requirement form</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {Object.entries(groupedDrawings).map(([clientName, clientDrawings]) => (
-                  <div key={clientName} className="border border-slate-200 rounded bg-white overflow-hidden transition-all hover:">
+                  <div key={clientName} className="border border-slate-100 rounded-2xl bg-white overflow-hidden transition-all hover:shadow-md hover:border-indigo-100">
                     {/* CLIENT GROUP HEADER */}
                     <div 
                       onClick={() => toggleClientGroup(clientName)}
-                      className={`p-2  cursor-pointer flex justify-between items-center transition-all group ${expandedClients[clientName] ? 'bg-indigo-50 border-b border-slate-200' : 'hover:bg-slate-50'}`}
+                      className={`p-4 cursor-pointer flex justify-between items-center transition-all group ${expandedClients[clientName] ? 'bg-indigo-50/50 border-b border-slate-100' : 'hover:bg-slate-50'}`}
                     >
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className={`p-1 rounded text-indigo-600 transition-all ${expandedClients[clientName] ? 'rotate-90' : ''}`}>
-                          <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                          </svg>
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className={`p-1.5 rounded-lg text-indigo-600 bg-white shadow-sm transition-all ${expandedClients[clientName] ? 'rotate-180 bg-indigo-600 text-white' : ''}`}>
+                          <ChevronDown size={16} />
                         </div>
                         <div className="flex flex-col flex-1">
-                          <span className="text-sm text-slate-900">{clientName}</span>
+                          <span className="text-sm font-bold text-slate-900">{clientName}</span>
                         </div>
-                        <span className="p-1  bg-indigo-100 text-indigo-700 rounded text-xs ">
-                          {clientDrawings.length}
+                        <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold">
+                          {clientDrawings.length} Drawings
                         </span>
                         {clientDrawings.some(d => !d.status || d.status !== 'SHARED') && (
                           <button
@@ -1128,11 +1121,9 @@ const CustomerDrawing = () => {
                               e.stopPropagation();
                               handleShareClientGroupWithDesign(clientName);
                             }}
-                            className="p-1  bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded text-xs   transition-all flex items-center gap-1"
-                            title="Send all unshared drawings to Design"
+                            className="px-4 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm active:scale-95"
                           >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                            Send to Design
+                            <Send size={14} /> Send to Design
                           </button>
                         )}
                       </div>
@@ -1141,10 +1132,10 @@ const CustomerDrawing = () => {
                           e.stopPropagation();
                           handleDeleteClientGroup(clientName);
                         }}
-                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-all"
+                        className="p-2 ml-4 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all active:scale-95"
                         title="Delete all drawings for this client"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        <Trash2 size={18} />
                       </button>
                     </div>
 
@@ -1152,96 +1143,81 @@ const CustomerDrawing = () => {
                     {expandedClients[clientName] && (
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-slate-100">
-                          <thead className="bg-slate-100">
+                          <thead className="bg-slate-50/50">
                             <tr>
-                              <th className="px-3 py-2 text-left text-xs  text-slate-600">#</th>
-                              <th className="px-3 py-2 text-left text-xs  text-slate-600">Drawing</th>
-                              <th className="px-3 py-2 text-left text-xs  text-slate-600">Description</th>
-                              <th className="px-3 py-2 text-left text-xs  text-slate-600">Rev</th>
-                              <th className="px-3 py-2 text-left text-xs  text-slate-600">Qty</th>
-                              <th className="px-3 py-2 text-left text-xs  text-slate-600">File</th>
-                              <th className="px-3 py-2 text-left text-xs  text-slate-600">By</th>
-                              <th className="px-3 py-2 text-right text-xs  text-slate-600">Actions</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">#</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Drawing</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Description</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Rev</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Qty</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider text-center">File</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">By</th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100">
+                          <tbody className="divide-y divide-slate-50">
                             {clientDrawings.map((drawing, idx) => (
-                              <tr key={drawing.id || `${drawing.drawing_no}-${idx}`} className="hover:bg-indigo-50/30 transition-colors text-xs">
-                                <td className="px-3 py-2 whitespace-nowrap text-slate-500 ">{idx + 1}</td>
-                                <td className="px-3 py-2 whitespace-nowrap text-slate-900">{drawing.drawing_no}</td>
-                                <td className="px-3 py-2 whitespace-nowrap text-slate-600">
-                                  {drawing.description || <span className="text-slate-400 italic">—</span>}
+                              <tr key={drawing.id || `${drawing.drawing_no}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap text-xs font-medium text-slate-400">{idx + 1}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">{drawing.drawing_no}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                                  {drawing.description || <span className="text-slate-300 italic">No description</span>}
                                 </td>
-                                <td className="px-3 py-2 whitespace-nowrap">
-                                  <span className="p-1  bg-slate-100 rounded text-slate-700   text-xs ">
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
                                     {drawing.revision || drawing.revision_no || '0'}
                                   </span>
                                 </td>
-                                <td className="px-3 py-2 whitespace-nowrap text-center">
-                                  <span className=" text-indigo-600">{drawing.qty || 1}</span>
+                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-indigo-600">
+                                  {drawing.qty || 1}
                                 </td>
-                                <td className="px-3 py-2 text-center">
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
                                   {(drawing.file_path || drawing.drawing_pdf) ? (
                                     <button 
                                       onClick={() => handlePreview(drawing)}
-                                      className="inline-flex items-center justify-center p-1.5 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition-all"
+                                      className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95"
                                       title="View Drawing"
                                     >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                      <Eye size={16} />
                                     </button>
                                   ) : (
-                                    <button 
-                                      onClick={() => handleEdit(drawing)}
-                                      className="inline-flex items-center justify-center p-1.5 bg-amber-50 text-amber-600 rounded hover:bg-amber-100 transition-all"
-                                      title="Upload Drawing"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                                    </button>
+                                    <span className="text-slate-300">
+                                      <FileText size={16} className="mx-auto opacity-30" />
+                                    </span>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 whitespace-nowrap">
-                                  <div className="flex items-center gap-1">
-                                    <div className="w-5 h-5 rounded  bg-indigo-100 flex items-center justify-center text-xs  text-indigo-700">
-                                      {(drawing.uploaded_by || 'S')[0].toUpperCase()}
-                                    </div>
-                                    <span className="text-slate-600  hidden sm:inline">{drawing.uploaded_by || 'Sales'}</span>
-                                  </div>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                                  {drawing.uploaded_by || '—'}
                                 </td>
-                                <td className="px-3 py-2 whitespace-nowrap text-right">
-                                  <div className="flex justify-end gap-0.5">
-                                    {drawing.status === 'SHARED' ? (
-                                      <span className="p-1 text-emerald-600 bg-emerald-100 rounded inline-block hover:bg-emerald-200 transition-colors" title="Shared">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                      </span>
-                                    ) : (
-                                      <button 
-                                        onClick={() => handleShareWithDesign(drawing.id)}
-                                        className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100 rounded transition-all"
-                                        title="Share"
-                                      >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
-                                      </button>
-                                    )}
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button 
+                                      onClick={() => handleViewRevisions(drawing)}
+                                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                      title="Revision History"
+                                    >
+                                      <History size={16} />
+                                    </button>
                                     <button 
                                       onClick={() => handleEdit(drawing)}
-                                      className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100 rounded transition-all"
-                                      title="Edit"
+                                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                      title="Edit Drawing"
                                     >
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                      <Edit2 size={16} />
                                     </button>
                                     <button 
                                       onClick={() => handleDelete(drawing.id)}
-                                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-all"
+                                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
                                       title="Delete"
                                     >
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                      <Trash2 size={16} />
                                     </button>
                                   </div>
                                 </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>
@@ -1249,9 +1225,8 @@ const CustomerDrawing = () => {
               </div>
             )}
           </div>
-        </div>
-      </div>
-    </div>
+        </Card>
+
 
       {/* Edit/View Modal */}
       <Modal 

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Card, Modal, FormControl, DataTable } from '../components/ui.jsx';
+import React, { useState, useEffect } from 'react';
+import { Card, Modal, FormControl, DataTable, StatusBadge } from '../components/ui.jsx';
 import { 
   Plus, 
   Users, 
@@ -11,19 +11,14 @@ import {
   Mail,
   Phone,
   Download,
-  Search,
-  Filter
+  MapPin,
+  Clock,
+  TrendingUp
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
-
-const vendorStatusColors = {
-  ACTIVE: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', label: 'Active' },
-  INACTIVE: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-700', label: 'Inactive' },
-  BLOCKED: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600', badge: 'bg-red-100 text-red-700', label: 'Blocked' },
-};
 
 const StarRating = ({ rating }) => {
   const numRating = parseFloat(rating) || 0;
@@ -33,12 +28,12 @@ const StarRating = ({ rating }) => {
   return (
     <div className="flex items-center gap-1">
       {[...Array(filled)].map((_, i) => (
-        <Star key={`filled-${i}`} size={16} className="text-yellow-400 fill-current" />
+        <Star key={`filled-${i}`} size={14} className="text-yellow-400 fill-current" />
       ))}
       {[...Array(empty)].map((_, i) => (
-        <Star key={`empty-${i}`} size={16} className="text-slate-300 fill-current" />
+        <Star key={`empty-${i}`} size={14} className="text-slate-200 fill-current" />
       ))}
-      <span className="text-sm text-slate-600 ml-1 ">{numRating.toFixed(1)}</span>
+      <span className="text-xs font-bold text-slate-600 ml-1">{numRating.toFixed(1)}</span>
     </div>
   );
 };
@@ -47,14 +42,15 @@ const Vendors = () => {
   const [vendors, setVendors] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('All Vendors');
   const [showForm, setShowForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     vendorName: '',
     contactPerson: '',
     category: '',
     vendorType: 'Material Supplier',
-    status: 'Active',
+    status: 'ACTIVE',
     email: '',
     phone: '',
     location: '',
@@ -62,7 +58,7 @@ const Vendors = () => {
   });
 
   const vendorTypes = ['Material Supplier', 'Service Provider', 'Logistics', 'Consultant', 'Other'];
-  const statuses = ['Active', 'Inactive', 'Blocked'];
+  const statuses = ['ACTIVE', 'INACTIVE', 'BLOCKED'];
 
   useEffect(() => {
     fetchVendors();
@@ -100,7 +96,6 @@ const Vendors = () => {
           'Content-Type': 'application/json'
         }
       });
-
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -110,156 +105,113 @@ const Vendors = () => {
     }
   };
 
-  const filteredVendors = (vendors || []).filter(v => 
-    filterStatus === 'All Vendors' || v.status === filterStatus
-  );
-
   const handleAddVendor = async (e) => {
     e.preventDefault();
-    
-    if (!formData.vendorName.trim()) {
-      errorToast('Vendor name is required');
-      return;
-    }
-
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/vendors`, {
-        method: 'POST',
+      const url = isEditing ? `${API_BASE}/vendors/${editingId}` : `${API_BASE}/vendors`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...formData,
-          status: 'ACTIVE'
-        })
+        body: JSON.stringify(formData)
       });
 
-      if (!response.ok) throw new Error('Failed to create vendor');
-
-      successToast('Vendor added successfully');
+      if (!response.ok) throw new Error('Failed to save vendor');
+      
+      successToast(isEditing ? 'Vendor updated successfully' : 'Vendor added successfully');
+      setShowForm(false);
+      setIsEditing(false);
+      setEditingId(null);
       setFormData({
         vendorName: '',
         contactPerson: '',
         category: '',
         vendorType: 'Material Supplier',
-        status: 'Active',
+        status: 'ACTIVE',
         email: '',
         phone: '',
         location: '',
         rating: 0
       });
-      setShowForm(false);
       fetchVendors();
       fetchStats();
     } catch (error) {
-      errorToast(error.message || 'Failed to add vendor');
+      errorToast(error.message);
     }
   };
 
-  const handleDeleteVendor = async (vendorId, vendorName) => {
+  const handleEditVendor = (vendor) => {
+    setFormData({
+      vendorName: vendor.vendor_name,
+      contactPerson: vendor.contact_person || '',
+      category: vendor.category || '',
+      vendorType: vendor.vendor_type || 'Material Supplier',
+      status: vendor.status || 'ACTIVE',
+      email: vendor.email || '',
+      phone: vendor.phone || '',
+      location: vendor.location || '',
+      rating: vendor.rating || 0
+    });
+    setEditingId(vendor.id);
+    setIsEditing(true);
+    setShowForm(true);
+  };
+
+  const handleDeleteVendor = async (id) => {
     const result = await Swal.fire({
-      title: 'Delete Vendor?',
-      text: `Are you sure you want to delete ${vendorName}?`,
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Delete',
-      cancelButtonText: 'Cancel'
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it!'
     });
 
-    if (!result.isConfirmed) return;
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/vendors/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/vendors/${vendorId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+        if (!response.ok) throw new Error('Failed to delete vendor');
 
-      if (!response.ok) throw new Error('Failed to delete vendor');
-
-      successToast('Vendor deleted successfully');
-      fetchVendors();
-      fetchStats();
-    } catch (error) {
-      errorToast(error.message || 'Failed to delete vendor');
+        successToast('Vendor deleted successfully');
+        fetchVendors();
+        fetchStats();
+      } catch (error) {
+        errorToast(error.message);
+      }
     }
-  };
-
-  const handleExportList = () => {
-    if (vendors.length === 0) {
-      errorToast('No vendors to export');
-      return;
-    }
-
-    const headers = ['Vendor Name', 'Category', 'Email', 'Phone', 'Location', 'Rating', 'Status'];
-    const rows = vendors.map(v => [
-      v.vendor_name,
-      v.category || '—',
-      v.email || '—',
-      v.phone || '—',
-      v.location || '—',
-      v.rating || '0',
-      v.status
-    ]);
-
-    const csv = [
-      headers.join(','),
-      ...rows.map(r => r.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vendors-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
   };
 
   const columns = [
     {
-      label: 'Vendor',
+      label: 'Vendor Name',
       key: 'vendor_name',
       sortable: true,
-      render: (val, row) => (
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded  bg-indigo-50 flex items-center justify-center text-indigo-600  text-lg">
-            {val.charAt(0)}
-          </div>
-          <div>
-            <div className=" text-slate-900">{val}</div>
-            <div className="text-xs text-slate-400">{row.vendor_type}</div>
-          </div>
-        </div>
-      )
+      className: 'font-bold text-slate-900'
     },
     {
       label: 'Category',
       key: 'category',
       sortable: true,
-      render: (val) => val ? (
-        <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded  text-xs ">
-          {val}
-        </span>
-      ) : '—'
+      render: (val) => val ? <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold border border-blue-100 uppercase tracking-wider">{val}</span> : '—'
     },
     {
-      label: 'Contact Details',
-      key: 'email',
-      render: (val, row) => (
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-slate-600">
-            <Mail size={14} className="text-slate-400" />
-            <span className="text-xs">{val || 'No email'}</span>
-          </div>
-          <div className="flex items-center gap-2 text-slate-600">
-            <Phone size={14} className="text-slate-400" />
-            <span className="text-xs">{row.phone || 'No phone'}</span>
-          </div>
+      label: 'Contact',
+      key: 'contact',
+      render: (_, row) => (
+        <div className="flex flex-col">
+          <span className="text-xs font-bold text-slate-700">{row.contact_person || '—'}</span>
+          <span className="text-[10px] text-slate-400 font-medium">{row.phone || 'No Phone'}</span>
         </div>
       )
     },
@@ -273,150 +225,219 @@ const Vendors = () => {
       label: 'Status',
       key: 'status',
       sortable: true,
-      render: (val) => {
-        const config = vendorStatusColors[val] || vendorStatusColors.ACTIVE;
-        return (
-          <span className={`px-2 py-1 rounded text-xs font-medium border ${config.badge}`}>
-            {config.label}
-          </span>
-        );
-      }
+      render: (val) => <StatusBadge status={val} />
     },
     {
       label: 'Actions',
-      key: 'id',
+      key: 'actions',
       className: 'text-right',
-      render: (val, row) => (
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button 
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+      render: (_, row) => (
+        <div className="flex justify-end gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); handleEditVendor(row); }}
+            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
             title="Edit Vendor"
           >
-            <FileEdit size={16} />
+            <FileEdit className="w-4 h-4" />
           </button>
-          <button 
-            onClick={() => handleDeleteVendor(val, row.vendor_name)}
-            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+          <button
+            onClick={(e) => { e.stopPropagation(); handleDeleteVendor(row.id); }}
+            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
             title="Delete Vendor"
           >
-            <Trash2 size={16} />
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )
     }
   ];
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl  text-slate-900 tracking-tight">Vendors</h2>
-          <p className="text-sm text-slate-500">Manage your supplier network and performance</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExportList}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-all shadow-sm"
-          >
-            <Download size={18} className="text-slate-400" />
-            Export
-          </button>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
-          >
-            <Plus size={18} />
-            Add Vendor
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4 border border-slate-100 rounded-xl bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 rounded-lg">
-              <Users className="w-6 h-6 text-indigo-600" />
+  const renderVendorExpanded = (vendor) => (
+    <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 m-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <Mail className="w-4 h-4" />
             </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Total Vendors</p>
-              <p className="text-2xl  text-slate-900">{stats?.totalVendors || vendors.length}</p>
-            </div>
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Contact Information</h4>
           </div>
-        </Card>
-        <Card className="p-4 border border-slate-100 rounded-xl bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-emerald-600" />
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 space-y-3">
+            <div>
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Email Address</p>
+              <p className="text-xs font-black text-slate-700">{vendor.email || 'N/A'}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Active</p>
-              <p className="text-2xl  text-slate-900">{vendors.filter(v => v.status === 'ACTIVE').length}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 border border-slate-100 rounded-xl bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-yellow-50 rounded-lg">
-              <Star className="w-6 h-6 text-yellow-600 fill-current" />
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Phone Number</p>
+              <p className="text-xs font-black text-slate-700">{vendor.phone || 'N/A'}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Avg Rating</p>
-              <p className="text-2xl  text-slate-900">
-                {(vendors.reduce((acc, v) => acc + parseFloat(v.rating || 0), 0) / (vendors.length || 1)).toFixed(1)}
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Location</p>
+              <p className="text-xs font-black text-slate-700 flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-slate-400" />
+                {vendor.location || 'N/A'}
               </p>
             </div>
           </div>
-        </Card>
-        <Card className="p-4 border border-slate-100 rounded-xl bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 rounded-lg">
-              <Briefcase className="w-6 h-6 text-indigo-600" />
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Business Summary</h4>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white p-4 rounded-2xl border border-slate-100">
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Total Orders</p>
+              <p className="text-lg font-black text-slate-900">{vendor.total_orders || 0}</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100">
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Total Value</p>
+              <p className="text-lg font-black text-indigo-600">₹{(vendor.total_value || 0).toLocaleString('en-IN')}</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 col-span-2">
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Last Order Date</p>
+              <p className="text-xs font-black text-slate-700 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-slate-400" />
+                {vendor.last_order_date ? new Date(vendor.last_order_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : 'No orders yet'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+              <Briefcase className="w-4 h-4" />
+            </div>
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Classification</h4>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 space-y-3">
+            <div>
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Vendor Type</p>
+              <p className="text-xs font-black text-slate-700 uppercase">{vendor.vendor_type || 'N/A'}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Top Category</p>
-              <p className="text-xl  text-slate-900 truncate max-w-[120px]">Material</p>
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Category</p>
+              <p className="text-xs font-black text-slate-700 uppercase">{vendor.category || 'N/A'}</p>
             </div>
           </div>
-        </Card>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="p-6 space-y-8 bg-slate-50/50 min-h-screen">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100">
+              <Briefcase className="w-6 h-6" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Suppliers</h2>
+          </div>
+          <p className="text-sm font-medium text-slate-500 ml-14">Manage your supplier network and relationships</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="p-2.5 rounded-xl border border-slate-200 text-slate-400 hover:bg-white hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
+            title="Refresh Data"
+          >
+            <Download className="w-5 h-5" />
+          </button>
+          
+          <button
+            onClick={() => { setIsEditing(false); setFormData({ vendorName: '', contactPerson: '', category: '', vendorType: 'Material Supplier', status: 'ACTIVE', email: '', phone: '', location: '', rating: 0 }); setShowForm(true); }}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add Supplier</span>
+          </button>
+        </div>
       </div>
 
-      <DataTable 
-        columns={columns}
-        data={vendors.filter(v => filterStatus === 'All Vendors' || v.status === filterStatus)}
-        loading={loading}
-        searchPlaceholder="Search vendors, categories, emails..."
-        actions={
-          <div className="flex items-center gap-3">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="p-2  bg-white border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all "
-            >
-              <option value="All Vendors">All Statuses</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-              <option value="BLOCKED">Blocked</option>
-            </select>
+      {/* KPI Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
+            <Users className="w-5 h-5" />
           </div>
-        }
-      />
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Suppliers</p>
+            <p className="text-xl font-black text-slate-900">{stats?.totalVendors || vendors.length}</p>
+          </div>
+        </div>
+        <div className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
+            <CheckCircle className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active</p>
+            <p className="text-xl font-black text-slate-900">{vendors.filter(v => v.status === 'ACTIVE').length}</p>
+          </div>
+        </div>
+        <div className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-yellow-50 text-yellow-600">
+            <Star className="w-5 h-5 fill-current" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Avg Rating</p>
+            <p className="text-xl font-black text-slate-900">
+              {(vendors.reduce((acc, v) => acc + parseFloat(v.rating || 0), 0) / (vendors.length || 1)).toFixed(1)}
+            </p>
+          </div>
+        </div>
+        <div className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
+            <Briefcase className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Orders</p>
+            <p className="text-xl font-black text-slate-900">{vendors.reduce((acc, v) => acc + (v.total_orders || 0), 0)}</p>
+          </div>
+        </div>
+      </div>
+
+      <Card className="bg-white border border-slate-100 rounded-[32px] shadow-sm overflow-hidden">
+        <div className="p-6">
+          <DataTable 
+            columns={columns}
+            data={vendors}
+            loading={loading}
+            renderExpanded={renderVendorExpanded}
+            pageSize={5}
+            searchPlaceholder="Search suppliers by name, category, or contact..."
+            emptyMessage="No suppliers found. Add one to get started."
+          />
+        </div>
+      </Card>
 
       <Modal
         isOpen={showForm}
         onClose={() => setShowForm(false)}
-        title="Add New Vendor"
+        title={isEditing ? "Edit Supplier" : "Add New Supplier"}
+        size="3xl"
       >
-        <form onSubmit={handleAddVendor} className="space-y-8 max-h-[70vh] overflow-y-auto px-1">
-          <div>
-            <h3 className="text-sm  text-slate-800   border-b border-slate-100 pb-2 mb-4">Basic Information</h3>
-            <div className="">
-              <FormControl label="Vendor Name *">
+        <form onSubmit={handleAddVendor} className="space-y-8">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Users className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Basic Information</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormControl label="Supplier Name *">
                 <input
                   type="text"
-                  placeholder="Enter vendor name"
+                  placeholder="Enter supplier name"
                   value={formData.vendorName}
                   onChange={(e) => setFormData({...formData, vendorName: e.target.value})}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   required
                 />
               </FormControl>
@@ -427,88 +448,92 @@ const Vendors = () => {
                   placeholder="Contact person name"
                   value={formData.contactPerson}
                   onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </FormControl>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormControl label="Category">
+                <input
+                  type="text"
+                  placeholder="e.g., Electronics"
+                  value={formData.category}
+                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </FormControl>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                <FormControl label="Category">
-                  <input
-                    type="text"
-                    placeholder="e.g., Electronics"
-                    value={formData.category}
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
-                  />
-                </FormControl>
-
-                <FormControl label="Vendor Type *">
-                  <select
-                    value={formData.vendorType}
-                    onChange={(e) => setFormData({...formData, vendorType: e.target.value})}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
-                  >
-                    {vendorTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </FormControl>
-              </div>
+              <FormControl label="Supplier Type">
+                <select
+                  value={formData.vendorType}
+                  onChange={(e) => setFormData({...formData, vendorType: e.target.value})}
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                >
+                  {vendorTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </FormControl>
 
               <FormControl label="Status">
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({...formData, status: e.target.value})}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 >
                   {statuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
+                    <option key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</option>
                   ))}
                 </select>
               </FormControl>
             </div>
           </div>
 
-          <div>
-            <h3 className="text-sm  text-slate-800   border-b border-slate-100 pb-2 mb-4">Contact Information</h3>
-            <div className="">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                <FormControl label="Email">
-                  <input
-                    type="email"
-                    placeholder="vendor@example.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
-                  />
-                </FormControl>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Mail className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Contact Information</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormControl label="Email Address">
+                <input
+                  type="email"
+                  placeholder="supplier@example.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </FormControl>
 
-                <FormControl label="Phone">
-                  <input
-                    type="tel"
-                    placeholder="+91 XXXXXXXXXX"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
-                  />
-                </FormControl>
-              </div>
-
-              <FormControl label="Location/Address">
-                <textarea
-                  placeholder="Enter vendor location or address"
-                  value={formData.location}
-                  onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs min-h-[80px]"
+              <FormControl label="Phone Number">
+                <input
+                  type="tel"
+                  placeholder="+91 XXXXXXXXXX"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </FormControl>
             </div>
+
+            <FormControl label="Location/Address">
+              <textarea
+                placeholder="Enter supplier location or address"
+                value={formData.location}
+                onChange={(e) => setFormData({...formData, location: e.target.value})}
+                className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all min-h-[100px]"
+              />
+            </FormControl>
           </div>
 
-          <div>
-            <h3 className="text-sm  text-slate-800   border-b border-slate-100 pb-2 mb-4">Performance</h3>
-            <FormControl label="Initial Rating (0-5)">
-              <div className="flex items-center gap-4">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Star className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Performance</h3>
+            </div>
+            <FormControl label="Supplier Rating (0.0 - 5.0)">
+              <div className="flex items-center gap-6">
                 <input
                   type="number"
                   min="0"
@@ -516,15 +541,9 @@ const Vendors = () => {
                   step="0.1"
                   value={formData.rating}
                   onChange={(e) => setFormData({...formData, rating: parseFloat(e.target.value) || 0})}
-                  className="w-32 p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  className="w-32 p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
-                <div className="flex items-center gap-1">
-                  {[...Array(5)].map((_, i) => (
-                    <span key={i} className={i < Math.floor(formData.rating) ? 'text-yellow-400 text-xl' : 'text-slate-200 text-xl'}>
-                      ★
-                    </span>
-                  ))}
-                </div>
+                <StarRating rating={formData.rating} />
               </div>
             </FormControl>
           </div>
@@ -533,164 +552,21 @@ const Vendors = () => {
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="p-2.5 border border-slate-200 rounded  text-slate-600 text-xs  hover:bg-slate-50 transition-all"
+              className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-10 py-2.5 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+              className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95"
             >
-              Add Vendor
+              {isEditing ? 'Update Supplier' : 'Add Supplier'}
             </button>
           </div>
         </form>
       </Modal>
-
-        {loading ? (
-          <p className="text-sm text-slate-400">Loading vendors...</p>
-        ) : filteredVendors.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500 mb-3">No vendors found</p>
-            {vendors.length === 0 && (
-              <button
-                type="button"
-                onClick={() => setShowForm(true)}
-                className="p-2  rounded  bg-slate-900 text-white text-sm  hover:bg-slate-800"
-              >
-                + Add Vendor
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-            {filteredVendors.map((vendor) => (
-              <div
-                key={`vendor-${vendor.id}`}
-                className="border border-slate-200 rounded  p-5 hover:shadow-md transition"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <h3 className="text-slate-900 text-xs text-sm">{vendor.vendor_name}</h3>
-                    <div className="flex gap-2 mt-2 flex-wrap">
-                      {vendor.category && (
-                        <span className="inline-block px-2 py-1 rounded text-xs  bg-blue-100 text-blue-700">
-                          {vendor.category}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className={`inline-block px-2 py-1 rounded  text-xs  ${(vendorStatusColors[vendor.status] || vendorStatusColors.ACTIVE).badge}`}>
-                    {(vendorStatusColors[vendor.status] || vendorStatusColors.ACTIVE).label}
-                  </span>
-                </div>
-
-                <div className="space-y-2 mb-4 text-xs text-slate-600 border-t border-b border-slate-100 py-3">
-                  {vendor.email && (
-                    <div className="flex items-center gap-2 ">
-                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      <span>{vendor.email}</span>
-                    </div>
-                  )}
-                  {vendor.phone && (
-                    <div className="flex items-center gap-2 ">
-                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                      <span>{vendor.phone}</span>
-                    </div>
-                  )}
-                  {vendor.location && (
-                    <div className="flex items-center gap-2 ">
-                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span>{vendor.location}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="text-center p-2 bg-slate-50 rounded">
-                    <p className="text-xs text-slate-500 mb-1">Orders</p>
-                    <p className="text-slate-900 text-xs">{vendor.total_orders || 0}</p>
-                  </div>
-                  <div className="text-center p-2 bg-slate-50 rounded">
-                    <p className="text-xs text-slate-500 mb-1">Value</p>
-                    <p className="text-slate-900 text-xs">₹{(vendor.total_value || 0).toLocaleString('en-IN')}</p>
-                  </div>
-                  <div className="text-center p-2 bg-slate-50 rounded">
-                    <p className="text-xs text-slate-500 mb-1">Last Order</p>
-                    <p className="text-slate-900 text-xs">{vendor.last_order_date ? new Date(vendor.last_order_date).toLocaleDateString('en-IN', {day: '2-digit', month: 'short'}) : 'N/A'}</p>
-                  </div>
-                </div>
-
-                <div className="mb-4 flex items-center justify-between py-3 border-t border-slate-100">
-                  <StarRating rating={vendor.rating} />
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="flex-1 px-3 py-2 text-xs rounded border border-blue-200 text-blue-600  hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="flex-1 px-3 py-2 text-xs rounded border border-slate-200 text-slate-600  hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    Performance
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteVendor(vendor.id, vendor.vendor_name)}
-                    className="px-3 py-2 text-xs rounded border border-red-200 text-red-600  hover:bg-red-50 transition-colors flex items-center justify-center"
-                    title="Delete Vendor"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-    
-
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-50 border border-blue-200 rounded  p-4">
-            <p className="text-xs text-blue-600    mb-1">Total Vendors</p>
-            <p className="text-2xl  text-blue-900">{stats.total_vendors || 0}</p>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded  p-4">
-            <p className="text-xs text-emerald-600    mb-1">Active Vendors</p>
-            <p className="text-2xl  text-emerald-900">{stats.active_vendors || 0}</p>
-          </div>
-          <div className="bg-yellow-50 border border-yellow-200 rounded  p-4">
-            <p className="text-xs text-yellow-600    mb-1">Avg. Rating</p>
-            <p className="text-2xl  text-yellow-900">{(parseFloat(stats.avg_rating) || 0).toFixed(1)}</p>
-          </div>
-          <div className="bg-purple-50 border border-purple-200 rounded  p-4">
-            <p className="text-xs text-purple-600    mb-1">Total Orders</p>
-            <p className="text-2xl  text-purple-900">{stats.total_orders || 0}</p>
-          </div>
-        </div>
-      )}
-   
-</div>
+    </div>
   );
 };
-export default Vendors;
 
+export default Vendors;

@@ -145,6 +145,7 @@ const QualityRejections = () => {
           columns={columns}
           data={rejections}
           loading={loading}
+          pageSize={5}
           searchPlaceholder="Search by item, GRN, or PO..."
           emptyMessage="No quality rejections found."
         />

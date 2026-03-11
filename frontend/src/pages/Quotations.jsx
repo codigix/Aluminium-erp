@@ -1504,6 +1504,7 @@ const Quotations = () => {
         columns={columns}
         data={displayQuotations}
         loading={loading}
+        pageSize={5}
         searchPlaceholder="Search quote number, vendor..."
         actions={
           <div className="flex items-center gap-3">

@@ -323,6 +323,7 @@ const StockBalance = () => {
         columns={columns}
         data={balances}
         loading={loading}
+        pageSize={5}
         searchPlaceholder="Search by item code or description..."
         emptyMessage="No stock items found"
         className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"

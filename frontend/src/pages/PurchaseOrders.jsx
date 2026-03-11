@@ -1068,6 +1068,7 @@ const PurchaseOrders = () => {
           columns={columns}
           data={filteredPOs}
           loading={loading}
+          pageSize={5}
           hideHeader={true}
           className="border-none shadow-none rounded-none"
         />

@@ -311,6 +311,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
               columns={columns}
               data={filteredShipments}
               loading={loading}
+              pageSize={5}
               hideHeader={true}
               emptyMessage="No shipments for planning found."
             />

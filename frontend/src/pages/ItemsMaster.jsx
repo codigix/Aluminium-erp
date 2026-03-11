@@ -729,6 +729,7 @@ const ItemsMaster = () => {
                 columns={groupColumns}
                 data={itemGroups}
                 loading={groupsLoading}
+                pageSize={5}
                 hideHeader={true}
               />
             </div>

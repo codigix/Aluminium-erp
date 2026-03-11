@@ -379,6 +379,7 @@ const DrawingMaster = () => {
               columns={columns}
               data={drawings}
               loading={loading}
+              pageSize={5}
               hideHeader={true}
               hideExpander={true}
               renderExpanded={(row) => {

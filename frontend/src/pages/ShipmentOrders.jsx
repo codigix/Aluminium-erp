@@ -229,6 +229,7 @@ const ShipmentOrders = ({ apiRequest }) => {
               columns={columns}
               data={filteredOrders}
               loading={loading}
+              pageSize={5}
               hideHeader={true}
               emptyMessage="No shipment orders found."
             />

@@ -794,6 +794,7 @@ const POReceipts = () => {
               return matchesSearch && matchesStatus;
             })}
             loading={loading}
+            pageSize={5}
             hideHeader={true}
             className="border-none shadow-none rounded-none"
           />
@@ -807,6 +808,7 @@ const POReceipts = () => {
               return matchesSearch;
             })}
             loading={loading}
+            pageSize={5}
             hideHeader={true}
             className="border-none shadow-none rounded-none"
             searchPlaceholder="Search available stocks..."

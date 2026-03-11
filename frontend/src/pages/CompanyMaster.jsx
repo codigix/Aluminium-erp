@@ -1,17 +1,15 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { 
   Plus, 
   RotateCcw, 
   Edit, 
   Trash2, 
   Eye,
-  X,
   Building2,
   User,
   MapPin,
-  Search
 } from 'lucide-react'
-import { FormControl, StatusBadge, Modal } from '../components/ui.jsx'
+import { FormControl, StatusBadge, Modal, DataTable, Card } from '../components/ui.jsx'
 
 const formatCustomerType = value => {
   if (!value) return '—'
@@ -24,7 +22,7 @@ const getCompanyCity = company => {
 }
 
 const CompanyMaster = ({
-  companies,
+  companies = [],
   showCreatePanel,
   onToggleCreatePanel,
   onInlineSubmit,
@@ -37,41 +35,86 @@ const CompanyMaster = ({
   onEditCompany,
   onDeleteCompany
 }) => {
-  const [selectedRows, setSelectedRows] = useState(new Set())
   
-  const toggleRowSelection = (id) => {
-    const newSelection = new Set(selectedRows)
-    if (newSelection.has(id)) {
-      newSelection.delete(id)
-    } else {
-      newSelection.add(id)
+  const columns = [
+    {
+      label: 'Company Name',
+      key: 'company_name',
+      sortable: true,
+      className: 'font-bold text-slate-900'
+    },
+    {
+      label: 'Type',
+      key: 'customer_type',
+      sortable: true,
+      render: (val) => formatCustomerType(val)
+    },
+    {
+      label: 'City',
+      key: 'city',
+      sortable: true,
+      render: (_, row) => getCompanyCity(row)
+    },
+    {
+      label: 'GSTIN',
+      key: 'gstin',
+      sortable: true,
+      className: 'font-medium text-slate-500'
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      sortable: true,
+      render: (val) => <StatusBadge status={val} />
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex justify-end gap-1">
+          <button
+            onClick={() => onViewCompany(row)}
+            title="View"
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onEditCompany(row)}
+            title="Edit"
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onDeleteCompany(row)}
+            title="Delete"
+            className="p-1.5 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
     }
-    setSelectedRows(newSelection)
-  }
-
-  const toggleAllRows = () => {
-    if (selectedRows.size === companies.length) {
-      setSelectedRows(new Set())
-    } else {
-      setSelectedRows(new Set(companies.map(c => c.id)))
-    }
-  }
+  ];
 
   return (
-    <>
+    <div className="p-6 space-y-8 bg-slate-50/50 min-h-screen">
       <Modal
         isOpen={showCreatePanel}
         onClose={onToggleCreatePanel}
-        title="Register Company"
+        title={companyForm.id ? "Edit Company" : "Register Company"}
+        size="3xl"
       >
-        <form onSubmit={onInlineSubmit} className="space-y-8 max-h-[70vh] overflow-y-auto px-1">
+        <form onSubmit={onInlineSubmit} className="space-y-8">
           {/* Company Info */}
-          <div className="">
-            <div className="flex items-center gap-2  pb-2 border-b border-slate-100">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <Building2 className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm  text-slate-800  ">Company Information</h3>
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Company Information</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormControl label="Company Name">
                 <input
                   type="text"
@@ -98,19 +141,19 @@ const CompanyMaster = ({
           </div>
 
           {/* Tax Info */}
-          <div className="">
-            <div className="flex items-center gap-2  pb-2 border-b border-slate-100">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <Building2 className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm  text-slate-800  ">Tax Information</h3>
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Tax Information</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <FormControl label="GSTIN">
                 <input
                   type="text"
                   value={companyForm.gstin}
                   onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value })}
                   placeholder="XXXXXXXXXXXX"
-                  className={`${fieldInputClass}  `}
+                  className={fieldInputClass}
                   required
                 />
               </FormControl>
@@ -120,7 +163,7 @@ const CompanyMaster = ({
                   value={companyForm.cin}
                   onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value })}
                   placeholder="CIN number"
-                  className={`${fieldInputClass}  `}
+                  className={fieldInputClass}
                 />
               </FormControl>
               <FormControl label="PAN">
@@ -129,19 +172,19 @@ const CompanyMaster = ({
                   value={companyForm.pan}
                   onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value })}
                   placeholder="PAN number"
-                  className={`${fieldInputClass}  `}
+                  className={fieldInputClass}
                 />
               </FormControl>
             </div>
           </div>
 
           {/* Billing Address */}
-          <div className="">
-            <div className="flex items-center gap-2  pb-2 border-b border-slate-100">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <MapPin className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm  text-slate-800  ">Billing Address</h3>
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Billing Address</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               <FormControl label="Address Line 1">
                 <input
                   type="text"
@@ -151,7 +194,7 @@ const CompanyMaster = ({
                   placeholder="Street name, Building number"
                 />
               </FormControl>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormControl label="City">
                   <input
                     type="text"
@@ -169,13 +212,13 @@ const CompanyMaster = ({
                   />
                 </FormControl>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormControl label="Pincode">
                   <input
                     type="text"
                     value={companyForm.billingAddress.pincode}
                     onChange={e => updateAddress('billingAddress', 'pincode', e.target.value)}
-                    className={`${fieldInputClass}  `}
+                    className={fieldInputClass}
                   />
                 </FormControl>
                 <FormControl label="Country">
@@ -191,10 +234,10 @@ const CompanyMaster = ({
           </div>
 
           {/* Contact Person */}
-          <div className="">
-            <div className="flex items-center gap-2  pb-2 border-b border-slate-100">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <User className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm  text-slate-800  ">Contact Person</h3>
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Contact Person</h3>
             </div>
             <FormControl label="Contact Person Name">
               <input
@@ -205,14 +248,14 @@ const CompanyMaster = ({
                 className={fieldInputClass}
               />
             </FormControl>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormControl label="Mobile No.">
                 <input
                   type="tel"
                   value={companyForm.contactMobile || ''}
                   onChange={e => setCompanyForm({ ...companyForm, contactMobile: e.target.value })}
                   placeholder="e.g., 9823714674"
-                  className={`${fieldInputClass}  `}
+                  className={fieldInputClass}
                 />
               </FormControl>
               <FormControl label="Email">
@@ -231,14 +274,14 @@ const CompanyMaster = ({
             <button
               type="button"
               onClick={onToggleCreatePanel}
-              className="p-2.5 rounded  border border-slate-200 text-slate-600 text-xs  hover:bg-slate-50 transition-all"
+              className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-10 py-2.5 rounded  bg-indigo-600 text-white text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2 "
+              className="px-10 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2"
             >
               {loading ? (
                 <>
@@ -256,23 +299,23 @@ const CompanyMaster = ({
         </form>
       </Modal>
 
-      {/* Action Toolbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-indigo-50 rounded ">
-              <Building2 className="w-5 h-5 text-indigo-600" />
+            <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100">
+              <Building2 className="w-6 h-6" />
             </div>
-            <h2 className="text-xl text-slate-900">Company Master</h2>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Company Master</h2>
           </div>
-          <p className="text-sm text-slate-500 ml-10">Manage customers, vendors, and partner organizations</p>
+          <p className="text-sm font-medium text-slate-500 ml-14">Manage customers, vendors, and partner organizations</p>
         </div>
         
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="p-2.5 rounded  border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all "
+            className="p-2.5 rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
             title="Refresh Data"
           >
             <RotateCcw className="w-5 h-5" />
@@ -281,7 +324,7 @@ const CompanyMaster = ({
           <button
             type="button"
             onClick={onToggleCreatePanel}
-            className="flex items-center gap-2  px-5 py-2.5 rounded  bg-indigo-600 text-white text-sm  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
           >
             <Plus className="w-5 h-5" />
             <span>New Company</span>
@@ -289,109 +332,20 @@ const CompanyMaster = ({
         </div>
       </div>
 
-      {/* Bulk Action Toolbar */}
-      {selectedRows.size > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded  p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center text-sm ">
-                {selectedRows.size}
-              </div>
-              <span className="text-sm  text-slate-700">{selectedRows.size} selected</span>
-            </div>
-            <div className="flex gap-2">
-              <button className="p-2  rounded  bg-white border border-slate-200 text-sm  text-slate-700 hover:bg-slate-50">
-                Deactivate
-              </button>
-              <button className="p-2  rounded  bg-white border border-red-200 text-sm  text-red-600 hover:bg-red-50">
-                Delete
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Table */}
-        <div className="bg-white rounded  border border-slate-200 overflow-hidden">
-          {/* Table Header */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="p-2 text-left">
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.size === companies.length && companies.length > 0}
-                      onChange={toggleAllRows}
-                      className="w-4 h-4 rounded border-slate-300"
-                    />
-                  </th>
-                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">Company Name</th>
-                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">Type</th>
-                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">City</th>
-                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">GSTIN</th>
-                  <th className="p-2 text-left text-xs  text-slate-700  tracking-wide">Status</th>
-                  <th className="p-2  text-right text-xs  text-slate-700  tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companies.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="px-4 py-8 text-center text-slate-500">
-                      No companies found. Create one to get started.
-                    </td>
-                  </tr>
-                ) : (
-                  companies.map(company => (
-                    <tr key={company.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
-                      <td className="p-2 ">
-                        <input
-                          type="checkbox"
-                          checked={selectedRows.has(company.id)}
-                          onChange={() => toggleRowSelection(company.id)}
-                          className="w-4 h-4 rounded border-slate-300"
-                        />
-                      </td>
-                      <td className="p-2   text-slate-900">{company.company_name}</td>
-                      <td className="p-2  text-sm text-slate-600">{formatCustomerType(company.customer_type)}</td>
-                      <td className="p-2  text-sm text-slate-600">{getCompanyCity(company)}</td>
-                      <td className="p-2  text-sm text-slate-600  ">{company.gstin || '—'}</td>
-                      <td className="p-2 ">
-                        <StatusBadge status={company.status} />
-                      </td>
-                      <td className="p-2  text-right">
-                        <div className="flex gap-1 justify-end">
-                          <button
-                            onClick={() => onViewCompany(company)}
-                            title="View"
-                            className="p-1.5 rounded  hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => onEditCompany(company)}
-                            title="Edit"
-                            className="p-1.5 rounded  hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => onDeleteCompany(company)}
-                            title="Delete"
-                            className="p-1.5 rounded  hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+      <Card className="bg-white border border-slate-100 rounded-[32px] shadow-sm overflow-hidden">
+        <div className="p-6">
+          <DataTable 
+            columns={columns}
+            data={companies}
+            loading={loading}
+            pageSize={5}
+            searchPlaceholder="Search by name, type, gstin..."
+            emptyMessage="No companies found. Create one to get started."
+          />
         </div>
-    </>
+      </Card>
+    </div>
   )
 }
 
 export default CompanyMaster
-

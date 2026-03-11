@@ -371,6 +371,7 @@ const DeliveryChallan = () => {
               columns={columns}
               data={filteredChallans}
               loading={loading}
+              pageSize={5}
               hideHeader={true}
               emptyMessage="No delivery challans found."
             />
