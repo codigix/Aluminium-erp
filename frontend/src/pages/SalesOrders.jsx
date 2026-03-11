@@ -12,7 +12,10 @@ import {
   ArrowLeft, 
   Save, 
   Loader2,
-  FileText
+  FileText,
+  Calendar,
+  DollarSign,
+  Check
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -647,58 +650,130 @@ const SalesOrders = () => {
 
   const columns = [
     {
-      label: 'Order No',
+      label: 'Order Details',
       key: 'order_no',
       sortable: true,
-      render: (val, row) => <span className="  text-indigo-600">{val || `ORD-${String(row.id).padStart(4, '0')}`}</span>
+      render: (val, row) => (
+        <div className="flex flex-col py-1">
+          <span className="font-bold text-indigo-600 tracking-tight">
+            {val || `ORD-${String(row.id).padStart(4, '0')}`}
+          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-slate-400 font-medium px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100 uppercase">
+              {row.order_type || 'Sales Order'}
+            </span>
+          </div>
+        </div>
+      )
     },
     {
       label: 'Customer',
       key: 'client',
       sortable: true,
-      render: (val) => <span className=" text-slate-900">{val}</span>
+      render: (val, row) => (
+        <div className="flex items-center gap-3 py-1">
+          <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm shadow-sm">
+            {val ? val.substring(0, 2).toUpperCase() : 'C'}
+          </div>
+          <div className="flex flex-col">
+            <span className="font-semibold text-slate-900 leading-tight">{val}</span>
+            <span className="text-[11px] text-slate-500 font-medium italic">
+              {row.projectName || 'General Project'}
+            </span>
+          </div>
+        </div>
+      )
     },
     {
       label: 'Order Date',
       key: 'order_date',
       sortable: true,
-      render: (val, row) => <span>{new Date(val || row.created_at).toLocaleDateString()}</span>
+      render: (val, row) => (
+        <div className="flex items-center gap-2 text-slate-600">
+          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-xs">{new Date(val || row.created_at).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+        </div>
+      )
     },
     {
-      label: 'Delivery Date',
+      label: 'Delivery',
       key: 'delivery_date',
       sortable: true,
-      render: (val) => <span>{val ? new Date(val).toLocaleDateString() : '—'}</span>
+      render: (val) => (
+        <div className="flex items-center gap-2">
+          {val ? (
+            <>
+              <div className={`w-2 h-2 rounded-full ${new Date(val) < new Date() ? 'bg-rose-400 animate-pulse' : 'bg-emerald-400'}`} />
+              <span className="text-xs text-slate-600 font-medium">
+                {new Date(val).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
+              </span>
+            </>
+          ) : (
+             <span className="text-slate-300 text-xs">—</span>
+          )}
+        </div>
+      )
     },
     {
       label: 'Grand Total',
       key: 'grand_total',
       sortable: true,
-      render: (val) => <span className=" text-slate-900">₹{Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+      render: (val) => (
+        <div className="flex flex-col py-1">
+          <div className="flex items-center gap-1 font-bold text-slate-900">
+            <span className="text-indigo-600 font-medium">₹</span>
+            <span>{Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+            <Check className="w-3 h-3" /> Inclusive of Tax
+          </span>
+        </div>
+      )
     },
     {
       label: 'Status',
       key: 'status',
       sortable: true,
-      render: (val) => <StatusBadge status={val} />
+      render: (val) => (
+        <div className="flex items-center justify-center">
+          <StatusBadge status={val} />
+        </div>
+      )
     },
     {
       label: 'Actions',
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-          <button onClick={() => handleCreateShipment(row)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors" title="Create Shipment">
-            <Truck className="w-4 h-4" />
+        <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
+          <button 
+            onClick={() => handleCreateShipment(row)} 
+            className="p-2 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
+            title="Create Shipment"
+          >
+            <Truck className="w-4 h-4 group-hover:scale-110" />
           </button>
-          <button onClick={() => handleViewOrder(row)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors" title="View">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          <div className="h-4 w-[1px] bg-slate-100 mx-0.5" />
+          <button 
+            onClick={() => handleViewOrder(row)} 
+            className="p-2 hover:bg-indigo-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100 group shadow-sm"
+            title="View Details"
+          >
+            <Eye className="w-4 h-4 group-hover:scale-110" />
           </button>
-          <button onClick={() => handleEditOrder(row)} className="p-1.5 hover:bg-slate-100 rounded  text-slate-400 hover:text-amber-600 transition-colors" title="Edit">
-            <Pencil className="w-4 h-4" />
+          <button 
+            onClick={() => handleEditOrder(row)} 
+            className="p-2 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-all border border-transparent hover:border-amber-100 group shadow-sm"
+            title="Edit Order"
+          >
+            <Pencil className="w-4 h-4 group-hover:scale-110" />
           </button>
-          <button onClick={() => handleDeleteOrder(row.id)} className="p-1.5 hover:bg-slate-100 rounded  text-slate-400 hover:text-rose-600 transition-colors" title="Delete">
-            <Trash2 className="w-4 h-4" />
+          <button 
+            onClick={() => handleDeleteOrder(row.id)} 
+            className="p-2 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            title="Delete Order"
+          >
+            <Trash2 className="w-4 h-4 group-hover:scale-110" />
           </button>
         </div>
       )
@@ -706,28 +781,62 @@ const SalesOrders = () => {
   ];
 
   if (viewMode === 'list') {
+    const totalOrders = orders.length;
+    const pendingOrders = orders.filter(o => ['DRAFT', 'CREATED', 'IN_PROGRESS'].includes(o.status?.toUpperCase())).length;
+    const completedOrders = orders.filter(o => ['COMPLETED', 'FULFILLED', 'DELIVERED'].includes(o.status?.toUpperCase())).length;
+
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl  text-slate-900">Sales Orders</h1>
-            <p className="text-sm text-slate-500">Manage your sales orders and production workflow</p>
+      <div className="space-y-6 pb-10">
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 shadow-inner">
+               <Package className="w-8 h-8" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Sales Orders</h1>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                  {totalOrders} Total
+                </span>
+                <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  {pendingOrders} Processing
+                </span>
+                <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  {completedOrders} Finalized
+                </span>
+              </div>
+            </div>
           </div>
-          <button 
-            onClick={handleAddOrder}
-            className="flex items-center gap-2  p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all shadow-lg text-xs "
-          >
-            <Plus className="w-5 h-5" />
-            Add Sales Order
-          </button>
+          <div className="flex items-center gap-3">
+             <button 
+              onClick={fetchOrders}
+              className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-100"
+              title="Refresh Data"
+            >
+              <Loader2 className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button 
+              onClick={handleAddOrder}
+              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95 text-sm font-bold"
+            >
+              <Plus className="w-5 h-5" />
+              Create New Order
+            </button>
+          </div>
         </div>
 
-        <DataTable 
-          columns={columns}
-          data={orders}
-          loading={loading}
-          searchPlaceholder="Search sales orders..."
-        />
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-2">
+          <DataTable 
+            columns={columns}
+            data={orders}
+            loading={loading}
+            searchPlaceholder="Search orders by number, customer or project..."
+            className="border-none"
+          />
+        </div>
       </div>
     );
   }

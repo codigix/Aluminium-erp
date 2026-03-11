@@ -286,7 +286,7 @@ export const StatusBadge = ({ status }) => {
   }
 
   return (
-    <span className={`p-1 rounded text-xs   border   ${getStatusStyles(normalized)}`}>
+    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getStatusStyles(normalized)}`}>
       {formatStatus(normalized)}
     </span>
   )
