@@ -30,6 +30,8 @@ const CustomerPO = ({
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
+  const [viewingPo, setViewingPo] = useState(null)
+  const [loadingPoDetails, setLoadingPoDetails] = useState(false)
 
   const [poForm, setPoForm] = useState({
     companyId: '',
@@ -218,6 +220,18 @@ const CustomerPO = ({
     }
   }
 
+  const fetchPoDetails = async (poId) => {
+    setLoadingPoDetails(true);
+    try {
+      const data = await apiRequest(`/customer-pos/${poId}`);
+      setViewingPo(data);
+    } catch (error) {
+      showToast(error.message || 'Failed to fetch PO details');
+    } finally {
+      setLoadingPoDetails(false);
+    }
+  };
+
   const handleDownloadPdf = async (poId, poNumber) => {
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -311,6 +325,7 @@ const CustomerPO = ({
             <FileText className="w-4 h-4" />
           </button>
           <button 
+            onClick={() => fetchPoDetails(row.id)}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100 shadow-sm hover:shadow-md"
             title="View Details"
           >
@@ -761,6 +776,158 @@ const CustomerPO = ({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* PO Details Modal */}
+      {viewingPo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewingPo(null)} />
+          <div className="relative w-full max-w-5xl bg-white shadow-2xl rounded-[32px] flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl shadow-inner">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                    {viewingPo.po_number}
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest border ${poStatusColors[viewingPo.status || 'DRAFT'].bg} ${poStatusColors[viewingPo.status || 'DRAFT'].text} ${poStatusColors[viewingPo.status || 'DRAFT'].border}`}>
+                      {viewingPo.status || 'DRAFT'}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
+                    <Building2 className="w-3 h-3 text-indigo-500" />
+                    {viewingPo.company_name}
+                    <span className="w-1 h-1 bg-slate-300 rounded-full mx-1" />
+                    <Calendar className="w-3 h-3 text-indigo-500" />
+                    {new Date(viewingPo.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => handleDownloadPdf(viewingPo.id, viewingPo.po_number)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 text-slate-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-100 transition-all active:scale-95 border border-slate-200 shadow-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </button>
+                <button 
+                  onClick={() => setViewingPo(null)}
+                  className="p-3 rounded-2xl hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50 border border-slate-200"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Currency</p>
+                  <p className="text-sm font-black text-slate-700">{viewingPo.currency || 'INR'}</p>
+                </div>
+                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Payment Terms</p>
+                  <p className="text-sm font-black text-slate-700">{viewingPo.payment_terms || '—'}</p>
+                </div>
+                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Credit Days</p>
+                  <p className="text-sm font-black text-slate-700">{viewingPo.credit_days || '—'} Days</p>
+                </div>
+                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Order Type</p>
+                  <p className="text-sm font-black text-slate-700">{viewingPo.order_type || 'STANDARD'}</p>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <Package className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Order Items</h3>
+                </div>
+                
+                <div className="overflow-hidden rounded-[24px] border-2 border-slate-100 bg-white shadow-sm">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b-2 border-slate-100">
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Drawing No</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Description</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Qty</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Rate</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-8">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {viewingPo.items?.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <span className="text-xs font-black text-slate-900">{item.drawing_no}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="text-xs font-bold text-slate-600">{item.description}</p>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="text-xs font-black text-slate-900">{item.quantity} {item.unit}</span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <span className="text-xs font-bold text-slate-600">{formatCurrency(item.rate)}</span>
+                          </td>
+                          <td className="px-6 py-4 text-right pr-8">
+                            <span className="text-xs font-black text-slate-900">{formatCurrency(item.basic_amount)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Financial Summary */}
+              <div className="flex justify-end">
+                <div className="w-full max-w-md bg-slate-50 rounded-3xl p-6 space-y-4 border border-slate-200/50">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <span>Sub Total</span>
+                    <span className="text-slate-900">{formatCurrency(viewingPo.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <span>Tax Amount</span>
+                    <span className="text-slate-900">{formatCurrency(viewingPo.tax_total)}</span>
+                  </div>
+                  <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
+                    <span className="text-sm font-black text-indigo-600 uppercase tracking-widest">Net Amount</span>
+                    <span className="text-2xl font-black text-indigo-600 tracking-tight">{formatCurrency(viewingPo.net_total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Remarks */}
+              {viewingPo.remarks && (
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Remarks / Notes</h4>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/50 text-sm text-slate-600 font-medium italic">
+                    {viewingPo.remarks}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {loadingPoDetails && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px]">
+          <div className="bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4">
+            <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+            <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Loading Details...</p>
           </div>
         </div>
       )}

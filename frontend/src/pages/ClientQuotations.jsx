@@ -1319,7 +1319,7 @@ const ClientQuotations = () => {
                                               <td className="px-4 py-3 text-[11px] text-slate-600 font-medium">{quote.item_description || '—'}</td>
                                               <td className="px-4 py-3 text-center text-xs font-bold text-slate-900">{quote.item_qty || '0'} {quote.item_unit || 'Pcs'}</td>
                                               <td className="px-4 py-3 text-right text-xs font-bold text-slate-600">
-                                                ₹{Number(quote.quoted_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                ₹{Number(quote.quoted_price || (quote.total_amount / (quote.item_qty || 1)) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                               </td>
                                               <td className="px-4 py-3 text-right pr-6">
                                                 <span className="text-xs font-black text-slate-900">
