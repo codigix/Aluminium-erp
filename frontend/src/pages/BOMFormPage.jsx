@@ -63,7 +63,7 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
                 {actualType === 'material' ? item.material_name : (item.component_code || item.componentCode)}
               </span>
               {item.description && (
-                <span className="text-[10px] text-slate-400 truncate max-w-[200px]">{cleanText(item.description)}</span>
+                <span className="text-xs text-slate-400 truncate max-w-[200px]">{cleanText(item.description)}</span>
               )}
             </div>
           </div>
@@ -76,7 +76,7 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
         <td className="p-2  text-center text-xs text-slate-600">₹{rate.toFixed(2)}</td>
         <td className="p-2  text-center text-xs text-slate-600">
           {item.warehouse || '—'}
-          {item.item_group && <div className="text-[9px] text-blue-500 ">{item.item_group}</div>}
+          {item.item_group && <div className="text-xs text-blue-500 ">{item.item_group}</div>}
         </td>
         <td className="p-2  text-center text-xs text-slate-600">
           {actualType === 'component' ? `${itemLossPercent.toFixed(2)}%` : (item.operation || '—')}
@@ -1069,15 +1069,15 @@ const BOMFormPage = () => {
   const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100)), 0) / batchQty;
 
   if (loading && stockItems.length === 0) return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
-      <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-2">
+      <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
       <div className="text-slate-500 animate-pulse">Loading Item Details...</div>
     </div>
   );
 
   return (
     <div className="bg-slate-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
+      <div className="p-4">
         {/* Header Actions */}
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-2  text-slate-900">
@@ -1085,12 +1085,12 @@ const BOMFormPage = () => {
               <FileText className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl  flex items-center gap-3">
+              <h1 className="text-xl  flex items-center gap-2">
                 {isReadOnly
                   ? `Viewing BOM: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
                   : 'Create BOM'}
                 {selectedItem?.status === 'DRAFT' && (
-                  <span className="px-2 py-1 rounded text-[10px] bg-amber-100 text-amber-600 border border-amber-200">
+                  <span className="px-2 py-1 rounded text-xs bg-amber-100 text-amber-600 border border-amber-200">
                     Draft BOM
                   </span>
                 )}
@@ -1100,7 +1100,7 @@ const BOMFormPage = () => {
                   </span>
                 )}
               </h1>
-              <p className="text-[10px] text-slate-400   ">
+              <p className="text-xs text-slate-400   ">
                 {selectedItem?.status === 'REJECTED' && selectedItem?.rejection_reason
                   ? `Reason: ${selectedItem.rejection_reason}`
                   : isReadOnly ? 'Inspecting bill of materials details' : 'Configure bill of materials'}
@@ -1110,30 +1110,30 @@ const BOMFormPage = () => {
           <div className="flex gap-2">
             <button 
               onClick={() => navigate('/bom-creation?filter=drafts')} 
-              className="px-4 py-1.5 bg-blue-50 text-blue-600 rounded  text-xs  border border-blue-100 hover:bg-blue-100 transition-all flex items-center gap-1.5"
+              className="p-2 bg-blue-50 text-blue-600 rounded  text-xs  border border-blue-100 hover:bg-blue-100 transition-all flex items-center gap-1.5"
             >
               <History className="w-3.5 h-3.5" />
               View Drafts
             </button>
-            <button onClick={() => navigate('/bom-creation')} className="px-4 py-1.5 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50  transition-all flex items-center gap-1">
+            <button onClick={() => navigate('/bom-creation')} className="p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50  transition-all flex items-center gap-1">
               ← Back
             </button>
           </div>
         </div>
 
         {/* SECTION 1: Product Information */}
-        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:shadow-md">
+        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
           <div
-            className="bg-white p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
+            className="bg-white p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
             onClick={() => toggleSection('productInfo')}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="w-9 h-9 bg-blue-50 rounded  flex items-center justify-center text-blue-600 border border-blue-100 ">
                 <Info className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="text-sm  text-slate-800 tracking-tight">Product Information</h4>
-                <p className="text-[10px] text-slate-400   ">Primary Configuration</p>
+                <p className="text-xs text-slate-400   ">Primary Configuration</p>
               </div>
             </div>
             <div className={`transition-transform duration-300 ${collapsedSections.productInfo ? 'rotate-180' : ''}`}>
@@ -1141,12 +1141,12 @@ const BOMFormPage = () => {
             </div>
           </div>
           {!collapsedSections.productInfo && (
-            <div className="p-4 bg-white">
+            <div className="p-2 bg-white">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Product Name <span className="text-rose-500">*</span></label>
                   {isReadOnly ? (
-                    <div className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-900 ">
+                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-900 ">
                       {productForm.description || '—'}
                     </div>
                   ) : (
@@ -1243,7 +1243,7 @@ const BOMFormPage = () => {
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Item Code <span className="text-rose-500">*</span></label>
                   {isReadOnly ? (
-                    <div className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-900 ">
+                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-900 ">
                       {productForm.itemCode || '—'}
                     </div>
                   ) : (
@@ -1339,7 +1339,7 @@ const BOMFormPage = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Drawing No</label>
-                  <div className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 font-medium">
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 font-medium">
                     {productForm.drawingNo || 'N/A'}
                   </div>
                 </div>
@@ -1347,7 +1347,7 @@ const BOMFormPage = () => {
                   <label className="text-xs  text-slate-500 ml-1">Item Group</label>
                   <select
                     disabled={isReadOnly}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
                     value={productForm.itemGroup}
                     onChange={(e) => {
                       const newGroup = e.target.value;
@@ -1370,7 +1370,7 @@ const BOMFormPage = () => {
                   <div className="relative">
                     <input
                       type="number"
-                      className={`w-full px-3 py-2.5 border border-slate-200 rounded  text-xs  transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${(['Sub Assembly', 'Assembly'].includes(productForm.itemGroup) || isReadOnly) ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700'}`}
+                      className={`w-full p-2.5 border border-slate-200 rounded  text-xs  transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${(['Sub Assembly', 'Assembly'].includes(productForm.itemGroup) || isReadOnly) ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700'}`}
                       placeholder="Enter quantity"
                       step="0.01"
                       min="0.01"
@@ -1380,7 +1380,7 @@ const BOMFormPage = () => {
                     />
                     <div className="absolute right-3 top-1/2 -translate-y-1/2text-xs  text-slate-400 ">{productForm.uom}</div>
                   </div>
-                  <p className="text-[9px] text-slate-400 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                     <Info className="w-3 h-3 text-amber-500" />
                     Yield for cost calculation
                   </p>
@@ -1389,7 +1389,7 @@ const BOMFormPage = () => {
                   <label className="text-xs  text-slate-500 ml-1">UOM</label>
                   <select
                     disabled={isReadOnly}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
                     value={productForm.uom}
                     onChange={(e) => setProductForm({ ...productForm, uom: e.target.value })}
                   >
@@ -1403,7 +1403,7 @@ const BOMFormPage = () => {
                   <input
                     type="text"
                     disabled={isReadOnly}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
                     placeholder="e.g. 1.0"
                     value={productForm.revision}
                     onChange={(e) => setProductForm({ ...productForm, revision: e.target.value })}
@@ -1417,14 +1417,14 @@ const BOMFormPage = () => {
                   <textarea
                     disabled={isReadOnly}
                     rows="2"
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 resize-none"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 resize-none"
                     placeholder="Enter any additional technical details or manufacturing notes..."
                     value={productForm.notes}
                     onChange={(e) => setProductForm({ ...productForm, notes: e.target.value })}
                   />
                 </div>
-                <div className="flex flex-col justify-center gap-4">
-                  <label className="flex items-center gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded  transition-colors">
+                <div className="flex flex-col justify-center gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer group p-2 hover:bg-slate-50 rounded  transition-colors">
                     <div className={`w-10 h-6 rounded  relative transition-colors ${productForm.isActive ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                       <input
                         disabled={isReadOnly}
@@ -1437,7 +1437,7 @@ const BOMFormPage = () => {
                     </div>
                     <span className="text-xs  text-slate-700">Active BOM</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded  transition-colors">
+                  <label className="flex items-center gap-2 cursor-pointer group p-2 hover:bg-slate-50 rounded  transition-colors">
                     <div className={`w-10 h-6 rounded  relative transition-colors ${productForm.isDefault ? 'bg-blue-500' : 'bg-slate-300'}`}>
                       <input
                         disabled={isReadOnly}
@@ -1457,21 +1457,21 @@ const BOMFormPage = () => {
         </Card>
 
         {/* SECTION 2: Components */}
-        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:shadow-md">
+        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
           <div
-            className="bg-white p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
+            className="bg-white p-2 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
             onClick={() => toggleSection('components')}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="w-9 h-9 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600 border border-indigo-100 ">
                 <Layers className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="text-sm  text-slate-800 tracking-tight">Components/Sub-Assemblies</h4>
-                <p className="text-[10px] text-slate-400   ">{bomData.components.length} items • Total ₹{componentsCost.toFixed(2)}</p>
+                <p className="text-xs text-slate-400   ">{bomData.components.length} items • Total ₹{componentsCost.toFixed(2)}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {!isReadOnly && (
                 <button
                   onClick={(e) => {
@@ -1492,11 +1492,11 @@ const BOMFormPage = () => {
             </div>
           </div>
           {!collapsedSections.components && (
-            <div className="p-4 bg-white">
+            <div className="p-2 bg-white">
               {!isReadOnly && (
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100 mb-6">
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100 mb-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h5 className="text-[10px]  text-indigo-600  flex items-center gap-2 ">
+                    <h5 className="text-xs  text-indigo-600  flex items-center gap-2 ">
                       <span className="w-1.5 h-1.5 bg-indigo-500 rounded "></span>
                       Add New Component
                     </h5>
@@ -1507,10 +1507,10 @@ const BOMFormPage = () => {
                         checked={showAllDrawings}
                         onChange={(e) => setShowAllDrawings(e.target.checked)}
                       />
-                      <span className="text-[10px]  text-slate-600 group-hover:text-indigo-600 transition-colors">Global Search</span>
+                      <span className="text-xs  text-slate-600 group-hover:text-indigo-600 transition-colors">Global Search</span>
                     </label>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                     <div className="md:col-span-4 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Component Selection <span className="text-rose-500">*</span></label>
                       <SearchableSelect
@@ -1533,7 +1533,7 @@ const BOMFormPage = () => {
                     <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Parent Level</label>
                       <select
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                         value={componentForm.parentId}
                         onChange={(e) => setComponentForm({ ...componentForm, parentId: e.target.value })}
                       >
@@ -1545,7 +1545,7 @@ const BOMFormPage = () => {
                     </div>
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Qty</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.quantity} onChange={(e) => setComponentForm({ ...componentForm, quantity: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.quantity} onChange={(e) => setComponentForm({ ...componentForm, quantity: e.target.value })} />
                     </div>
                     <div className="md:col-span-1 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">UOM</label>
@@ -1565,18 +1565,18 @@ const BOMFormPage = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-3">
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Unit Rate (₹)</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.rate} onChange={(e) => setComponentForm({ ...componentForm, rate: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.rate} onChange={(e) => setComponentForm({ ...componentForm, rate: e.target.value })} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Process Loss %</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-rose-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({ ...componentForm, lossPercent: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-rose-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({ ...componentForm, lossPercent: e.target.value })} />
                     </div>
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Component Notes</label>
-                      <input type="text" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="Special handling or revision notes..." value={componentForm.notes} onChange={(e) => setComponentForm({ ...componentForm, notes: e.target.value })} />
+                      <input type="text" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="Special handling or revision notes..." value={componentForm.notes} onChange={(e) => setComponentForm({ ...componentForm, notes: e.target.value })} />
                     </div>
                   </div>
                 </div>
@@ -1623,21 +1623,21 @@ const BOMFormPage = () => {
 
 
         {/* SECTION 3: Materials */}
-        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:shadow-md">
+        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
           <div
-            className="bg-white p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
+            className="bg-white p-2 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
             onClick={() => toggleSection('materials')}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="w-9 h-9 bg-emerald-50 rounded  flex items-center justify-center text-emerald-600 border border-emerald-100 ">
                 <Package className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="text-sm  text-slate-800 tracking-tight">Raw Materials</h4>
-                <p className="text-[10px] text-slate-400   ">{bomData.materials.length} items • Total ₹{rawMaterialsCost.toFixed(2)}</p>
+                <p className="text-xs text-slate-400   ">{bomData.materials.length} items • Total ₹{rawMaterialsCost.toFixed(2)}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {!isReadOnly && (
                 <button
                   onClick={(e) => {
@@ -1658,11 +1658,11 @@ const BOMFormPage = () => {
             </div>
           </div>
           {!collapsedSections.materials && (
-            <div className="p-4 bg-white">
+            <div className="p-2 bg-white">
               {!isReadOnly && (
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100 mb-6">
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100 mb-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h5 className="text-[10px]  text-emerald-600  flex items-center gap-2 ">
+                    <h5 className="text-xs  text-emerald-600  flex items-center gap-2 ">
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded "></span>
                       Add New Material
                     </h5>
@@ -1673,11 +1673,11 @@ const BOMFormPage = () => {
                         checked={showAllDrawings}
                         onChange={(e) => setShowAllDrawings(e.target.checked)}
                       />
-                      <span className="text-[10px]  text-slate-600 group-hover:text-emerald-600 transition-colors">Global Search</span>
+                      <span className="text-xs  text-slate-600 group-hover:text-emerald-600 transition-colors">Global Search</span>
                     </label>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                     <div className="md:col-span-4 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Material Selection <span className="text-rose-500">*</span></label>
                       <SearchableSelect
@@ -1769,7 +1769,7 @@ const BOMFormPage = () => {
 
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Quantity</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="0.00" step="0.01" value={materialForm.qty} onChange={(e) => setMaterialForm({ ...materialForm, qty: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="0.00" step="0.01" value={materialForm.qty} onChange={(e) => setMaterialForm({ ...materialForm, qty: e.target.value })} />
                     </div>
 
                     <div className="md:col-span-1 space-y-1">
@@ -1783,7 +1783,7 @@ const BOMFormPage = () => {
 
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Item Group</label>
-                      <select className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.itemGroup} onChange={(e) => setMaterialForm({ ...materialForm, itemGroup: e.target.value })}>
+                      <select className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.itemGroup} onChange={(e) => setMaterialForm({ ...materialForm, itemGroup: e.target.value })}>
                         <option value="">Select Group</option>
                         {itemGroups.map(group => (
                           <option key={group.id} value={group.name}>{group.name}</option>
@@ -1802,14 +1802,14 @@ const BOMFormPage = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-3">
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Rate (₹)</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="0.00" step="0.01" value={materialForm.rate} onChange={(e) => setMaterialForm({ ...materialForm, rate: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="0.00" step="0.01" value={materialForm.rate} onChange={(e) => setMaterialForm({ ...materialForm, rate: e.target.value })} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Warehouse</label>
-                      <select className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.warehouse} onChange={(e) => setMaterialForm({ ...materialForm, warehouse: e.target.value })}>
+                      <select className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.warehouse} onChange={(e) => setMaterialForm({ ...materialForm, warehouse: e.target.value })}>
                         <option value="">Default</option>
                         <option value="Main">Main Warehouse</option>
                         <option value="Scrap">Scrap Yard</option>
@@ -1830,7 +1830,7 @@ const BOMFormPage = () => {
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Parent Component</label>
                       <select
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                        className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                         value={materialForm.parentId}
                         onChange={(e) => setMaterialForm({ ...materialForm, parentId: e.target.value })}
                       >
@@ -1885,21 +1885,21 @@ const BOMFormPage = () => {
         </Card>
 
         {/* SECTION 4: Operations */}
-        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:shadow-md">
+        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
           <div
-            className="bg-white p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
+            className="bg-white p-2 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
             onClick={() => toggleSection('operations')}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="w-9 h-9 bg-purple-50 rounded  flex items-center justify-center text-purple-600 border border-purple-100 ">
                 <Settings className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="text-sm  text-slate-800 tracking-tight">Process Routing</h4>
-                <p className="text-[10px] text-slate-400   ">{bomData.operations.length} operations • Total ₹{operationsCost.toFixed(2)}</p>
+                <p className="text-xs text-slate-400   ">{bomData.operations.length} operations • Total ₹{operationsCost.toFixed(2)}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {!isReadOnly && (
                 <button
                   onClick={(e) => {
@@ -1922,24 +1922,24 @@ const BOMFormPage = () => {
             </div>
           </div>
           {!collapsedSections.operations && (
-            <div className="p-4 bg-white">
+            <div className="p-2 bg-white">
               {!isReadOnly && (
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100 mb-6">
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100 mb-6">
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h5 className="text-[10px]  text-purple-600  flex items-center gap-2 ">
+                      <h5 className="text-xs  text-purple-600  flex items-center gap-2 ">
                         <span className="w-1.5 h-1.5 bg-purple-500 rounded "></span>
                         Add New Operation
                       </h5>
-                      <p className="text-[9px] text-slate-400  mt-0.5">Define manufacturing sequence and standard times</p>
+                      <p className="text-xs text-slate-400  mt-0.5">Define manufacturing sequence and standard times</p>
                     </div>
                     <div className="bg-white px-2.5 py-1.5 rounded  border border-slate-200  flex items-center gap-2 ">
-                      <span className="text-[9px]  text-slate-400  tracking-tighter">Cost Formula:</span>
-                      <code className="text-[10px] text-purple-600   ">((Cycle + Setup) / 60) * Rate</code>
+                      <span className="text-xs  text-slate-400  tracking-tighter">Cost Formula:</span>
+                      <code className="text-xs text-purple-600   ">((Cycle + Setup) / 60) * Rate</code>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                     <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Operation *</label>
                       <SearchableSelect
@@ -1971,7 +1971,7 @@ const BOMFormPage = () => {
                     <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Workstation / Resource</label>
                       <select
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                        className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
                         value={operationForm.workstation}
                         onChange={(e) => {
                           const ws = workstations.find(w => w.workstation_code === e.target.value);
@@ -2000,24 +2000,24 @@ const BOMFormPage = () => {
 
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Cycle Time (min)</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" placeholder="0.00" step="0.01" value={operationForm.cycleTimeMin} onChange={(e) => setOperationForm({ ...operationForm, cycleTimeMin: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" placeholder="0.00" step="0.01" value={operationForm.cycleTimeMin} onChange={(e) => setOperationForm({ ...operationForm, cycleTimeMin: e.target.value })} />
                     </div>
 
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Setup Time (min)</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" placeholder="0.00" step="0.01" value={operationForm.setupTimeMin} onChange={(e) => setOperationForm({ ...operationForm, setupTimeMin: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" placeholder="0.00" step="0.01" value={operationForm.setupTimeMin} onChange={(e) => setOperationForm({ ...operationForm, setupTimeMin: e.target.value })} />
                     </div>
 
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Hourly Rate (₹)</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" placeholder="0.00" step="0.01" value={operationForm.hourlyRate} onChange={(e) => setOperationForm({ ...operationForm, hourlyRate: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" placeholder="0.00" step="0.01" value={operationForm.hourlyRate} onChange={(e) => setOperationForm({ ...operationForm, hourlyRate: e.target.value })} />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-4 pt-4 border-t border-slate-200/60">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2 mt-4 pt-4 border-t border-slate-200/60">
                     <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Process Type</label>
-                      <select className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" value={operationForm.operationType} onChange={(e) => setOperationForm({ ...operationForm, operationType: e.target.value })}>
+                      <select className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" value={operationForm.operationType} onChange={(e) => setOperationForm({ ...operationForm, operationType: e.target.value })}>
                         <option value="In-House">In-House Production</option>
                         <option value="Sub-Contract">Job Work (Sub-Contract)</option>
                       </select>
@@ -2025,7 +2025,7 @@ const BOMFormPage = () => {
 
                     <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Output Warehouse (WIP)</label>
-                      <select className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" value={operationForm.targetWarehouse} onChange={(e) => setOperationForm({ ...operationForm, targetWarehouse: e.target.value })}>
+                      <select className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all" value={operationForm.targetWarehouse} onChange={(e) => setOperationForm({ ...operationForm, targetWarehouse: e.target.value })}>
                         <option value="">Select Destination</option>
                         <option value="WIP">Work In Progress</option>
                         <option value="FG">Finished Goods</option>
@@ -2035,7 +2035,7 @@ const BOMFormPage = () => {
 
                     <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Calculated Op. Cost</label>
-                      <div className="px-3 py-2 bg-purple-50 border border-purple-100 rounded  text-xs  text-purple-700 flex items-center h-[38px]">
+                      <div className="p-2 bg-purple-50 border border-purple-100 rounded  text-xs  text-purple-700 flex items-center h-[38px]">
                         ₹ {(((parseFloat(operationForm.cycleTimeMin || 0) + parseFloat(operationForm.setupTimeMin || 0)) / 60) * parseFloat(operationForm.hourlyRate || 0)).toFixed(2)}
                       </div>
                     </div>
@@ -2076,11 +2076,11 @@ const BOMFormPage = () => {
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/80 transition-colors group">
                             <td className="p-2  whitespace-nowrap">
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2">
                                 <span className="w-6 h-6 rounded  bg-slate-100 flex items-center justify-centertext-xs   text-slate-500 border border-slate-200">{idx + 1}</span>
                                 <div className="flex flex-col">
                                   <span className="text-xs  text-slate-800">{o.operation_name}</span>
-                                  <span className="text-[9px] text-slate-400   flex items-center gap-1">
+                                  <span className="text-xs text-slate-400   flex items-center gap-1">
                                     <Settings className="w-2.5 h-2.5" />
                                     {o.workstation || 'No Resource'}
                                   </span>
@@ -2090,7 +2090,7 @@ const BOMFormPage = () => {
                             <td className="p-2  text-center whitespace-nowrap">
                               <div className="flex flex-col items-center">
                                 <span className="text-xs  text-slate-700">C: {cycleTime} / S: {setupTime}</span>
-                                <span className="text-[9px] text-slate-400 ">Minutes</span>
+                                <span className="text-xs text-slate-400 ">Minutes</span>
                               </div>
                             </td>
                             <td className="p-2  text-center whitespace-nowrap text-xs  text-slate-600">
@@ -2136,21 +2136,21 @@ const BOMFormPage = () => {
         </Card>
 
         {/* SECTION 5: Scrap & Loss */}
-        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:shadow-md">
+        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
           <div
-            className="bg-white p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
+            className="bg-white p-2 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
             onClick={() => toggleSection('scrap')}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="w-9 h-9 bg-orange-50 rounded  flex items-center justify-center text-orange-600 border border-orange-100 ">
                 <RefreshCw className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="text-sm  text-slate-800 tracking-tight">Scrap & Recoveries</h4>
-                <p className="text-[10px] text-slate-400   ">{bomData.scrap.length} scrap items • Value ₹{scrapLoss.toFixed(2)}</p>
+                <p className="text-xs text-slate-400   ">{bomData.scrap.length} scrap items • Value ₹{scrapLoss.toFixed(2)}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {!isReadOnly && (
                 <button
                   onClick={(e) => {
@@ -2173,11 +2173,11 @@ const BOMFormPage = () => {
             </div>
           </div>
           {!collapsedSections.scrap && (
-            <div className="p-4 bg-white">
+            <div className="p-2 bg-white">
               {!isReadOnly && (
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100 mb-6">
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100 mb-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h5 className="text-[10px]  text-orange-600  flex items-center gap-2 ">
+                    <h5 className="text-xs  text-orange-600  flex items-center gap-2 ">
                       <span className="w-1.5 h-1.5 bg-orange-500 rounded "></span>
                       Add Scrap Item
                     </h5>
@@ -2188,11 +2188,11 @@ const BOMFormPage = () => {
                         checked={showAllDrawings}
                         onChange={(e) => setShowAllDrawings(e.target.checked)}
                       />
-                      <span className="text-[10px]  text-slate-600 group-hover:text-orange-600 transition-colors">Global Search</span>
+                      <span className="text-xs  text-slate-600 group-hover:text-orange-600 transition-colors">Global Search</span>
                     </label>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                     <div className="md:col-span-4 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Scrap Material *</label>
                       <SearchableSelect
@@ -2230,7 +2230,7 @@ const BOMFormPage = () => {
                     <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Process Link (Component)</label>
                       <select
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                        className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
                         value={scrapForm.parentId}
                         onChange={(e) => setScrapForm({ ...scrapForm, parentId: e.target.value })}
                       >
@@ -2243,7 +2243,7 @@ const BOMFormPage = () => {
 
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Input Qty</label>
-                      <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-orange-500 outline-none transition-all" placeholder="0.00" step="0.01" value={scrapForm.inputQty} onChange={(e) => setScrapForm({ ...scrapForm, inputQty: e.target.value })} />
+                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-orange-500 outline-none transition-all" placeholder="0.00" step="0.01" value={scrapForm.inputQty} onChange={(e) => setScrapForm({ ...scrapForm, inputQty: e.target.value })} />
                     </div>
 
                     <div className="md:col-span-1 space-y-1">
@@ -2254,7 +2254,7 @@ const BOMFormPage = () => {
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Recovery Rate (₹)</label>
                       <div className="flex gap-2">
-                        <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-orange-500 outline-none transition-all" placeholder="0.00" step="0.01" value={scrapForm.rate} onChange={(e) => setScrapForm({ ...scrapForm, rate: e.target.value })} />
+                        <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-orange-500 outline-none transition-all" placeholder="0.00" step="0.01" value={scrapForm.rate} onChange={(e) => setScrapForm({ ...scrapForm, rate: e.target.value })} />
                         <button
                           onClick={() => handleAddSectionItem('scrap', scrapForm, setScrapForm, { itemCode: '', itemName: '', inputQty: '1', lossPercent: '', rate: '', parentId: '' })}
                           className="px-3 bg-orange-600 text-white rounded  text-xs  hover:bg-orange-700 shadow-lg shadow-orange-100 transition-all active:scale-95"
@@ -2295,7 +2295,7 @@ const BOMFormPage = () => {
                             <td className="p-2  whitespace-nowrap">
                               <div className="flex flex-col">
                                 <span className="text-xs  text-slate-800">{s.item_name || 'N/A'}</span>
-                                <span className="text-[9px] text-slate-400   tracking-tight">
+                                <span className="text-xs text-slate-400   tracking-tight">
                                   {s.item_code} {s.parent_id || s.parentId ? `[Ref: Component]` : ''}
                                 </span>
                               </div>
@@ -2370,9 +2370,9 @@ const BOMFormPage = () => {
                       <td className="p-2  whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className="text-sm  text-slate-800">{s.item_name || 'N/A'}</span>
-                          <span className="text-[10px] text-slate-500  tracking-tight">{s.item_code || 'N/A'}</span>
+                          <span className="text-xs text-slate-500  tracking-tight">{s.item_code || 'N/A'}</span>
                           {stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (
-                            <span className="inline-flex items-center gap-1 mt-1 text-[9px]  text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100 w-fit">
+                            <span className="inline-flex items-center gap-1 mt-1 text-xs  text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100 w-fit">
                               <Search className="w-2.5 h-2.5" />
                               Drg: {stockItem.drawing_no}
                             </span>
@@ -2385,7 +2385,7 @@ const BOMFormPage = () => {
                             <span className="text-xs  text-slate-700">
                               {bomData.components.find(c => String(c.id) === String(s.parent_id || s.parentId))?.component_code || 'Unknown'}
                             </span>
-                            <span className="text-[9px] text-slate-400">Sub-Component Scrap</span>
+                            <span className="text-xs text-slate-400">Sub-Component Scrap</span>
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 italic">Top Level</span>
@@ -2397,7 +2397,7 @@ const BOMFormPage = () => {
                           {lossPercent.toFixed(2)}%
                         </span>
                       </td>
-                      <td className="p-2  text-center whitespace-nowrap text-sm  text-slate-900">{scrapQty.toFixed(2)}</td>
+                      <td className="p-2  text-center whitespace-nowrap text-xs  text-slate-900">{scrapQty.toFixed(2)}</td>
                       <td className="p-2  text-center whitespace-nowrap text-sm text-slate-600">
                         ₹{rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
@@ -2432,32 +2432,32 @@ const BOMFormPage = () => {
           className="bg-white p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
           onClick={() => toggleSection('costing')}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded  flex items-center justify-center text-white text-sm">₹</div>
             <div>
               <h4 className="text-sm  text-slate-800">BOM Costing</h4>
-              <p className="text-[10px] text-slate-400  ">₹{totalBOMCost.toFixed(2)} Analysis Per Unit</p>
+              <p className="text-xs text-slate-400  ">₹{totalBOMCost.toFixed(2)} Analysis Per Unit</p>
             </div>
           </div>
           <div className="text-slate-400">{collapsedSections.costing ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}</div>
         </div>
         {!collapsedSections.costing && (
           <div className="p-2  space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-              <div className="p-4 bg-blue-50 rounded-md border border-blue-100">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+              <div className="p-2 bg-blue-50 rounded-md border border-blue-100">
                 <p className="text-xs text-blue-600  mb-1">Material Cost / FG</p>
                 <p className="text-2xl  text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</p>
-                <p className="text-[10px] text-blue-400  mt-1">(Materials + Components - Scrap)</p>
+                <p className="text-xs text-blue-400  mt-1">(Materials + Components - Scrap)</p>
               </div>
-              <div className="p-4 bg-purple-50 rounded-md border border-purple-100">
+              <div className="p-2 bg-purple-50 rounded-md border border-purple-100">
                 <p className="text-xs text-purple-600  mb-1">Operations Cost / FG</p>
                 <p className="text-2xl  text-purple-900">₹{operationsCost.toFixed(2)}</p>
-                <p className="text-[10px] text-purple-400  mt-1">Based on (Cycle + Setup) / 60 * Rate</p>
+                <p className="text-xs text-purple-400  mt-1">Based on (Cycle + Setup) / 60 * Rate</p>
               </div>
-              <div className="p-4 bg-emerald-50 rounded-md border border-emerald-100">
+              <div className="p-2 bg-emerald-50 rounded-md border border-emerald-100">
                 <p className="text-xs text-emerald-600  mb-1">Total Cost / FG</p>
                 <p className="text-2xl  text-emerald-900">₹{totalBOMCost.toFixed(2)}</p>
-                <p className="text-[10px] text-emerald-400  mt-1">Base Quantity: {batchQty}</p>
+                <p className="text-xs text-emerald-400  mt-1">Base Quantity: {batchQty}</p>
               </div>
             </div>
 
@@ -2494,7 +2494,7 @@ const BOMFormPage = () => {
               </div>
             </div>
 
-            <div className="flex justify-between items-center p-4 bg-slate-900 rounded-md text-white">
+            <div className="flex justify-between items-center p-2 bg-slate-200 rounded-md text-white">
               <span className="text-sm   ">Cost Per Unit:</span>
               <span className="text-xl ">₹{costPerUnit.toFixed(2)}</span>
             </div>
@@ -2503,12 +2503,12 @@ const BOMFormPage = () => {
       </Card>
 
       {/* Footer Actions */}
-      <div className="flex justify-end gap-3 pb-8">
+      <div className="flex justify-end gap-2 pb-8">
         <button onClick={() => navigate('/bom-creation')} className="px-8 py-2.5 bg-white border border-slate-200 rounded  text-sm  text-slate-600 hover:bg-slate-50 transition-all">
           {isReadOnly ? 'Back to List' : 'Cancel'}
         </button>
         {!isReadOnly && (
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <button 
               onClick={() => handleCreateBOM('Draft')} 
               className="px-8 py-2.5 bg-white border border-indigo-200 text-indigo-600 rounded  text-sm  hover:bg-indigo-50 transition-all flex items-center gap-2"

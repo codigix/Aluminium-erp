@@ -531,7 +531,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, row) => (
         <div>
           <div className=" text-slate-900">{val || '—'}</div>
-          <div className="text-[10px] text-slate-500">{row.vendor_name || '—'}</div>
+          <div className="text-xs text-slate-500">{row.vendor_name || '—'}</div>
         </div>
       )
     },
@@ -614,7 +614,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             <>
               <button 
                 onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
-                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors bg-white border border-slate-100"
+                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded  transition-colors bg-white border border-slate-100"
                 title="Create Stock Entry"
               >
                 <Database className="w-3.5 h-3.5" />
@@ -643,29 +643,29 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     switch (activeTab) {
       case 'incoming':
         return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded  border border-slate-200 ">
-                <p className="text-[10px]  text-slate-400   mb-1">Total Inspections</p>
-                <p className="text-2xl  text-slate-900">{stats?.totalInspections || qcInspections.length}</p>
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="bg-white p-2 rounded  border border-slate-200 ">
+                <p className="text-xs  text-slate-400   mb-1">Total Inspections</p>
+                <p className="text-xl  text-slate-900">{stats?.totalInspections || qcInspections.length}</p>
               </div>
-              <div className="bg-white p-4 rounded  border border-slate-200 ">
-                <p className="text-[10px]  text-emerald-500   mb-1">Passed</p>
+              <div className="bg-white p-2 rounded  border border-slate-200 ">
+                <p className="text-xs  text-emerald-500   mb-1">Passed</p>
                 <p className="text-2xl  text-emerald-600">{stats?.passed || 0}</p>
               </div>
-              <div className="bg-white p-4 rounded  border border-slate-200 ">
-                <p className="text-[10px]  text-red-500   mb-1">Failed</p>
+              <div className="bg-white p-2 rounded  border border-slate-200 ">
+                <p className="text-xs  text-red-500   mb-1">Failed</p>
                 <p className="text-2xl  text-red-600">{stats?.failed || 0}</p>
               </div>
-              <div className="bg-white p-4 rounded  border border-slate-200 ">
-                <p className="text-[10px]  text-amber-500   mb-1">Pending</p>
+              <div className="bg-white p-2 rounded  border border-slate-200 ">
+                <p className="text-xs  text-amber-500   mb-1">Pending</p>
                 <p className="text-2xl  text-amber-600">{stats?.pending || 0}</p>
               </div>
             </div>
 
             <Card>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm  text-slate-900">Incoming Inspection Queue</h3>
+                <h3 className="text-xs  text-slate-900">Incoming Inspection Queue</h3>
                 <button 
                   onClick={() => { fetchQCInspections(); fetchStats(); }}
                   className="p-2 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all"
@@ -685,7 +685,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         );
       case 'in-process':
         return (
-          <div className="space-y-4">
+          <div className="space-y-2">
             <Card title="In-Process Quality Control" subtitle="Real-time production quality monitoring and line inspections">
               <div className="flex justify-end mb-4">
                 <button 
@@ -706,7 +706,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         );
       case 'final':
         return (
-          <div className="space-y-6">
+          <div className="space-y-2">
             {finalInspections.length > 0 && (
               <Card 
                 title="Completed Incoming Inspections" 
@@ -728,9 +728,9 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl  text-slate-900">Quality Control</h1>
+        <h1 className="text-xl  text-slate-900">Quality Control</h1>
         <p className="text-sm text-slate-500">Manage raw material, in-process, and final quality inspections.</p>
       </div>
 
@@ -762,51 +762,51 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         size="6xl"
       >
         {selectedQC && (
-          <div className="space-y-8 p-2">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4 bg-white rounded  border border-slate-100 ">
-                <p className="text-[10px] font-black text-slate-400  tracking-widest mb-1.5">Status</p>
-                <span className={`inline-flex items-center p-2  rounded text-xs  font-black  border ${qcStatusColors[selectedQC.status]?.badge}`}>
+          <div className="space-y-2 p-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="p-2 bg-white rounded  border border-slate-100 ">
+                <p className="text-xs  text-slate-400   mb-1.5">Status</p>
+                <span className={`inline-flex items-center p-2  rounded text-xs    border ${qcStatusColors[selectedQC.status]?.badge}`}>
                   {qcStatusColors[selectedQC.status]?.label || selectedQC.status}
                 </span>
               </div>
-              <div className="p-4 bg-white rounded  border border-slate-100 ">
-                <p className="text-[10px] font-black text-slate-400  tracking-widest mb-1.5">PO Number</p>
-                <p className="text-sm font-black text-slate-900">{selectedQC.po_number || '—'}</p>
+              <div className="p-2 bg-white rounded  border border-slate-100 ">
+                <p className="text-xs  text-slate-400   mb-1.5">PO Number</p>
+                <p className="text-xs  text-slate-900">{selectedQC.po_number || '—'}</p>
               </div>
-              <div className="p-4 bg-white rounded  border border-slate-100 ">
-                <p className="text-[10px] font-black text-emerald-500  tracking-widest mb-1.5">Pass Quantity</p>
-                <p className="text-sm font-black text-emerald-600">
+              <div className="p-2 bg-white rounded  border border-slate-100 ">
+                <p className="text-xs  text-emerald-500   mb-1.5">Pass Quantity</p>
+                <p className="text-sm  text-emerald-600">
                   {selectedQC.status === 'PENDING' ? 'Pending' : (selectedQC.pass_quantity || selectedQC.accepted_quantity || 0)}
                 </p>
               </div>
-              <div className="p-4 bg-white rounded  border border-slate-100 ">
-                <p className="text-[10px] font-black text-red-500  tracking-widest mb-1.5">Fail Quantity</p>
-                <p className="text-sm font-black text-red-600">{selectedQC.fail_quantity || 0}</p>
+              <div className="p-2 bg-white rounded  border border-slate-100 ">
+                <p className="text-xs  text-red-500   mb-1.5">Fail Quantity</p>
+                <p className="text-sm  text-red-600">{selectedQC.fail_quantity || 0}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
+              <div className="lg:col-span-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
                     <ListTodo className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-black text-slate-900  tracking-widest">Items Verification</h4>
+                    <h4 className="text-xs  text-slate-900  ">Items Verification</h4>
                     <p className="text-[8px] text-slate-400  ">Item wise quality check results</p>
                   </div>
                 </div>
                 
-                <div className="bg-white rounded-[24px] border border-slate-100 overflow-hidden ">
+                <div className="bg-white rounded border border-slate-100 overflow-hidden ">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50/80">
-                      <tr className="text-[10px] font-black text-slate-500  tracking-widest border-b border-slate-200">
+                      <tr className="text-xs  text-slate-500   border-b border-slate-200">
                         <th className="p-2 ">Item Details</th>
-                        <th className="px-4 py-4">Warehouse</th>
-                        <th className="px-4 py-4 text-center">Design Qty</th>
-                        <th className="px-4 py-4 text-center">Received</th>
-                        <th className="px-4 py-4 text-center">Accepted</th>
+                        <th className="p-2 ">Warehouse</th>
+                        <th className="p-2  text-center">Design Qty</th>
+                        <th className="p-2  text-center">Received</th>
+                        <th className="p-2  text-center">Accepted</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -814,7 +814,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                         <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
                           <td className="p-2 ">
                             <div className="flex flex-col gap-0.5">
-                              <div className="font-black text-slate-900 text-xs">{item.material_name || 'Unnamed Item'}</div>
+                              <div className=" text-slate-900 text-xs">{item.material_name || 'Unnamed Item'}</div>
                               <div className="inline-flex items-center p-1  rounded-md bg-slate-100 text-slate-600text-xs    w-fit tracking-tight border border-slate-200">
                                 {item.item_code}
                               </div>
@@ -825,14 +825,14 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4">
-                            <span className="text-[10px] font-black text-slate-500  bg-slate-100 px-2 py-1 rounded  border border-slate-200">
+                          <td className="p-2 ">
+                            <span className="text-xs  text-slate-500  bg-slate-100 px-2 py-1 rounded  border border-slate-200">
                               {item.warehouse_name || '—'}
                             </span>
                           </td>
-                          <td className="px-4 py-4 text-center font-black text-slate-400 text-xs">{parseFloat(item.ordered_qty || 0).toFixed(3)}</td>
-                          <td className="px-4 py-4 text-center font-black text-slate-600 text-xs">{parseFloat(item.received_qty || 0).toFixed(3)}</td>
-                          <td className="px-4 py-4 text-center font-black text-emerald-600 text-xs">
+                          <td className="p-2  text-center  text-slate-400 text-xs">{parseFloat(item.ordered_qty || 0).toFixed(3)}</td>
+                          <td className="p-2  text-center  text-slate-600 text-xs">{parseFloat(item.received_qty || 0).toFixed(3)}</td>
+                          <td className="p-2  text-center  text-emerald-600 text-xs">
                             {selectedQC.status === 'PENDING' ? 'Pending' : parseFloat(item.accepted_qty || 0).toFixed(3)}
                           </td>
                         </tr>
@@ -842,27 +842,27 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 </div>
               </div>
 
-              <div className="space-y-6">
-                <div className="p-5 bg-amber-50/50 rounded-3xl border border-amber-100/50 space-y-3">
-                  <div className="flex items-center gap-3">
+              <div className="space-y-2">
+                <div className="p-5 bg-amber-50/50 rounded border border-amber-100/50 space-y-3">
+                  <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-amber-100 text-amber-600 rounded  flex items-center justify-center">
                       <AlertTriangle className="w-4 h-4" />
                     </div>
-                    <h4 className="text-[10px] font-black text-amber-700  tracking-widest">Defects</h4>
+                    <h4 className="text-xs  text-amber-700  ">Defects</h4>
                   </div>
-                  <p className="text-xs text-slate-600 leading-relaxed  bg-white/50 p-4 rounded  border border-amber-50">
+                  <p className="text-xs text-slate-600 leading-relaxed  bg-white/50 p-2 rounded  border border-amber-50">
                     {selectedQC.defects || "No specific defects reported."}
                   </p>
                 </div>
 
-                <div className="p-5 bg-blue-50/50 rounded-3xl border border-blue-100/50 space-y-3">
-                  <div className="flex items-center gap-3">
+                <div className="p-5 bg-blue-50/50 rounded border border-blue-100/50 space-y-3">
+                  <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded  flex items-center justify-center">
                       <Beaker className="w-4 h-4" />
                     </div>
-                    <h4 className="text-[10px] font-black text-blue-700  tracking-widest">Remarks</h4>
+                    <h4 className="text-xs  text-blue-700  ">Remarks</h4>
                   </div>
-                  <p className="text-xs text-slate-600 leading-relaxed italic  bg-white/50 p-4 rounded  border border-blue-50">
+                  <p className="text-xs text-slate-600 leading-relaxed italic  bg-white/50 p-2 rounded  border border-blue-50">
                     "{selectedQC.remarks || 'Auto-created inspection record.'}"
                   </p>
                 </div>
@@ -872,7 +872,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             <div className="flex justify-end pt-4 border-t border-slate-50">
               <button
                 onClick={() => setShowViewModal(false)}
-                className="px-8 py-2.5 bg-slate-900 text-white rounded  text-xs font-black hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
+                className="px-8 py-2.5 bg-slate-900 text-white rounded  text-xs  hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
               >
                 Close Details
               </button>
@@ -887,35 +887,35 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         title="QUALITY CONTROL INSPECTION"
         size="6xl"
       >
-        <form onSubmit={handleUpdateQC} className="space-y-6 p-2">
+        <form onSubmit={handleUpdateQC} className="space-y-2 p-2">
           {/* Top Info */}
-          <div className="bg-slate-50/50 p-4 rounded  border border-slate-100 flex items-center justify-between">
+          <div className="bg-slate-50/50 p-2 rounded  border border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-6">
                <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-slate-400  tracking-widest">GRN Number</span>
-                  <span className="text-xs font-black text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
+                  <span className="text-xs  text-slate-400  ">GRN Number</span>
+                  <span className="text-xs  text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
                </div>
                <div className="h-8 w-px bg-slate-200"></div>
                <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-slate-400  tracking-widest">PO Number</span>
-                  <span className="text-xs font-black text-slate-700">{selectedQC?.po_number || '—'}</span>
+                  <span className="text-xs  text-slate-400  ">PO Number</span>
+                  <span className="text-xs  text-slate-700">{selectedQC?.po_number || '—'}</span>
                </div>
             </div>
-            <div className="flex items-center gap-4">
-               <div className="w-10 h-10 bg-white rounded  flex items-center justify-center text-slate-400 border border-slate-100 ">
+            <div className="flex items-center gap-2">
+               <div className="w-5 h-5 bg-white rounded  flex items-center justify-center text-slate-400 border border-slate-100 ">
                   <Clock className="w-5 h-5" />
                </div>
                <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-400  tracking-widest">Inspection Date</p>
-                  <p className="text-xs font-black text-slate-900">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  <p className="text-xs  text-slate-400  ">Inspection Date</p>
+                  <p className="text-xs  text-slate-900">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
             <FormControl label="INSPECTION STATUS">
               <select
-                className="w-full p-2 .5 bg-white rounded  border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-black text-xs text-slate-700  "
+                className="w-full p-2 .5 bg-white rounded  border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all  text-xs text-slate-700  "
                 value={editFormData.status}
                 onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
                 required
@@ -940,18 +940,18 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             </FormControl>
           </div>
 
-          <div className="space-y-4">
-             <div className="bg-white rounded-[24px] border border-slate-100 overflow-hidden ">
+          <div className="space-y-2">
+             <div className="bg-white rounded border border-slate-100 overflow-hidden ">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/80">
-                    <tr className="text-[10px] font-black text-slate-500  tracking-widest border-b border-slate-200">
+                    <tr className="text-xs  text-slate-500   border-b border-slate-200">
                       <th className="p-2 ">Item Details</th>
-                      <th className="px-4 py-4 text-center">Ordered</th>
-                      <th className="px-4 py-4 text-center">Invoice</th>
-                      <th className="px-4 py-4 text-center">Received Quantity</th>
-                      <th className="px-4 py-4 text-center text-rose-500">Shortage</th>
-                      <th className="px-4 py-4 text-center text-blue-500">Overage</th>
-                      <th className="px-4 py-4 text-center">Item Status</th>
+                      <th className="p-2  text-center">Ordered</th>
+                      <th className="p-2  text-center">Invoice</th>
+                      <th className="p-2  text-center">Received Quantity</th>
+                      <th className="p-2  text-center text-rose-500">Shortage</th>
+                      <th className="p-2  text-center text-blue-500">Overage</th>
+                      <th className="p-2  text-center">Item Status</th>
                       <th className="p-2 ">Item Notes</th>
                     </tr>
                   </thead>
@@ -964,7 +964,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                         <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
                           <td className="p-2 ">
                             <div className="flex flex-col gap-0.5">
-                              <div className="font-black text-slate-900 text-xs">{item.material_name || item.item_code || 'Unnamed Item'}</div>
+                              <div className=" text-slate-900 text-xs">{item.material_name || item.item_code || 'Unnamed Item'}</div>
                               <div className="inline-flex items-center p-1  rounded-md bg-slate-100 text-slate-600text-xs    w-fit tracking-tight border border-slate-200">
                                 {item.item_code}
                               </div>
@@ -975,39 +975,39 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-center font-black text-slate-400 text-xs">
+                          <td className="p-2  text-center  text-slate-400 text-xs">
                             {parseFloat(item.ordered_qty || 0).toFixed(2)}
                           </td>
-                          <td className="px-4 py-4 text-center font-black text-slate-900 text-xs">
+                          <td className="p-2  text-center  text-slate-900 text-xs">
                             {parseFloat(item.received_qty || 0).toFixed(2)}
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="p-2 ">
                             <div className="flex justify-center">
                               <input
                                 type="number"
                                 value={item.accepted_qty}
                                 onChange={(e) => handleItemQtyChange(idx, e.target.value)}
-                                className="w-20 p-2 .5 bg-white border border-blue-200 rounded  text-center text-xs font-black text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
+                                className="w-20 p-2 .5 bg-white border border-blue-200 rounded  text-center text-xs  text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
                               />
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-center font-black text-rose-500 text-xs">
+                          <td className="p-2  text-center  text-rose-500 text-xs">
                             {shortage > 0 ? shortage.toFixed(0) : '0'}
                           </td>
-                          <td className="px-4 py-4 text-center font-black text-blue-500 text-xs">
+                          <td className="p-2  text-center  text-blue-500 text-xs">
                             {overage > 0 ? overage.toFixed(0) : '0'}
                           </td>
-                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                          <td className="p-2  text-center whitespace-nowrap">
                             {shortage > 0 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-rose-50 text-rose-600 border border-rose-100 text-[9px]  font-black   ">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-rose-50 text-rose-600 border border-rose-100 text-xs     ">
                                 SHORTAGE ✅
                               </span>
                             ) : overage > 0 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-orange-50 text-orange-600 border border-orange-100 text-[9px]  font-black   ">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-orange-50 text-orange-600 border border-orange-100 text-xs     ">
                                 OVERAGE ✅
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-emerald-50 text-emerald-600 border border-emerald-100 text-[9px]  font-black   ">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded  bg-emerald-50 text-emerald-600 border border-emerald-100 text-xs     ">
                                 AVAILABLE ✅
                               </span>
                             )}
@@ -1032,20 +1032,20 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           {/* Footer */}
           <div className="flex items-center justify-between pt-6 border-t border-slate-100">
             <div>
-              <p className="text-[10px] font-black text-slate-400  tracking-widest">Total Received</p>
-              <p className="text-xl font-black text-blue-600">{editFormData.passQuantity} <span className="text-xs  text-slate-400">Units</span></p>
+              <p className="text-xs  text-slate-400  ">Total Received</p>
+              <p className="text-xl  text-blue-600">{editFormData.passQuantity} <span className="text-xs  text-slate-400">Units</span></p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="px-8 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs font-black hover:bg-slate-50 transition-all active:scale-95"
+                className="px-8 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all active:scale-95"
               >
                 CANCEL
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-2  px-8 py-2.5 bg-blue-600 text-white rounded  text-xs font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
+                className="flex items-center gap-2  px-8 py-2.5 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
               >
                 <ShieldCheck className="w-4 h-4" />
                 SAVE INSPECTION RESULTS
@@ -1057,16 +1057,16 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
       {/* Email Modal */}
       {showEmailModal && selectedQC && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
-            <div className="flex justify-between items-center p-6 border-b border-slate-50">
-              <div className="flex items-center gap-3">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
+          <div className="bg-white rounded shadow-2xl w-full max-w-2xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
+            <div className="flex justify-between items-center p-2 border-b border-slate-50">
+              <div className="flex items-center gap-2">
                 <div className="p-2 bg-blue-50 text-blue-600 rounded ">
                   <Mail className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-xl  text-slate-800 tracking-tight">Send QC Alert to Vendor</h2>
-                  <p className="text-[10px] text-slate-400   tracking-widest">GRN-{String(selectedQC.grn_id).padStart(4, '0')} • {selectedQC.vendor_name || 'Vendor'}</p>
+                  <p className="text-xs text-slate-400   ">GRN-{String(selectedQC.grn_id).padStart(4, '0')} • {selectedQC.vendor_name || 'Vendor'}</p>
                 </div>
               </div>
               <button 
@@ -1078,7 +1078,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             </div>
 
             <form onSubmit={handleSendEmail} className="p-6 space-y-5">
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <FormControl label="Recipient Email *">
                   <input
                     type="email"
@@ -1110,12 +1110,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   />
                 </FormControl>
 
-                <div className="flex items-center gap-3 p-4 bg-emerald-50/50 border border-emerald-100 rounded ">
+                <div className="flex items-center gap-2 p-2 bg-emerald-50/50 border border-emerald-100 rounded ">
                   <div className="p-2 bg-emerald-500 text-white rounded ">
                     <Paperclip className="w-4 h-4" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-[10px] font-black text-emerald-700  ">Attachment</p>
+                    <p className="text-xs  text-emerald-700  ">Attachment</p>
                     <p className="text-xs  text-emerald-600">QC_Report_GRN-{String(selectedQC.grn_id).padStart(4, '0')}.pdf</p>
                   </div>
                   <div className="flex items-center gap-2 ">
@@ -1126,12 +1126,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                       onChange={(e) => setEmailData({...emailData, attachPDF: e.target.checked})}
                       className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                     />
-                    <label htmlFor="attachPDF" className="text-[10px]  text-slate-500  ">Include</label>
+                    <label htmlFor="attachPDF" className="text-xs  text-slate-500  ">Include</label>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-2">
+              <div className="flex gap-2 justify-end pt-2">
                 <button
                   type="button"
                   onClick={() => setShowEmailModal(false)}
@@ -1142,7 +1142,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex items-center gap-2  px-8 py-2.5 bg-blue-600 text-white rounded  text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2  px-8 py-2.5 bg-blue-600 text-white rounded  text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />

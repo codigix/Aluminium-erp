@@ -794,8 +794,8 @@ function App() {
       showCancelButton: true,
       buttonsStyling: false,
       customClass: {
-        confirmButton: 'px-5 py-2 rounded  bg-rose-500 text-white  ml-3',
-        cancelButton: 'px-5 py-2 rounded  border border-slate-200 text-slate-600 '
+        confirmButton: 'p-2 rounded  bg-rose-500 text-white  ml-3',
+        cancelButton: 'p-2 rounded  border border-slate-200 text-slate-600 '
       }
     })
     if (!result.isConfirmed) return
@@ -868,8 +868,8 @@ function App() {
       showCancelButton: true,
       buttonsStyling: false,
       customClass: {
-        confirmButton: 'px-5 py-2 rounded  bg-rose-500 text-white  ml-3',
-        cancelButton: 'px-5 py-2 rounded  border border-slate-200 text-slate-600 '
+        confirmButton: 'p-2 rounded  bg-rose-500 text-white  ml-3',
+        cancelButton: 'p-2 rounded  border border-slate-200 text-slate-600 '
       }
     })
     if (!result.isConfirmed) return
@@ -948,7 +948,7 @@ function App() {
 
   const contactFormDisabled = !contactCompany || !isCompanyActive(contactCompany)
 
-  const fieldInputClass = 'w-full rounded  border border-slate-200/80 bg-white p-2  text-sm text-slate-900  focus:border-slate-900 focus:ring-2 focus:ring-slate-200 outline-none transition disabled:bg-slate-100 disabled:text-slate-400'
+  const fieldInputClass = 'w-full rounded  border border-slate-200/80 bg-white p-2  text-xs text-slate-900  focus:border-slate-900 focus:ring-2 focus:ring-slate-200 outline-none transition disabled:bg-slate-100 disabled:text-slate-400'
 
   const formatCurrency = value => currencyFormatter.format(Number(value) || 0)
 
@@ -1072,12 +1072,12 @@ function App() {
 
   if (!token || !user) {
     return (
-      <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 items-center justify-center p-4">
+      <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 items-center justify-center p-2">
         <div className="w-full max-w-md">
           <div className="bg-white rounded  shadow-2xl p-2 space-y-2">
             <div className="text-center space-y-2">
-              <div className="h-16 w-16 rounded  bg-slate-900 flex items-center justify-center mx-auto p-2">
-                <Building2 className="h-8 w-8 text-white" />
+              <div className="p-2 w-fit rounded  bg-slate-900 flex items-center justify-center mx-auto p-2">
+                <Building2 className="h-3 w-3 text-white" />
               </div>
               <h1 className="text-xl text-slate-900">SPTECHPIONEER</h1>
               <p className="text-xs text-slate-500">Sales & Operations ERP</p>
@@ -1087,7 +1087,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => setAuthMode('login')}
-                className={`flex-1 pb-3 text-sm  transition ${
+                className={`flex-1 pb-3 text-xs  transition ${
                   authMode === 'login'
                     ? 'text-slate-900 border-b-2 border-slate-900'
                     : 'text-slate-500 hover:text-slate-700'
@@ -1098,7 +1098,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => { setAuthMode('signup'); loadDepartmentsAndRoles() }}
-                className={`flex-1 pb-3 text-sm  transition ${
+                className={`flex-1 pb-3 text-xs  transition ${
                   authMode === 'signup'
                     ? 'text-slate-900 border-b-2 border-slate-900'
                     : 'text-slate-500 hover:text-slate-700'
@@ -1109,9 +1109,9 @@ function App() {
             </div>
 
             {authMode === 'login' ? (
-              <form onSubmit={handleLogin} className="">
+              <form onSubmit={handleLogin} className="grid gap-2">
                 <div>
-                  <label className="block text-sm  text-slate-700 mb-2">Email</label>
+                  <label className="block text-xs  text-slate-700 mb-2">Email</label>
                   <input
                     type="email"
                     value={loginEmail}
@@ -1121,8 +1121,8 @@ function App() {
                     disabled={loginLoading}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm  text-slate-700 mb-2">Password</label>
+                <div className=''>
+                  <label className="block text-xs  text-slate-700 mb-2">Password</label>
                   <input
                     type="password"
                     value={loginPassword}
@@ -1135,14 +1135,14 @@ function App() {
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-full px-5 py-2.5 rounded  bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition"
+                  className="w-full p-2  rounded  bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition"
                 >
                   {loginLoading ? 'Signing in...' : 'Sign In'}
                 </button>
               </form>
             ) : (
               <form onSubmit={handleSignup} className="space-y-3 max-h-96 overflow-y-auto">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs  text-slate-700 mb-1">First Name</label>
                     <input
@@ -1150,7 +1150,7 @@ function App() {
                       value={signupForm.first_name}
                       onChange={e => setSignupForm({ ...signupForm, first_name: e.target.value })}
                       placeholder="John"
-                      className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                       disabled={signupLoading}
                     />
                   </div>
@@ -1161,7 +1161,7 @@ function App() {
                       value={signupForm.last_name}
                       onChange={e => setSignupForm({ ...signupForm, last_name: e.target.value })}
                       placeholder="Doe"
-                      className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                       disabled={signupLoading}
                     />
                   </div>
@@ -1173,7 +1173,7 @@ function App() {
                     value={signupForm.email}
                     onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
                     placeholder="john@company.com"
-                    className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                     disabled={signupLoading}
                   />
                 </div>
@@ -1193,7 +1193,7 @@ function App() {
                         setRoles([])
                       }
                     }}
-                    className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                     disabled={signupLoading}
                   >
                     <option value="">Select Department</option>
@@ -1207,7 +1207,7 @@ function App() {
                   <select
                     value={signupForm.role_id}
                     onChange={e => setSignupForm({ ...signupForm, role_id: e.target.value })}
-                    className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                     disabled={signupLoading || !signupForm.department_id}
                   >
                     <option value="">Select Role</option>
@@ -1216,7 +1216,7 @@ function App() {
                     ))}
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs  text-slate-700 mb-1">Password</label>
                     <input
@@ -1224,7 +1224,7 @@ function App() {
                       value={signupForm.password}
                       onChange={e => setSignupForm({ ...signupForm, password: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                       disabled={signupLoading}
                     />
                   </div>
@@ -1235,7 +1235,7 @@ function App() {
                       value={signupForm.confirmPassword}
                       onChange={e => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-3 py-2 rounded  text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
                       disabled={signupLoading}
                     />
                   </div>
@@ -1243,7 +1243,7 @@ function App() {
                 <button
                   type="submit"
                   disabled={signupLoading}
-                  className="w-full px-5 py-2.5 rounded  bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition text-sm"
+                  className="w-full p-2  rounded  bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition text-xs"
                 >
                   {signupLoading ? 'Creating account...' : 'Sign Up'}
                 </button>
@@ -1251,7 +1251,7 @@ function App() {
             )}
 
             {toast && (
-              <div className={`p-3 rounded  border text-sm ${
+              <div className={`p-2 rounded  border text-xs ${
                 toast.includes('success') || toast.includes('Welcome')
                   ? 'bg-green-50 border-green-200 text-green-700'
                   : 'bg-red-50 border-red-200 text-red-700'
@@ -1263,7 +1263,7 @@ function App() {
             {authMode === 'login' && (
               <div className="text-left text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
                 <p className="">Demo Credentials:</p>
-                <div className="grid grid-cols-2 gap-2 text-left bg-slate-50 p-3 rounded  overflow-y-auto max-h-64">
+                <div className="grid grid-cols-2 gap-2 text-left bg-slate-50 p-2 rounded  overflow-y-auto max-h-64">
                   <button 
                     onClick={() => performLogin('admin@company.com', 'Admin@123')}
                     className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left col-span-2"
@@ -1339,12 +1339,12 @@ function App() {
 
   return (
     <>
-      <div className="flex min-h-screen bg-gray-50 text-slate-900">
+      <div className="flex h-screen overflow-hidden bg-gray-50 text-slate-900">
         <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
           mobileMenuOpen ? 'flex' : 'hidden'
         } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-2 border-b flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1">
+              <div className="flex items-center gap-2 flex-1">
                 <div className="h-8 w-8 rounded  bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
                   <Building2 className="h-4 w-4 text-slate-900" />
                 </div>
@@ -1363,7 +1363,7 @@ function App() {
                 </svg>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-2">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">
               {navigationItems.map((item, index) => {
                 const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
                 const isDisabled = item.isGroup || !item.moduleId
@@ -1372,7 +1372,7 @@ function App() {
                   return (
                     <div key={`group-${item.groupId || item.label}-${index}`} className="pt-1">
                       <div
-                        className="w-full flex items-center justify-between px-3 py-2 text-xs  text-slate-500   hover:text-slate-700 transition-colors"
+                        className="w-full flex items-center justify-between p-2 text-xs  text-slate-500   hover:text-slate-700 transition-colors"
                       >
                         <span>{item.label}</span>
                       </div>
@@ -1390,7 +1390,7 @@ function App() {
                         setMobileMenuOpen(false)
                       }
                     }}
-                    className={`flex items-center gap-3 w-full p-2  text-sm  transition-all duration-150 group ${item.indent ? 'ml-2' : ''} ${
+                    className={`flex items-center gap-2 w-full p-2  text-xs  transition-all duration-150 group ${item.indent ? '' : ''} ${
                       isActive 
                         ? 'bg-indigo-50 text-indigo-700 ' 
                         : isDisabled 
@@ -1413,7 +1413,7 @@ function App() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="w-full px-3 py-2 rounded  border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
+                className="w-full p-2 rounded  border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
               >
                 Logout
               </button>
@@ -1427,13 +1427,13 @@ function App() {
           />
         )}
 
-        <div className={`flex-1 lg:ml-64 flex flex-col bg-slate-50`}>
+        <div className={`flex-1 lg:ml-64 flex flex-col bg-slate-50 min-w-0`}>
           <div className="sticky top-0 z-10 bg-white border-b border-slate-200 ">
-              <div className="p-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
+              <div className="p-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-end">
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <div className="text-right">
-                    <p className="text-sm text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                    <p className="text-xs text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
                     <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
                   </div>
                   <div className="h-5 w-5 rounded  bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white  text-lg">
@@ -1443,7 +1443,7 @@ function App() {
               </div>
             </div>
 
-          <div className="flex-1 p-3">
+          <div className="flex-1 p-2 min-w-0 overflow-y-auto custom-scrollbar">
             {location.pathname.startsWith('/receipt-details/') ? (
               <POReceiptDetails />
             ) : !allowedModules.includes(activeModule) && user.department_code !== 'ADMIN' ? (
@@ -1455,7 +1455,7 @@ function App() {
             ) : (
               <>
                 {toast && (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-2  rounded  text-sm ">
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-2  rounded  text-xs ">
                     {toast}
                   </div>
                 )}
@@ -1829,18 +1829,18 @@ function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
+                <div className="flex items-center justify-end gap-2 pt-6 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={closeDrawer}
-                    className="p-2  rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300"
+                    className="p-2  rounded  border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
                   >
                     {drawerMode === 'view' ? 'Close' : 'Cancel'}
                   </button>
                   {drawerMode !== 'view' && (
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded  bg-indigo-500 text-white text-sm   hover:bg-indigo-600 disabled:opacity-60"
+                      className="p-2 rounded  bg-indigo-500 text-white text-xs   hover:bg-indigo-600 disabled:opacity-60"
                       disabled={loading}
                     >
                       {loading ? 'Saving...' : primaryButtonLabel}
@@ -1863,7 +1863,7 @@ function App() {
                 <h3 className="text-xl text-slate-900 text-xs">{contactCompany.company_name}</h3>
                 <p className="text-xs text-slate-500">{contactCompany.company_code}</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <StatusBadge status={contactCompany.status} />
                 <button
                   type="button"
@@ -1884,7 +1884,7 @@ function App() {
                   <button
                     type="button"
                     onClick={resetContactForm}
-                    className="p-2  rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300 disabled:opacity-50"
+                    className="p-2  rounded  border border-slate-200 text-xs  text-slate-600 hover:border-slate-300 disabled:opacity-50"
                     disabled={contactFormDisabled}
                   >
                     New Contact
@@ -1895,8 +1895,8 @@ function App() {
                 ) : contactList.length ? (
                   <div className="space-y-3">
                     {contactList.map(contact => (
-                      <div key={contact.id} className="border border-slate-200 rounded  bg-white p-4 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
+                      <div key={contact.id} className="border border-slate-200 rounded  bg-white p-2 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="text-base text-slate-900 text-xs">{contact.name || 'Untitled Contact'}</p>
                             <p className="text-xs text-slate-500">{contact.designation || '—'}</p>
@@ -1906,7 +1906,7 @@ function App() {
                           </div>
                           <StatusBadge status={contact.status} />
                         </div>
-                        <div className="grid gap-1 text-sm text-slate-600">
+                        <div className="grid gap-1 text-xs text-slate-600">
                           <p>Email: {contact.email || '—'}</p>
                           <p>Phone: {contact.phone || '—'}</p>
                         </div>
@@ -1945,13 +1945,13 @@ function App() {
                   </div>
                 )}
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 space-y-5">
+              <div className="bg-slate-50 border border-slate-200 rounded p-5 space-y-5">
                 <div>
                   <p className="text-xs  text-slate-400 ">{editingContactId ? 'Update Contact' : 'Add Contact'}</p>
                   <h4 className="text-xl text-slate-900 text-xs">{editingContactId ? 'Edit Existing Contact' : 'Create New Contact'}</h4>
                 </div>
                 {!isCompanyActive(contactCompany) && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-700 p-2  rounded  text-sm">
+                  <div className="bg-amber-50 border border-amber-200 text-amber-700 p-2  rounded  text-xs">
                     Activate this company to manage contacts.
                   </div>
                 )}
@@ -1967,7 +1967,7 @@ function App() {
                       required
                     />
                   </div>
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid md:grid-cols-2 gap-2">
                     <label className="flex flex-col gap-2 text-[0.65rem]  tracking-[0.35em] text-slate-500 ">
                       <span>Designation</span>
                       <input
@@ -1994,7 +1994,7 @@ function App() {
                       </select>
                     </label>
                   </div>
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid md:grid-cols-2 gap-2">
                     <label className="flex flex-col gap-2 text-[0.65rem]  tracking-[0.35em] text-slate-500 ">
                       <span>Email</span>
                       <input
@@ -2017,10 +2017,10 @@ function App() {
                       />
                     </label>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <div className="flex flex-wrap items-center gap-2 pt-2">
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded  bg-indigo-500 text-white text-sm   hover:bg-indigo-600 disabled:opacity-60"
+                      className="p-2 rounded  bg-indigo-500 text-white text-xs   hover:bg-indigo-600 disabled:opacity-60"
                       disabled={contactFormDisabled || contactSaving}
                     >
                       {contactSaving ? 'Saving...' : editingContactId ? 'Update Contact' : 'Add Contact'}
@@ -2028,7 +2028,7 @@ function App() {
                     {editingContactId && (
                       <button
                         type="button"
-                        className="p-2  rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300"
+                        className="p-2  rounded  border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
                         onClick={resetContactForm}
                         disabled={contactFormDisabled}
                       >
@@ -2047,15 +2047,15 @@ function App() {
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-slate-900/60" onClick={closePoDetailDrawer} />
           <div className="absolute inset-y-0 right-0 w-full max-w-4xl bg-white shadow-2xl flex flex-col">
-            <div className="px-8 py-6 border-b border-slate-200">
+            <div className="p-2  border-b border-slate-200">
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-xs  text-slate-400 ">Purchase Order</p>
                   <h2 className="text-xl text-slate-900 mt-1">{poDetail?.po_number || 'PO'}</h2>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   {poDetailPdfUrl && (
-                    <a href={poDetailPdfUrl} target="_blank" rel="noreferrer" className="p-2  rounded  bg-indigo-100 text-sm  text-indigo-700 hover:bg-indigo-200">
+                    <a href={poDetailPdfUrl} target="_blank" rel="noreferrer" className="p-2  rounded  bg-indigo-100 text-xs  text-indigo-700 hover:bg-indigo-200">
                       Download PDF
                     </a>
                   )}
@@ -2071,27 +2071,27 @@ function App() {
             <div className="flex-1 overflow-y-auto">
               {poDetailLoading && <p className="p-8 text-xs text-slate-500">Loading PO details…</p>}
               {!poDetailLoading && poDetailError && (
-                <div className="m-6 bg-rose-50 border border-rose-200 text-rose-600 p-2  rounded  text-sm">{poDetailError}</div>
+                <div className="m-6 bg-rose-50 border border-rose-200 text-rose-600 p-2  rounded  text-xs">{poDetailError}</div>
               )}
               {!poDetailLoading && !poDetailError && poDetail && (
-                <div className="p-8 space-y-8">
+                <div className="p-2 space-y-2">
                   <div className="grid md:grid-cols-3 gap-6">
-                    <div className="rounded  border border-slate-200 p-4">
+                    <div className="rounded  border border-slate-200 p-2">
                       <p className="text-xs text-slate-500  mb-2">PO Date</p>
                       <p className="text-md text-slate-900 text-xs">{formatDisplayDate(poDetail.po_date)}</p>
                     </div>
-                    <div className="rounded  border border-slate-200 p-4">
+                    <div className="rounded  border border-slate-200 p-2">
                       <p className="text-xs text-slate-500  mb-2">Status</p>
                       <p className="text-md text-slate-900 text-xs">{(poDetail.status || 'DRAFT').split('_').map(chunk => chunk.charAt(0) + chunk.slice(1).toLowerCase()).join(' ')}</p>
                     </div>
-                    <div className="rounded  border border-slate-200 p-4">
+                    <div className="rounded  border border-slate-200 p-2">
                       <p className="text-xs text-slate-500  mb-2">Currency</p>
                       <p className="text-md text-slate-900 text-xs">{poDetail.currency || 'INR'}</p>
                     </div>
                   </div>
 
                   <div className="border-t border-slate-200 pt-8">
-                    <div className="grid md:grid-cols-2 gap-8 text-sm">
+                    <div className="grid md:grid-cols-2 gap-8 text-xs">
                       <div>
                         <p className="text-[0.65rem]  tracking-[0.35em] text-slate-500  mb-3">Terms & Conditions</p>
                         <div className="space-y-2">
@@ -2150,8 +2150,8 @@ function App() {
                   <div className="border-t border-slate-200 pt-8">
                     <div className="flex justify-end">
                       <div className="w-full md:w-80 space-y-3">
-                        <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal:</span><span className=" text-slate-900">{formatCurrencyByCode(poDetail.subtotal, poDetail.currency)}</span></div>
-                        <div className="flex justify-between text-sm border-t border-slate-200 pt-3"><span className="text-slate-600">Taxes:</span><span className=" text-slate-900">{formatCurrencyByCode(poDetail.tax_total, poDetail.currency)}</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-slate-600">Subtotal:</span><span className=" text-slate-900">{formatCurrencyByCode(poDetail.subtotal, poDetail.currency)}</span></div>
+                        <div className="flex justify-between text-xs border-t border-slate-200 pt-3"><span className="text-slate-600">Taxes:</span><span className=" text-slate-900">{formatCurrencyByCode(poDetail.tax_total, poDetail.currency)}</span></div>
                         <div className="flex justify-between bg-slate-900 text-white rounded  p-2 "><span>Total Amount:</span><span className="text-xl">{formatCurrencyByCode(poDetail.net_total, poDetail.currency)}</span></div>
                       </div>
                     </div>
@@ -2160,7 +2160,7 @@ function App() {
                   {poDetail.remarks && (
                     <div className="border-t border-slate-200 pt-8">
                       <p className="text-[0.65rem]  tracking-[0.35em] text-slate-500  mb-3">Remarks</p>
-                      <p className="text-sm text-slate-600 whitespace-pre-wrap">{poDetail.remarks}</p>
+                      <p className="text-xs text-slate-600 whitespace-pre-wrap">{poDetail.remarks}</p>
                     </div>
                   )}
                 </div>

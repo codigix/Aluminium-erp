@@ -240,7 +240,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
       render: (val, row) => (
         <div>
           <div className="text-slate-900 ">{val || 'No workstation assigned'}</div>
-          <div className="text-[10px] text-slate-400  ">{row.workstation_codes}</div>
+          <div className="text-xs text-slate-400  ">{row.workstation_codes}</div>
         </div>
       )
     },
@@ -393,7 +393,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
                 subLabelField="subLabel"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <label className="text-xs  text-slate-500">Std Time *</label>
                 <input 
@@ -446,7 +446,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-6 border-t border-slate-100">
             <button 
               type="button" 
               onClick={() => { setShowForm(false); resetForm(); }}

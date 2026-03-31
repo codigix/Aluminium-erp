@@ -325,10 +325,10 @@ const Warehouses = () => {
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-orange-50 rounded ">
+    <div className="p-2 space-y-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-orange-50 rounded ">
             <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
@@ -381,7 +381,7 @@ const Warehouses = () => {
         <div className="bg-white rounded  border border-slate-200  overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500  tracking-[0.2em]text-xs   ">
+              <thead className="bg-slate-50 text-slate-500  text-xs   ">
                 <tr>
                   <th className="p-2 text-left">Source (GRN/PO)</th>
                   <th className="p-2 text-left">Item Details</th>
@@ -397,14 +397,14 @@ const Warehouses = () => {
                 {allocationLoading ? (
                   <tr>
                     <td colSpan="8" className="px-6 py-16 text-center">
-                      <div className="w-10 h-10 border-4 border-slate-200 border-t-orange-500 rounded  animate-spin mx-auto mb-4" />
+                      <div className="w-5 h-5 border-4 border-slate-200 border-t-orange-500 rounded  animate-spin mx-auto mb-4" />
                       <p className="text-xs text-slate-500 ">Loading pending allocations...</p>
                     </td>
                   </tr>
                 ) : pendingItems.length === 0 ? (
                   <tr>
                     <td colSpan="8" className="px-6 py-16 text-center">
-                      <div className="p-3 bg-slate-50 rounded   w-fit mx-auto mb-4">
+                      <div className="p-2 bg-slate-50 rounded   w-fit mx-auto mb-4">
                         <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
@@ -418,7 +418,7 @@ const Warehouses = () => {
                     <tr key={item.grn_item_id} className="group hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-5">
                         <div className=" text-orange-600 ">#{item.grn_number}</div>
-                        <div className="text-[10px] text-slate-400 tracking-tight mt-0.5">PO: {item.po_number}</div>
+                        <div className="text-xs text-slate-400 tracking-tight mt-0.5">PO: {item.po_number}</div>
                       </td>
                       <td className="px-6 py-5">
                         <div className=" text-slate-900 ">{item.item_code}</div>
@@ -435,7 +435,7 @@ const Warehouses = () => {
                       </td>
                       <td className="px-6 py-5">
                         <select
-                          className="w-full px-3 py-2 border border-slate-200 rounded  text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-white transition-all"
+                          className="w-full p-2 border border-slate-200 rounded  text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-white transition-all"
                           value={allocationData[item.grn_item_id]?.target_warehouse || ''}
                           onChange={(e) => handleAllocationInputChange(item.grn_item_id, 'target_warehouse', e.target.value)}
                         >
@@ -448,7 +448,7 @@ const Warehouses = () => {
                       <td className="px-6 py-5">
                         <input
                           type="number"
-                          className="w-24 px-3 py-2 border border-slate-200 rounded  text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                          className="w-24 p-2 border border-slate-200 rounded  text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                           value={allocationData[item.grn_item_id]?.allocate_qty || ''}
                           onChange={(e) => handleAllocationInputChange(item.grn_item_id, 'allocate_qty', e.target.value)}
                           max={item.pending_allocation_qty}
@@ -495,8 +495,8 @@ const Warehouses = () => {
         onClose={resetForm}
         title={editingWarehouse ? 'Edit Warehouse' : 'Create Warehouse'}
       >
-        <form onSubmit={handleSubmit} className="space-y-4 p-2">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-2 p-2">
+          <div className="grid grid-cols-2 gap-2">
             <FormControl label="Warehouse Code *">
               <input
                 type="text"
@@ -520,7 +520,7 @@ const Warehouses = () => {
             </FormControl>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             <FormControl label="Type">
               <select
                 value={formData.warehouseType}
@@ -546,7 +546,7 @@ const Warehouses = () => {
             </FormControl>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             <FormControl label="Capacity">
               <input
                 type="number"
@@ -568,7 +568,7 @@ const Warehouses = () => {
             </FormControl>
           </div>
 
-          <div className="flex justify-end gap-3 mt-6">
+          <div className="flex justify-end gap-2 mt-6">
             <button
               type="button"
               onClick={resetForm}

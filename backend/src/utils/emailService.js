@@ -237,17 +237,17 @@ const generateChallanHTML = (challan) => {
         body { font-family: sans-serif; color: #334155; margin: 0; padding: 0; line-height: 1.5; }
         .container { width: 210mm; margin: 0 auto; background: white; border: 1px solid #e2e8f0; }
         .header { background-color: #4f6ebc; color: white; padding: 30px; text-align: center; }
-        .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+        .header h1 { margin: 0; font-size: 24px; text-transform: ; letter-spacing: 2px; }
         .header p { margin: 5px 0 0; font-size: 12px; opacity: 0.9; }
         .title-section { padding: 20px 40px; display: flex; justify-content: space-between; border-bottom: 2px solid #f1f5f9; }
         .title-section h2 { margin: 0; font-size: 28px; color: #1e3a8a; }
         .info-grid { padding: 30px 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
         .card { border: 1px solid #f1f5f9; border-radius: 12px; background: #f8fafc; overflow: hidden; }
-        .card-header { background: #f1f5f9; padding: 8px 15px; font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; }
+        .card-header { background: #f1f5f9; padding: 8px 15px; font-size: 10px; font-weight: bold; color: #64748b; text-transform: ; }
         .card-body { padding: 15px; font-size: 12px; }
         .table-container { padding: 0 40px; margin-top: 20px; }
         table { width: 100%; border-collapse: collapse; border: 2px solid #f1f5f9; border-radius: 15px; overflow: hidden; }
-        th { background: #e0e7ff; color: #1e3a8a; font-size: 10px; text-transform: uppercase; padding: 12px; text-align: left; }
+        th { background: #e0e7ff; color: #1e3a8a; font-size: 10px; text-transform: ; padding: 12px; text-align: left; }
         .totals { background: #fffbeb; border: 2px solid #fde68a; padding: 20px; border-radius: 20px; margin: 20px 40px; }
         .footer { background: #f1f5f9; padding: 15px; text-align: center; font-size: 9px; color: #64748b; margin-top: auto; }
       </style>
@@ -279,7 +279,7 @@ const generateChallanHTML = (challan) => {
                   Email: ${challan.snapshot_customer_email || 'N/A'}
                 </div>
                 <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
-                  <div style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">Billing Address:</div>
+                  <div style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: ;">Billing Address:</div>
                   <div style="margin-top: 3px;">${challan.snapshot_billing_address || 'N/A'}</div>
                 </div>
               </div>
@@ -294,28 +294,28 @@ const generateChallanHTML = (challan) => {
               <div class="card-header">Transport Details:</div>
               <div class="card-body">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                  <span style="color: #94a3b8; font-size: 10px; text-transform: uppercase;">Transporter:</span>
+                  <span style="color: #94a3b8; font-size: 10px; text-transform: ;">Transporter:</span>
                   <span style="font-weight: bold;">${challan.transporter || '—'}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                  <span style="color: #94a3b8; font-size: 10px; text-transform: uppercase;">Vehicle No:</span>
+                  <span style="color: #94a3b8; font-size: 10px; text-transform: ;">Vehicle No:</span>
                   <span style="background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 4px; font-weight: bold;">${challan.vehicle_number || '—'}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                  <span style="color: #94a3b8; font-size: 10px; text-transform: uppercase;">Driver:</span>
+                  <span style="color: #94a3b8; font-size: 10px; text-transform: ;">Driver:</span>
                   <span style="font-weight: bold;">${challan.driver_name || '—'}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                  <span style="color: #94a3b8; font-size: 10px; text-transform: uppercase;">Dispatch Time:</span>
+                  <span style="color: #94a3b8; font-size: 10px; text-transform: ;">Dispatch Time:</span>
                   <span style="font-weight: bold;">${dispatchTime}</span>
                 </div>
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0; overflow: hidden;">
                   <div style="float: left; width: 45%; background: #f1f5f9; padding: 10px; border-radius: 8px; text-align: center;">
-                    <div style="font-size: 8px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">Total Qty</div>
+                    <div style="font-size: 8px; font-weight: bold; color: #94a3b8; text-transform: ;">Total Qty</div>
                     <div style="font-size: 16px; font-weight: bold; color: #1e3a8a;">${totalQty} <span style="font-size: 9px;">PCS</span></div>
                   </div>
                   <div style="float: right; width: 45%; background: #f1f5f9; padding: 10px; border-radius: 8px; text-align: center;">
-                    <div style="font-size: 8px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">Total Weight</div>
+                    <div style="font-size: 8px; font-weight: bold; color: #94a3b8; text-transform: ;">Total Weight</div>
                     <div style="font-size: 16px; font-weight: bold; color: #1e3a8a;">200 <span style="font-size: 9px;">KG</span></div>
                   </div>
                 </div>
@@ -341,7 +341,7 @@ const generateChallanHTML = (challan) => {
           </table>
         </div>
         <div class="totals">
-          <div style="font-size: 10px; font-weight: bold; color: #92400e; text-transform: uppercase; margin-bottom: 5px;">Remarks:</div>
+          <div style="font-size: 10px; font-weight: bold; color: #92400e; text-transform: ; margin-bottom: 5px;">Remarks:</div>
           <div style="font-size: 12px; color: #b45309; font-style: italic;">"${challan.remarks || 'Material sent for delivery. Please check items and quantities before receiving.'}"</div>
         </div>
         <div class="footer">

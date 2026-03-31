@@ -35,9 +35,9 @@ const StatMiniCard = ({ title, count, color, icon }) => {
   };
   
   return (
-    <div className={`p-4 rounded-xl border ${colorMap[color]} flex flex-col items-center text-center transition-all hover:shadow-md`}>
-      <div className="p-2.5 bg-white rounded-lg mb-2 shadow-sm">{icon}</div>
-      <p className="text-[10px]  uppercase tracking-wider opacity-80 mb-0.5">{title}</p>
+    <div className={`p-2 rounded  border ${colorMap[color]} flex flex-col items-center text-center transition-all hover:`}>
+      <div className="p-2.5 bg-white rounded  mb-2 shadow-sm">{icon}</div>
+      <p className="text-xs    opacity-80 mb-0.5">{title}</p>
       <p className="text-xl ">{count || 0}</p>
     </div>
   );
@@ -293,24 +293,24 @@ const GRN = () => {
         <div className="flex justify-end gap-2">
           <button 
             onClick={() => handleViewGRN(grn)} 
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
             title="View Details"
           >
-            <Eye size={16} />
+            <Eye size={15} />
           </button>
           <button 
             onClick={() => handleEditGRN(grn)} 
-            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all"
             title="Edit GRN"
           >
-            <FileEdit size={16} />
+            <FileEdit size={15} />
           </button>
           <button 
             onClick={() => handleDeleteGRN(grn.id)} 
-            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all"
             title="Delete GRN"
           >
-            <Trash2 size={16} />
+            <Trash2 size={15} />
           </button>
         </div>
       )
@@ -318,22 +318,22 @@ const GRN = () => {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-100">
+    <div className="space-y-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded  border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-600 rounded  shadow-lg shadow-indigo-100">
             <ClipboardList className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl  text-slate-900">GRN Records</h1>
-            <p className="text-sm text-slate-500 font-medium">History of all Goods Received Notes</p>
+            <h1 className="text-xl  text-slate-900">GRN Records</h1>
+            <p className="text-xs text-slate-500 ">History of all Goods Received Notes</p>
           </div>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+          className="flex items-center justify-center gap-2 px-6 p-2 bg-indigo-600 text-white rounded  text-sm font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
         >
-          <Plus size={18} />
+          <Plus size={15} />
           Create GRN
         </button>
       </div>
@@ -348,26 +348,26 @@ const GRN = () => {
       />
 
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <StatMiniCard title="Total GRNs" count={stats.totalGrns} color="indigo" icon={<FileText size={18} />} />
-          <StatMiniCard title="Pending" count={stats.pendingGrns} color="amber" icon={<Clock size={18} />} />
-          <StatMiniCard title="Received" count={stats.receivedGrns} color="cyan" icon={<CheckCircle size={18} />} />
-          <StatMiniCard title="Approved" count={stats.approvedGrns} color="emerald" icon={<CheckCircle size={18} />} />
-          <StatMiniCard title="Rejected" count={stats.rejectedGrns} color="rose" icon={<XCircle size={18} />} />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <StatMiniCard title="Total GRNs" count={stats.totalGrns} color="indigo" icon={<FileText size={15} />} />
+          <StatMiniCard title="Pending" count={stats.pendingGrns} color="amber" icon={<Clock size={15} />} />
+          <StatMiniCard title="Received" count={stats.receivedGrns} color="cyan" icon={<CheckCircle size={15} />} />
+          <StatMiniCard title="Approved" count={stats.approvedGrns} color="emerald" icon={<CheckCircle size={15} />} />
+          <StatMiniCard title="Rejected" count={stats.rejectedGrns} color="rose" icon={<XCircle size={15} />} />
         </div>
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center p-4 bg-slate-50 border-b border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 transition-all">
+          <div className="bg-white rounded  shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
               <div>
                 <h3 className="text-base  text-slate-900">Create Goods Received Note</h3>
-                <p className="text-xs text-slate-500 font-medium tracking-wide mt-0.5">Record incoming material from vendor</p>
+                <p className="text-xs text-slate-500 tracking-wide mt-0.5">Record incoming material from vendor</p>
               </div>
               <button 
                 onClick={() => setShowModal(false)} 
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-slate-200"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded  transition-all border border-transparent hover:border-slate-200"
               >
                 <X size={20} />
               </button>
@@ -423,7 +423,7 @@ const GRN = () => {
                 />
               </div>
 
-              <div className="flex gap-3 justify-end pt-6 border-t border-slate-100">
+              <div className="flex gap-2 justify-end pt-6 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
@@ -444,12 +444,12 @@ const GRN = () => {
       )}
 
       {showViewModal && selectedGRN && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 transition-all">
           <div className="bg-white rounded  shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
               <div>
-                <h3 className="text-sm  text-slate-900  ">GRN Details</h3>
-                <p className="text-[10px] text-slate-500  tracking-wide mt-0.5">Goods Received Note Information</p>
+                <h3 className="text-xs  text-slate-900  ">GRN Details</h3>
+                <p className="text-xs text-slate-500  tracking-wide mt-0.5">Goods Received Note Information</p>
               </div>
               <button 
                 onClick={() => setShowViewModal(false)} 
@@ -462,25 +462,25 @@ const GRN = () => {
             </div>
 
             <div className="p-6">
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100">
-                  <p className="text-[10px]  text-slate-400   mb-1">GRN Number</p>
-                  <p className="text-sm  text-slate-900">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1">GRN Number</p>
+                  <p className="text-xs  text-slate-900">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
                 </div>
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100">
-                  <p className="text-[10px]  text-slate-400   mb-1">PO Number</p>
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1">PO Number</p>
                   <p className="text-sm  text-indigo-600">{selectedGRN.poNumber}</p>
                 </div>
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100">
-                  <p className="text-[10px]  text-slate-400   mb-1">GRN Date</p>
-                  <p className="text-sm  text-slate-900">{formatDate(selectedGRN.grnDate)}</p>
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1">GRN Date</p>
+                  <p className="text-xs  text-slate-900">{formatDate(selectedGRN.grnDate)}</p>
                 </div>
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100">
-                  <p className="text-[10px]  text-slate-400   mb-1">Received Qty</p>
-                  <p className="text-sm  text-slate-900">{selectedGRN.receivedQuantity}</p>
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1">Received Qty</p>
+                  <p className="text-xs  text-slate-900">{selectedGRN.receivedQuantity}</p>
                 </div>
-                <div className="bg-slate-50 p-4 rounded  border border-slate-100 col-span-2">
-                  <p className="text-[10px]  text-slate-400   mb-2">Current Status</p>
+                <div className="bg-slate-50 p-2 rounded  border border-slate-100 col-span-2">
+                  <p className="text-xs  text-slate-400   mb-2">Current Status</p>
                   <span className={`inline-flex p-2  rounded text-xs     ${grnStatusColors[selectedGRN.status]?.badge}`}>
                     {grnStatusColors[selectedGRN.status]?.label || selectedGRN.status}
                   </span>
@@ -488,8 +488,8 @@ const GRN = () => {
               </div>
 
               {selectedGRN.notes && (
-                <div className="mb-6 bg-indigo-50 border border-indigo-100 p-4 rounded ">
-                  <p className="text-[10px]  text-indigo-600   mb-2">Notes</p>
+                <div className="mb-6 bg-indigo-50 border border-indigo-100 p-2 rounded ">
+                  <p className="text-xs  text-indigo-600   mb-2">Notes</p>
                   <p className="text-sm text-slate-700  leading-relaxed">{selectedGRN.notes}</p>
                 </div>
               )}
@@ -508,12 +508,12 @@ const GRN = () => {
       )}
 
       {showEditModal && selectedGRN && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 transition-all">
           <div className="bg-white rounded  shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-2 bg-slate-50 border-b border-slate-200">
               <div>
-                <h3 className="text-sm  text-slate-900  ">Update GRN Status</h3>
-                <p className="text-[10px] text-slate-500  tracking-wide mt-0.5">Modify progress of Goods Received Note</p>
+                <h3 className="text-xs  text-slate-900  ">Update GRN Status</h3>
+                <p className="text-xs text-slate-500  tracking-wide mt-0.5">Modify progress of Goods Received Note</p>
               </div>
               <button 
                 onClick={() => setShowEditModal(false)} 
@@ -526,17 +526,17 @@ const GRN = () => {
             </div>
 
             <form onSubmit={handleUpdateGRN} className="p-6 space-y-3">
-              <div className="bg-slate-50 p-4 rounded  border border-slate-200 grid grid-cols-3 gap-4">
+              <div className="bg-slate-50 p-2 rounded  border border-slate-200 grid grid-cols-3 gap-2">
                 <div>
-                  <p className="text-[10px]  text-slate-400   mb-1">GRN ID</p>
+                  <p className="text-xs  text-slate-400   mb-1">GRN ID</p>
                   <p className="text-xs  text-slate-700">GRN-{String(selectedGRN.id).padStart(4, '0')}</p>
                 </div>
                 <div>
-                  <p className="text-[10px]  text-slate-400   mb-1">PO Number</p>
+                  <p className="text-xs  text-slate-400   mb-1">PO Number</p>
                   <p className="text-xs  text-indigo-600">{selectedGRN.poNumber}</p>
                 </div>
                 <div>
-                  <p className="text-[10px]  text-slate-400   mb-1">Received Qty</p>
+                  <p className="text-xs  text-slate-400   mb-1">Received Qty</p>
                   <p className="text-xs  text-slate-700">{selectedGRN.receivedQuantity}</p>
                 </div>
               </div>
@@ -558,7 +558,7 @@ const GRN = () => {
                 </select>
               </div>
 
-              <div className="flex gap-3 justify-end pt-6 border-t border-slate-100">
+              <div className="flex gap-2 justify-end pt-6 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}

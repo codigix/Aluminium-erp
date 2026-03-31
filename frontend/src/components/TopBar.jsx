@@ -9,11 +9,11 @@ const TopBar = () => (
     <div className="top-bar-title">Inventory Dashboard</div>
     <div className="top-bar-actions">
       <button type="button" className="icon-button" aria-label="View notifications">
-        <Bell size={18} />
+        <Bell size={15} />
         <span className="badge-dot" />
       </button>
       <button type="button" className="icon-button profile" aria-label="Open profile">
-        <UserRound size={18} />
+        <UserRound size={15} />
       </button>
     </div>
   </header>

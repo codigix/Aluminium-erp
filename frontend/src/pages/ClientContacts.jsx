@@ -7,7 +7,7 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
         <p className="text-xs text-slate-500">Choose a company below to review its contact directory or add new customer touchpoints.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
+            <thead className="bg-slate-50 text-slate-500   text-xs">
               <tr>
                 <th className="p-2 text-left ">Company</th>
                 <th className="p-2 text-left ">Primary Contact</th>
@@ -24,20 +24,20 @@ const ClientContacts = ({ companies, onOpenContactDrawer }) => (
                 
                 return (
                   <tr key={`contact-row-${company.id}`} className="border-t border-slate-100">
-                    <td className="px-4 py-4">
+                    <td className="p-2 ">
                       <p className="text-slate-900 text-xs">{company.company_name}</p>
                       <p className="text-xs text-slate-400">{company.company_code}</p>
                     </td>
-                    <td className="px-4 py-4 text-slate-900 ">
+                    <td className="p-2  text-slate-900 ">
                       {primaryContact?.name || '—'}
                     </td>
-                    <td className="px-4 py-4 text-slate-600">
+                    <td className="p-2  text-slate-600">
                       {primaryContact?.phone || '—'}
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="p-2 ">
                       <StatusBadge status={company.status} />
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="p-2 ">
                       <div className="flex justify-end">
                       <button
                         type="button"

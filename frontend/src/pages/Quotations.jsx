@@ -1193,10 +1193,10 @@ const Quotations = () => {
           <div className=" text-slate-900">
             <div className="text-sm  tracking-tight flex items-center gap-2">
               {val}
-              {q.isRFQOnly && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded text-[9px] font-black uppercase tracking-wider">No Vendor Assigned</span>}
+              {q.isRFQOnly && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded text-xs   ">No Vendor Assigned</span>}
             </div>
             {(q.sales_order_id || q.mr_number) && (
-              <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+              <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                 <span className="px-1.5 py-0.5 bg-slate-100 rounded ">{q.mr_number || `SO-${q.sales_order_id}`}</span>
                 {q.project_name && <span className="truncate max-w-[120px]">{q.project_name}</span>}
               </div>
@@ -1211,8 +1211,8 @@ const Quotations = () => {
         render: (val, q) => (
           <div className="flex flex-col">
             <span className="text-slate-900 ">{val ? getVendorName(val) : (q.isRFQOnly ? 'Unassigned' : 'Unknown')}</span>
-            {val && <span className="text-[10px] text-slate-400   ">Vendor ID: #{val}</span>}
-            {q.isRFQOnly && <span className="text-[9px] text-amber-500 italic">Select vendor below</span>}
+            {val && <span className="text-xs text-slate-400   ">Vendor ID: #{val}</span>}
+            {q.isRFQOnly && <span className="text-xs text-amber-500 italic">Select vendor below</span>}
           </div>
         )
       },
@@ -1224,12 +1224,12 @@ const Quotations = () => {
           <div className="flex flex-col gap-1">
             <span className=" text-slate-700">{formatDate(val)}</span>
             {val && daysValid(val) > 0 && (
-              <span className="text-[9px]  p-1  rounded  bg-emerald-50 text-emerald-600 border border-emerald-100 w-fit">
+              <span className="text-xs  p-1  rounded  bg-emerald-50 text-emerald-600 border border-emerald-100 w-fit">
                 {daysValid(val)} days left
               </span>
             )}
             {val && daysValid(val) <= 0 && (
-              <span className="text-[9px]  p-1  rounded  bg-rose-50 text-rose-600 border border-rose-100 w-fit">
+              <span className="text-xs  p-1  rounded  bg-rose-50 text-rose-600 border border-rose-100 w-fit">
                 Expired
               </span>
             )}
@@ -1266,7 +1266,7 @@ const Quotations = () => {
             {q.isRFQOnly && (
               <button
                 onClick={(e) => { e.stopPropagation(); openRFQSendModal(q); }}
-                className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded text-[10px] font-black uppercase tracking-wider hover:bg-amber-100 transition-all"
+                className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded text-xs    hover:bg-amber-100 transition-all"
                 title="Assign Vendor & Send"
               >
                 <Mail className="w-3.5 h-3.5" />
@@ -1377,23 +1377,23 @@ const Quotations = () => {
   }, [activeTab, selectedQuotes, displayQuotations, vendors, quotations, getVendorName, handleApproveQuote, handleDeleteQuotation, openEmailModal]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded  border border-slate-200 ">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-blue-600 rounded  shadow-lg shadow-blue-200">
+    <div className="space-y-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-2 rounded  border border-slate-200 ">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-blue-600 rounded  shadow-lg shadow-blue-200">
             <FileText className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-2 text-xs  font-black text-slate-400  tracking-widest mb-1">
+            <div className="flex items-center gap-2 text-xs   text-slate-400   mb-1">
               <span>Buying</span>
               <ChevronRight className="w-3 h-3" />
               <span>Procurement</span>
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Vendor Quotations</h1>
+            <h1 className="text-xl  text-slate-900 ">Vendor Quotations</h1>
             <p className="text-xs text-slate-500 ">Manage and compare vendor quotes</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => { fetchQuotations(); fetchRawRfqs(); }}
             className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
@@ -1425,7 +1425,7 @@ const Quotations = () => {
               }
               setShowCreateModal(true);
             }}
-            className="flex items-center gap-2  px-5 py-2.5 bg-blue-600 text-white rounded  text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+            className="flex items-center gap-2  p-2  bg-blue-600 text-white rounded  text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
             <Plus className="w-5 h-5" />
             {activeTab === 'sent' ? 'Request Quote' : 'Record Quote'}
@@ -1433,7 +1433,7 @@ const Quotations = () => {
         </div>
       </div>
 
-      <div className="bg-white p-2 rounded  border border-slate-200  flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <div className="flex gap-2 p-1 bg-slate-50 rounded  w-fit border border-slate-100">
           <button
             onClick={() => setActiveTab('sent')}
@@ -1459,7 +1459,7 @@ const Quotations = () => {
         </div>
 
         {activeTab === 'received' && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="w-64">
               <SearchableSelect
                 options={materialRequests.map(mr => ({
@@ -1487,7 +1487,7 @@ const Quotations = () => {
             <button
               onClick={handleCompare}
               disabled={selectedQuotes.length < 2}
-              className={`flex items-center gap-2  px-5 py-2 rounded  text-sm  transition-all ${
+              className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${
                 selectedQuotes.length >= 2
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -1507,11 +1507,11 @@ const Quotations = () => {
         pageSize={5}
         searchPlaceholder="Search quote number, vendor..."
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="p-2  bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+              className="p-2  bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
             >
               <option value="All Quotations">All Statuses</option>
               <option value="RFQ_REQUESTED">RFQ Requested</option>
@@ -1530,24 +1530,24 @@ const Quotations = () => {
       />
 
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           {[
             { label: 'Total Quotations', value: stats.total_quotations, sub: `Total: ${formatCurrency(stats.total_value)}`, icon: FileText, bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
             { label: 'Pending Quotes', value: stats.pending_quotations, sub: 'Awaiting response', icon: Clock, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-amber-50', iconColor: 'text-amber-500' },
             { label: 'Approved Quotes', value: stats.approved_quotations, sub: 'Ready for PO', icon: CheckCircle2, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
             { label: 'Received', value: stats.received_quotations || (stats.total_quotations - stats.pending_quotations), sub: 'Vendor responses', icon: Mail, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-blue-50', iconColor: 'text-blue-500' },
           ].map((stat, idx) => (
-            <div key={idx} className={`${stat.bg} border border-slate-200 rounded  p-4  hover:shadow-md transition-all relative overflow-hidden group`}>
+            <div key={idx} className={`${stat.bg} border border-slate-200 rounded  p-2  hover: transition-all relative overflow-hidden group`}>
               {stat.bg !== 'bg-white' && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded  -mr-12 -mt-12 transition-transform group-hover:scale-110"></div>}
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2">
-                  <p className={`text-[10px]  ${stat.bg === 'bg-white' ? 'text-slate-400' : 'text-blue-100'}  `}>{stat.label}</p>
+                  <p className={`text-xs  ${stat.bg === 'bg-white' ? 'text-slate-400' : 'text-blue-100'}  `}>{stat.label}</p>
                   <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded  `}>
                     <stat.icon className="w-4 h-4" />
                   </div>
                 </div>
-                <p className={`text-2xl font-black ${stat.text} tracking-tight`}>{stat.value || 0}</p>
-                <p className={`text-[10px] ${stat.subText} mt-1 `}>{stat.sub}</p>
+                <p className={`text-2xl  ${stat.text} tracking-tight`}>{stat.value || 0}</p>
+                <p className={`text-xs ${stat.subText} mt-1 `}>{stat.sub}</p>
               </div>
             </div>
           ))}
@@ -1555,8 +1555,8 @@ const Quotations = () => {
       )}
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded  p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2">
+          <div className="bg-white rounded  p-2 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-6">
               <div>
                <h3 className="text-md text-slate-900 text-xs">
@@ -1572,13 +1572,13 @@ const Quotations = () => {
             <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="">
               {activeTab === 'sent' ? (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-sm  text-slate-700 mb-1">Select Project (Optional)</label>
+                      <label className="block text-xs  text-slate-700 mb-1">Select Project (Optional)</label>
                       <select
                         value={formData.salesOrderId}
                         onChange={handleSalesOrderChange}
-                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Select Project/MR to Load Requirements</option>
                         
@@ -1603,11 +1603,11 @@ const Quotations = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm  text-slate-700 mb-1">Vendor *</label>
+                      <label className="block text-xs  text-slate-700 mb-1">Vendor *</label>
                       <select
                         value={formData.vendorId}
                         onChange={(e) => setFormData({...formData, vendorId: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                       >
                         <option value="">-- Select a Vendor --</option>
@@ -1619,17 +1619,17 @@ const Quotations = () => {
                   </div>
 
                   <div className="w-1/2">
-                    <label className="block text-sm  text-slate-700 mb-1">Valid Until</label>
+                    <label className="block text-xs  text-slate-700 mb-1">Valid Until</label>
                     <input
                       type="date"
                       value={formData.validUntil}
                       onChange={(e) => setFormData({...formData, validUntil: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="flex justify-between my-2 items-center">
                       <label className="block text-sm  text-slate-700">Line Items</label>
                       <button
                         type="button"
@@ -1641,7 +1641,7 @@ const Quotations = () => {
                     </div>
 
                     {formData.items.length === 0 ? (
-                      <p className="text-xs text-slate-500 p-4 text-center border border-dashed border-slate-200 rounded">
+                      <p className="text-xs text-slate-500 p-2 text-center border border-dashed border-slate-200 rounded">
                         No items added yet. Click "Add Item" to include line items in this quotation.
                       </p>
                     ) : (
@@ -1661,7 +1661,7 @@ const Quotations = () => {
                                   placeholder="Drawing No"
                                   value={item.drawing_no}
                                   onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-                                  className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 pr-7"
+                                  className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 pr-7"
                                 />
                                 {item.drawing_no && (
                                   <button
@@ -1679,21 +1679,21 @@ const Quotations = () => {
                                 placeholder="Material Name"
                                 value={item.material_name}
                                 onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
-                                className="col-span-5 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="col-span-5 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                               <input
                                 type="text"
                                 placeholder="Type"
                                 value={item.material_type}
                                 onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
-                                className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                               <input
                                 type="number"
                                 placeholder="Design"
                                 value={item.quantity || item.design_qty || 0}
                                 onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
-                                className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                             <div className="col-span-1 flex justify-center">
                               <button
@@ -1712,25 +1712,25 @@ const Quotations = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm  text-slate-700 mb-1">Notes (Optional)</label>
+                    <label className="block text-xs  text-slate-700 mb-1">Notes (Optional)</label>
                     <textarea
                       value={formData.notes}
                       onChange={(e) => setFormData({...formData, notes: e.target.value})}
                       placeholder="Add any notes"
-                      className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                       rows="3"
                     />
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                     <label className="block text-sm  text-slate-700 mb-1">Select Project/MR</label>
+                     <label className="block text-xs  text-slate-700 mb-1">Select Project/MR</label>
                       <select
                         value={recordData.projectId}
                         onChange={(e) => handleRecordProjectChange(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">-- Select Project/MR to Filter Quotes --</option>
                         
@@ -1755,11 +1755,11 @@ const Quotations = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm  text-slate-700 mb-1">Vendor *</label>
+                      <label className="block text-xs  text-slate-700 mb-1">Vendor *</label>
                       <select
                         value={recordData.vendorId}
                         onChange={(e) => handleRecordVendorChange(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                         disabled={!recordData.projectId}
                       >
@@ -1770,46 +1770,46 @@ const Quotations = () => {
                       </select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="grid grid-cols-3 gap-2">
                         <div className="bg-slate-50 p-2 rounded  border border-slate-200">
-                        <label className="block text-[9px]  text-slate-500   mb-1  ">Subtotal</label>
+                        <label className="block text-xs  text-slate-500   mb-1  ">Subtotal</label>
                         <div className="text-sm  text-slate-700">{recordData.amount > 0 ? formatCurrency(recordData.amount) : '—'}</div>
                         </div>
                         <div className="bg-slate-50 p-2 rounded  border border-slate-200">
-                        <label className="block text-[9px]  text-slate-500   mb-1  ">GST (18%)</label>
+                        <label className="block text-xs  text-slate-500   mb-1  ">GST (18%)</label>
                         <div className="text-sm  text-slate-700">{recordData.amount > 0 ? formatCurrency(recordData.amount * 0.18) : '—'}</div>
                         </div>
                         <div className="bg-blue-50 p-2 rounded  border border-blue-200">
-                        <label className="block text-[9px]  text-blue-500   mb-1  ">Total</label>
-                        <div className="text-base font-black text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</div>
+                        <label className="block text-xs  text-blue-500   mb-1  ">Total</label>
+                        <div className="text-base  text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</div>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 mt-2">
                         <div>
-                        <label className="blocktext-xs   text-slate-700 mb-1">Valid Until</label>
+                        <label className="block text-xs   text-slate-700 mb-1">Valid Until</label>
                         <input
                             type="date"
                             value={recordData.validUntil}
                             onChange={(e) => setRecordData({...recordData, validUntil: e.target.value})}
-                            className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         </div>
                         <div>
-                        <label className="blocktext-xs   text-slate-700 mb-1">Attach Vendor PDF</label>
+                        <label className="block text-xs   text-slate-700 mb-1">Attach Vendor PDF</label>
                         <input
                             type="file"
                             accept="application/pdf"
                             onChange={handleRecordFileChange}
-                            className="w-full px-2 py-1 border border-slate-200 roundedtext-xs  focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-1 border border-slate-200 rounded text-xs  focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         </div>
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-4">
+                    <div className="flex justify-between items-center my-2">
+                      <div className="flex items-center gap-2">
                         <label className="block text-sm  text-slate-700">Line Items</label>
                         {recordData.received_pdf_path && (
                           <button
@@ -1836,13 +1836,13 @@ const Quotations = () => {
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
-                            <th className="px-3 py-2  text-slate-600" style={{ width: '150px' }}>ITEM CODE / DRAWING NO</th>
-                            <th className="px-3 py-2  text-slate-600">MATERIAL NAME</th>
-                            <th className="px-3 py-2  text-slate-600" style={{ width: '120px' }}>TYPE</th>
-                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '80px' }}>DESIGN QTY</th>
-                            <th className="px-3 py-2 text-center  text-slate-600" style={{ width: '120px' }}>RATE (₹)</th>
-                            <th className="px-3 py-2 text-right  text-slate-600" style={{ width: '120px' }}>AMOUNT</th>
-                            <th className="px-3 py-2 text-center" style={{ width: '40px' }}></th>
+                            <th className="p-2  text-slate-600" style={{ width: '150px' }}>ITEM CODE / DRAWING NO</th>
+                            <th className="p-2  text-slate-600">MATERIAL NAME</th>
+                            <th className="p-2  text-slate-600" style={{ width: '120px' }}>TYPE</th>
+                            <th className="p-2 text-center  text-slate-600" style={{ width: '80px' }}>DESIGN QTY</th>
+                            <th className="p-2 text-center  text-slate-600" style={{ width: '120px' }}>RATE (₹)</th>
+                            <th className="p-2 text-right  text-slate-600" style={{ width: '120px' }}>AMOUNT</th>
+                            <th className="p-2 text-center" style={{ width: '40px' }}></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -1855,7 +1855,7 @@ const Quotations = () => {
                           ) : (
                             recordData.items.map((item, idx) => (
                               <tr key={idx} className="hover:bg-slate-50">
-                                <td className="px-3 py-2">
+                                <td className="p-2">
                                   <div className="relative">
                                     <input
                                       type="text"
@@ -1876,7 +1876,7 @@ const Quotations = () => {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="p-2">
                                   <input
                                     type="text"
                                     value={item.material_name}
@@ -1885,12 +1885,12 @@ const Quotations = () => {
                                     placeholder="Material..."
                                   />
                                   {item.item_code && item.item_code !== item.drawing_no && (
-                                    <div className="px-2 text-[9px] text-slate-400   truncate max-w-[150px]">
+                                    <div className="px-2 text-xs text-slate-400   truncate max-w-[150px]">
                                       Code: {item.item_code}
                                     </div>
                                   )}
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="p-2">
                                   <input
                                     type="text"
                                     value={item.material_type}
@@ -1899,7 +1899,7 @@ const Quotations = () => {
                                     placeholder="Type..."
                                   />
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="p-2">
                                   <input
                                     type="number"
                                     value={item.quantity || item.design_qty || 0}
@@ -1908,7 +1908,7 @@ const Quotations = () => {
                                     placeholder="0.00"
                                   />
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="p-2">
                                   <input
                                     type="number"
                                     value={item.unit_rate || ''}
@@ -1917,12 +1917,12 @@ const Quotations = () => {
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="px-3 py-2 text-right  text-slate-700">
+                                <td className="p-2 text-right  text-slate-700">
                                   {((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0)) > 0 
                                     ? formatCurrency((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0)) 
                                     : '—'}
                                 </td>
-                                <td className="px-3 py-2 text-center">
+                                <td className="p-2 text-center">
                                   <button
                                     type="button"
                                     onClick={() => handleRecordRemoveItem(idx)}
@@ -1939,7 +1939,7 @@ const Quotations = () => {
                     </div>
 
                     {recordData.items.length > 0 && (
-                      <div className="mt-4 p-4 bg-blue-50 rounded  flex flex-col gap-2 border border-blue-100">
+                      <div className="mt-4 p-2 bg-blue-50 rounded  flex flex-col gap-2 border border-blue-100">
                         <div className="flex justify-between items-center text-xs text-blue-600">
                           <span>Subtotal</span>
                           <span>{recordData.amount > 0 ? formatCurrency(recordData.amount) : '—'}</span>
@@ -1949,20 +1949,20 @@ const Quotations = () => {
                           <span>{recordData.amount > 0 ? `+ ${formatCurrency(recordData.amount * 0.18)}` : '—'}</span>
                         </div>
                         <div className="flex justify-between items-center border-t-2 border-blue-200 pt-2">
-                          <span className="text-sm font-black text-blue-800  ">Grand Total</span>
-                          <span className="text-2xl font-black text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</span>
+                          <span className="text-sm  text-blue-800  ">Grand Total</span>
+                          <span className="text-2xl  text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</span>
                         </div>
                       </div>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm  text-slate-700 mb-1">Notes (Optional)</label>
+                    <label className="block text-xs  text-slate-700 my-2">Notes (Optional)</label>
                     <textarea
                       value={recordData.notes}
                       onChange={(e) => setRecordData({...recordData, notes: e.target.value})}
                       placeholder="Add any notes from vendor response"
-                      className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                       rows="3"
                     />
                   </div>
@@ -1973,13 +1973,13 @@ const Quotations = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="p-2  border border-slate-200 rounded text-sm  hover:bg-slate-50"
+                  className="p-2  border border-slate-200 rounded text-xs  hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="p-2  bg-green-600 text-white rounded text-sm  hover:bg-green-700"
+                  className="p-2  bg-green-600 text-white rounded text-xs  hover:bg-green-700"
                 >
                   Create Quotation
                 </button>
@@ -1990,8 +1990,8 @@ const Quotations = () => {
       )}
 
       {showEmailModal && selectedQuotation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded  p-6 max-w-2xl w-full">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2">
+          <div className="bg-white rounded  p-2 max-w-2xl w-full">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-md text-slate-900 text-xs">Send Quotation via Email</h3>
               <button 
@@ -2008,33 +2008,33 @@ const Quotations = () => {
 
             <form onSubmit={handleSendEmail} className="">
               <div>
-                <label className="block text-sm  text-slate-700 mb-1">To</label>
+                <label className="block text-xs  text-slate-700 mb-1">To</label>
                 <input
                   type="email"
                   value={emailData.to}
                   onChange={(e) => setEmailData({...emailData, to: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm  text-slate-700 mb-1">Subject</label>
+                <label className="block text-xs  text-slate-700 mb-1">Subject</label>
                 <input
                   type="text"
                   value={emailData.subject}
                   onChange={(e) => setEmailData({...emailData, subject: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm  text-slate-700 mb-1">Message</label>
+                <label className="block text-xs  text-slate-700 mb-1">Message</label>
                 <textarea
                   value={emailData.message}
                   onChange={(e) => setEmailData({...emailData, message: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows="5"
                 />
               </div>
@@ -2057,13 +2057,13 @@ const Quotations = () => {
                     fetchQuotations();
                     fetchStats();
                   }}
-                  className="p-2  border border-slate-200 rounded text-sm  hover:bg-slate-50"
+                  className="p-2  border border-slate-200 rounded text-xs  hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="p-2  bg-blue-600 text-white rounded text-sm  hover:bg-blue-700"
+                  className="p-2  bg-blue-600 text-white rounded text-xs  hover:bg-blue-700"
                 >
                   Send Email
                 </button>
@@ -2074,21 +2074,21 @@ const Quotations = () => {
       )}
 
       {showEditModal && selectedQuotation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded  p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2">
+          <div className="bg-white rounded  p-2 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-md text-slate-900 text-xs">Edit Quotation</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
             </div>
             
             <form onSubmit={handleEditQuotation} className="">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                 <label className="block text-sm  text-slate-700 mb-1">Vendor</label>
+                 <label className="block text-xs  text-slate-700 mb-1">Vendor</label>
                   <select
                     value={editFormData.vendorId}
                     onChange={(e) => setEditFormData({...editFormData, vendorId: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {vendors.map(v => (
                       <option key={v.id} value={v.id}>{v.vendor_name}</option>
@@ -2097,18 +2097,18 @@ const Quotations = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm  text-slate-700 mb-1">Valid Until</label>
+                  <label className="block text-xs  text-slate-700 mb-1">Valid Until</label>
                   <input
                     type="date"
                     value={editFormData.validUntil}
                     onChange={(e) => setEditFormData({...editFormData, validUntil: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <div className="flex justify-between items-center mb-2">
+                <div className="flex justify-between items-center my-2">
                   <label className="block text-sm  text-slate-700">Line Items</label>
                   <button
                     type="button"
@@ -2124,12 +2124,12 @@ const Quotations = () => {
                   </button>
                 </div>
                 {editFormData.items.length === 0 ? (
-                  <p className="text-xs text-slate-500 p-4 text-center border border-dashed border-slate-200 rounded">
+                  <p className="text-xs text-slate-500 p-2 text-center border border-dashed border-slate-200 rounded">
                     No items added yet.
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100text-xs   text-slate-500  tracking-wide">
+                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs   text-slate-500  ">
                       {activeTab === 'sent' ? (
                         <>
                           <div className="col-span-3">Drawing No</div>
@@ -2164,7 +2164,7 @@ const Quotations = () => {
                                 newItems[idx].material_type = getCorrectMaterialType(e.target.value, newItems[idx].material_type);
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-3 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="text"
@@ -2175,7 +2175,7 @@ const Quotations = () => {
                                 newItems[idx].material_name = e.target.value;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-5 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-5 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="text"
@@ -2186,7 +2186,7 @@ const Quotations = () => {
                                 newItems[idx].material_type = e.target.value;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="number"
@@ -2199,7 +2199,7 @@ const Quotations = () => {
                                 newItems[idx].quantity = val;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                           </>
                         ) : (
@@ -2214,7 +2214,7 @@ const Quotations = () => {
                                 newItems[idx].material_type = getCorrectMaterialType(e.target.value, newItems[idx].material_type);
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="text"
@@ -2225,7 +2225,7 @@ const Quotations = () => {
                                 newItems[idx].material_name = e.target.value;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-3 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-3 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="text"
@@ -2236,7 +2236,7 @@ const Quotations = () => {
                                 newItems[idx].material_type = e.target.value;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="number"
@@ -2249,7 +2249,7 @@ const Quotations = () => {
                                 newItems[idx].quantity = val;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-1 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <input
                               type="number"
@@ -2260,7 +2260,7 @@ const Quotations = () => {
                                 newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-2 px-2 py-1.5 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-1 text-right text-xs  text-slate-700">
                               {formatCurrency((item.design_qty || item.quantity || 0) * (item.unit_rate || 0))}
@@ -2289,13 +2289,13 @@ const Quotations = () => {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="p-2  border border-slate-200 rounded text-sm  hover:bg-slate-50"
+                  className="p-2  border border-slate-200 rounded text-xs  hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="p-2  bg-blue-600 text-white rounded text-sm  hover:bg-blue-700"
+                  className="p-2  bg-blue-600 text-white rounded text-xs  hover:bg-blue-700"
                 >
                   Update Quotation
                 </button>
@@ -2315,13 +2315,13 @@ const Quotations = () => {
             <table className="w-full border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-slate-50">
-                  <th className="p-3 border text-left text-xs  text-slate-600 sticky left-0 bg-slate-50 z-10">Item / Drawing No.</th>
-                  <th className="p-3 border text-center text-xs  text-slate-600 bg-slate-50">Design Qty</th>
+                  <th className="p-2 border text-left text-xs  text-slate-600 sticky left-0 bg-slate-50 z-10">Item / Drawing No.</th>
+                  <th className="p-2 border text-center text-xs  text-slate-600 bg-slate-50">Design Qty</th>
                   {compareData.map((q, idx) => (
-                    <th key={idx} className="p-3 border text-center text-xs  text-slate-800 bg-indigo-50/50" colSpan="2">
+                    <th key={idx} className="p-2 border text-center text-xs  text-slate-800 bg-indigo-50/50" colSpan="2">
                       <div className="flex flex-col gap-1">
                         <span className="text-indigo-600">{getVendorName(q.vendor_id)}</span>
-                        <span className="text-[10px] text-slate-500 font-normal">{q.quote_number}</span>
+                        <span className="text-xs text-slate-500 font-normal">{q.quote_number}</span>
                       </div>
                     </th>
                   ))}
@@ -2343,23 +2343,23 @@ const Quotations = () => {
                   const firstItem = compareData.flatMap(q => q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
                   return (
                     <tr key={itemIdx} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3 border  text-slate-900 sticky left-0 bg-white z-10">
+                      <td className="p-2 border  text-slate-900 sticky left-0 bg-white z-10">
                         <div className="flex flex-col">
                           <span>{itemCode}</span>
-                          <span className="text-[10px] text-slate-400 font-normal">{firstItem?.material_name}</span>
+                          <span className="text-xs text-slate-400 font-normal">{firstItem?.material_name}</span>
                         </div>
                       </td>
-                      <td className="p-3 border text-center text-slate-600 font-medium">
+                      <td className="p-2 border text-center text-slate-600 font-medium">
                         {Number(firstItem?.quantity || firstItem?.design_qty || 0).toFixed(3)}
                       </td>
                       {compareData.map((q, qIdx) => {
                         const item = (q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
                         return (
                           <React.Fragment key={qIdx}>
-                            <td className="p-3 border text-right text-slate-600  ">
+                            <td className="p-2 border text-right text-slate-600  ">
                               {item ? formatCurrency(item.unit_rate) : '—'}
                             </td>
-                            <td className={`p-3 border text-right   ${item ? 'text-indigo-600 ' : 'text-slate-300'}`}>
+                            <td className={`p-2 border text-right   ${item ? 'text-indigo-600 ' : 'text-slate-300'}`}>
                               {item ? formatCurrency(item.amount || (item.unit_rate * (item.design_qty || item.quantity))) : '—'}
                             </td>
                           </React.Fragment>
@@ -2371,17 +2371,17 @@ const Quotations = () => {
               </tbody>
               <tfoot>
                 <tr className="bg-slate-50 ">
-                  <td className="p-4 border text-right sticky left-0 bg-slate-50 z-10" colSpan="2">GRAND TOTAL</td>
+                  <td className="p-2 border text-right sticky left-0 bg-slate-50 z-10" colSpan="2">GRAND TOTAL</td>
                   {compareData.map((q, idx) => (
-                    <td key={idx} className="p-4 border text-right text-indigo-700 text-sm" colSpan="2">
+                    <td key={idx} className="p-2 border text-right text-indigo-700 text-sm" colSpan="2">
                       {formatCurrency(q.total_amount)}
                     </td>
                   ))}
                 </tr>
                 <tr>
-                  <td className="p-4 border text-right sticky left-0 bg-white z-10" colSpan="2">Actions</td>
+                  <td className="p-2 border text-right sticky left-0 bg-white z-10" colSpan="2">Actions</td>
                   {compareData.map((q, idx) => (
-                    <td key={idx} className="p-4 border text-center" colSpan="2">
+                    <td key={idx} className="p-2 border text-center" colSpan="2">
                       <button
                         onClick={() => {
                           handleApproveQuote(q.id);

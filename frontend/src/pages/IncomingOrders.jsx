@@ -58,7 +58,7 @@ const SalesOrderRow = ({ order, onAction, actionLoading }) => {
         <td className="px-5 py-4 text-slate-600 whitespace-nowrap">{order.po_number || '—'}</td>
         <td className="px-5 py-4 text-slate-600 whitespace-nowrap">{formatDate(order.target_dispatch_date)}</td>
         <td className="px-5 py-4">
-          <span className={`text-[10px]  ${priorityColors[order.production_priority]}`}>
+          <span className={`text-xs  ${priorityColors[order.production_priority]}`}>
             {order.production_priority || 'NORMAL'}
           </span>
         </td>
@@ -182,7 +182,7 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 text-slate-500  tracking-[0.2em] text-[0.65rem]">
+            <thead className="bg-slate-100 text-slate-500   text-[0.65rem]">
               <tr>
                 <th className="px-5 py-4 text-left ">SO Code</th>
                 <th className="px-5 py-4 text-left ">Customer / Project</th>

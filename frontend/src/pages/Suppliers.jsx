@@ -29,12 +29,12 @@ const StarRating = ({ rating }) => {
   return (
     <div className="flex items-center gap-1">
       {[...Array(filled)].map((_, i) => (
-        <Star key={`filled-${i}`} size={16} className="text-yellow-400 fill-current" />
+        <Star key={`filled-${i}`} size={15} className="text-yellow-400 fill-current" />
       ))}
       {[...Array(empty)].map((_, i) => (
-        <Star key={`empty-${i}`} size={16} className="text-slate-200 fill-current" />
+        <Star key={`empty-${i}`} size={15} className="text-slate-200 fill-current" />
       ))}
-      <span className="text-[10px] text-slate-500  ml-1">{numRating.toFixed(1)}</span>
+      <span className="text-xs text-slate-500  ml-1">{numRating.toFixed(1)}</span>
     </div>
   );
 };
@@ -260,14 +260,14 @@ const Suppliers = () => {
         <div className="flex items-center justify-end gap-2">
           <button 
             onClick={() => handleEdit(row)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-md text-xs  hover:bg-indigo-100 transition-all"
+            className="flex items-center gap-1.5 p-1.5 bg-indigo-50 text-indigo-600 rounded-md text-xs  hover:bg-indigo-100 transition-all"
           >
             <FileEdit size={14} />
             Edit
           </button>
           <button 
             onClick={() => handleDelete(val, row.vendor_name)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 rounded-md text-xs  hover:bg-red-100 transition-all"
+            className="flex items-center gap-1.5 p-1.5 bg-red-50 text-red-600 rounded-md text-xs  hover:bg-red-100 transition-all"
           >
             <Trash2 size={14} />
             Delete
@@ -278,25 +278,25 @@ const Suppliers = () => {
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-4 space-y-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl  text-slate-900">Suppliers</h1>
-          <p className="text-slate-500 mt-1">Manage your supplier network and relationships</p>
+          <h1 className="text-xl  text-slate-900">Suppliers</h1>
+          <p className="text-slate-500 text-xs mt-1">Manage your supplier network and relationships</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
         >
-          <Plus size={18} />
+          <Plus size={15} />
           Add Supplier
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4 border border-slate-100 rounded-xl bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 rounded-lg">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+        <Card className="p-2 border border-slate-100 rounded  bg-white">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 rounded ">
               <Users className="w-6 h-6 text-indigo-600" />
             </div>
             <div>
@@ -305,9 +305,9 @@ const Suppliers = () => {
             </div>
           </div>
         </Card>
-        <Card className="p-4 border border-slate-100 rounded-xl bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 rounded-lg">
+        <Card className="p-2 border border-slate-100 rounded  bg-white">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-emerald-50 rounded ">
               <CheckCircle className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
@@ -316,9 +316,9 @@ const Suppliers = () => {
             </div>
           </div>
         </Card>
-        <Card className="p-4 border border-slate-100 rounded-xl bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-yellow-50 rounded-lg">
+        <Card className="p-2 border border-slate-100 rounded  bg-white">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-yellow-50 rounded ">
               <Star className="w-6 h-6 text-yellow-600 fill-current" />
             </div>
             <div>
@@ -329,9 +329,9 @@ const Suppliers = () => {
             </div>
           </div>
         </Card>
-        <Card className="p-4 border border-slate-100 rounded-xl bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 rounded-lg">
+        <Card className="p-2 border border-slate-100 rounded  bg-white">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 rounded ">
               <ShoppingBag className="w-6 h-6 text-indigo-600" />
             </div>
             <div>
@@ -354,25 +354,26 @@ const Suppliers = () => {
         onClose={resetForm}
         title={editingSupplier ? 'Edit Supplier' : 'Add New Supplier'}
       >
-        <form onSubmit={handleSubmit} className="space-y-4 p-2 max-h-[70vh] overflow-y-auto">
-          <FormControl label="Supplier Name *">
+        <form onSubmit={handleSubmit} className="space-y-2 p-2 max-h-[70vh] overflow-y-auto">
+          
+
+          <div className="grid grid-cols-3 gap-2">
+            <FormControl label="Supplier Name *">
             <input
               type="text"
               value={formData.vendorName}
               onChange={(e) => setFormData({...formData, vendorName: e.target.value})}
-              className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+              className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
               placeholder="Enter supplier name"
               required
             />
           </FormControl>
-
-          <div className="grid grid-cols-2 gap-4">
             <FormControl label="GSTIN">
               <input
                 type="text"
                 value={formData.gstin}
                 onChange={(e) => setFormData({...formData, gstin: e.target.value})}
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                 placeholder="GSTIN Number"
               />
             </FormControl>
@@ -381,19 +382,19 @@ const Suppliers = () => {
                 type="text"
                 value={formData.groupName}
                 onChange={(e) => setFormData({...formData, groupName: e.target.value})}
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                 placeholder="Group Name"
               />
             </FormControl>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-2">
             <FormControl label="Lead Time">
               <input
                 type="text"
                 value={formData.leadTime}
                 onChange={(e) => setFormData({...formData, leadTime: e.target.value})}
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                 placeholder="e.g. 7 days"
               />
             </FormControl>
@@ -405,27 +406,28 @@ const Suppliers = () => {
                 max="5"
                 value={formData.rating}
                 onChange={(e) => setFormData({...formData, rating: e.target.value})}
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
               />
             </FormControl>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <FormControl label="Email">
               <input
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                 placeholder="email@example.com"
               />
             </FormControl>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2">
+            
             <FormControl label="Phone">
               <input
                 type="text"
                 value={formData.phone}
                 onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                 placeholder="Phone Number"
               />
             </FormControl>
@@ -435,22 +437,22 @@ const Suppliers = () => {
             <textarea
               value={formData.location}
               onChange={(e) => setFormData({...formData, location: e.target.value})}
-              className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none min-h-[80px]"
+              className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none min-h-[80px]"
               placeholder="Full Address"
             />
           </FormControl>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
               onClick={resetForm}
-              className="p-2.5 rounded  border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all"
+              className="p-2 rounded  border border-slate-200 text-xs text-slate-700 hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="p-2.5 rounded  bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+              className="p-2 rounded text-xs  bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
             >
               {editingSupplier ? 'Update Supplier' : 'Add Supplier'}
             </button>

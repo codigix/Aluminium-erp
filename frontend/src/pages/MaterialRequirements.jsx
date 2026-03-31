@@ -133,7 +133,7 @@ const MaterialRequirements = () => {
       render: (val, row) => (
         <div>
           <div className=" text-slate-900">{val}</div>
-          <div className="text-[10px] text-slate-400">{row.details.length} linked project(s)</div>
+          <div className="text-xs text-slate-400">{row.details.length} linked project(s)</div>
         </div>
       )
     },
@@ -194,9 +194,9 @@ const MaterialRequirements = () => {
     {
       label: 'Actions',
       key: 'id',
-      className: 'text-right',
+      className: '',
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center  gap-2  group-hover:opacity-100 transition-opacity">
           <button 
             onClick={() => handleShowDetails(row)}
             className="flex items-center gap-1 text-indigo-600 hover:text-indigo-900  text-xs "
@@ -207,7 +207,7 @@ const MaterialRequirements = () => {
           {row.available_qty > 0 && (
             <button 
               onClick={() => handleOpenIssue(row)}
-              className="flex items-center gap-1 bg-emerald-600 text-white hover:bg-emerald-700 text-xs  px-2 py-1 rounded  shadow-md shadow-emerald-100"
+              className="flex items-center gap-1 bg-emerald-600 text-white hover:bg-emerald-700 text-xs  px-2 py-1 rounded   shadow-emerald-100"
             >
               <ArrowUpRight className="w-3.5 h-3.5" />
               Issue
@@ -222,7 +222,7 @@ const MaterialRequirements = () => {
   const withShortage = requirements.filter(r => r.shortage > 0).length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2 p-4 min-w-0">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl text-slate-900">Material Requirements</h2>
@@ -239,29 +239,29 @@ const MaterialRequirements = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
         <Card className="bg-white">
-          <div className="p-4">
+          <div className="p-2">
             <p className="text-xs text-slate-500   ">Total Items Needed</p>
             <p className="text-xl text-slate-900 mt-1">{totalRequired}</p>
           </div>
         </Card>
-        <Card>
-          <div className="p-4">
+        <Card className="bg-white">
+          <div className="p-2">
             <p className="text-xs text-slate-500   ">Items with Shortage</p>
             <p className="text-2xl  text-rose-600 mt-1">{withShortage}</p>
           </div>
         </Card>
-        <Card>
-          <div className="p-4">
+        <Card className="bg-white">
+          <div className="p-2">
             <p className="text-xs text-slate-500   ">Stock Health</p>
             <p className="text-2xl  text-emerald-600 mt-1">
               {totalRequired ? Math.round(((totalRequired - withShortage) / totalRequired) * 100) : 100}%
             </p>
           </div>
         </Card>
-        <Card>
-          <div className="p-4">
+        <Card className="bg-white">
+          <div className="p-2">
             <p className="text-xs text-slate-500   ">Active Plans</p>
             <p className="text-2xl  text-indigo-600 mt-1">
               {[...new Set(requirements.flatMap(r => r.details.map(d => d.plan_code)))].length}
@@ -281,7 +281,7 @@ const MaterialRequirements = () => {
               <select 
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded  text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full p-2 border border-slate-200 rounded  text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 {materialTypes.map(type => (
                   <option key={type} value={type}>{type}</option>
@@ -297,13 +297,13 @@ const MaterialRequirements = () => {
         onClose={() => setIsDetailsModalOpen(false)}
         title={`Material Details: ${selectedMat?.material_name}`}
       >
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="p-3 bg-slate-50 rounded ">
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="p-2 bg-slate-50 rounded ">
               <p className="text-slate-500 text-xs">Total Required</p>
               <p className=" text-lg">{selectedMat?.required_qty} {selectedMat?.uom}</p>
             </div>
-            <div className="p-3 bg-slate-50 rounded ">
+            <div className="p-2 bg-slate-50 rounded ">
               <p className="text-slate-500 text-xs">Stock Available</p>
               <p className=" text-lg text-emerald-600">{selectedMat?.available_qty} {selectedMat?.uom}</p>
             </div>
@@ -329,12 +329,12 @@ const MaterialRequirements = () => {
         onClose={() => setIsIssueModalOpen(false)}
         title={`Issue Material: ${selectedMat?.material_name}`}
       >
-        <form onSubmit={handleIssueSubmit} className="space-y-4">
+        <form onSubmit={handleIssueSubmit} className="space-y-2">
           <FormControl label="Work Order">
             <select 
               value={issueData.workOrderId}
               onChange={(e) => setIssueData(prev => ({ ...prev, workOrderId: e.target.value }))}
-              className="w-full px-3 py-2 border border-slate-200 rounded  text-sm bg-white"
+              className="w-full p-2 border border-slate-200 rounded  text-sm bg-white"
               required
             >
               <option value="">Select Work Order</option>
@@ -344,7 +344,7 @@ const MaterialRequirements = () => {
             </select>
           </FormControl>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             <FormControl label="Issue Quantity">
               <div className="relative">
                 <input 
@@ -353,7 +353,7 @@ const MaterialRequirements = () => {
                   max={selectedMat?.available_qty}
                   value={issueData.quantity}
                   onChange={(e) => setIssueData(prev => ({ ...prev, quantity: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-sm"
+                  className="w-full p-2 border border-slate-200 rounded  text-sm"
                   required
                 />
                 <span className="absolute right-3 top-2 text-slate-400 text-xs">{selectedMat?.uom}</span>
@@ -370,12 +370,12 @@ const MaterialRequirements = () => {
               type="text" 
               value={issueData.remarks}
               onChange={(e) => setIssueData(prev => ({ ...prev, remarks: e.target.value }))}
-              className="w-full px-3 py-2 border border-slate-200 rounded  text-sm"
+              className="w-full p-2 border border-slate-200 rounded  text-sm"
               placeholder="E.g., Floor issue for production"
             />
           </FormControl>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex justify-end gap-2 pt-4 border-t">
             <button 
               type="button"
               onClick={() => setIsIssueModalOpen(false)}

@@ -205,7 +205,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       render: (val, row) => (
         <div>
           <div className=" text-slate-900">{val}</div>
-          <div className="text-[10px] text-slate-400">{row.location}</div>
+          <div className="text-xs text-slate-400">{row.location}</div>
         </div>
       )
     },
@@ -249,16 +249,16 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
   ];
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="p-4">
       <Modal isOpen={showForm} onClose={() => { resetForm(); setShowForm(false); }} title={isEditing ? "Edit Workstation" : "Create Workstation"}>
         <form onSubmit={handleSubmit} className="space-y-3">
             {/* Basic Information */}
             <section className="space-y-3">
               <div className="flex items-center gap-2  border-b border-slate-100 pb-3">
-                <span className="p-1.5 bg-blue-50 text-blue-600 rounded  text-sm">📋</span>
-                <h3 className="text-sm  text-slate-500">Basic Information</h3>
+                <span className="p-1.5 bg-blue-50 text-blue-600 rounded  text-xs">📋</span>
+                <h3 className="text-xs  text-slate-500">Basic Information</h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <FormControl label="Workstation ID *">
                   <input
                     type="text"
@@ -306,7 +306,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
             </section>
 
             {/* Action Buttons */}
-            <div className="flex justify-end gap-3 pt-8 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-8 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => { resetForm(); setShowForm(false); }}
@@ -328,19 +328,19 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       </Modal>
 
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded  border border-slate-100 ">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 rounded  shadow-lg shadow-indigo-100">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded  border border-slate-100 ">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-600 rounded  shadow-lg shadow-indigo-100">
             <RefreshCw className={`w-6 h-6 text-white ${loading ? 'animate-spin' : ''}`} />
           </div>
           <div>
-            <h1 className="text-2xl  text-slate-900">Workstation Master</h1>
-            <p className="text-slate-500 text-sm">Manage production floor workstations and equipment</p>
+            <h1 className="text-xl  text-slate-900">Workstation Master</h1>
+            <p className="text-slate-500 text-xs">Manage production floor workstations and equipment</p>
           </div>
         </div>
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded  transition-all shadow-lg shadow-indigo-200 "
+          className="flex items-center justify-center gap-2 p-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded  transition-all shadow-lg shadow-indigo-200 "
         >
           <Plus className="w-5 h-5" />
           Add Workstation

@@ -252,14 +252,14 @@ const StockBalance = () => {
         <div className="flex justify-end gap-1">
           <button
             onClick={() => openEditModal(item)}
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
             title="Edit Master Item"
           >
             <FileEdit className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleDelete(item.id)}
-            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all"
             title="Remove from Balance"
           >
             <Trash2 className="w-4 h-4" />
@@ -270,49 +270,49 @@ const StockBalance = () => {
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-2 animate-in fade-in duration-500">
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-indigo-600 border border-indigo-700 rounded-2xl p-5 flex items-center justify-between shadow-xl shadow-indigo-100">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="bg-indigo-600 border border-indigo-700 rounded p-5 flex items-center justify-between shadow-xl shadow-indigo-100">
             <div>
-              <p className="text-[10px] text-indigo-100 font-black tracking-widest uppercase mb-1">Total Items</p>
-              <p className="text-2xl font-black text-white">{stats.totalItems}</p>
+              <p className="text-xs text-indigo-100    mb-1">Total Items</p>
+              <p className="text-2xl  text-white">{stats.totalItems}</p>
             </div>
-            <div className="p-3 bg-indigo-500/50 backdrop-blur-sm rounded-xl text-white shadow-inner">
+            <div className="p-2 bg-indigo-500/50 backdrop-blur-sm rounded  text-white ">
               <Box className="w-6 h-6" />
             </div>
           </div>
           
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center justify-between hover:shadow-md transition-all">
+          <div className="bg-white border border-slate-200 rounded p-5 flex items-center justify-between hover: transition-all">
             <div>
-              <p className="text-[10px] text-slate-500 font-black tracking-widest uppercase mb-1">Total Balance</p>
-              <p className="text-2xl font-black text-slate-900">{parseFloat(stats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              <p className="text-xs text-slate-500    mb-1">Total Balance</p>
+              <p className="text-xl  text-slate-900">{parseFloat(stats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
-            <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
+            <div className="p-2 bg-emerald-50 rounded  text-emerald-600 border border-emerald-100">
               <Database className="w-6 h-6" />
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center justify-between hover:shadow-md transition-all">
+          <div className="bg-white border border-slate-200 rounded p-5 flex items-center justify-between hover: transition-all">
             <div>
-              <p className="text-[10px] text-slate-500 font-black tracking-widest uppercase mb-1">Low Stock Items</p>
-              <p className="text-2xl font-black text-rose-600">{stats.lowStock}</p>
+              <p className="text-xs text-slate-500    mb-1">Low Stock Items</p>
+              <p className="text-2xl  text-rose-600">{stats.lowStock}</p>
             </div>
-            <div className="p-3 bg-rose-50 rounded-xl text-rose-600 border border-rose-100">
+            <div className="p-2 bg-rose-50 rounded  text-rose-600 border border-rose-100">
               <AlertTriangle className="w-6 h-6" />
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200">
+      <div className="flex justify-between items-center bg-white p-2 rounded border border-slate-200">
         <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">Inventory Status</h2>
+          <h2 className="text-xl  text-slate-900 tracking-tight">Inventory Status</h2>
           <p className="text-xs text-slate-500">Manage master items and monitor stock levels</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+          className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
         >
           <Plus className="w-4 h-4" />
           Create New Item
@@ -326,7 +326,7 @@ const StockBalance = () => {
         pageSize={5}
         searchPlaceholder="Search by item code or description..."
         emptyMessage="No stock items found"
-        className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+        className="bg-white rounded border border-slate-200 overflow-hidden shadow-sm"
       />
 
       {/* Add Item Modal */}
@@ -336,15 +336,15 @@ const StockBalance = () => {
         title="Add New Master Item"
         size="2xl"
       >
-        <form onSubmit={handleCreateItem} className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleCreateItem} className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
             <FormControl label="Item Name">
               <input
                 type="text"
                 required
                 value={newItem.itemName}
                 onChange={(e) => setNewItem({...newItem, itemName: e.target.value})}
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 placeholder="e.g. MS Plate 10mm"
               />
             </FormControl>
@@ -353,7 +353,7 @@ const StockBalance = () => {
               <select
                 value={newItem.itemGroup}
                 onChange={(e) => setNewItem({...newItem, itemGroup: e.target.value})}
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="Raw Material">Raw Material</option>
                 <option value="Consumable">Consumable</option>
@@ -368,7 +368,7 @@ const StockBalance = () => {
                 type="text"
                 value={newItem.itemCode}
                 onChange={(e) => setNewItem({...newItem, itemCode: e.target.value})}
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 placeholder="Leave 'Auto-generated' for default"
               />
             </FormControl>
@@ -378,7 +378,7 @@ const StockBalance = () => {
                 type="text"
                 value={newItem.defaultUom}
                 onChange={(e) => setNewItem({...newItem, defaultUom: e.target.value})}
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 placeholder="Nos, Kg, Ltr, etc."
               />
             </FormControl>
@@ -389,7 +389,7 @@ const StockBalance = () => {
                 step="0.01"
                 value={newItem.valuationRate}
                 onChange={(e) => setNewItem({...newItem, valuationRate: parseFloat(e.target.value) || 0})}
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
 
@@ -398,23 +398,23 @@ const StockBalance = () => {
                 type="text"
                 value={newItem.drawingNo}
                 onChange={(e) => setNewItem({...newItem, drawingNo: e.target.value})}
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setShowAddModal(false)}
-              className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-50 transition-all active:scale-95"
+              className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all active:scale-95"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+              className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-100 active:scale-95"
             >
               {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               Save Item
@@ -431,15 +431,15 @@ const StockBalance = () => {
         size="2xl"
       >
         {editingItem && (
-          <form onSubmit={handleEditItem} className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+          <form onSubmit={handleEditItem} className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
               <FormControl label="Item Name">
                 <input
                   type="text"
                   required
                   value={editingItem.material_name || ''}
                   onChange={(e) => setEditingItem({...editingItem, material_name: e.target.value})}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
               
@@ -447,7 +447,7 @@ const StockBalance = () => {
                 <select
                   value={editingItem.material_type || ''}
                   onChange={(e) => setEditingItem({...editingItem, material_type: e.target.value})}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
                 >
                   <option value="Raw Material">Raw Material</option>
                   <option value="Consumable">Consumable</option>
@@ -462,7 +462,7 @@ const StockBalance = () => {
                   type="text"
                   readOnly
                   value={editingItem.item_code || ''}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-500 outline-none cursor-not-allowed"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-500 outline-none cursor-not-allowed"
                 />
               </FormControl>
 
@@ -471,7 +471,7 @@ const StockBalance = () => {
                   type="text"
                   value={editingItem.unit || ''}
                   onChange={(e) => setEditingItem({...editingItem, unit: e.target.value})}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
 
@@ -481,7 +481,7 @@ const StockBalance = () => {
                   step="0.01"
                   value={editingItem.valuation_rate || 0}
                   onChange={(e) => setEditingItem({...editingItem, valuation_rate: parseFloat(e.target.value) || 0})}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
 
@@ -490,23 +490,23 @@ const StockBalance = () => {
                   type="text"
                   value={editingItem.drawing_no || ''}
                   onChange={(e) => setEditingItem({...editingItem, drawing_no: e.target.value})}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-50 transition-all active:scale-95"
+                className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-100 active:scale-95"
               >
                 {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileEdit className="w-4 h-4" />}
                 Update Item

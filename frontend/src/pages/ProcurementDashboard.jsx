@@ -59,24 +59,24 @@ const ProcurementDashboard = () => {
   };
 
   const StatCard = ({ title, count, subtitle, color, icon: Icon, trend }) => (
-    <div className="bg-white rounded-[32px] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
-      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
+    <div className="bg-white rounded  p-2 border border-slate-100 shadow-sm hover: transition-all group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
       
       <div className="flex items-start justify-between relative z-10">
         <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</p>
+          <p className="text-xs  text-slate-400   mb-1">{title}</p>
           <div className="flex items-baseline gap-2">
-            <h3 className="text-3xl font-black text-slate-900">{count}</h3>
+            <h3 className="text-xl  text-slate-900">{count}</h3>
             {trend && (
-              <span className={`flex items-center text-[10px] font-bold ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+              <span className={`flex items-center text-xs  ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {trend > 0 ? <TrendingUp className="w-3 h-3 mr-0.5" /> : <TrendingDown className="w-3 h-3 mr-0.5" />}
                 {Math.abs(trend)}%
               </span>
             )}
           </div>
-          <p className="text-[10px] text-slate-500 mt-1 font-medium">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
         </div>
-        <div className={`p-4 rounded-2xl ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
+        <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
           <Icon className="w-6 h-6" />
         </div>
       </div>
@@ -85,46 +85,46 @@ const ProcurementDashboard = () => {
 
   if (loading || !stats) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-xs text-slate-500 font-bold tracking-widest uppercase">Initializing Procurement Hub...</p>
+      <div className="flex flex-col items-center justify-center p-22 space-y-2">
+        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
+        <p className="text-xs text-slate-500   ">Initializing Procurement Hub...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-2 pb-12">
       {/* Professional Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full -mr-32 -mt-32 blur-3xl" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100  relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded -mr-32 -mt-32 blur-3xl" />
         <div className="relative z-10 flex items-center gap-6">
-          <div className="p-4 bg-indigo-600 rounded-3xl shadow-xl shadow-indigo-200">
-            <ShoppingCart className="w-10 h-10 text-white" />
+          <div className="p-2 bg-indigo-600 rounded shadow-indigo-200">
+            <ShoppingCart className="w-5 h-5 text-white" />
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Procurement Hub</h1>
-              <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-100">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl  text-slate-900 ">Procurement Hub</h1>
+              <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-xs    border border-indigo-100">
                 Supply Chain
               </span>
             </div>
-            <div className="flex items-center gap-4 mt-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-1.5 text-xs  text-slate-400  ">
                 <Clock className="w-3.5 h-3.5" />
                 Updated {lastUpdated.toLocaleTimeString()}
               </div>
-              <div className="w-1 h-1 rounded-full bg-slate-200" />
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+              <div className="w-1 h-1 rounded bg-slate-200" />
+              <div className="flex items-center gap-1.5 text-xs  text-emerald-500  ">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Inventory Sync: Active
               </div>
             </div>
           </div>
         </div>
-        <div className="relative z-10 flex items-center gap-3">
+        <div className="relative z-10 flex items-center gap-2">
           <button 
             onClick={fetchDashboardData}
-            className="flex items-center gap-2 px-5 py-3 bg-slate-50 text-slate-600 rounded-2xl text-xs font-black hover:bg-slate-100 transition-all border border-slate-200"
+            className="flex items-center gap-2 px-5 p-2 bg-slate-50 text-slate-600 rounded text-xs  hover:bg-slate-100 transition-all border border-slate-200"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             REFRESH DATA
@@ -132,7 +132,7 @@ const ProcurementDashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[
           { label: 'New RFQ', icon: FileText, path: '/procurement/quotations', color: 'bg-indigo-600' },
           { label: 'Create PO', icon: ShoppingCart, path: '/procurement/purchase-orders', color: 'bg-emerald-600' },
@@ -142,12 +142,12 @@ const ProcurementDashboard = () => {
           <button
             key={idx}
             onClick={() => window.location.href = action.path}
-            className="flex items-center gap-3 p-4 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group"
+            className="flex items-center gap-2 p-2 bg-white rounded border border-slate-100 shadow-sm hover: transition-all group"
           >
-            <div className={`p-2 rounded-xl ${action.color} text-white group-hover:scale-110 transition-transform`}>
+            <div className={`p-2 rounded  ${action.color} text-white group-hover:scale-110 transition-transform`}>
               <action.icon className="w-5 h-5" />
             </div>
-            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">{action.label}</span>
+            <span className="text-xs  text-slate-700  ">{action.label}</span>
           </button>
         ))}
       </div>
@@ -162,14 +162,14 @@ const ProcurementDashboard = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Spending Analysis */}
-        <div className="xl:col-span-2 bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm">
+        <div className="xl:col-span-2 bg-white rounded] p-2 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-10">
             <div>
-              <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <h3 className="text-md  text-slate-900 tracking-tight flex items-center gap-2">
                 <TrendingUp className="w-6 h-6 text-indigo-600" />
                 Procurement Analytics
               </h3>
-              <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">DAILY SPENDING TREND (LAST 5 DAYS)</p>
+              <p className="text-xs text-slate-500   mt-1 ">DAILY SPENDING TREND (LAST 5 DAYS)</p>
             </div>
           </div>
           <div className="h-[300px]">
@@ -192,8 +192,8 @@ const ProcurementDashboard = () => {
         </div>
 
         {/* Category Breakdown */}
-        <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Category Split</h3>
+        <div className="bg-white rounded] p-2 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-md  text-slate-900  mb-2">Category Split</h3>
           <div className="flex-1 h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -218,10 +218,10 @@ const ProcurementDashboard = () => {
             {(stats.categorySpend || []).map((item, idx) => (
               <div key={idx} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-blue-500', 'bg-rose-500'][idx % 5]}`} />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">{item.name}</span>
+                  <div className={`w-2 h-2 rounded ${['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-blue-500', 'bg-rose-500'][idx % 5]}`} />
+                  <span className="text-xs  text-slate-500 ">{item.name}</span>
                 </div>
-                <span className="text-xs font-black text-slate-900">₹{item.value.toLocaleString()}</span>
+                <span className="text-xs  text-slate-900">₹{item.value.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -230,9 +230,9 @@ const ProcurementDashboard = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {/* Supplier Performance */}
-        <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Supply Chain Health</h3>
-          <div className="space-y-6 flex-1">
+        <div className="bg-white rounded] p-2 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-md  text-slate-900  mb-2">Supply Chain Health</h3>
+          <div className="space-y-2 flex-1">
             {(stats.health || [
               { label: 'On-Time Delivery', value: 0, color: 'bg-indigo-500' },
               { label: 'Quality Compliance', value: 0, color: 'bg-emerald-500' },
@@ -241,11 +241,11 @@ const ProcurementDashboard = () => {
             ]).map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <div className="flex justify-between items-end">
-                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{item.label}</span>
-                  <span className="text-lg font-black text-slate-900">{item.value}%</span>
+                  <span className="text-xs   text-slate-500  ">{item.label}</span>
+                  <span className="text-md  text-slate-900">{item.value}%</span>
                 </div>
-                <div className="h-3 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                  <div className={`h-full ${item.color} rounded-full transition-all duration-1000`} style={{ width: `${item.value}%` }} />
+                <div className="h-3 w-full bg-slate-50 rounded overflow-hidden border border-slate-100">
+                  <div className={`h-full ${item.color} rounded transition-all duration-1000`} style={{ width: `${item.value}%` }} />
                 </div>
               </div>
             ))}
@@ -253,19 +253,19 @@ const ProcurementDashboard = () => {
         </div>
 
         {/* Recent RFQs */}
-        <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col p-8">
+        <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden flex flex-col p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <h3 className="text-xs  text-slate-900 tracking-tight flex items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-indigo-600" />
                 RECENT RFQ PIPELINE
               </h3>
-              <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-widest">ACTIVE VENDOR NEGOTIATIONS</p>
+              <p className="text-xs text-slate-500  mt-0.5  ">ACTIVE VENDOR NEGOTIATIONS</p>
             </div>
           </div>
           <DataTable
             columns={[
-              { label: 'RFQ Code', key: 'rfq_code', render: (val) => <span className="font-black text-slate-900">{val}</span> },
+              { label: 'RFQ Code', key: 'rfq_code', render: (val) => <span className=" text-slate-900">{val}</span> },
               { label: 'Supplier', key: 'vendor_name', render: (val) => val || 'Unassigned' },
               { label: 'Items', key: 'item_count', render: (val) => `${val} items` },
               { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val} /> }

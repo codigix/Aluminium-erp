@@ -298,7 +298,7 @@ const generateCustomerPoPDF = async poId => {
       <style>
         body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.4; margin: 20px; font-size: 11px; }
         .main-container { border: 1.5px solid #000; padding: 0; }
-        .header-title { text-align: center; border-bottom: 1.5px solid #000; padding: 10px; font-size: 18px; font-weight: bold; text-transform: uppercase; }
+        .header-title { text-align: center; border-bottom: 1.5px solid #000; padding: 10px; font-size: 18px; font-weight: bold; text-transform: ; }
         .company-name { text-align: center; border-bottom: 1.5px solid #000; padding: 5px; font-size: 22px; font-weight: bold; color: #666; }
         
         .info-section { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1.5px solid #000; }

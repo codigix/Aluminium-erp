@@ -87,7 +87,7 @@ const StockLedger = () => {
       key: 'item_code',
       label: 'Item Code',
       sortable: true,
-      render: (val) => <span className="font-black text-slate-900">{val}</span>
+      render: (val) => <span className=" text-slate-900">{val}</span>
     },
     {
       key: 'material_name',
@@ -96,7 +96,7 @@ const StockLedger = () => {
       render: (val, row) => (
         <div className="flex flex-col">
           <span className="text-slate-600 ">{val || '—'}</span>
-          <span className="text-[10px] text-slate-400  tracking-widest uppercase">{row.material_type || '—'}</span>
+          <span className="text-xs text-slate-400   ">{row.material_type || '—'}</span>
         </div>
       )
     },
@@ -115,7 +115,7 @@ const StockLedger = () => {
       label: 'Type',
       sortable: true,
       render: (val) => (
-        <span className={`inline-flex px-2.5 py-1 rounded text-[10px] font-black tracking-widest border ${transactionTypeColors[val]?.badge}`}>
+        <span className={`inline-flex px-2.5 py-1 rounded text-xs   border ${transactionTypeColors[val]?.badge}`}>
           {val}
         </span>
       )
@@ -126,7 +126,7 @@ const StockLedger = () => {
       sortable: true,
       className: 'text-right',
       render: (val, row) => (
-        <span className={`font-black ${row.transaction_type === 'IN' ? 'text-emerald-600' : 'text-slate-900'}`}>
+        <span className={` ${row.transaction_type === 'IN' ? 'text-emerald-600' : 'text-slate-900'}`}>
           {row.transaction_type === 'IN' ? '+' : '-'}{parseFloat(val).toFixed(3)}
         </span>
       )
@@ -137,7 +137,7 @@ const StockLedger = () => {
       sortable: true,
       className: 'text-right',
       render: (val) => (
-        <span className="font-black text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-100">
+        <span className=" text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-100">
           {parseFloat(val || 0).toFixed(3)}
         </span>
       )
@@ -148,13 +148,13 @@ const StockLedger = () => {
       render: (_, row) => (
         <div className="space-y-1">
           {row.reference_doc_type && row.reference_doc_number ? (
-            <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded text-[10px] font-black text-slate-600 uppercase tracking-tighter">
+            <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded text-xs  text-slate-600  tracking-tighter">
               <span className="text-slate-400">{row.reference_doc_type}:</span>
               {row.reference_doc_number}
             </div>
           ) : <span className="text-slate-300">—</span>}
           {row.remarks && (
-            <div className="text-[9px] text-slate-400  italic max-w-[150px] truncate" title={row.remarks}>
+            <div className="text-xs text-slate-400  italic max-w-[150px] truncate" title={row.remarks}>
               {row.remarks}
             </div>
           )}
@@ -168,7 +168,7 @@ const StockLedger = () => {
       render: (_, row) => (
         <button
           onClick={() => handleDelete(row.id)}
-          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all"
           title="Delete Entry"
         >
           <Trash2 className="w-4 h-4" />
@@ -254,22 +254,22 @@ const StockLedger = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-2 animate-in fade-in duration-500">
       <Card 
         title="Stock Ledger" 
         subtitle="Detailed history of inventory movements and adjustments"
         action={
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-xs font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
           >
             <Plus className="w-4 h-4" />
             Add Entry
           </button>
         }
       >
-        <div className="mb-6 p-4 bg-slate-50/50 rounded border border-slate-100">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <div className="mb-6 p-2 bg-slate-200 rounded border border-slate-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
             <FormControl label="Item Code">
               <div className="relative">
                 <Tag className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -278,7 +278,7 @@ const StockLedger = () => {
                   value={itemCode}
                   onChange={(e) => setItemCode(e.target.value)}
                   placeholder="Enter item code..."
-                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </div>
             </FormControl>
@@ -287,7 +287,7 @@ const StockLedger = () => {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
             <FormControl label="End Date">
@@ -295,13 +295,13 @@ const StockLedger = () => {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
             <div className="flex gap-2">
               <button
                 onClick={handleFilter}
-                className="flex-1 px-4 py-2 bg-slate-900 text-white rounded text-xs font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-200 active:scale-95"
+                className="flex-1 px-4 py-2 bg-slate-900 text-white rounded text-xs  hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-200 active:scale-95"
               >
                 <Filter className="w-4 h-4" />
                 Apply Filter
@@ -337,14 +337,14 @@ const StockLedger = () => {
         title="Add Stock Ledger Entry"
         size="2xl"
       >
-        <form onSubmit={handleAddEntry} className="space-y-4">
-          <div className="p-1 bg-indigo-50 border border-indigo-100 rounded-xl mb-4">
-            <div className="flex items-center gap-3 p-3">
-              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-indigo-600 shadow-sm">
+        <form onSubmit={handleAddEntry} className="space-y-2">
+          <div className="p-1 bg-indigo-50 border border-indigo-100 rounded  mb-4">
+            <div className="flex items-center gap-2 p-2">
+              <div className="w-5 h-5 bg-white rounded  flex items-center justify-center text-indigo-600 shadow-sm">
                 <ClipboardList className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] text-indigo-400 font-black tracking-widest uppercase">Manual Transaction</p>
+                <p className="text-xs text-indigo-400   ">Manual Transaction</p>
                 <p className="text-xs text-indigo-900 ">Create a new manual inventory movement</p>
               </div>
             </div>
@@ -356,17 +356,17 @@ const StockLedger = () => {
               value={formData.itemCode}
               onChange={(e) => setFormData({...formData, itemCode: e.target.value})}
               placeholder="e.g. RM-AL-001"
-              className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+              className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               required
             />
           </FormControl>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             <FormControl label="Transaction Type *">
               <select
                 value={formData.transactionType}
                 onChange={(e) => setFormData({...formData, transactionType: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="IN">IN (Purchase/Return)</option>
                 <option value="OUT">OUT (Issue/Sale)</option>
@@ -381,20 +381,20 @@ const StockLedger = () => {
                 value={formData.quantity}
                 onChange={(e) => setFormData({...formData, quantity: e.target.value})}
                 placeholder="0.000"
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 required
               />
             </FormControl>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             <FormControl label="Ref Doc Type">
               <input
                 type="text"
                 value={formData.refDocType}
                 onChange={(e) => setFormData({...formData, refDocType: e.target.value})}
                 placeholder="e.g. GRN, PO, SO"
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
             <FormControl label="Ref Doc Number">
@@ -403,7 +403,7 @@ const StockLedger = () => {
                 value={formData.refDocNumber}
                 onChange={(e) => setFormData({...formData, refDocNumber: e.target.value})}
                 placeholder="e.g. GRN-0022"
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
           </div>
@@ -413,22 +413,22 @@ const StockLedger = () => {
               value={formData.remarks}
               onChange={(e) => setFormData({...formData, remarks: e.target.value})}
               placeholder="Add any additional notes..."
-              className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+              className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               rows="3"
             />
           </FormControl>
 
-          <div className="flex gap-3 justify-end pt-4 border-t border-slate-100">
+          <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setShowModal(false)}
-              className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded text-xs font-black hover:bg-slate-50 transition-all active:scale-95"
+              className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all active:scale-95"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 text-white rounded text-xs font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+              className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Create Entry

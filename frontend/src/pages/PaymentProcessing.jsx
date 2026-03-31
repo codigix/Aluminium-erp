@@ -148,7 +148,7 @@ const PaymentProcessing = () => {
         <div className="flex justify-end gap-2 text-right">
           <button
             onClick={() => handleSendEmailClick(row)}
-            className="p-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-all active:scale-90"
+            className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-all active:scale-90"
             title="Send PO Email"
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -166,7 +166,7 @@ const PaymentProcessing = () => {
               setSelectedInvoice(row);
               setIsPaymentModalOpen(true);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all shadow-sm"
+            className="flex items-center gap-1 p-1.5 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 transition-all shadow-sm"
           >
             Process Payment
           </button>
@@ -185,14 +185,14 @@ const PaymentProcessing = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payment Processing</h1>
+          <h1 className="text-xl  text-slate-900 ">Payment Processing</h1>
           <p className="text-xs text-slate-500  mt-1">Process pending vendor payments</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="relative">
             <input 
               type="text" 

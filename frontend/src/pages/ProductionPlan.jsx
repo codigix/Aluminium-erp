@@ -100,8 +100,8 @@ const ProductionPlan = () => {
         cancelButtonText: 'Cancel',
         background: '#ffffff',
         customClass: {
-          title: 'text-lg  text-slate-900',
-          content: 'text-sm text-slate-600',
+          title: 'text-md  text-slate-900',
+          content: 'text-xs text-slate-600',
           confirmButton: 'p-2  text-xs   ',
           cancelButton: 'p-2  text-xs   '
         }
@@ -889,32 +889,32 @@ const ProductionPlan = () => {
     const totalMaterialCount = materialsToDisplay.length;
     
     return (
-      <div className="space-y-6 max-w-[1400px] mx-auto pb-20">
+      <div className="space-y-2 p-4 mx-auto pb-20">
         {/* Header Section */}
-        <div className="flex items-center justify-between bg-white p-4 rounded  border border-slate-200  sticky top-0 z-10">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between   sticky top-0 z-10">
+          <div className="flex items-center gap-2">
             <button onClick={() => setIsCreating(false)} className="p-2 hover:bg-slate-100 rounded  transition-colors">
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             </button>
             <div>
               <div className="flex items-center gap-2 ">
                 <span className="text-xs  text-slate-400">PP /</span>
-                <h1 className="text-lg font-semibold text-slate-900">{isViewing ? `VIEW PLAN: ${newPlan.planCode}` : 'NEW PRODUCTION PLAN'}</h1>
+                <h1 className="text-xl  text-slate-900">{isViewing ? `VIEW PLAN: ${newPlan.planCode}` : 'New Production Plan'}</h1>
               </div>
               <span className="p-1  bg-slate-100 text-slate-600text-xs   rounded capitalize">{isViewing ? newPlan.operationalStatus : 'draft'}</span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button 
               onClick={() => setIsCreating(false)}
-              className="p-2  text-slate-600 hover:bg-slate-50 text-sm  transition-colors"
+              className="p-2  text-slate-600 hover:bg-slate-50 text-xs  transition-colors"
             >
               {isViewing ? 'Close' : 'Discard Changes'}
             </button>
             {!isViewing && (
               <button 
                 onClick={handleSubmit}
-                className="p-2  bg-slate-900 text-white rounded  hover:bg-slate-800 text-sm  transition-colors "
+                className="p-2  bg-slate-900 text-white rounded  hover:bg-slate-800 text-xs  transition-colors "
               >
                 Save Strategic Plan
               </button>
@@ -923,12 +923,12 @@ const ProductionPlan = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-2  border-b border-slate-200 pb-px">
+        <div className="flex items-center gap-2   border-slate-200 pb-px">
           {['Basic Info', 'Finished Goods', 'Materials', 'Sub Assemblies'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 text-sm  transition-all relative ${
+              className={`p-2 text-xs  transition-all relative ${
                 activeTab === tab 
                   ? 'text-indigo-600' 
                   : 'text-slate-500 hover:text-slate-700'
@@ -945,17 +945,17 @@ const ProductionPlan = () => {
               )}
             </button>
           ))}
-          <div className="ml-auto flex gap-3">
+          <div className="ml-auto flex gap-2">
             {isViewing && newPlan.operationalStatus !== 'Completed' && (
               <button 
                 onClick={() => handleCreateWorkOrders(newPlan.id)}
-                className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  hover:bg-indigo-700 text-xs font-semibold transition-colors "
+                className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  hover:bg-indigo-700 text-xs  transition-colors "
               >
                 <Plus className="w-4 h-4" />
                 Work Orders
               </button>
             )}
-            <button className="flex items-center gap-2  p-2  bg-rose-500 text-white rounded  hover:bg-rose-600 text-xs font-semibold transition-colors ">
+            <button className="flex items-center gap-2  p-2  bg-rose-500 text-white rounded  hover:bg-rose-600 text-xs  transition-colors ">
               Production Progress
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
             </button>
@@ -964,14 +964,14 @@ const ProductionPlan = () => {
 
         {/* Section 01: Strategic Parameters */}
         <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
-          <div className="p-6">
-            <div className="flex items-center gap-4 mb-8">
-              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
+          <div className="p-2">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               </div>
               <div>
                 <div className="flex items-center gap-2 ">
-                  <span className="text-sm  text-indigo-600">01</span>
+                  <span className="text-xs  text-indigo-600">01</span>
                   <h2 className="text-base  text-slate-800">STRATEGIC PARAMETERS</h2>
                 </div>
                 <p className="text-xs text-slate-400">Core planning identities and source selection</p>
@@ -981,13 +981,13 @@ const ProductionPlan = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <FormControl label="Plan Identity *">
                 <input 
                   type="text" 
                   value="Auto Generated" 
                   disabled 
-                  className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm text-slate-500  cursor-not-allowed"
+                  className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-500  cursor-not-allowed"
                 />
               </FormControl>
               <FormControl label="Naming Series">
@@ -996,7 +996,7 @@ const ProductionPlan = () => {
                   value={newPlan.namingSeries} 
                   onChange={(e) => setNewPlan(prev => ({ ...prev, namingSeries: e.target.value }))}
                   disabled={isViewing}
-                  className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                  className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 />
               </FormControl>
               <FormControl label="Operational Status">
@@ -1004,7 +1004,7 @@ const ProductionPlan = () => {
                   value={newPlan.operationalStatus}
                   onChange={(e) => setNewPlan(prev => ({ ...prev, operationalStatus: e.target.value }))}
                   disabled={isViewing}
-                  className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                  className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 >
                   <option value="Draft">Draft</option>
                   <option value="In Progress">In Progress</option>
@@ -1038,7 +1038,7 @@ const ProductionPlan = () => {
               <FormControl label="Select BOM">
                 <div className="relative">
                   <select
-                    className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={selectedBomId}
                     onChange={(e) => handleBomSelect(e.target.value)}
                     disabled={isViewing}
@@ -1061,12 +1061,12 @@ const ProductionPlan = () => {
                     type="number" 
                     value={newPlan.targetQuantity}
                     onChange={(e) => setNewPlan(prev => ({ ...prev, targetQuantity: parseFloat(e.target.value) }))}
-                    className="flex-1 p-2 .5 bg-slate-50 border border-slate-200 rounded-l-lg text-sm  focus:outline-none cursor-not-allowed transition-all"
+                    className="flex-1 p-2 .5 bg-slate-50 border border-slate-200 rounded-l-lg text-xs  focus:outline-none cursor-not-allowed transition-all"
                     readOnly
                   />
-                  <span className="p-2 .5 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg text-xs font-semibold text-slate-400">UNIT</span>
+                  <span className="p-2 .5 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg text-xs  text-slate-400">UNIT</span>
                 </div>
-                <p className="text-[10px] text-indigo-600 mt-1 ">Quantity fetched from Design Order</p>
+                <p className="text-xs text-indigo-600 mt-1 ">Quantity fetched from Design Order</p>
               </FormControl>
             </div>
           </div>
@@ -1074,16 +1074,16 @@ const ProductionPlan = () => {
 
         {/* Section 02: Finished Goods */}
         <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
-          <div className="p-6">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded  flex items-center justify-center">
+          <div className="p-2">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-5 h-5 bg-blue-50 text-blue-600 rounded  flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
               </div>
               <div>
                 <div className="flex items-center gap-2 ">
-                  <span className="text-sm  text-blue-600">02</span>
+                  <span className="text-xs  text-blue-600">02</span>
                   <h2 className="text-base  text-slate-800">Finished Goods</h2>
-                  <span className="p-1  bg-blue-50 text-blue-600text-xs   rounded  ml-2  tracking-tight">{newPlan.items.length} ITEMS</span>
+                  <span className="p-1  bg-blue-50 text-blue-600 text-xs   rounded  ml-2  tracking-tight">{newPlan.items.length} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Finished goods and target fulfillment</p>
               </div>
@@ -1093,7 +1093,7 @@ const ProductionPlan = () => {
             </div>
 
             <div className="overflow-x-auto border border-slate-100 rounded ">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead className="bg-slate-50/50">
                   <tr className="text-lefttext-xs   text-slate-400  ">
                     <th className="p-2  ">No.</th>
@@ -1109,36 +1109,36 @@ const ProductionPlan = () => {
                 <tbody className="divide-y divide-slate-100">
                   {newPlan.items.map((item, idx) => (
                     <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-4 text-slate-400 ">{idx + 1}</td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
+                      <td className="p-2  text-slate-400 ">{idx + 1}</td>
+                      <td className="p-2 ">
+                        <div className="flex items-center gap-2">
                           <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center text-blue-600">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                           </div>
                           <div>
                             <div className=" text-slate-800 text-xs">{item.itemCode}</div>
-                            <div className="text-[10px] text-slate-400">{item.description}</div>
+                            <div className="text-xs text-slate-400">{item.description}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="p-2  text-center">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-indigo-600text-xs   rounded-md border border-slate-100">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                           {item.bom_no || 'BOM-' + (item.salesOrderItemId || 'REF')}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center  text-slate-700">
+                      <td className="p-2  text-center  text-slate-700">
                         {Number(item.designQty || item.totalQty || item.quantity || 0).toFixed(3)}
                       </td>
-                      <td className="px-4 py-4 text-center  text-indigo-600">{item.plannedQty}</td>
-                      <td className="px-4 py-4 text-center text-slate-400 text-xs">Nos</td>
-                      <td className="px-4 py-4">
+                      <td className="p-2  text-center  text-indigo-600">{item.plannedQty}</td>
+                      <td className="p-2  text-center text-slate-400 text-xs">Nos</td>
+                      <td className="p-2 ">
                         <div className="flex items-center gap-2  text-slate-600">
                           <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                           <span className="text-xs ">Finished Goods - NC</span>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="p-2 ">
                         <div className="flex items-center gap-2  text-slate-600">
                           <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                           <span className="text-xs ">{item.plannedStartDate || '2026-02-04'}</span>
@@ -1148,7 +1148,7 @@ const ProductionPlan = () => {
                   ))}
                   {newPlan.items.length === 0 && (
                     <tr>
-                      <td colSpan="8" className="px-4 p-2 text-center text-slate-400 italic text-sm">
+                      <td colSpan="8" className="px-4 p-2 text-center text-slate-400 italic text-xs">
                         No finished goods selected. Please select a sales order and BOM.
                       </td>
                     </tr>
@@ -1161,19 +1161,19 @@ const ProductionPlan = () => {
 
         {/* Section 04: Sub Assemblies */}
         <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
-          <div className="p-6">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded  flex items-center justify-center">
+          <div className="p-2">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-5 h-5 bg-rose-50 text-rose-600 rounded  flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
               </div>
               <div>
                 <div className="flex items-center gap-2 ">
-                  <span className="text-sm  text-rose-600">04</span>
+                  <span className="text-xs  text-rose-600">04</span>
                   <h2 className="text-base  text-slate-800">Sub Assemblies</h2>
-                  <span className="p-1  bg-rose-50 text-rose-600text-xs   rounded  ml-2  tracking-tight">{subAssembliesToDisplay.length} ITEMS</span>
+                  <span className="p-1  bg-rose-50 text-rose-600 text-xs   rounded  ml-2  tracking-tight">{subAssembliesToDisplay.length} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Manufacturing breakdown of intermediate components</p>
-                <p className="text-[10px] text-rose-600 mt-1   tracking-tight">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
+                <p className="text-xs text-rose-600 mt-1   tracking-tight">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
               </div>
               <button className="ml-auto p-1 hover:bg-slate-50 rounded text-rose-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
@@ -1181,7 +1181,7 @@ const ProductionPlan = () => {
             </div>
 
             <div className="overflow-x-auto border border-slate-100 rounded ">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead className="bg-slate-50/50">
                   <tr className="text-lefttext-xs   text-slate-400  ">
                     <th className="p-2  ">No.</th>
@@ -1198,56 +1198,56 @@ const ProductionPlan = () => {
                 <tbody className="divide-y divide-slate-100">
                   {subAssembliesToDisplay.map((sa, idx) => (
                     <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-4 text-slate-400 ">{idx + 1}</td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
+                      <td className="p-2  text-slate-400 ">{idx + 1}</td>
+                      <td className="p-2 ">
+                        <div className="flex items-center gap-2">
                           <div className="w-8 h-8 bg-rose-50 rounded flex items-center justify-center text-rose-600">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                           </div>
                           <div>
                             <div className=" text-slate-800 text-xs">{sa.itemCode || sa.item_code}</div>
-                            <div className="text-[10px] text-slate-400">{sa.description || 'Sub-Assembly'}</div>
+                            <div className="text-xs text-slate-400">{sa.description || 'Sub-Assembly'}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="p-2 ">
                         <div className="flex items-center gap-2  text-slate-600">
                           <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                           <span className="text-xs ">{sa.targetWarehouse || sa.target_warehouse || 'Work In Progress - NC'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="p-2 ">
                         <div className="flex items-center gap-2  text-slate-600">
                           <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
                           <span className="text-xs ">{isViewing ? (sa.scheduled_date ? sa.scheduled_date.split('T')[0] : '-') : '2026-02-04'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-center  text-slate-700">
+                      <td className="p-2  text-center  text-slate-700">
                         {Number(isViewing ? (sa.design_qty || sa.required_qty) : (sa.designQty || 0)).toFixed(3)}
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="p-2  text-center">
                         <div className=" text-rose-600">{Number(isViewing ? sa.required_qty : (sa.plannedQty || 0)).toFixed(3)}</div>
-                        <div className="text-[8px] text-slate-400   tracking-tighter">NOS</div>
+                        <div className="text-[8px] text-slate-400   ">NOS</div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="p-2 ">
                         <span className="inline-flex items-center gap-1.5 p-1  bg-slate-50 text-rose-600text-xs   rounded border border-slate-100">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                           {sa.bomNo || sa.bom_no}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className="text-[10px] text-slate-500 ">
+                      <td className="p-2 ">
+                        <span className="text-xs text-slate-500 ">
                           {sa.sourceFg || sa.source_fg || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="p-2  text-center">
                         <span className="p-1  bg-rose-50 text-rose-600text-xs   rounded  border border-rose-100">{sa.manufacturingType || sa.manufacturing_type || 'In House'}</span>
                       </td>
                     </tr>
                   ))}
                   {subAssembliesToDisplay.length === 0 && (
                     <tr>
-                      <td colSpan="8" className="px-4 p-2 text-center text-slate-400 italic text-sm">
+                      <td colSpan="8" className="px-4 p-2 text-center text-slate-400 italic text-xs">
                         No sub assemblies required.
                       </td>
                     </tr>
@@ -1260,19 +1260,19 @@ const ProductionPlan = () => {
 
         {/* Section 03: Materials */}
         <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
-          <div className="p-6">
-            <div className="flex items-center gap-4 mb-8">
-              <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded  flex items-center justify-center">
+          <div className="p-2">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-5 h-5 bg-amber-50 text-amber-600 rounded  flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
               </div>
               <div>
                 <div className="flex items-center gap-2 ">
-                  <span className="text-sm  text-amber-600">03</span>
+                  <span className="text-xs  text-amber-600">03</span>
                   <h2 className="text-base  text-slate-800">Materials</h2>
-                  <span className="p-1  bg-amber-50 text-amber-600text-xs   rounded  ml-2  tracking-tight">{totalMaterialCount} ITEMS</span>
+                  <span className="p-1  bg-amber-50 text-amber-600 text-xs   rounded  ml-2  tracking-tight">{totalMaterialCount} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Consolidated material explosion across all levels</p>
-                <p className="text-[10px] text-amber-600 mt-1   tracking-tight">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
+                <p className="text-xs text-amber-600 mt-1   tracking-tight">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
               </div>
               <button className="ml-auto p-1 hover:bg-slate-50 rounded text-amber-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
@@ -1283,10 +1283,10 @@ const ProductionPlan = () => {
             <div className="mb-8">
               <div className="flex items-center gap-2  mb-4">
                 <div className="w-2 h-2 bg-amber-500 rounded "></div>
-                <h3 className="text-[10px]  text-amber-600  tracking-widest">Core Materials</h3>
+                <h3 className="text-xs  text-amber-600  ">Core Materials</h3>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-xs">
                   <thead className="text-lefttext-xs  text-slate-400   border-b border-slate-100">
                     <tr>
                       <th className="p-2  ">Item</th>
@@ -1302,7 +1302,7 @@ const ProductionPlan = () => {
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="p-2 ">
                           <div className=" text-slate-800 text-xs">{mat.material_name}</div>
-                          <div className="text-[10px] text-slate-400">{mat.description || 'Direct Material'}</div>
+                          <div className="text-xs text-slate-400">{mat.description || 'Direct Material'}</div>
                         </td>
                         <td className="p-2  text-right  text-slate-700">
                           {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
@@ -1311,16 +1311,16 @@ const ProductionPlan = () => {
                           <div className=" text-amber-600">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
-                          <div className="text-[9px] text-slate-400  ">{isViewing ? mat.uom : mat.unit}</div>
+                          <div className="text-xs text-slate-400  ">{isViewing ? mat.uom : mat.unit}</div>
                         </td>
                         <td className="p-2 ">
                           <div className="text-xs text-slate-600 ">{mat.warehouse || 'Store - NC'}</div>
                         </td>
                         <td className="p-2 ">
-                          <span className="text-[10px] text-slate-400 ">{isViewing ? mat.bom_ref : mat.bom_no}</span>
+                          <span className="text-xs text-slate-400 ">{isViewing ? mat.bom_ref : mat.bom_no}</span>
                         </td>
                         <td className="p-2  text-center">
-                          <span className={`p-1 rounded text-[10px] font-black tracking-tighter border
+                          <span className={`p-1 rounded text-xs   border
                             ${mat.status === 'FULFILLED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                               mat.status === 'SUBMITTED' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
                               'bg-slate-100 text-slate-500 border-slate-200'}`}
@@ -1344,10 +1344,10 @@ const ProductionPlan = () => {
             <div>
               <div className="flex items-center gap-2  mb-4">
                 <div className="w-2 h-2 bg-rose-500 rounded "></div>
-                <h3 className="text-[10px]  text-rose-600  tracking-widest uppercase">Exploded Components</h3>
+                <h3 className="text-xs  text-rose-600   ">Exploded Components</h3>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-xs">
                   <thead className="text-lefttext-xs  text-slate-400   border-b border-slate-100">
                     <tr>
                       <th className="p-2  ">Component Specification</th>
@@ -1362,7 +1362,7 @@ const ProductionPlan = () => {
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="p-2 ">
                           <div className=" text-slate-800 text-xs">{mat.material_name || mat.materialName}</div>
-                          <div className="text-[10px] text-slate-400">{mat.item_code || mat.itemCode}</div>
+                          <div className="text-xs text-slate-400">{mat.item_code || mat.itemCode}</div>
                         </td>
                         <td className="p-2  text-right  text-slate-700">
                           {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
@@ -1371,13 +1371,13 @@ const ProductionPlan = () => {
                           <div className=" text-rose-600">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
-                          <div className="text-[9px] text-slate-400  ">{isViewing ? mat.uom : (mat.uom || mat.unit)}</div>
+                          <div className="text-xs text-slate-400  ">{isViewing ? mat.uom : (mat.uom || mat.unit)}</div>
                         </td>
                         <td className="p-2 ">
-                          <div className="text-[10px] text-slate-500 ">{mat.source_assembly || mat.sourceFg || '-'}</div>
+                          <div className="text-xs text-slate-500 ">{mat.source_assembly || mat.sourceFg || '-'}</div>
                         </td>
                         <td className="p-2 ">
-                          <span className="text-[10px] text-slate-400 ">{isViewing ? mat.bom_ref : mat.bom_no}</span>
+                          <span className="text-xs text-slate-400 ">{isViewing ? mat.bom_ref : mat.bom_no}</span>
                         </td>
                       </tr>
                     ))}
@@ -1400,13 +1400,13 @@ const ProductionPlan = () => {
         {/*
         <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
           <div className="p-6">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               </div>
               <div>
                 <div className="flex items-center gap-2 ">
-                  <span className="text-sm  text-indigo-600">05</span>
+                  <span className="text-xs  text-indigo-600">05</span>
                   <h2 className="text-base  text-slate-800">Operations</h2>
                   <span className="p-1  bg-indigo-50 text-indigo-600text-xs   rounded  ml-2  tracking-tight">{operationsToDisplay.length} OPERATIONS</span>
                 </div>
@@ -1418,7 +1418,7 @@ const ProductionPlan = () => {
             </div>
 
             <div className="overflow-x-auto border border-slate-100 rounded ">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead className="bg-slate-50/50">
                   <tr className="text-lefttext-xs   text-slate-400  ">
                     <th className="p-2  ">Step</th>
@@ -1431,22 +1431,22 @@ const ProductionPlan = () => {
                 <tbody className="divide-y divide-slate-100">
                   {operationsToDisplay.map((op, idx) => (
                     <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-4 text-slate-400 ">0{idx + 1}</td>
-                      <td className="px-4 py-4">
+                      <td className="p-2  text-slate-400 ">0{idx + 1}</td>
+                      <td className="p-2 ">
                         <div className=" text-slate-800 text-xs">{op.operation_name}</div>
-                        <div className="text-[10px] text-slate-400">Standard manufacturing process</div>
+                        <div className="text-xs text-slate-400">Standard manufacturing process</div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="p-2 ">
                         <div className="flex items-center gap-2  text-slate-600">
                           <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                           <span className="text-xs ">{op.workstation || 'General Workstation'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="p-2  text-center">
                         <div className=" text-indigo-600">{op.base_hour || '1.0'}</div>
-                        <div className="text-[8px] text-slate-400   tracking-tighter">HRS</div>
+                        <div className="text-[8px] text-slate-400   ">HRS</div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="p-2 ">
                         <span className="inline-flex items-center gap-1.5 p-1  bg-slate-50 text-indigo-600text-xs   rounded border border-slate-100">
                           {op.itemCode || op.source_item}
                         </span>
@@ -1455,7 +1455,7 @@ const ProductionPlan = () => {
                   ))}
                   {(!newPlan.items.some(item => item.operations?.length > 0)) && (
                     <tr>
-                      <td colSpan="5" className="px-4 p-2 text-center text-slate-400 italic text-sm">
+                      <td colSpan="5" className="px-4 p-2 text-center text-slate-400 italic text-xs">
                         No operations defined for the selected items.
                       </td>
                     </tr>
@@ -1468,10 +1468,10 @@ const ProductionPlan = () => {
         */}
 
         {/* Sticky Bottom Bar */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 p-4 flex items-center justify-between z-20">
+        <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 p-2 flex items-center justify-between z-20">
           <div className="flex items-center gap-8 ml-64">
             <div>
-              <span className="text-[10px] text-slate-400   tracking-widest block mb-0.5">Plan Status</span>
+              <span className="text-xs text-slate-400    block mb-0.5">Plan Status</span>
               <div className="flex items-center gap-2 ">
                 <span className="p-1  bg-slate-100 text-slate-600text-xs   rounded">draft</span>
                 <span className="text-xs  text-slate-400 tracking-tight">Draft</span>
@@ -1479,11 +1479,11 @@ const ProductionPlan = () => {
             </div>
             <div className="h-8 w-px bg-slate-200"></div>
             <div>
-              <span className="text-[10px] text-slate-400   tracking-widest block mb-0.5">Materials</span>
+              <span className="text-xs text-slate-400    block mb-0.5">Materials</span>
               <span className="text-xs  text-slate-800 tracking-tight">{totalMaterialCount} Items Calculated</span>
             </div>
           </div>
-          <div className="flex items-center gap-3 mr-4">
+          <div className="flex items-center gap-2 mr-4">
             <button 
               onClick={() => handleCreateWorkOrders(newPlan.id)}
               className="flex items-center gap-2  p-2  bg-emerald-50 text-emerald-600 rounded  hover:bg-emerald-100 text-xs  transition-all border border-emerald-100"
@@ -1498,7 +1498,7 @@ const ProductionPlan = () => {
             {!isViewing && (
               <button 
                 onClick={handleSubmit}
-                className="flex items-center gap-2  p-2 bg-slate-900 text-white rounded  hover:bg-slate-800 text-xs  transition-all shadow-lg shadow-slate-200"
+                className="flex items-center gap-2  p-2 bg-slate-200 text-white rounded  hover:bg-slate-800 text-xs  transition-all shadow-lg shadow-slate-200"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
                 {newPlan.id ? 'Update Strategic Plan' : 'Save Strategic Plan'}
@@ -1668,15 +1668,15 @@ const ProductionPlan = () => {
   }
 
   return (
-    <div className="p-1 space-y-6">
+    <div className="p-4 space-y-2 min-w-0">
       {/* Header Section */}
       <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-900 text-white rounded  flex items-center justify-center shadow-lg shadow-slate-200">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 bg-slate-900 text-white rounded  flex items-center justify-center shadow-lg shadow-slate-200">
             <Layers className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl  text-slate-900 tracking-tight flex items-center gap-2 ">
+            <h1 className="text-xl  text-slate-900  flex items-center gap-2 ">
               Production <span className="text-indigo-600">Intelligence</span>
             </h1>
             <div className="flex items-center gap-2  text-xs text-slate-400 ">
@@ -1688,7 +1688,7 @@ const ProductionPlan = () => {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button 
             onClick={() => {/* Reset logic if needed */}}
             className="flex items-center gap-2  p-2  text-rose-600 hover:bg-rose-50 rounded  text-xs  transition-all"
@@ -1698,7 +1698,7 @@ const ProductionPlan = () => {
           </button>
           <button 
             onClick={handleCreateNew}
-            className="flex items-center gap-2  px-5 py-2.5 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all text-sm  shadow-xl shadow-slate-200"
+            className="flex items-center gap-2  p-2  bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all text-xs  shadow-xl shadow-slate-200"
           >
             <Plus className="w-4 h-4" />
             New Strategic Plan
@@ -1707,7 +1707,7 @@ const ProductionPlan = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 ">
         {[
           { label: 'Active Strategies', value: plans.filter(p => p.status !== 'Draft').length, icon: Layers, color: 'indigo', sub: 'Total registered plans' },
           { label: 'Execution Phase', value: '0', icon: Zap, color: 'blue', sub: 'Plans in active production' },
@@ -1715,18 +1715,18 @@ const ProductionPlan = () => {
           { label: 'Draft Formulation', value: plans.filter(p => p.status === 'Draft').length, icon: FileText, color: 'slate', sub: 'Pending validation' }
         ].map((stat, i) => (
           <Card key={i} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300 border-none bg-white  ring-1 ring-slate-100">
-            <div className="p-6">
+            <div className="p-2">
               <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 rounded  bg-${stat.color}-50 text-${stat.color}-600 flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
+                <div className={`w-5 h-5 rounded  bg-${stat.color}-50 text-${stat.color}-600 flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
                   <stat.icon className="w-6 h-6" />
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-black text-slate-900">{stat.value}</div>
+                  <div className="text-xl  text-slate-900">{stat.value}</div>
                 </div>
               </div>
               <div>
                 <div className="text-xs  text-slate-500   mb-1">{stat.label}</div>
-                <div className="text-[10px] text-slate-400 ">{stat.sub}</div>
+                <div className="text-xs text-slate-400 ">{stat.sub}</div>
               </div>
             </div>
             <div className={`absolute bottom-0 left-0 right-0 h-1 bg-${stat.color}-500/10 group-hover:bg-${stat.color}-500 transition-colors`} />
@@ -1736,18 +1736,18 @@ const ProductionPlan = () => {
 
       {/* Content Section */}
       <Card className="border-none  ring-1 ring-slate-100 bg-white rounded  overflow-hidden">
-        <div className="p-6">
+        <div className="p-2">
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
                 <BarChart2 className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm  text-slate-800 tracking-tight ">Strategy Pipeline</h2>
-                <p className="text-[11px] text-slate-400 ">Manage and monitor manufacturing execution</p>
+                <h2 className="text-xs  text-slate-800 tracking-tight ">Strategy Pipeline</h2>
+                <p className="text-xs  text-slate-400 ">Manage and monitor manufacturing execution</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
@@ -1755,7 +1755,7 @@ const ProductionPlan = () => {
                   placeholder="SEARCH STRATEGIES..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded text-xs   tracking-widest text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none w-64 transition-all"
+                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded text-xs    text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none w-64 transition-all"
                 />
               </div>
               <button className="p-2 bg-slate-50 text-slate-400 hover:text-slate-600 rounded  border border-slate-100 transition-all">
@@ -1764,22 +1764,22 @@ const ProductionPlan = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full">
               <thead>
                 <tr className="text-left border-b border-slate-50">
-                  <th className="pb-4text-xs   text-slate-400  tracking-widest px-2">Plan ID</th>
-                  <th className="pb-4text-xs   text-slate-400  tracking-widest px-4">Origin & Status</th>
-                  <th className="pb-4text-xs   text-slate-400  tracking-widest px-4">Timeline</th>
-                  <th className="pb-4text-xs   text-slate-400  tracking-widest px-4">Production Progress</th>
-                  <th className="pb-4text-xs   text-slate-400  tracking-widest px-4">Operations</th>
-                  <th className="pb-4text-xs   text-slate-400  tracking-widest px-4 text-right">Actions</th>
+                  <th className="p-2 text-xs   text-slate-400  ">Plan ID</th>
+                  <th className="p-2 text-xs   text-slate-400  ">Origin & Status</th>
+                  <th className="p-2 text-xs   text-slate-400  ">Timeline</th>
+                  <th className="p-2 text-xs   text-slate-400  ">Production Progress</th>
+                  <th className="p-2 text-xs   text-slate-400  ">Operations</th>
+                  <th className="p-2 text-xs   text-slate-400  ">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="p-2 text-center text-slate-400 text-xs italic ">Loading strategic intelligence...</td>
+                    <td colSpan="6" className="px-2 text-center text-slate-400 text-xs italic ">Loading strategic intelligence...</td>
                   </tr>
                 ) : filteredPlans.length === 0 ? (
                   <tr>
@@ -1787,29 +1787,29 @@ const ProductionPlan = () => {
                   </tr>
                 ) : filteredPlans.map((plan) => (
                   <tr key={plan.id} className="group hover:bg-slate-50/50 transition-all duration-200">
-                    <td className="py-5 px-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-slate-900 text-white rounded  flex items-center justify-center shadow-md shadow-slate-200">
-                          <Layers className="w-4 h-4" />
+                    <td className="p-2">
+                      <div className="flex items-start gap-2">
+                        <div className="p-1 bg-slate-900 text-white rounded  flex items-center justify-center  shadow-slate-200">
+                          <Layers className="w-3 h-3" />
                         </div>
                         <div>
-                          <div className="text-[11px] font-black text-slate-800 tracking-tight">{plan.plan_code}</div>
-                          <div className="text-[10px] text-slate-400 ">
+                          <div className="text-xs   text-slate-800 tracking-tight">{plan.plan_code}</div>
+                          <div className="text-xs text-slate-400 ">
                             {plan.item_code ? `${plan.item_code} - ${plan.item_description}` : (plan.project_name || 'Global Manufacturing')}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="py-5 px-4">
-                      <div className="flex flex-col gap-1.5">
+                    <td className="p-2">
+                      <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2 ">
-                          <div className="w-4 h-4 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
+                          <div className="p-1 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
                             <Layers className="w-2.5 h-2.5" />
                           </div>
-                          <span className="text-[10px]  text-slate-600">{plan.order_no || 'N/A'}</span>
+                          <span className="text-xs  text-slate-600">{plan.order_no || 'N/A'}</span>
                         </div>
-                        <div className="flex gap-1.5">
-                          <span className={`p-1  rounded  text-[9px] font-black  tracking-tighter border flex items-center gap-1
+                        <div className="flex gap-1">
+                          <span className={`p-1  rounded  text-xs    border flex items-center gap-1
                             ${plan.status === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
                               plan.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                               'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
@@ -1818,7 +1818,7 @@ const ProductionPlan = () => {
                             {plan.status}
                           </span>
                           {plan.mr_status && (
-                            <span className={`p-1 rounded text-[9px] font-black tracking-tighter border flex items-center gap-1
+                            <span className={`p-1 rounded text-xs   border flex items-center gap-1
                               ${plan.mr_status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                                 plan.mr_status === 'DRAFT' ? 'bg-slate-50 text-slate-600 border-slate-100' : 
                                 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
@@ -1829,25 +1829,25 @@ const ProductionPlan = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="py-5 px-4">
+                    <td className="p-2">
                       <div className="flex items-center gap-2  group/time">
-                        <div className="w-8 h-8 rounded  border border-slate-100 bg-white flex items-center justify-center text-slate-400 group-hover/time:border-indigo-100 group-hover/time:text-indigo-500 transition-colors">
-                          <Clock className="w-4 h-4" />
+                        <div className="p-1 rounded  border border-slate-100 bg-white flex items-center justify-center text-slate-400 group-hover/time:border-indigo-100 group-hover/time:text-indigo-500 transition-colors">
+                          <Clock className="w-3 h-3" />
                         </div>
                         <div>
-                          <div className="text-[10px]  text-slate-600  tracking-tighter">
+                          <div className="text-xs  text-slate-600  ">
                             {plan.start_date ? new Date(plan.start_date).toLocaleDateString() : '-'}
                           </div>
-                          <div className="text-[9px] text-slate-400 ">
+                          <div className="text-xs text-slate-400 ">
                             {plan.wo_count > 0 ? `${plan.wo_count} Active Work Orders` : 'No work orders'}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="py-5 px-4">
-                      <div className="w-48">
+                    <td className="p-2">
+                      <div className="w-40">
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[9px] font-black text-slate-400  tracking-widest">
+                          <span className="text-xs  text-slate-400  ">
                             {(() => {
                               const total = plan.total_ops || 0;
                               const woCount = plan.wo_count || 0;
@@ -1859,7 +1859,7 @@ const ProductionPlan = () => {
                               return 0;
                             })()}% Complete
                           </span>
-                          <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded  tracking-tighter">
+                          <span className="text-xs  text-slate-900 bg-slate-100 p-1 rounded  ">
                             {plan.completed_ops}/{plan.total_ops} OPS
                           </span>
                         </div>
@@ -1882,15 +1882,15 @@ const ProductionPlan = () => {
                         </div>
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <Clock className="w-3 h-3 text-indigo-400" />
-                          <span className="text-[9px] text-indigo-600   tracking-tighter">
+                          <span className="text-xs text-indigo-600   ">
                             {plan.wo_count > 0 ? `${plan.wo_count} Linked Orders` : 'No work orders'}
                           </span>
                         </div>
                       </div>
                     </td>
-                    <td className="py-5 px-4">
+                    <td className="p-2">
                       <div className="flex items-center -space-x-2">
-                        <div className="w-8 h-8 rounded  border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600text-xs  font-black  ring-1 ring-indigo-100 relative group/op">
+                        <div className="p-1 rounded  border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-xs    ring-1 ring-indigo-100 relative group/op">
                           {plan.total_ops}
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[8px]  rounded opacity-0 group-hover/op:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                             Total Operations
@@ -1898,7 +1898,7 @@ const ProductionPlan = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="py-5 px-4">
+                    <td className="p-2">
                       <div className="flex items-center justify-end gap-1 transition-all duration-200">
                         <button 
                           onClick={() => handleViewPlan(plan.id)}
@@ -1907,32 +1907,32 @@ const ProductionPlan = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Analytics">
+                        <button className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Analytics">
                           <BarChart2 className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Settings">
+                        <button className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Settings">
                           <Settings className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => handleTransmitMR(plan.id)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
                           title="Transmit"
                         >
                           <Send className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => handleEditPlan(plan.id)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
                           title="Edit Strategy"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Documents">
+                        <button className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Documents">
                           <FileText className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => handleDeletePlan(plan.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all" 
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all" 
                           title="Archive Strategy"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1947,12 +1947,12 @@ const ProductionPlan = () => {
 
           {/* Footer Section */}
           <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
-            <div className="text-[10px]  text-slate-400  tracking-widest flex items-center gap-2 ">
+            <div className="text-xs  text-slate-400   flex items-center gap-2 ">
               Showing {filteredPlans.length} of {plans.length} strategic formulations
             </div>
             <div className="flex items-center gap-2 ">
               <div className="w-2 h-2 bg-emerald-500 rounded  animate-pulse" />
-              <span className="text-[10px] font-black text-slate-900  tracking-tighter">Neural Link Active</span>
+              <span className="text-xs  text-slate-900  ">Neural Link Active</span>
             </div>
           </div>
         </div>
@@ -1968,8 +1968,8 @@ const ProductionPlan = () => {
               <Layers className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-slate-800 tracking-tight">Material Request</h2>
-              <div className="flex items-center gap-1 text-[10px] text-indigo-500 font-bold uppercase tracking-widest">
+              <h2 className="text-lg  text-slate-800 tracking-tight">Material Request</h2>
+              <div className="flex items-center gap-1 text-xs text-indigo-500   ">
                 <Activity className="w-3 h-3" />
                 Resource Acquisition Phase
               </div>
@@ -1978,20 +1978,20 @@ const ProductionPlan = () => {
         }
         size="4xl"
       >
-        <div className="space-y-6">
+        <div className="space-y-2">
           {/* MR Header Info */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Request Identifier</label>
-              <div className="text-sm font-black text-slate-800">{mrPlanDetails?.planCode || '---'}</div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="p-2 bg-slate-50/50 rounded  border border-slate-100">
+              <label className="text-xs text-slate-400    block mb-1">Request Identifier</label>
+              <div className="text-xs  text-slate-800">{mrPlanDetails?.planCode || '---'}</div>
             </div>
-            <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Originating Dept</label>
-              <div className="text-sm font-black text-slate-800">Production</div>
+            <div className="p-2 bg-slate-50/50 rounded  border border-slate-100">
+              <label className="text-xs text-slate-400    block mb-1">Originating Dept</label>
+              <div className="text-xs  text-slate-800">Production</div>
             </div>
-            <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">SLA Target Date</label>
-              <div className="text-sm font-black text-slate-800">
+            <div className="p-2 bg-slate-50/50 rounded  border border-slate-100">
+              <label className="text-xs text-slate-400    block mb-1">SLA Target Date</label>
+              <div className="text-xs  text-slate-800">
                 {mrPlanDetails?.startDate ? new Date(mrPlanDetails.startDate).toLocaleDateString() : '---'}
               </div>
             </div>
@@ -2001,26 +2001,26 @@ const ProductionPlan = () => {
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
             <div className="flex gap-6">
               <button className="flex items-center gap-2 pb-2 border-b-2 border-rose-500 text-rose-600">
-                <span className="text-xs font-black">Pending Request</span>
-                <span className="px-1.5 py-0.5 bg-rose-50 rounded text-[10px] font-black">
+                <span className="text-xs ">Pending Request</span>
+                <span className="px-1.5 py-0.5 bg-rose-50 rounded text-xs ">
                   {mrItems.filter(item => !item.is_fulfilled && item.inventory < item.quantity).length}
                 </span>
               </button>
               <button className="flex items-center gap-2 pb-2 text-slate-400 hover:text-slate-600">
-                <span className="text-xs font-black">Complete Request</span>
-                <span className="px-1.5 py-0.5 bg-slate-50 rounded text-[10px] font-black">
+                <span className="text-xs ">Complete Request</span>
+                <span className="px-1.5 py-0.5 bg-slate-50 rounded text-xs ">
                   {mrItems.filter(item => item.is_fulfilled || item.inventory >= item.quantity).length}
                 </span>
               </button>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
-                <span className="text-[11px] font-black text-slate-700">Items to Request ({mrItems.length})</span>
+                <div className="w-1.5 h-6 bg-indigo-500 rounded" />
+                <span className="text-xs   text-slate-700">Items to Request ({mrItems.length})</span>
               </div>
               <button 
                 onClick={() => setShowAddItem(!showAddItem)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-[10px] font-black shadow-sm"
+                className="flex items-center gap-1.5 p-1.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs  shadow-sm"
               >
                 <Plus className="w-3 h-3" />
                 Add Item
@@ -2033,11 +2033,11 @@ const ProductionPlan = () => {
             <table className="w-full">
               <thead>
                 <tr className="text-left border-b border-slate-50">
-                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Component Intelligence</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Required</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Inventory</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Status</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right w-10">Action</th>
+                  <th className="pb-3 text-xs  text-slate-400  ">Component Intelligence</th>
+                  <th className="pb-3 text-xs  text-slate-400   text-center">Required</th>
+                  <th className="pb-3 text-xs  text-slate-400   text-center">Inventory</th>
+                  <th className="pb-3 text-xs  text-slate-400   text-right">Status</th>
+                  <th className="pb-3 text-xs  text-slate-400   text-right w-10">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -2046,35 +2046,35 @@ const ProductionPlan = () => {
                     <td className="py-4">
                       <div className="flex items-center gap-2">
                         <div className="flex flex-col">
-                          <div className="text-xs font-black text-slate-700">{item.material_name}</div>
-                          <div className="text-[10px] text-slate-400">({item.item_code})</div>
+                          <div className="text-xs  text-slate-700">{item.material_name}</div>
+                          <div className="text-xs text-slate-400">({item.item_code})</div>
                         </div>
                         {item.is_manual && (
-                          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-[8px] font-black uppercase rounded">Manual</span>
+                          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-[8px]   rounded">Manual</span>
                         )}
                       </div>
                     </td>
                     <td className="py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs font-black text-slate-800">{Number(item.quantity).toFixed(2)}</span>
-                        <span className="text-[10px] text-slate-400">{item.uom}</span>
+                        <span className="text-xs  text-slate-800">{Number(item.quantity).toFixed(2)}</span>
+                        <span className="text-xs text-slate-400">{item.uom}</span>
                       </div>
                     </td>
                     <td className="py-4 text-center">
-                      <div className="text-xs font-black text-slate-800">{Number(item.inventory || 0).toFixed(2)}</div>
+                      <div className="text-xs  text-slate-800">{Number(item.inventory || 0).toFixed(2)}</div>
                     </td>
                     <td className="py-4 text-right">
                       {item.is_fulfilled || item.inventory >= item.quantity ? (
                         <div className="flex items-center justify-end gap-1.5 text-emerald-500">
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-black uppercase tracking-tight">
+                          <span className="text-xs   tracking-tight">
                             {item.is_fulfilled ? 'Fulfilled' : 'In Stock'}
                           </span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1.5 text-rose-500">
                           <AlertCircle className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-black uppercase tracking-tight">
+                          <span className="text-xs   tracking-tight">
                             {item.inventory <= 0 ? 'Zero Stock' : 'Shortage'}
                           </span>
                         </div>
@@ -2083,7 +2083,7 @@ const ProductionPlan = () => {
                     <td className="py-4 text-right">
                       <button 
                         onClick={() => setMrItems(prev => prev.filter((_, i) => i !== idx))}
-                        className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -2112,7 +2112,7 @@ const ProductionPlan = () => {
                         className="text-xs h-8 bg-white"
                       />
                       {selectedNewItem && (
-                        <div className="mt-1 px-1 text-[9px] text-indigo-600 font-bold uppercase truncate max-w-[200px]">
+                        <div className="mt-1 px-1 text-xs text-indigo-600   truncate max-w-[200px]">
                           {selectedNewItem.material_name}
                         </div>
                       )}
@@ -2123,18 +2123,18 @@ const ProductionPlan = () => {
                         value={newItemQty}
                         onChange={(e) => setNewItemQty(e.target.value)}
                         placeholder="Qty"
-                        className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs font-black text-center outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs  text-center outline-none focus:ring-1 focus:ring-indigo-500"
                         min="0"
                         step="0.01"
                       />
                     </td>
                     <td className="py-2 px-1 text-center">
-                      <div className="text-[10px] text-slate-400 font-bold italic">
+                      <div className="text-xs text-slate-400  italic">
                         {selectedNewItem ? Number(selectedNewItem.current_balance || 0).toFixed(2) : '--'}
                       </div>
                     </td>
                     <td className="py-2 px-1 text-right">
-                       <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-[8px] font-black uppercase rounded">NEW</span>
+                       <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-[8px]   rounded">NEW</span>
                     </td>
                     <td className="py-2 px-1 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -2166,11 +2166,11 @@ const ProductionPlan = () => {
           </div>
 
           {/* Modal Actions */}
-          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
+          <div className="flex items-center justify-end gap-2 pt-6 border-t border-slate-100">
             <button
               onClick={() => setMrModalOpen(false)}
               disabled={transmittingMr}
-              className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
+              className="px-4 py-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors"
             >
               Abort Request
             </button>
@@ -2178,11 +2178,11 @@ const ProductionPlan = () => {
               <button
                 onClick={confirmTransmitMR}
                 disabled={transmittingMr}
-                className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all text-xs font-black shadow-lg shadow-slate-200 disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all text-xs  shadow-lg shadow-slate-200 disabled:opacity-50"
               >
                 {transmittingMr ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded animate-spin" />
                     Transmitting...
                   </>
                 ) : (

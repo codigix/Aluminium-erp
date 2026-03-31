@@ -38,12 +38,12 @@ const entryTypeIcons = {
 };
 
 const StatCard = ({ label, value, icon: Icon, colorClass, iconBg }) => (
-  <div className="bg-white p-4 rounded  border border-slate-200  flex flex-col gap-3 flex-1 min-w-[200px]">
-    <div className={`w-10 h-10 rounded  ${iconBg} flex items-center justify-center ${colorClass}`}>
+  <div className="bg-white p-2 rounded  border border-slate-200  flex flex-col gap-2 flex-1 min-w-[200px]">
+    <div className={`w-5 h-5 rounded  ${iconBg} flex items-center justify-center ${colorClass}`}>
       <Icon className="w-5 h-5" />
     </div>
     <div>
-      <p className="text-[10px]  text-slate-500   ">{label}</p>
+      <p className="text-xs  text-slate-500   ">{label}</p>
       <p className="text-xl text-slate-900 leading-tight font-semibold">{value}</p>
     </div>
   </div>
@@ -324,9 +324,9 @@ const StockEntries = () => {
   const totalValue = entries.reduce((acc, curr) => acc + (parseFloat(curr.total_value) || 0), 0);
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto p-4">
+    <div className="space-y-2 max-w-[1600px] mx-auto p-2">
       {/* Stats Summary */}
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-2">
         <StatCard 
           label="Total Movements" 
           value={totalMovements} 
@@ -358,7 +358,7 @@ const StockEntries = () => {
       </div>
 
       <Card>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-6">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
@@ -370,9 +370,9 @@ const StockEntries = () => {
             />
           </div>
           
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <select 
-              className="bg-slate-50 border border-slate-200 rounded  px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="bg-slate-50 border border-slate-200 rounded  p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
               value={typeFilter}
               onChange={e => setTypeFilter(e.target.value)}
             >
@@ -384,7 +384,7 @@ const StockEntries = () => {
             </select>
 
             <select 
-              className="bg-slate-50 border border-slate-200 rounded  px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="bg-slate-50 border border-slate-200 rounded  p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
               value={warehouseFilter}
               onChange={e => setWarehouseFilter(e.target.value)}
             >
@@ -433,11 +433,11 @@ const StockEntries = () => {
                 </tr>
               ) : filteredEntries.map(entry => (
                 <tr key={entry.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-4 py-4">
+                  <td className="p-2 ">
                     <div className=" text-slate-900">{entry.entry_no}</div>
-                    <div className="text-[10px] text-slate-400  tracking-tighter">ID: {entry.id}</div>
+                    <div className="text-xs text-slate-400  tracking-tighter">ID: {entry.id}</div>
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="p-2 ">
                     <div className="flex items-center gap-2   text-slate-700">
                       {entryTypeIcons[entry.entry_type]}
                       {entry.entry_type}
@@ -448,7 +448,7 @@ const StockEntries = () => {
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="p-2 ">
                     <div className="flex items-center gap-2  text-slate-600">
                       <span className={entry.from_warehouse_name ? "text-slate-900 " : "text-slate-400 italic"}>
                         {entry.from_warehouse_name || 'N/A'}
@@ -459,18 +459,18 @@ const StockEntries = () => {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="p-2 ">
                     <Badge variant="outline" className={`${statusColors[entry.status]} `}>
                       {entry.status}
                     </Badge>
                   </td>
-                  <td className="px-4 py-4 text-slate-600">
+                  <td className="p-2  text-slate-600">
                     {new Date(entry.entry_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </td>
-                  <td className="px-4 py-4 text-center  text-slate-700">
+                  <td className="p-2  text-center  text-slate-700">
                     {entry.item_count}
                   </td>
-                  <td className="px-4 py-4 text-right">
+                  <td className="p-2  text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       {entry.status === 'draft' && (
                         <>
@@ -510,10 +510,10 @@ const StockEntries = () => {
 
       {/* Creation Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
-            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="relative bg-white rounded shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+            <div className="p-2  border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
                 <h2 className="text-xl  text-slate-900">Create Stock Entry</h2>
                 <p className="text-xs text-slate-500 mt-1">Record material movements between warehouses or adjust stock levels.</p>
@@ -526,9 +526,9 @@ const StockEntries = () => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-8">
+            <div className="flex-1 overflow-y-auto p-2 space-y-2">
               {/* Basic Details */}
-              <div className="space-y-6">
+              <div className="space-y-2">
                 <div className="flex items-center gap-2  text-indigo-600 font-semibold text-sm">
                   <div className="w-6 h-6 rounded  bg-indigo-50 flex items-center justify-center">1</div>
                   Basic Information
@@ -549,13 +549,13 @@ const StockEntries = () => {
                         </option>
                       ))}
                     </select>
-                    <div className="flex items-center gap-4 px-1">
-                      <span className="text-[10px] text-slate-400">Available GRNs: {grns?.length || 0}</span>
-                      <span className="text-[10px] text-slate-400">Processed: 0</span>
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-xs text-slate-400">Available GRNs: {grns?.length || 0}</span>
+                      <span className="text-xs text-slate-400">Processed: 0</span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <label className="text-xs font-semibold text-slate-600  ">Entry Date *</label>
                       <input 
@@ -614,14 +614,14 @@ const StockEntries = () => {
               </div>
 
               {/* Items Section */}
-              <div className="space-y-6 pt-6 border-t border-slate-100">
+              <div className="space-y-2 pt-6 border-t border-slate-100">
                 <div className="flex items-center gap-2  text-indigo-600 font-semibold text-sm">
                   <div className="w-6 h-6 rounded  bg-indigo-50 flex items-center justify-center">2</div>
                   Add Items
                 </div>
 
-                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-slate-50 rounded p-2 border border-slate-100 space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div className="md:col-span-1">
                       <label className="blocktext-xs   text-slate-500 mb-1.5 ">Item Code *</label>
                       <select 
@@ -654,7 +654,7 @@ const StockEntries = () => {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                     <div>
                       <label className="blocktext-xs   text-slate-500 mb-1.5 ">Batch No</label>
                       <input 
@@ -677,7 +677,7 @@ const StockEntries = () => {
                     <button 
                       type="button"
                       onClick={addItem}
-                      className="w-full py-2.5 bg-emerald-600 text-white rounded  text-sm  hover:bg-emerald-700 transition-all shadow-md active:scale-[0.98]"
+                      className="w-full py-2.5 bg-emerald-600 text-white rounded  text-sm  hover:bg-emerald-700 transition-all  active:scale-[0.98]"
                     >
                       Add Item
                     </button>
@@ -720,7 +720,7 @@ const StockEntries = () => {
                 )}
               </div>
 
-              <div className="space-y-4 pt-6">
+              <div className="space-y-2 pt-6">
                 <label className="text-xs font-semibold text-slate-600  ">Remarks</label>
                 <textarea 
                   className="w-full bg-slate-50 border border-slate-200 rounded  p-2  text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none min-h-[100px]"
@@ -731,7 +731,7 @@ const StockEntries = () => {
               </div>
             </div>
 
-            <div className="px-8 py-6 border-t border-slate-100 flex items-center justify-end gap-4 bg-slate-50/50">
+            <div className="p-2  border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/50">
               <button 
                 onClick={() => setShowModal(false)}
                 className="p-2.5 rounded  border border-slate-200 text-slate-600  text-sm hover:bg-white transition-all"

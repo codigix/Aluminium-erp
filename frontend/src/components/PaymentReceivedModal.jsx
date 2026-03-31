@@ -368,17 +368,17 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={invoice ? "Record Payment Received" : "Add Payment Received"} size="2xl">
-      <div className="space-y-6">
+      <div className="space-y-2">
         
         {/* Selection Section (Only if no invoice passed) */}
         {!invoice && (
-          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded  border border-slate-200">
             <div className="col-span-2">
               <FormControl label="Customer *">
                 <select
                   value={formData.customerId}
                   onChange={(e) => handleInputChange('customerId', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white ${errors.customerId ? 'border-rose-500' : 'border-slate-300'}`}
+                  className={`w-full p-2 border rounded  text-sm bg-white ${errors.customerId ? 'border-rose-500' : 'border-slate-300'}`}
                 >
                   <option value="">Select Customer</option>
                   {customers.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
@@ -392,7 +392,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 value={formData.salesOrderId}
                 onChange={(e) => handleInputChange('salesOrderId', e.target.value)}
                 disabled={!formData.customerId}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-100"
+                className="w-full p-2 border border-slate-300 rounded  text-sm bg-white disabled:bg-slate-100"
               >
                 <option value="">Advance Payment / On Account</option>
                 {customerInvoices.map(inv => (
@@ -406,7 +406,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 value={formData.soId}
                 onChange={(e) => handleInputChange('soId', e.target.value)}
                 disabled={!formData.customerId}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-100"
+                className="w-full p-2 border border-slate-300 rounded  text-sm bg-white disabled:bg-slate-100"
               >
                 <option value="">Select Sales Order</option>
                 {customerSalesOrders.map(so => (
@@ -421,44 +421,44 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
         {/* Invoice Summary (If invoice passed) */}
         {invoice && (
-          <div className="bg-gradient-to-br from-emerald-50 to-slate-50 border border-emerald-100 rounded-xl p-5 space-y-3">
+          <div className="bg-gradient-to-br from-emerald-50 to-slate-50 border border-emerald-100 rounded  p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">Invoice Summary</h3>
+              <h3 className=" text-slate-900 text-sm  tracking-wide">Invoice Summary</h3>
             </div>
             <div className="grid grid-cols-2 gap-5 text-xs">
               <div>
                 <span className="text-slate-500 font-medium">Invoice No</span>
-                <p className="font-bold text-slate-900 mt-1">{invoice.po_number || invoice.so_number || 'N/A'}</p>
+                <p className=" text-slate-900 mt-1">{invoice.po_number || invoice.so_number || 'N/A'}</p>
               </div>
               <div>
                 <span className="text-slate-500 font-medium">Customer</span>
-                <p className="font-bold text-slate-900 mt-1">{invoice.customer_name || 'N/A'}</p>
+                <p className=" text-slate-900 mt-1">{invoice.customer_name || 'N/A'}</p>
               </div>
               <div>
                 <span className="text-slate-500 font-medium">Invoice Amount</span>
-                <p className="font-bold text-slate-900 mt-1">{formatCurrency(invoice.total_amount || invoice.net_total)}</p>
+                <p className=" text-slate-900 mt-1">{formatCurrency(invoice.total_amount || invoice.net_total)}</p>
               </div>
               <div>
                 <span className="text-slate-500 font-medium">Outstanding</span>
-                <p className="font-bold text-rose-600 mt-1">{formatCurrency(currentOutstanding)}</p>
+                <p className=" text-rose-600 mt-1">{formatCurrency(currentOutstanding)}</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Payment Details */}
-        <div className="space-y-4">
-          <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">Payment Details</h3>
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <h3 className=" text-slate-900 text-sm  tracking-wide">Payment Details</h3>
+          <div className="grid grid-cols-2 gap-2">
             <FormControl label="Payment Amount *">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 ">₹</span>
                 <input
                   type="number"
                   step="0.01"
                   value={formData.paymentAmount}
                   onChange={(e) => handleInputChange('paymentAmount', e.target.value)}
-                  className={`w-full pl-7 pr-3 py-2 border rounded-lg text-sm focus:ring-2 ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-200' : 'border-slate-300 focus:ring-emerald-200'}`}
+                  className={`w-full pl-7 pr-3 py-2 border rounded  text-xs focus:ring-2 ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-200' : 'border-slate-300 focus:ring-emerald-200'}`}
                   placeholder="0.00"
                 />
               </div>
@@ -470,7 +470,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 type="date"
                 value={formData.paymentDate}
                 onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.paymentDate ? 'border-rose-500' : 'border-slate-300'}`}
+                className={`w-full p-2 border rounded  text-sm ${errors.paymentDate ? 'border-rose-500' : 'border-slate-300'}`}
               />
               {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentDate}</span>}
             </FormControl>
@@ -479,7 +479,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
               <select
                 value={formData.paymentMode}
                 onChange={(e) => handleInputChange('paymentMode', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.paymentMode ? 'border-rose-500' : 'border-slate-300'}`}
+                className={`w-full p-2 border rounded  text-sm ${errors.paymentMode ? 'border-rose-500' : 'border-slate-300'}`}
               >
                 <option value="">Select Mode</option>
                 {paymentModes.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
@@ -507,7 +507,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   <select
                     value={formData.upiApp}
                     onChange={(e) => handleInputChange('upiApp', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className="w-full p-2 border border-slate-300 rounded  text-sm"
                   >
                     <option value="">Select App</option>
                     {upiApps.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
@@ -518,7 +518,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="text"
                     value={formData.upiTransactionId}
                     onChange={(e) => handleInputChange('upiTransactionId', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className="w-full p-2 border border-slate-300 rounded  text-sm"
                     placeholder="ID"
                   />
                 </FormControl>
@@ -532,7 +532,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="text"
                     value={formData.chequeNumber}
                     onChange={(e) => handleInputChange('chequeNumber', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.chequeNumber ? 'border-rose-500' : 'border-slate-300'}`}
+                    className={`w-full p-2 border rounded  text-sm ${errors.chequeNumber ? 'border-rose-500' : 'border-slate-300'}`}
                   />
                   {errors.chequeNumber && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeNumber}</span>}
                 </FormControl>
@@ -541,7 +541,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="text"
                     value={formData.bankName}
                     onChange={(e) => handleInputChange('bankName', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.bankName ? 'border-rose-500' : 'border-slate-300'}`}
+                    className={`w-full p-2 border rounded  text-sm ${errors.bankName ? 'border-rose-500' : 'border-slate-300'}`}
                     placeholder="e.g. HDFC Bank"
                   />
                   {errors.bankName && <span className="text-xs text-rose-600 mt-1 block">{errors.bankName}</span>}
@@ -551,7 +551,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="date"
                     value={formData.chequeDate}
                     onChange={(e) => handleInputChange('chequeDate', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.chequeDate ? 'border-rose-500' : 'border-slate-300'}`}
+                    className={`w-full p-2 border rounded  text-sm ${errors.chequeDate ? 'border-rose-500' : 'border-slate-300'}`}
                   />
                   {errors.chequeDate && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeDate}</span>}
                 </FormControl>
@@ -564,7 +564,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="text"
                   value={formData.transactionRefNo}
                   onChange={(e) => handleInputChange('transactionRefNo', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  className="w-full p-2 border border-slate-300 rounded  text-sm"
                   placeholder="Reference #"
                 />
               </FormControl>
@@ -575,15 +575,15 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             <textarea
               value={formData.remarks}
               onChange={(e) => handleInputChange('remarks', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              className="w-full p-2 border border-slate-300 rounded  text-sm"
               rows="2"
             />
           </FormControl>
         </div>
 
-        <div className="flex gap-3 pt-4 border-t">
-          <button onClick={onClose} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading} className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700">
+        <div className="flex gap-2 pt-4 border-t">
+          <button onClick={onClose} className="flex-1 px-4 py-2 border border-slate-300 rounded  text-sm font-semibold text-slate-700">Cancel</button>
+          <button onClick={handleSubmit} disabled={loading} className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded  text-sm font-semibold hover:bg-emerald-700">
             {loading ? 'Processing...' : 'Record Payment'}
           </button>
         </div>

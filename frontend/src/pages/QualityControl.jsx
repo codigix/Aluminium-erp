@@ -257,12 +257,12 @@ const QualityControl = () => {
   };
 
   const StatMiniCard = ({ label, value, icon: Icon, colorClass }) => (
-    <div className="bg-white p-4 rounded  border border-slate-200  flex items-center gap-4">
+    <div className="bg-white p-2 rounded  border border-slate-200  flex items-center gap-2">
       <div className={`p-2 rounded  ${colorClass}`}>
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px]  text-slate-500  ">{label}</p>
+        <p className="text-xs  text-slate-500  ">{label}</p>
         <p className="text-sm text-slate-900 leading-tight">{value}</p>
       </div>
     </div>
@@ -270,11 +270,11 @@ const QualityControl = () => {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex bg-slate-100 p-1 rounded  w-fit border border-slate-200">
           <button
             onClick={() => setActiveTab('grn')}
-            className={`flex items-center gap-2  px-5 py-2 rounded  text-sm  transition-all ${
+            className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${
               activeTab === 'grn'
                 ? 'bg-white text-indigo-600 '
                 : 'text-slate-500 hover:text-slate-700'
@@ -285,7 +285,7 @@ const QualityControl = () => {
           </button>
           <button
             onClick={() => setActiveTab('qc')}
-            className={`flex items-center gap-2  px-5 py-2 rounded  text-sm  transition-all ${
+            className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${
               activeTab === 'qc'
                 ? 'bg-white text-indigo-600 '
                 : 'text-slate-500 hover:text-slate-700'
@@ -298,7 +298,7 @@ const QualityControl = () => {
 
         <button
           onClick={() => activeTab === 'grn' ? setShowGRNModal(true) : setShowQCModal(true)}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded  text-sm  shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
+          className="flex items-center justify-center gap-2 p-2  bg-indigo-600 text-white rounded  text-sm  shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5"
         >
           <Plus className="w-5 h-5" />
           {activeTab === 'grn' ? 'Create GRN' : 'New Inspection'}
@@ -307,7 +307,7 @@ const QualityControl = () => {
 
       <Card>
         <div className="space-y-3">
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-center pb-2">
+          <div className="flex flex-col md:flex-row gap-2 justify-between items-center pb-2">
             <div className="relative w-full md:w-96">
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -320,7 +320,7 @@ const QualityControl = () => {
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24">
-              <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded  animate-spin mb-4" />
+              <div className="w-5 h-5 border-4 border-indigo-100 border-t-indigo-600 rounded  animate-spin mb-4" />
               <p className="text-sm  text-slate-500">Retrieving quality data...</p>
             </div>
           ) : (activeTab === 'grn' ? grns : qcInspections).length === 0 ? (
@@ -329,7 +329,7 @@ const QualityControl = () => {
                 <Inbox className="w-8 h-8" />
               </div>
               <p className="text-slate-900 ">No records found</p>
-              <p className="text-slate-500 text-sm mt-1 max-w-xs mx-auto">
+              <p className="text-slate-500 text-xs  max-w-xs mx-auto">
                 {activeTab === 'grn' 
                   ? "Start by creating a Goods Received Note for incoming material."
                   : "Pending GRNs will appear here for quality inspection."}
@@ -433,7 +433,7 @@ const QualityControl = () => {
       </Card>
 
       {stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <StatMiniCard 
             label="Pending GRNs" 
             value={stats.pendingGrns || 0} 
@@ -463,7 +463,7 @@ const QualityControl = () => {
 
       {/* GRN Modal */}
       {showGRNModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-2">
           <div className="bg-white rounded  shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div className="flex items-center gap-2 ">
@@ -471,8 +471,8 @@ const QualityControl = () => {
                   <Archive className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm  text-slate-900">Create Goods Received Note</h3>
-                  <p className="text-[10px] text-slate-500   ">Inventory Inward</p>
+                  <h3 className="text-xs  text-slate-900">Create Goods Received Note</h3>
+                  <p className="text-xs text-slate-500   ">Inventory Inward</p>
                 </div>
               </div>
               <button 
@@ -484,7 +484,7 @@ const QualityControl = () => {
             </div>
 
             <form onSubmit={handleCreateGRN} className="p-6 ">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-2">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500  ml-1">PO Number *</label>
                   <div className="relative">
@@ -533,7 +533,7 @@ const QualityControl = () => {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500  ml-1">Notes (Optional)</label>
                   <div className="relative">
-                    <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <MessageSquare className="w-4 h-4 absolute left-3 top-2 text-slate-400" />
                     <textarea
                       value={grnFormData.notes}
                       onChange={(e) => setGrnFormData({...grnFormData, notes: e.target.value})}
@@ -544,7 +544,7 @@ const QualityControl = () => {
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-4">
+              <div className="flex gap-2 justify-end pt-4">
                 <button
                   type="button"
                   onClick={() => setShowGRNModal(false)}
@@ -566,7 +566,7 @@ const QualityControl = () => {
 
       {/* QC Modal */}
       {showQCModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-2">
           <div className="bg-white rounded  shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div className="flex items-center gap-2 ">
@@ -574,8 +574,8 @@ const QualityControl = () => {
                   <CheckBadgeIcon className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm  text-slate-900">Create QC Inspection</h3>
-                  <p className="text-[10px] text-slate-500   ">Quality Verification</p>
+                  <h3 className="text-xs  text-slate-900">Create QC Inspection</h3>
+                  <p className="text-xs text-slate-500   ">Quality Verification</p>
                 </div>
               </div>
               <button 
@@ -587,7 +587,7 @@ const QualityControl = () => {
             </div>
 
             <form onSubmit={handleCreateQC} className="p-6 ">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-2">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500  ml-1">Select GRN *</label>
                   <div className="relative">
@@ -622,7 +622,7 @@ const QualityControl = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500  ml-1">Pass Quantity *</label>
                     <div className="relative">
@@ -658,7 +658,7 @@ const QualityControl = () => {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500  ml-1">Defects & Issues</label>
                   <div className="relative">
-                    <ArrowUpRight className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <ArrowUpRight className="w-4 h-4 absolute left-3 top-2 text-slate-400" />
                     <textarea
                       value={qcFormData.defects}
                       onChange={(e) => setQcFormData({...qcFormData, defects: e.target.value})}
@@ -671,7 +671,7 @@ const QualityControl = () => {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500  ml-1">Remarks</label>
                   <div className="relative">
-                    <MessageSquare className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <MessageSquare className="w-4 h-4 absolute left-3 top-2 text-slate-400" />
                     <textarea
                       value={qcFormData.remarks}
                       onChange={(e) => setQcFormData({...qcFormData, remarks: e.target.value})}
@@ -682,7 +682,7 @@ const QualityControl = () => {
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-4">
+              <div className="flex gap-2 justify-end pt-4">
                 <button
                   type="button"
                   onClick={() => setShowQCModal(false)}
@@ -704,9 +704,9 @@ const QualityControl = () => {
 
       {/* Detail Modal */}
       {detailModal.open && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-2">
           <div className="bg-white rounded  shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div className="flex items-center gap-2 ">
                 <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
                   <Archive className="w-5 h-5" />
@@ -765,7 +765,7 @@ const QualityControl = () => {
                               className="p-1.5 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors inline-flex items-center gap-1"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                              <span className="text-[10px]">Preview</span>
+                              <span className="text-xs">Preview</span>
                             </button>
                           </td>
                         </tr>

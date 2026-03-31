@@ -234,62 +234,62 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Process Payment" size="2xl">
-      <div className="space-y-6">
+      <div className="space-y-2">
         {/* Invoice Summary Section */}
-        <div className="bg-gradient-to-br from-blue-50 to-slate-50 border border-blue-100 rounded-xl p-5 space-y-3">
+        <div className="bg-gradient-to-br from-blue-50 to-slate-50 border border-blue-100 rounded  p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">Invoice Summary</h3>
+            <h3 className=" text-slate-900 text-sm  tracking-wide">Invoice Summary</h3>
             <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-md">READ ONLY</span>
           </div>
           <div className="border-t border-blue-100 pt-3"></div>
           <div className="grid grid-cols-2 gap-5 text-xs">
             <div>
               <span className="text-slate-500 text-xs font-medium">Invoice No</span>
-              <p className="font-bold text-slate-900 mt-2 text-sm">{invoice.po_number || 'N/A'}</p>
+              <p className=" text-slate-900 mt-2 text-sm">{invoice.po_number || 'N/A'}</p>
             </div>
             <div>
               <span className="text-slate-500 text-xs font-medium">Supplier</span>
-              <p className="font-bold text-slate-900 mt-2 text-sm">{invoice.vendor_name || 'N/A'}</p>
+              <p className=" text-slate-900 mt-2 text-sm">{invoice.vendor_name || 'N/A'}</p>
             </div>
             <div>
               <span className="text-slate-500 text-xs font-medium">Invoice Date</span>
-              <p className="font-bold text-slate-900 mt-2 text-sm">{formatDate(invoice.created_at)}</p>
+              <p className=" text-slate-900 mt-2 text-sm">{formatDate(invoice.created_at)}</p>
             </div>
             <div>
               <span className="text-slate-500 text-xs font-medium">Invoice Amount</span>
-              <p className="font-bold text-slate-900 mt-2 text-sm">{formatCurrency(invoice.total_amount)}</p>
+              <p className=" text-slate-900 mt-2 text-sm">{formatCurrency(invoice.total_amount)}</p>
             </div>
             <div>
               <span className="text-slate-500 text-xs font-medium">Already Paid</span>
-              <p className="font-bold text-emerald-600 mt-2 text-sm">{formatCurrency(alreadyPaid)}</p>
+              <p className=" text-emerald-600 mt-2 text-sm">{formatCurrency(alreadyPaid)}</p>
             </div>
             <div>
               <span className="text-slate-500 text-xs font-medium">Outstanding</span>
-              <p className="font-bold text-rose-600 mt-2 text-sm">{formatCurrency(outstanding)}</p>
+              <p className=" text-rose-600 mt-2 text-sm">{formatCurrency(outstanding)}</p>
             </div>
           </div>
         </div>
 
         {/* Payment Entry Form */}
-        <div className="space-y-4">
-          <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">Payment Details</h3>
+        <div className="space-y-2">
+          <h3 className=" text-slate-900 text-sm  tracking-wide">Payment Details</h3>
           <div className="border-b border-slate-200"></div>
 
           {/* Payment Amount */}
           <FormControl label="Payment Amount *">
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 ">₹</span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={formData.paymentAmount}
                 onChange={(e) => handleInputChange('paymentAmount', e.target.value)}
-                className={`w-full pl-7 pr-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                className={`w-full pl-7 pr-3 py-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                 placeholder={`Max: ${formatCurrency(outstanding)}`}
               />
             </div>
-            {errors.paymentAmount && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.paymentAmount}</span>}
+            {errors.paymentAmount && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentAmount}</span>}
           </FormControl>
 
           {/* Payment Date */}
@@ -298,9 +298,9 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
               type="date"
               value={formData.paymentDate}
               onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-              className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+              className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
             />
-            {errors.paymentDate && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.paymentDate}</span>}
+            {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentDate}</span>}
           </FormControl>
 
           {/* Payment Mode */}
@@ -308,7 +308,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             <select
               value={formData.paymentMode}
               onChange={(e) => handleInputChange('paymentMode', e.target.value)}
-              className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.paymentMode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+              className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.paymentMode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
               style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
             >
               <option value="">Select Payment Mode</option>
@@ -316,7 +316,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 <option key={mode.value} value={mode.value}>{mode.label}</option>
               ))}
             </select>
-            {errors.paymentMode && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.paymentMode}</span>}
+            {errors.paymentMode && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentMode}</span>}
           </FormControl>
 
           {/* Bank Transfer Fields */}
@@ -333,7 +333,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   placeholder="Select or type bank account"
                   allowCustom={true}
                 />
-                {errors.bankAccount && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.bankAccount}</span>}
+                {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block">{errors.bankAccount}</span>}
               </FormControl>
             </>
           )}
@@ -345,7 +345,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 <select
                   value={formData.upiApp}
                   onChange={(e) => handleInputChange('upiApp', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.upiApp ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.upiApp ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
                 >
                   <option value="">Select UPI App</option>
@@ -353,17 +353,17 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     <option key={app.value} value={app.value}>{app.label}</option>
                   ))}
                 </select>
-                {errors.upiApp && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.upiApp}</span>}
+                {errors.upiApp && <span className="text-xs text-rose-600 mt-1 block">{errors.upiApp}</span>}
               </FormControl>
               <FormControl label="UPI Transaction ID *">
                 <input
                   type="text"
                   value={formData.upiTransactionId}
                   onChange={(e) => handleInputChange('upiTransactionId', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.upiTransactionId ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.upiTransactionId ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="Enter UPI transaction ID"
                 />
-                {errors.upiTransactionId && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.upiTransactionId}</span>}
+                {errors.upiTransactionId && <span className="text-xs text-rose-600 mt-1 block">{errors.upiTransactionId}</span>}
               </FormControl>
             </>
           )}
@@ -376,29 +376,29 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="text"
                   value={formData.chequeNumber}
                   onChange={(e) => handleInputChange('chequeNumber', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeNumber ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeNumber ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="Enter cheque number"
                 />
-                {errors.chequeNumber && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.chequeNumber}</span>}
+                {errors.chequeNumber && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeNumber}</span>}
               </FormControl>
               <FormControl label="Bank Name *">
                 <input
                   type="text"
                   value={formData.bankName}
                   onChange={(e) => handleInputChange('bankName', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.bankName ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.bankName ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="Enter bank name"
                 />
-                {errors.bankName && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.bankName}</span>}
+                {errors.bankName && <span className="text-xs text-rose-600 mt-1 block">{errors.bankName}</span>}
               </FormControl>
               <FormControl label="Cheque Date *">
                 <input
                   type="date"
                   value={formData.chequeDate}
                   onChange={(e) => handleInputChange('chequeDate', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                 />
-                {errors.chequeDate && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.chequeDate}</span>}
+                {errors.chequeDate && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeDate}</span>}
               </FormControl>
             </>
           )}
@@ -410,7 +410,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 <select
                   value={formData.cardType}
                   onChange={(e) => handleInputChange('cardType', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.cardType ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.cardType ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
                 >
                   <option value="">Select Card Type</option>
@@ -418,7 +418,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
                 </select>
-                {errors.cardType && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.cardType}</span>}
+                {errors.cardType && <span className="text-xs text-rose-600 mt-1 block">{errors.cardType}</span>}
               </FormControl>
               <FormControl label="Last 4 Digits *">
                 <input
@@ -426,20 +426,20 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   maxLength="4"
                   value={formData.last4Digits}
                   onChange={(e) => handleInputChange('last4Digits', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all tracking-widest ${errors.last4Digits ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all  ${errors.last4Digits ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="****"
                 />
-                {errors.last4Digits && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.last4Digits}</span>}
+                {errors.last4Digits && <span className="text-xs text-rose-600 mt-1 block">{errors.last4Digits}</span>}
               </FormControl>
               <FormControl label="Authorization Code *">
                 <input
                   type="text"
                   value={formData.authorizationCode}
                   onChange={(e) => handleInputChange('authorizationCode', e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.authorizationCode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.authorizationCode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="Enter authorization code"
                 />
-                {errors.authorizationCode && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.authorizationCode}</span>}
+                {errors.authorizationCode && <span className="text-xs text-rose-600 mt-1 block">{errors.authorizationCode}</span>}
               </FormControl>
             </>
           )}
@@ -451,10 +451,10 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 type="text"
                 value={formData.transactionRefNo}
                 onChange={(e) => handleInputChange('transactionRefNo', e.target.value)}
-                className={`w-full px-3 py-2.5 border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.transactionRefNo ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.transactionRefNo ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                 placeholder="Enter transaction reference number"
               />
-              {errors.transactionRefNo && <span className="text-xs text-rose-600 font-medium mt-1 block">{errors.transactionRefNo}</span>}
+              {errors.transactionRefNo && <span className="text-xs text-rose-600 mt-1 block">{errors.transactionRefNo}</span>}
             </FormControl>
           )}
 
@@ -463,7 +463,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             <textarea
               value={formData.remarks}
               onChange={(e) => handleInputChange('remarks', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 resize-none transition-all"
+              className="w-full p-2.5 border border-slate-300 rounded  text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 resize-none transition-all"
               rows="3"
               placeholder="Additional payment remarks..."
             />
@@ -471,21 +471,21 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         </div>
 
         {/* Footer Buttons */}
-        <div className="flex gap-3 pt-6 border-t border-slate-200">
+        <div className="flex gap-2 pt-6 border-t border-slate-200">
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wide"
+            className="flex-1 p-2  border border-slate-300 text-slate-700  rounded  hover:bg-slate-50 hover:border-slate-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm  tracking-wide"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm uppercase tracking-wide shadow-sm hover:shadow-md"
+            className="flex-1 p-2  bg-blue-600 text-white  rounded  hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm  tracking-wide shadow-sm hover:"
           >
             {loading && (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded animate-spin"></div>
             )}
             Confirm Payment
           </button>

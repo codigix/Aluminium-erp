@@ -35,12 +35,12 @@ const itemStatusColors = {
 };
 
 const StatCard = ({ label, value, icon: Icon, colorClass, iconBg }) => (
-  <div className="bg-white p-4 rounded  border border-slate-200  flex flex-col gap-3 min-w-[140px]">
-    <div className={`w-10 h-10 rounded  ${iconBg} flex items-center justify-center ${colorClass}`}>
+  <div className="bg-white p-2 rounded  border border-slate-200  flex flex-col gap-2 min-w-[140px]">
+    <div className={`w-5 h-5 rounded  ${iconBg} flex items-center justify-center ${colorClass}`}>
       <Icon className="w-5 h-5" />
     </div>
     <div>
-      <p className="text-[10px]  text-slate-500   ">{label}</p>
+      <p className="text-xs  text-slate-500   ">{label}</p>
       <p className="text-xl text-slate-900 leading-tight">{value}</p>
     </div>
   </div>
@@ -530,7 +530,7 @@ const GRNProcessing = () => {
       render: (val) => (
         <div className="text-slate-500 text-xs">
           <div>{val ? new Date(val).toLocaleDateString('en-GB') : '—'}</div>
-          <div className="text-[10px] opacity-70">{val ? new Date(val).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+          <div className="text-xs opacity-70">{val ? new Date(val).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
         </div>
       )
     },
@@ -579,10 +579,10 @@ const GRNProcessing = () => {
 
 
   return (
-    <div className="p-4 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-2 space-y-2 bg-slate-50 min-h-screen">
       {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
           <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100 ">
             <ShieldCheck className="w-6 h-6" />
           </div>
@@ -619,7 +619,7 @@ const GRNProcessing = () => {
       </div>
 
       {/* Stats section */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <StatCard 
           label="Total GRNs" 
           value={stats.totalGrns} 
@@ -665,7 +665,7 @@ const GRNProcessing = () => {
       </div>
 
       {/* Filter/Actions bar */}
-      <div className="bg-white p-3 rounded  border border-slate-200  flex flex-col md:flex-row gap-4 justify-between items-center">
+      <div className="bg-white p-2 rounded  border border-slate-200  flex flex-col md:flex-row gap-2 justify-between items-center">
         <div className="relative w-full md:w-96">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -718,7 +718,7 @@ const GRNProcessing = () => {
 
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
           <div className="bg-white rounded  max-w-5xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
               <div>
@@ -727,13 +727,13 @@ const GRNProcessing = () => {
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded  transition-all"
               >
-                <XCircle size={24} />
+                <XCircle size={15} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateGRN} className="flex-1 overflow-y-auto p-6">
+            <form onSubmit={handleCreateGRN} className="flex-1 overflow-y-auto p-2">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="space-y-2">
                   <label className="text-sm  text-slate-700">Purchase Order *</label>
@@ -793,27 +793,27 @@ const GRNProcessing = () => {
               </div>
 
               {formData.poId && (
-                <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-indigo-50/50 rounded  border border-indigo-100">
+                <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-2 p-2 bg-indigo-50/50 rounded  border border-indigo-100">
                   <div>
-                    <div className="text-[10px]    text-indigo-400">Vendor</div>
-                    <div className="text-sm  text-slate-900">
+                    <div className="text-xs    text-indigo-400">Vendor</div>
+                    <div className="text-xs  text-slate-900">
                       {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.vendor_name || 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]    text-indigo-400">PO Total</div>
-                    <div className="text-sm  text-slate-900">
+                    <div className="text-xs    text-indigo-400">PO Total</div>
+                    <div className="text-xs  text-slate-900">
                       ₹{purchaseOrders.find(p => String(p.id) === String(formData.poId))?.total_amount?.toLocaleString('en-IN') || '0'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]    text-indigo-400">Delivery Date</div>
-                    <div className="text-sm  text-slate-900">
+                    <div className="text-xs    text-indigo-400">Delivery Date</div>
+                    <div className="text-xs  text-slate-900">
                       {new Date(purchaseOrders.find(p => String(p.id) === String(formData.poId))?.expected_delivery_date).toLocaleDateString('en-IN') || 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px]    text-indigo-400">PO Status</div>
+                    <div className="text-xs    text-indigo-400">PO Status</div>
                     <div className="text-sm">
                       <Badge variant="success">
                         {purchaseOrders.find(p => String(p.id) === String(formData.poId))?.status || 'N/A'}
@@ -833,11 +833,11 @@ const GRNProcessing = () => {
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50/50 text-slate-500 text-xs  ">
                         <tr>
-                          <th className="px-6 py-3 text-left">Material Details</th>
-                          <th className="px-6 py-3 text-center">PO Qty</th>
-                          <th className="px-6 py-3 text-center w-32">Accepted *</th>
-                          <th className="px-6 py-3 text-center w-32">Status</th>
-                          <th className="px-6 py-3 text-left">Remarks</th>
+                          <th className="px-6 p-2 text-left">Material Details</th>
+                          <th className="px-6 p-2 text-center">PO Qty</th>
+                          <th className="px-6 p-2 text-center w-32">Accepted *</th>
+                          <th className="px-6 p-2 text-center w-32">Status</th>
+                          <th className="px-6 p-2 text-left">Remarks</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -887,7 +887,7 @@ const GRNProcessing = () => {
               )}
             </form>
 
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
@@ -908,7 +908,7 @@ const GRNProcessing = () => {
       )}
 
       {showViewModal && selectedGRNForView && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
           <div className="bg-white rounded  max-w-4xl w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
               <div>
@@ -923,22 +923,22 @@ const GRNProcessing = () => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded  border border-slate-200">
+            <div className="flex-1 overflow-y-auto p-2 space-y-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-2 bg-slate-50 rounded  border border-slate-200">
                 <div>
-                  <div className="text-[10px]    text-slate-400">PO Number</div>
-                  <div className="text-sm  text-slate-900">{selectedGRNForView.poNumber}</div>
+                  <div className="text-xs    text-slate-400">PO Number</div>
+                  <div className="text-xs  text-slate-900">{selectedGRNForView.poNumber}</div>
                 </div>
                 <div>
-                  <div className="text-[10px]    text-slate-400">GRN Date</div>
-                  <div className="text-sm  text-slate-900">{new Date(selectedGRNForView.grnDate).toLocaleDateString('en-IN')}</div>
+                  <div className="text-xs    text-slate-400">GRN Date</div>
+                  <div className="text-xs  text-slate-900">{new Date(selectedGRNForView.grnDate).toLocaleDateString('en-IN')}</div>
                 </div>
                 <div>
-                  <div className="text-[10px]    text-slate-400">Supplier</div>
-                  <div className="text-sm  text-slate-900">{selectedGRNForView.vendorName}</div>
+                  <div className="text-xs    text-slate-400">Supplier</div>
+                  <div className="text-xs  text-slate-900">{selectedGRNForView.vendorName}</div>
                 </div>
                 <div>
-                  <div className="text-[10px]    text-slate-400">Status</div>
+                  <div className="text-xs    text-slate-400">Status</div>
                   <div className={`inline-flex items-center p-1  rounded text-xs     border ${itemStatusColors[selectedGRNForView.status] || itemStatusColors.PENDING}`}>
                     {selectedGRNForView.status?.toLowerCase()}
                   </div>
@@ -946,8 +946,8 @@ const GRNProcessing = () => {
               </div>
 
               {selectedGRNForView.notes && (
-                <div className="p-4 bg-amber-50 rounded  border border-amber-100">
-                  <div className="text-[10px]    text-amber-500 mb-1">Notes</div>
+                <div className="p-2 bg-amber-50 rounded  border border-amber-100">
+                  <div className="text-xs    text-amber-500 mb-1">Notes</div>
                   <div className="text-sm text-amber-800">{selectedGRNForView.notes}</div>
                 </div>
               )}
@@ -956,22 +956,22 @@ const GRNProcessing = () => {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="p-3text-xs   text-slate-500  ">Item Details</th>
-                      <th className="p-3text-xs   text-slate-500   text-center">PO Qty</th>
-                      <th className="p-3text-xs   text-slate-500   text-center">Accepted Qty</th>
-                      <th className="p-3text-xs   text-slate-500  ">Remarks</th>
+                      <th className="p-2text-xs   text-slate-500  ">Item Details</th>
+                      <th className="p-2text-xs   text-slate-500   text-center">PO Qty</th>
+                      <th className="p-2text-xs   text-slate-500   text-center">Accepted Qty</th>
+                      <th className="p-2text-xs   text-slate-500  ">Remarks</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(selectedGRNForView.items || []).map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-3">
-                          <div className="text-sm  text-slate-900">{item.material_name}</div>
-                          <div className="text-[10px] text-slate-500">{item.item_code} • {item.material_type}</div>
+                        <td className="p-2">
+                          <div className="text-xs  text-slate-900">{item.material_name}</div>
+                          <div className="text-xs text-slate-500">{item.item_code} • {item.material_type}</div>
                         </td>
-                        <td className="p-3 text-center text-sm  text-slate-600">{item.po_qty}</td>
-                        <td className="p-3 text-center text-sm  text-indigo-600">{item.accepted_qty}</td>
-                        <td className="p-3 text-xs text-slate-500">{item.remarks || '—'}</td>
+                        <td className="p-2 text-center text-sm  text-slate-600">{item.po_qty}</td>
+                        <td className="p-2 text-center text-sm  text-indigo-600">{item.accepted_qty}</td>
+                        <td className="p-2 text-xs text-slate-500">{item.remarks || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -979,7 +979,7 @@ const GRNProcessing = () => {
               </div>
             </div>
 
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
               <button
                 onClick={() => handlePrintGRN(selectedGRNForView.id)}
                 className="flex items-center gap-2  p-2.5 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"

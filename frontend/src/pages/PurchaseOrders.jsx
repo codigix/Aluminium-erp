@@ -742,11 +742,10 @@ const PurchaseOrders = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="font-bold text-blue-600 cursor-pointer hover:underline text-sm tracking-tight">
+          <span className=" text-blue-600 cursor-pointer hover:underline text-xs ">
             {val || `PO-${String(row.id).padStart(4, '0')}`}
           </span>
-          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-0.5">
-            <svg className="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
+          <span className="text-xs text-slate-400  flex items-center gap-1 mt-0.5">
             {row.mr_number || (row.quotation_id ? `QT-${row.quotation_id}` : `ID-${row.id}`)}
           </span>
         </div>
@@ -758,10 +757,10 @@ const PurchaseOrders = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col">
-          <span className={`font-bold text-sm tracking-tight ${!val ? 'text-rose-500 italic' : 'text-slate-700'}`}>
+          <span className={` text-xs  ${!val ? 'text-rose-500 italic' : 'text-slate-700'}`}>
             {val || 'Vendor Not Selected'}
           </span>
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+          <span className="text-xs text-slate-400">
             {val ? 'Active Vendor' : 'Action Required'}
           </span>
         </div>
@@ -772,14 +771,14 @@ const PurchaseOrders = () => {
       key: 'expected_delivery_date',
       sortable: true,
       render: (val, row) => (
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg text-[10px] text-slate-500 font-bold shadow-sm">
-            <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5  text-xs text-slate-500 ">
+            <svg className="w-2 h-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
             {formatDate(row.created_at)}
           </div>
-          <svg className="w-4 h-4 text-emerald-400 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-600 font-bold shadow-sm">
-            <svg className="w-3 h-3 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <svg className="w-2 h-2 text-emerald-400 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+          <div className="flex items-center gap-1.5 text-xs text-amber-600">
+            <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             {formatDate(val)}
           </div>
         </div>
@@ -791,8 +790,8 @@ const PurchaseOrders = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col">
-          <span className="font-black text-slate-800 text-sm">{formatCurrency(val)}</span>
-          <span className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mt-0.5">Net Value</span>
+          <span className=" text-slate-800 text-xs">{formatCurrency(val)}</span>
+          <span className="text-xs text-emerald-500    mt-0.5">Net Value</span>
         </div>
       )
     },
@@ -805,13 +804,13 @@ const PurchaseOrders = () => {
         const percent = total > 0 ? Math.min(100, Math.round((accepted / total) * 100)) : 0;
         return (
           <div className="w-48">
-            <div className="flex justify-between items-end text-[10px] mb-1.5">
-              <span className="text-slate-500 font-black">{accepted}/{total}</span>
-              <span className={`font-black ${percent === 100 ? 'text-emerald-500' : 'text-emerald-500'}`}>{percent}%</span>
+            <div className="flex justify-between items-end text-xs mb-1.5">
+              <span className="text-slate-500 ">{accepted}/{total}</span>
+              <span className={` ${percent === 100 ? 'text-emerald-500' : 'text-emerald-500'}`}>{percent}%</span>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden shadow-inner border border-slate-50">
+            <div className="w-full bg-slate-100 rounded h-1 overflow-hidden  border border-slate-50">
               <div 
-                className={`h-full transition-all duration-700 ease-out shadow-sm bg-emerald-500`}
+                className={`h-full transition-all duration-700 ease-out  bg-emerald-500`}
                 style={{ width: `${percent}%` }}
               ></div>
             </div>
@@ -824,13 +823,13 @@ const PurchaseOrders = () => {
       key: 'status',
       sortable: true,
       render: (val) => (
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold border shadow-sm ${poStatusColors[val]?.badge} ${poStatusColors[val]?.border}`}>
-          <div className={`p-0.5 rounded-full ${poStatusColors[val]?.text.replace('text-', 'bg-')} text-white`}>
-            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <span className={`inline-flex items-center gap-1.5 p-1  text-xs  ${poStatusColors[val]?.badge} ${poStatusColors[val]?.border}`}>
+          <div className={` rounded ${poStatusColors[val]?.text.replace('text-', 'bg-')} text-white`}>
+            <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d={poStatusColors[val]?.icon || 'M5 13l4 4L19 7'} />
             </svg>
           </div>
-          <span className="uppercase tracking-tight">{poStatusColors[val]?.label}</span>
+          <span className=" ">{poStatusColors[val]?.label}</span>
         </span>
       )
     },
@@ -843,17 +842,17 @@ const PurchaseOrders = () => {
           {(row.status === 'DRAFT' || row.status === 'PO_REQUEST') && (
             <button
               onClick={() => handleApprovePO(row.id)}
-              className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all border border-emerald-50 shadow-sm active:scale-90"
+              className=" text-emerald-500 hover:bg-emerald-50 rounded  transition-all border border-emerald-50  active:scale-90"
               title="Approve PO"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </button>
           )}
           <button
             onClick={() => handleViewPODetail(row.id)}
-            className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all border border-blue-50 shadow-sm active:scale-90"
+            className="p-1 text-blue-500 hover:bg-blue-50 rounded  transition-all active:scale-90"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -869,7 +868,7 @@ const PurchaseOrders = () => {
                 invoiceInputRef.current?.click();
               }
             }}
-            className={`p-2 rounded-xl transition-all border shadow-sm active:scale-90 ${row.invoice_url ? 'text-emerald-500 bg-emerald-50 border-emerald-100 hover:bg-emerald-100' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600 border-slate-50'}`}
+            className={` rounded  transition-all   active:scale-90 ${row.invoice_url ? 'text-emerald-500' : 'text-slate-400  hover:text-slate-600 '}`}
             title={row.invoice_url ? "View Invoice" : "Upload Invoice"}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -879,7 +878,7 @@ const PurchaseOrders = () => {
           {row.vendor_id && (
             <button
               onClick={() => openEmailModal(row)}
-              className={`p-2 rounded-full transition-all border shadow-sm active:scale-90 ${row.status === 'SENT' ? 'text-emerald-500 bg-emerald-50 border-emerald-50' : 'text-blue-600 bg-blue-50 border-blue-50'}`}
+              className={`rounded transition-all   active:scale-90 ${row.status === 'SENT' ? 'text-emerald-500' : 'text-blue-600'}`}
               title={row.status === 'SENT' ? "Resend PO to Vendor" : "Send PO to Vendor"}
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -889,7 +888,7 @@ const PurchaseOrders = () => {
           )}
           <button
             onClick={() => handleEditPO(row.id)}
-            className="p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600 rounded-xl transition-all border border-slate-50 shadow-sm active:scale-90"
+            className=" text-slate-400 hover:bg-slate-50 hover:text-slate-600   transition-all   active:scale-90"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -897,7 +896,7 @@ const PurchaseOrders = () => {
           </button>
           <button
             onClick={() => handleDeletePO(row.id)}
-            className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-rose-50 shadow-sm active:scale-90"
+            className="text-rose-500 hover:bg-rose-50   transition-all active:scale-90"
             title="Delete PO"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -933,37 +932,37 @@ const PurchaseOrders = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* Page Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-indigo-200 shadow-xl">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-600 rounded text-white shadow-indigo-200 shadow-xl">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
           </div>
           <div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+            <div className="flex items-center gap-2 text-xs text-slate-400   ">
               <span>Buying</span>
               <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
               <span>Procurement</span>
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Purchase Orders</h1>
+            <h1 className="text-xl  text-slate-900 ">Purchase Orders</h1>
             <p className="text-xs text-slate-500 font-medium">Manage procurement cycles and supplier orders</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+        <div className="flex items-center gap-2">
+          <div className="flex bg-slate-100 p-1 rounded  border border-slate-200">
             <button 
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded  text-xs  transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
               KANBAN
             </button>
             <button 
               onClick={() => setViewMode('list')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black transition-all ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded  text-xs  transition-all ${viewMode === 'list' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
               LIST
@@ -971,7 +970,7 @@ const PurchaseOrders = () => {
           </div>
           <button
             onClick={() => fetchPOs()}
-            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded-xl transition-all border border-slate-200 shadow-sm active:scale-95 bg-white"
+            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           </button>
@@ -980,7 +979,7 @@ const PurchaseOrders = () => {
               setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
               setShowManualCreateModal(true);
             }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+            className="flex items-center gap-2 p-2  bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
             Create Order
@@ -990,7 +989,7 @@ const PurchaseOrders = () => {
 
       {/* Stats Grid */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
           {[
             { label: 'Total Orders', value: stats.total_pos, sub: `Total: ${formatCurrency(stats.total_value)}`, icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', color: 'blue', bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
             { label: 'Draft', value: stats.draft_pos, sub: 'Pending submission', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', color: 'orange', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-orange-50', iconColor: 'text-orange-500' },
@@ -999,17 +998,17 @@ const PurchaseOrders = () => {
             { label: 'Partial', value: stats.partial_pos, sub: 'Incomplete receipts', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', color: 'rose', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-rose-50', iconColor: 'text-rose-500' },
             { label: 'Fulfilled', value: stats.fulfilled_pos, sub: 'Fully received', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'emerald', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
           ].map((stat, idx) => (
-            <div key={idx} className={`${stat.bg} border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group`}>
-              {stat.bg !== 'bg-white' && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110"></div>}
+            <div key={idx} className={`${stat.bg} border border-slate-200 rounded p-2  hover: transition-all relative overflow-hidden group`}>
+              {stat.bg !== 'bg-white' && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded -mr-12 -mt-12 transition-transform group-hover:scale-110"></div>}
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2">
-                  <p className={`text-[10px] font-bold ${stat.bg === 'bg-white' ? 'text-slate-400' : 'text-blue-100'} uppercase tracking-wider`}>{stat.label}</p>
-                  <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded-xl shadow-sm`}>
+                  <p className={`text-xs  ${stat.bg === 'bg-white' ? 'text-slate-400' : 'text-blue-100'}  `}>{stat.label}</p>
+                  <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded  `}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} /></svg>
                   </div>
                 </div>
-                <p className={`text-2xl font-black ${stat.text} tracking-tight`}>{stat.value || 0}</p>
-                <p className={`text-[10px] ${stat.subText} mt-1 font-medium`}>{stat.sub}</p>
+                <p className={`text-2xl  ${stat.text} `}>{stat.value || 0}</p>
+                <p className={`text-xs ${stat.subText} mt-1 font-medium`}>{stat.sub}</p>
               </div>
             </div>
           ))}
@@ -1017,32 +1016,32 @@ const PurchaseOrders = () => {
       )}
 
       {/* Search & Filter Bar */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <input 
             type="text" 
             placeholder="Search PO # or supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
+            className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
           />
           <svg className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </div>
 
         <button
           onClick={() => fetchPOs()}
-          className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded-xl transition-all border border-slate-200 shadow-sm active:scale-95 bg-slate-50/50"
+          className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-slate-50/50"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
         </button>
 
-        <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
+        <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded  ">
           <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Status:</span>
+          <span className="text-xs text-slate-400   ">Status:</span>
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-sm font-bold text-blue-600 outline-none bg-transparent cursor-pointer"
+            className="text-sm  text-blue-600 outline-none bg-transparent cursor-pointer"
           >
             <option value="ALL">All Orders</option>
             <option value="PO_REQUEST">Requests</option>
@@ -1056,13 +1055,13 @@ const PurchaseOrders = () => {
           </select>
         </div>
 
-        <button className="p-2.5 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all active:scale-95">
+        <button className="p-2.5 bg-emerald-500 text-white rounded  hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all active:scale-95">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
         </button>
       </div>
 
       {/* Main Table Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded border border-slate-200  overflow-hidden">
         
         <DataTable
           columns={columns}
@@ -1076,38 +1075,38 @@ const PurchaseOrders = () => {
 
       {/* Manual Create PO Modal (New Design) */}
       {showManualCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
+          <div className="bg-white rounded shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
             {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b border-slate-50">
-              <h2 className="text-xl font-bold text-slate-800">{manualFormData.id ? 'Edit Purchase Order Request' : 'Create New Purchase Order'}</h2>
+            <div className="flex justify-between items-center p-2 border-b border-slate-50">
+              <h2 className="text-xl  text-slate-800">{manualFormData.id ? 'Edit Purchase Order Request' : 'Create New Purchase Order'}</h2>
               <button 
                 onClick={() => {
                   setShowManualCreateModal(false);
                   setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
                 }}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+                className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            <form onSubmit={handleCreateManualPO} className="p-6 space-y-6 max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar">
+            <form onSubmit={handleCreateManualPO} className="p-2 space-y-2 max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar">
               {/* Basic Information Section */}
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-                  <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+              <div className="bg-white border border-slate-200 rounded overflow-hidden ">
+                <div className="bg-slate-50/50 px-4 p-2 border-b border-slate-100 flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-100 text-blue-600 rounded ">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                   </div>
-                  <h3 className="text-sm font-bold text-slate-700">Basic Information</h3>
+                  <h3 className="text-sm  text-slate-700">Basic Information</h3>
                 </div>
-                <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-2 grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Supplier *</label>
+                    <label className="text-xs  text-slate-400   ml-1">Supplier *</label>
                     <select
                       value={manualFormData.vendorId}
                       onChange={(e) => setManualFormData({ ...manualFormData, vendorId: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                       required
                     >
                       <option value="">Select Supplier</option>
@@ -1117,21 +1116,21 @@ const PurchaseOrders = () => {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Order Date *</label>
+                    <label className="text-xs  text-slate-400   ml-1">Order Date *</label>
                     <input
                       type="date"
                       defaultValue={new Date().toISOString().split('T')[0]}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                       required
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Expected Delivery *</label>
+                    <label className="text-xs  text-slate-400   ml-1">Expected Delivery *</label>
                     <input
                       type="date"
                       value={manualFormData.expectedDeliveryDate}
                       onChange={(e) => setManualFormData({ ...manualFormData, expectedDeliveryDate: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                       required
                     />
                   </div>
@@ -1139,18 +1138,18 @@ const PurchaseOrders = () => {
               </div>
 
               {/* Purchase Order Items Section */}
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div className="bg-white border border-slate-200 rounded overflow-hidden ">
+                <div className="bg-slate-50/50 px-4 p-2 border-b border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                    <div className="p-1.5 bg-blue-100 text-blue-600 rounded ">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                     </div>
-                    <h3 className="text-sm font-bold text-slate-700">Purchase Order Items</h3>
+                    <h3 className="text-sm  text-slate-700">Purchase Order Items</h3>
                   </div>
                   <button 
                     type="button"
                     onClick={handleAddManualItem}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-200 text-blue-600 rounded-lg text-[10px] font-bold hover:bg-blue-50 transition-all shadow-sm"
+                    className="flex items-center gap-1.5 p-1.5 bg-white border border-blue-200 text-blue-600 rounded  text-xs  hover:bg-blue-50 transition-all "
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                     Add Item
@@ -1159,23 +1158,23 @@ const PurchaseOrders = () => {
                 <div className="p-0 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                        <th className="px-4 py-3 text-left">Item Details</th>
-                        <th className="px-4 py-3 text-center w-24">DESIGN QTY</th>
-                        <th className="px-4 py-3 text-center w-24">UOM</th>
-                        <th className="px-4 py-3 text-center w-32">RATE</th>
-                        <th className="px-4 py-3 text-right w-32">AMOUNT</th>
-                        <th className="px-4 py-3 text-center w-12"></th>
+                      <tr className="text-xs  text-slate-400   border-b border-slate-100">
+                        <th className="px-4 p-2 text-left">Item Details</th>
+                        <th className="px-4 p-2 text-center w-24">DESIGN QTY</th>
+                        <th className="px-4 p-2 text-center w-24">UOM</th>
+                        <th className="px-4 p-2 text-center w-32">RATE</th>
+                        <th className="px-4 p-2 text-right w-32">AMOUNT</th>
+                        <th className="px-4 p-2 text-center w-12"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {manualFormData.items.map((item, idx) => (
                         <tr key={idx} className="group hover:bg-slate-50/50 transition-all">
-                          <td className="px-4 py-3">
+                          <td className="px-4 p-2">
                             <select
                               value={item.item_code}
                               onChange={(e) => handleManualItemChange(idx, 'item_code', e.target.value)}
-                              className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                              className="w-full px-4 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                             >
                               <option value="">Select Item</option>
                               {stockItems.map(si => (
@@ -1185,38 +1184,38 @@ const PurchaseOrders = () => {
                               ))}
                             </select>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 p-2">
                             <input
                               type="number"
                               value={item.quantity}
                               onChange={(e) => handleManualItemChange(idx, 'quantity', e.target.value)}
-                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-center focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                              className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-center focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                             />
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 p-2">
                             <input
                               type="text"
                               value={item.unit}
                               readOnly
-                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-center text-slate-400 outline-none uppercase"
+                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs  text-center text-slate-400 outline-none "
                             />
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 p-2">
                             <input
                               type="number"
                               value={item.rate}
                               onChange={(e) => handleManualItemChange(idx, 'rate', e.target.value)}
-                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-center focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                              className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-center focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                             />
                           </td>
-                          <td className="px-4 py-3 text-right font-bold text-slate-700">
+                          <td className="px-4 p-2 text-right  text-slate-700">
                             {formatCurrency(item.amount)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 p-2">
                             <button 
                               type="button"
                               onClick={() => handleRemoveManualItem(idx)}
-                              className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                              className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
@@ -1231,20 +1230,20 @@ const PurchaseOrders = () => {
                     </div>
                   )}
                 </div>
-                <div className="p-4 bg-slate-50/30 border-t border-slate-100 grid grid-cols-3 gap-8">
+                <div className="p-2 bg-slate-50/30 border-t border-slate-100 grid grid-cols-3 gap-8">
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Items</span>
-                    <span className="text-xl font-bold text-slate-800">{manualFormData.items.length}</span>
+                    <span className="text-xs  text-slate-400  ">Total Items</span>
+                    <span className="text-xl  text-slate-800">{manualFormData.items.length}</span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Qty</span>
-                    <span className="text-xl font-bold text-slate-800">
+                    <span className="text-xs  text-slate-400  ">Total Qty</span>
+                    <span className="text-xl  text-slate-800">
                       {manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0)}
                     </span>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Item Subtotal</span>
-                    <span className="text-xl font-bold text-blue-600">
+                    <span className="text-xs  text-slate-400  ">Item Subtotal</span>
+                    <span className="text-xl  text-blue-600">
                       {formatCurrency(manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0))}
                     </span>
                   </div>
@@ -1253,20 +1252,20 @@ const PurchaseOrders = () => {
 
               {/* Bottom Section: Tax & Currency */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                  <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                <div className="bg-white border border-slate-200 rounded overflow-hidden ">
+                  <div className="bg-slate-50/50 px-4 p-2 border-b border-slate-100 flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-100 text-blue-600 rounded ">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
                     </div>
-                    <h3 className="text-sm font-bold text-slate-700">Tax & Currency</h3>
+                    <h3 className="text-sm  text-slate-700">Tax & Currency</h3>
                   </div>
-                  <div className="p-4 space-y-4">
+                  <div className="p-2 space-y-2">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Currency</label>
+                      <label className="text-xs  text-slate-400   ml-1">Currency</label>
                       <select
                         value={manualFormData.currency}
                         onChange={(e) => setManualFormData({ ...manualFormData, currency: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"
+                        className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs outline-none"
                       >
                         <option>INR (Indian Rupee)</option>
                         <option>USD (US Dollar)</option>
@@ -1276,37 +1275,37 @@ const PurchaseOrders = () => {
                 </div>
 
                 {/* Summary Box */}
-                <div className="bg-blue-600 rounded-2xl p-1 shadow-lg shadow-blue-200 overflow-hidden flex flex-col">
-                  <div className="flex-1 p-6 space-y-4">
+                <div className="bg-blue-600 rounded p-1 shadow-lg shadow-blue-200 overflow-hidden flex flex-col">
+                  <div className="flex-1 p-2 space-y-2">
                     <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-3">
                       <span className="text-sm font-medium">Subtotal</span>
-                      <span className="text-lg font-bold">
+                      <span className="text-lg ">
                         {formatCurrency(manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0))}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-3">
                       <span className="text-sm font-medium">Tax Amount</span>
-                      <span className="text-lg font-bold">{formatCurrency(0)}</span>
+                      <span className="text-lg ">{formatCurrency(0)}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     setShowManualCreateModal(false);
                     setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
                   }}
-                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
+                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all "
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   {manualFormData.id ? 'Save Changes' : 'Create Purchase Order'}
@@ -1318,30 +1317,30 @@ const PurchaseOrders = () => {
       )}
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
+          <div className="bg-white rounded shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
             {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b border-slate-50">
-              <h2 className="text-xl font-bold text-slate-800">Create PO from Quotation</h2>
+            <div className="flex justify-between items-center p-2 border-b border-slate-50">
+              <h2 className="text-xl  text-slate-800">Create PO from Quotation</h2>
               <button 
                 onClick={() => {
                   setShowCreateModal(false);
                   setPoItems([]);
                 }}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+                className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            <form onSubmit={handleCreatePO} className="p-6 space-y-6 max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar">
+            <form onSubmit={handleCreatePO} className="p-2 space-y-2 max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Select Approved Quotation *</label>
+                  <label className="text-xs  text-slate-400   ml-1">Select Approved Quotation *</label>
                   <select
                     value={formData.quotationId}
                     onChange={(e) => handleQuotationChange(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     required
                   >
                     <option value="">-- Select a Quotation --</option>
@@ -1354,7 +1353,7 @@ const PurchaseOrders = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">PO Number *</label>
+                  <label className="text-xs  text-slate-400   ml-1">PO Number *</label>
                   <div className="flex gap-2">
                     <select
                       value={isManualPo ? 'MANUAL' : formData.poNumber}
@@ -1367,7 +1366,7 @@ const PurchaseOrders = () => {
                           setFormData({...formData, poNumber: e.target.value});
                         }
                       }}
-                      className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-mono"
+                      className="flex-1 p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-mono"
                       required
                       disabled={!formData.quotationId}
                     >
@@ -1389,7 +1388,7 @@ const PurchaseOrders = () => {
                         value={formData.poNumber}
                         onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
                         placeholder="Enter PO Number"
-                        className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-mono"
+                        className="flex-1 p-2  bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-mono"
                         required
                       />
                     )}
@@ -1399,63 +1398,63 @@ const PurchaseOrders = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Expected Delivery Date *</label>
+                  <label className="text-xs  text-slate-400   ml-1">Expected Delivery Date *</label>
                   <input
                     type="date"
                     value={formData.expectedDeliveryDate}
                     onChange={(e) => setFormData({...formData, expectedDeliveryDate: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Project Name</label>
+                  <label className="text-xs  text-slate-400   ml-1">Project Name</label>
                   <input
                     type="text"
                     value={formData.projectName}
                     readOnly
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 outline-none"
+                    className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none"
                   />
                 </div>
               </div>
 
               {poItems.length > 0 && (
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                  <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                <div className="bg-white border border-slate-200 rounded overflow-hidden ">
+                  <div className="bg-slate-50/50 px-4 p-2 border-b border-slate-100 flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-100 text-blue-600 rounded ">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                     </div>
-                    <h3 className="text-sm font-bold text-slate-700">Quotation Items Preview</h3>
+                    <h3 className="text-sm  text-slate-700">Quotation Items Preview</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                          <th className="px-4 py-3 text-left">Description</th>
-                          <th className="px-4 py-3 text-left">Material</th>
-                          <th className="px-4 py-3 text-center">Design Qty</th>
-                          <th className="px-4 py-3 text-right">Rate</th>
-                          <th className="px-4 py-3 text-right">Total</th>
+                        <tr className="text-xs  text-slate-400   border-b border-slate-100">
+                          <th className="px-4 p-2 text-left">Description</th>
+                          <th className="px-4 p-2 text-left">Material</th>
+                          <th className="px-4 p-2 text-center">Design Qty</th>
+                          <th className="px-4 p-2 text-right">Rate</th>
+                          <th className="px-4 p-2 text-right">Total</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {poItems.map((item, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50 transition-all">
-                            <td className="px-4 py-3">
-                              <p className="font-bold text-slate-700 text-xs">{item.description}</p>
-                              {item.item_code && <p className="text-[10px] text-slate-400">{item.item_code}</p>}
+                            <td className="px-4 p-2">
+                              <p className=" text-slate-700 text-xs">{item.description}</p>
+                              {item.item_code && <p className="text-xs text-slate-400">{item.item_code}</p>}
                             </td>
-                            <td className="px-4 py-3 text-xs text-slate-500">{item.material_name || '—'}</td>
-                            <td className="px-4 py-3 text-center text-xs text-slate-600 font-bold">{Number(item.design_qty || item.quantity || 0).toFixed(3)} {item.unit || 'NOS'}</td>
-                            <td className="px-4 py-3 text-right text-xs text-slate-500">{formatCurrency(item.unit_rate)}</td>
-                            <td className="px-4 py-3 text-right text-xs font-bold text-slate-800">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
+                            <td className="px-4 p-2 text-xs text-slate-500">{item.material_name || '—'}</td>
+                            <td className="px-4 p-2 text-center text-xs text-slate-600 ">{Number(item.design_qty || item.quantity || 0).toFixed(3)} {item.unit || 'NOS'}</td>
+                            <td className="px-4 p-2 text-right text-xs text-slate-500">{formatCurrency(item.unit_rate)}</td>
+                            <td className="px-4 p-2 text-right text-xs  text-slate-800">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="bg-slate-50/50">
                         <tr>
-                          <td colSpan="4" className="px-4 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Amount</td>
-                          <td className="px-4 py-3 text-right text-sm font-black text-blue-600">
+                          <td colSpan="4" className="px-4 p-2 text-right text-xs  text-slate-400  ">Total Amount</td>
+                          <td className="px-4 p-2 text-right text-sm  text-blue-600">
                             {formatCurrency(poItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || (item.quantity * item.unit_rate)), 0))}
                           </td>
                         </tr>
@@ -1466,27 +1465,27 @@ const PurchaseOrders = () => {
               )}
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Notes (Optional)</label>
+                <label className="text-xs  text-slate-400   ml-1">Notes (Optional)</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   placeholder="Add any special instructions or notes"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  className="w-full px-4 p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   rows="3"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
+                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all "
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 active:scale-95"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 active:scale-95"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   Create Purchase Order
@@ -1498,32 +1497,32 @@ const PurchaseOrders = () => {
       )}
 
       {showEditModal && selectedPO && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
+          <div className="bg-white rounded shadow-2xl w-full max-w-2xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
             {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b border-slate-50">
-              <h2 className="text-xl font-bold text-slate-800 tracking-tight">Edit Purchase Order</h2>
+            <div className="flex justify-between items-center p-2 border-b border-slate-50">
+              <h2 className="text-xl  text-slate-800 ">Edit Purchase Order</h2>
               <button 
                 onClick={() => setShowEditModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+                className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            <form onSubmit={handleUpdatePO} className="p-6 space-y-6">
-              <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 text-sm space-y-3">
-                <div className="flex items-center gap-4">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider w-24">PO Number:</span>
+            <form onSubmit={handleUpdatePO} className="p-2 space-y-2">
+              <div className="bg-slate-50/50 p-2 rounded border border-slate-100 text-sm space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs  text-slate-400   w-24">PO Number:</span>
                   <input
                     type="text"
                     value={selectedPO.po_number}
                     onChange={(e) => setSelectedPO({...selectedPO, po_number: e.target.value})}
-                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-blue-600 font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="flex-1 bg-white border border-slate-200 rounded  p-1.5 text-blue-600  outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vendor:</span>
+                  <span className="text-xs  text-slate-400  ">Vendor:</span>
                   {selectedPO.status === 'PO_REQUEST' ? (
                     <select
                       value={editFormData.vendorId}
@@ -1535,7 +1534,7 @@ const PurchaseOrders = () => {
                           status: newVendorId ? 'DRAFT' : 'PO_REQUEST'
                         });
                       }}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full bg-white border border-slate-200 rounded  p-1.5 text-sm  text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20"
                       required
                     >
                       <option value="">-- Select Vendor --</option>
@@ -1544,14 +1543,14 @@ const PurchaseOrders = () => {
                       ))}
                     </select>
                   ) : (
-                    <span className="text-sm font-bold text-slate-700">{selectedPO.vendor_name}</span>
+                    <span className="text-sm  text-slate-700">{selectedPO.vendor_name}</span>
                   )}
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider w-24">Amount:</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs  text-slate-400   w-24">Amount:</span>
                   <div className="flex flex-col">
-                    <span className="text-sm font-black text-slate-800">{formatCurrency(selectedPO.total_amount)}</span>
-                    <div className="flex gap-2 text-[8px] text-slate-400 font-bold uppercase tracking-tighter">
+                    <span className="text-sm  text-slate-800">{formatCurrency(selectedPO.total_amount)}</span>
+                    <div className="flex gap-2 text-[8px] text-slate-400   er">
                       <span>Sub: {formatCurrency(poItems.reduce((sum, i) => sum + (parseFloat(i.amount) || (i.quantity * (i.unit_rate || i.rate || 0))), 0))}</span>
                       <span className="text-emerald-500">Tax: {formatCurrency(poItems.reduce((sum, i) => sum + (parseFloat(i.cgst_amount || 0) + parseFloat(i.sgst_amount || 0)) || (i.quantity * (i.unit_rate || i.rate || 0) * 0.18), 0))}</span>
                     </div>
@@ -1562,47 +1561,47 @@ const PurchaseOrders = () => {
               {/* Order Items Section */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order Items (Update Rates & Tax)</h3>
-                  <span className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">Default 18% GST Applied</span>
+                  <h3 className="text-xs  text-slate-400  ">Order Items (Update Rates & Tax)</h3>
+                  <span className="text-xs  text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded">Default 18% GST Applied</span>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-white border border-slate-200 rounded overflow-hidden ">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50/50">
                       <tr>
-                        <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Item</th>
-                        <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Qty</th>
-                        <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Rate</th>
-                        <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
+                        <th className="px-4 py-2 text-xs  text-slate-400  ">Item</th>
+                        <th className="px-4 py-2 text-xs  text-slate-400   text-center">Qty</th>
+                        <th className="px-4 py-2 text-xs  text-slate-400   text-center">Rate</th>
+                        <th className="px-4 py-2 text-xs  text-slate-400   text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {poItems.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-4 py-3">
+                          <td className="px-4 p-2">
                             <div className="flex flex-col">
-                              <span className="text-xs font-bold text-slate-700">{item.material_name || item.description}</span>
-                              <span className="text-[9px] text-slate-400 font-medium">{item.item_code}</span>
+                              <span className="text-xs  text-slate-700">{item.material_name || item.description}</span>
+                              <span className="text-xs text-slate-400 font-medium">{item.item_code}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-xs font-black text-slate-600">{item.quantity}</span>
-                            <span className="text-[9px] text-slate-400 ml-1 uppercase">{item.unit || 'NOS'}</span>
+                          <td className="px-4 p-2 text-center">
+                            <span className="text-xs  text-slate-600">{item.quantity}</span>
+                            <span className="text-xs text-slate-400 ml-1 ">{item.unit || 'NOS'}</span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 p-2">
                             <div className="relative group max-w-[120px] mx-auto">
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">₹</span>
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs ">₹</span>
                               <input
                                 type="number"
                                 value={item.unit_rate || item.rate || 0}
                                 onChange={(e) => handleEditItemChange(idx, 'unit_rate', e.target.value)}
-                                className="w-full pl-5 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
+                                className="w-full pl-5 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
                               />
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 p-2 text-right">
                             <div className="flex flex-col items-end">
-                              <span className="text-xs font-black text-slate-800">{formatCurrency(item.total_amount || (item.quantity * (item.unit_rate || item.rate || 0) * 1.18))}</span>
-                              <span className="text-[9px] text-emerald-500 font-bold">+18% GST</span>
+                              <span className="text-xs  text-slate-800">{formatCurrency(item.total_amount || (item.quantity * (item.unit_rate || item.rate || 0) * 1.18))}</span>
+                              <span className="text-xs text-emerald-500 ">+18% GST</span>
                             </div>
                           </td>
                         </tr>
@@ -1614,11 +1613,11 @@ const PurchaseOrders = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Status</label>
+                  <label className="text-xs  text-slate-400   ml-1">Status</label>
                   <select
                     value={editFormData.status}
                     onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     required
                   >
                     <option value="">-- Select Status --</option>
@@ -1629,38 +1628,38 @@ const PurchaseOrders = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Expected Delivery Date</label>
+                  <label className="text-xs  text-slate-400   ml-1">Expected Delivery Date</label>
                   <input
                     type="date"
                     value={editFormData.expectedDeliveryDate ? new Date(editFormData.expectedDeliveryDate).toISOString().split('T')[0] : ''}
                     onChange={(e) => setEditFormData({...editFormData, expectedDeliveryDate: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Notes</label>
+                <label className="text-xs  text-slate-400   ml-1">Notes</label>
                 <textarea
                   value={editFormData.notes}
                   onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  className="w-full px-4 p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   rows="3"
                   placeholder="Add notes about this order"
                 />
               </div>
 
-              <div className="flex gap-3 justify-end pt-4 border-t border-slate-50">
+              <div className="flex gap-2 justify-end pt-4 border-t border-slate-50">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
+                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all "
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
                   Update Order
@@ -1673,71 +1672,71 @@ const PurchaseOrders = () => {
 
       {/* Email Modal */}
       {showEmailModal && selectedPO && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
-            <div className="flex justify-between items-center p-6 border-b border-slate-50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
+          <div className="bg-white rounded shadow-2xl w-full max-w-2xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
+            <div className="flex justify-between items-center p-2 border-b border-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded ">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z" />
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800 tracking-tight">Send PO to Vendor</h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{selectedPO.po_number} • {selectedPO.vendor_name}</p>
+                  <h2 className="text-xl  text-slate-800 ">Send PO to Vendor</h2>
+                  <p className="text-xs text-slate-400   ">{selectedPO.po_number} • {selectedPO.vendor_name}</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowEmailModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+                className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
             <form onSubmit={handleSendEmail} className="p-6 space-y-5">
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Recipient Email *</label>
+                  <label className="text-xs  text-slate-400   ml-1">Recipient Email *</label>
                   <input
                     type="email"
                     value={emailData.to}
                     onChange={(e) => setEmailData({...emailData, to: e.target.value})}
                     placeholder="vendor@example.com"
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Subject</label>
+                  <label className="text-xs  text-slate-400   ml-1">Subject</label>
                   <input
                     type="text"
                     value={emailData.subject}
                     onChange={(e) => setEmailData({...emailData, subject: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Message</label>
+                  <label className="text-xs  text-slate-400   ml-1">Message</label>
                   <textarea
                     value={emailData.message}
                     onChange={(e) => setEmailData({...emailData, message: e.target.value})}
                     rows="5"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none"
+                    className="w-full px-4 p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none"
                     required
                   />
                 </div>
 
-                <div className="flex items-center gap-3 p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
-                  <div className="p-2 bg-emerald-500 text-white rounded-lg">
+                <div className="flex items-center gap-2 p-2 bg-emerald-50/50 border border-emerald-100 rounded">
+                  <div className="p-2 bg-emerald-500 text-white rounded ">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                   </div>
                   <div className="flex-1">
-                    <p className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">Attachment</p>
-                    <p className="text-xs font-bold text-emerald-600">PurchaseOrder_{selectedPO.po_number}.pdf</p>
+                    <p className="text-xs  text-emerald-700  ">Attachment</p>
+                    <p className="text-xs  text-emerald-600">PurchaseOrder_{selectedPO.po_number}.pdf</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <input
@@ -1747,23 +1746,23 @@ const PurchaseOrders = () => {
                       onChange={(e) => setEmailData({...emailData, attachPDF: e.target.checked})}
                       className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                     />
-                    <label htmlFor="attachPDF" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Include</label>
+                    <label htmlFor="attachPDF" className="text-xs  text-slate-500  ">Include</label>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-2">
+              <div className="flex gap-2 justify-end pt-2">
                 <button
                   type="button"
                   onClick={() => setShowEmailModal(false)}
-                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
+                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all "
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>

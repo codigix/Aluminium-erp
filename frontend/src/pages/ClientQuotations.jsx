@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { Card, StatusBadge, DataTable } from '../components/ui.jsx';
+import { Card, StatusBadge } from '../components/ui.jsx';
 import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Download, Package, ChevronDown, ChevronUp, History, Search, CheckCheck } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -39,7 +39,6 @@ const getFileUrl = (path) => {
 };
 
 const ClientQuotations = () => {
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'sent', or 'received'
   const [groupedByClient, setGroupedByClient] = useState({});
   const [sentQuotations, setSentQuotations] = useState([]);
   const [receivedQuotations, setReceivedQuotations] = useState([]);
@@ -323,16 +322,20 @@ const ClientQuotations = () => {
     }
   };
 
+  const fetchAllData = async () => {
+    setLoading(true);
+    await Promise.all([
+      fetchApprovedOrders(),
+      fetchSentQuotations(),
+      fetchReceivedQuotations(),
+      fetchUnreadCounts()
+    ]);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    fetchUnreadCounts();
-    if (activeTab === 'pending') {
-      fetchApprovedOrders();
-    } else if (activeTab === 'sent') {
-      fetchSentQuotations();
-    } else if (activeTab === 'received') {
-      fetchReceivedQuotations();
-    }
-  }, [activeTab]);
+    fetchAllData();
+  }, []);
 
   const fetchReceivedQuotations = async () => {
     try {
@@ -386,18 +389,36 @@ const ClientQuotations = () => {
     }
   };
 
-  const toggleExpandClient = (clientName) => {
-    if (expandedClientName === clientName) {
-      setExpandedClientName(null);
-    } else {
-      setExpandedClientName(clientName);
-    }
-  };
+  const combinedQuotations = React.useMemo(() => {
+    const pending = Object.entries(groupedByClient).map(([name, data]) => ({
+      ...data,
+      type: 'PENDING',
+      status: 'BOM Approved',
+      displayStatus: 'BOM Approved',
+      uniqueKey: `pending_${name}`,
+      quotes: data.orders.flatMap(o => o.items || [])
+    }));
+
+    const sent = sentQuotations.map(q => ({
+      ...q,
+      type: 'SENT',
+      displayStatus: q.status
+    }));
+
+    const received = receivedQuotations.map(q => ({
+      ...q,
+      type: 'RECEIVED',
+      displayStatus: q.status
+    }));
+
+    return [...pending, ...sent, ...received].sort((a, b) => 
+      new Date(b.created_at) - new Date(a.created_at)
+    );
+  }, [groupedByClient, sentQuotations, receivedQuotations]);
 
   const handlePriceChange = (clientName, item, price) => {
     const rate = parseFloat(price) || 0;
     const bomCost = parseFloat(item.bom_cost) || 0;
-    
     let profit = 0;
     if (bomCost > 0) {
       profit = ((rate / bomCost) - 1) * 100;
@@ -495,11 +516,7 @@ const ClientQuotations = () => {
 
         if (response.ok) {
           successToast('Quotation approved successfully');
-          if (activeTab === 'sent') {
-            fetchSentQuotations();
-          } else {
-            fetchReceivedQuotations();
-          }
+          fetchAllData();
         } else {
           const errorData = await response.json();
           errorToast(errorData.error || 'Failed to approve quotation');
@@ -560,11 +577,7 @@ const ClientQuotations = () => {
 
       if (response.ok) {
         successToast('Amount updated successfully');
-        if (activeTab === 'sent') {
-          fetchSentQuotations();
-        } else {
-          fetchReceivedQuotations();
-        }
+        fetchAllData();
         setEditingSentAmounts(prev => {
           const next = { ...prev };
           delete next[group.uniqueKey];
@@ -706,11 +719,7 @@ const ClientQuotations = () => {
           [clientName]: {}
         }));
         
-        if (activeTab === 'pending') {
-          fetchApprovedOrders();
-        } else {
-          fetchSentQuotations();
-        }
+        fetchAllData();
       } catch (error) {
         errorToast(error.message);
       } finally {
@@ -798,7 +807,8 @@ const ClientQuotations = () => {
         }));
         fetchApprovedOrders();
       } catch (error) {
-        errorToast(error.message);
+        console.error(error);
+        errorToast('Failed to delete approved orders');
       }
     }
   };
@@ -830,11 +840,7 @@ const ClientQuotations = () => {
 
         if (response.ok) {
           successToast('Quotation deleted successfully');
-          if (activeTab === 'sent') {
-            fetchSentQuotations();
-          } else {
-            fetchReceivedQuotations();
-          }
+          fetchAllData();
         } else {
           errorToast('Failed to delete quotation');
         }
@@ -846,639 +852,519 @@ const ClientQuotations = () => {
   };
 
   return (
-    <div className="p-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-200">
-            <ClipboardList size={24} />
+    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-600 text-white rounded ">
+            <ClipboardList size={15} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Client Quotations</h1>
-            <p className="text-sm text-slate-500 font-medium">Create and track quotations from BOM-approved orders</p>
+            <h1 className="text-xl  text-slate-900 ">Client Quotations</h1>
+            <p className="text-xs text-slate-500 ">Track all quotations from BOM-approved orders</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-          <button
-            onClick={() => setActiveTab('pending')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'pending' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <History size={16} /> Pending Approval
-          </button>
-          <button
-            onClick={() => setActiveTab('sent')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'sent' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Mail size={16} /> Sent Quotations
-          </button>
-          <button
-            onClick={() => setActiveTab('received')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'received' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Check size={16} /> Received Quotes
-          </button>
-        </div>
+        <button
+          onClick={fetchAllData}
+          disabled={loading}
+          className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200 flex items-center gap-2 text-xs "
+        >
+          <RotateCw size={15} className={loading ? 'animate-spin' : ''} />
+          Refresh All
+        </button>
       </div>
 
-      <div className="space-y-6">
-        {activeTab === 'pending' && (
-          <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 ">
-                <CheckCircle className="w-5 h-5 text-indigo-600" />
-                BOM-Approved Orders
-              </h2>
-              <button
-                onClick={fetchApprovedOrders}
-                disabled={loading}
-                className="p-2.5 text-slate-500 hover:bg-slate-50 rounded-xl transition-all border border-slate-200 flex items-center gap-2 text-xs font-bold"
-              >
-                <RotateCw size={16} className={loading ? 'animate-spin' : ''} />
-                Refresh
-              </button>
-            </div>
-
-            <div className="p-6">
-              {Object.keys(groupedByClient).length === 0 ? (
-                <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  <FileText className="mx-auto h-12 w-12 text-slate-200 mb-4" />
-                  <p className="text-slate-500 font-bold">No BOM-approved orders found</p>
-                  <p className="text-slate-400 text-sm">Orders must have an approved BOM before quotation</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-slate-100">
-                    <thead className="bg-slate-50/50">
-                      <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Client Details</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Contact</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Items</th>
-                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-slate-50">
-                      {Object.entries(groupedByClient).map(([clientName, clientData]) => {
-                        const totalItems = clientData.orders.reduce((sum, order) => {
-                          return sum + (order.items?.length || 0);
-                        }, 0);
-                        const isExpanded = expandedClientName === clientName;
-                        
-                        return (
-                          <React.Fragment key={clientName}>
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-bold text-slate-900">{clientData.company_name}</span>
-                                  <span className="text-xs text-slate-500">Added: {new Date(clientData.created_at).toLocaleDateString('en-IN')}</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-col gap-0.5">
-                                  <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                                    <Mail size={12} className="text-slate-400" />
-                                    {clientData.email || '—'}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                                    <User size={12} className="text-slate-400" />
-                                    {clientData.contact_person || '—'}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold">
-                                  {totalItems} Items
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    onClick={() => toggleExpandClient(clientName)}
-                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                                      isExpanded 
-                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
-                                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                    {isExpanded ? 'Hide' : 'View & Price'}
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteApprovedOrders(clientName)}
-                                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all active:scale-95"
-                                    title="Remove from Pending"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-
-                            {isExpanded && (
-                              <tr>
-                                <td colSpan="4" className="px-6 py-4 bg-slate-50/50">
-                                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-in slide-in-from-top-2 duration-300">
-                                    <div className="px-5 py-3 border-b border-slate-50 bg-slate-50 flex items-center gap-2">
-                                      <Package size={16} className="text-indigo-600" />
-                                      <h3 className="text-sm font-bold text-slate-900">Approved Drawings & Pricing</h3>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                      <table className="min-w-full divide-y divide-slate-100">
-                                        <thead className="bg-slate-50/30">
-                                          <tr>
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Drawing</th>
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                                            <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Qty</th>
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">BOM Cost</th>
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Profit %</th>
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32">Unit Rate</th>
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">GST %</th>
-                                            <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider pr-6">Quote Price</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                          {clientData.orders.flatMap((order) => 
-                                            (order.items || []).map((item) => (
-                                              <tr key={`${order.id}-${item.id}`} className="hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3">
-                                                  <div className="flex flex-col">
-                                                    <span className="text-xs font-bold text-slate-900">{item.drawing_no || 'N/A'}</span>
-                                                    {item.status === 'REJECTED' && (
-                                                      <span className="mt-1 px-1.5 py-0.5 bg-rose-100 text-rose-600 rounded-full text-[9px] font-bold w-fit">Rejected</span>
-                                                    )}
-                                                  </div>
-                                                </td>
-                                                <td className="px-4 py-3 text-[11px] text-slate-600">{item.description || '—'}</td>
-                                                <td className="px-4 py-3 text-center text-xs font-bold text-slate-900">{item.design_qty || '0'} {item.unit || 'Pcs'}</td>
-                                                <td className="px-4 py-3 text-xs text-slate-600 font-medium">
-                                                  {item.bom_cost ? `₹${Number(item.bom_cost).toLocaleString('en-IN')}` : '—'}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                  <input
-                                                    type="text"
-                                                    value={profitMap[clientName]?.[item.id] || '0'}
-                                                    onChange={(e) => handleProfitChange(clientName, item, e.target.value)}
-                                                    className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-right text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                                  />
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                  <div className="relative group">
-                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] group-focus-within:text-indigo-500 transition-colors">₹</span>
-                                                    <input
-                                                      type="text"
-                                                      placeholder="0.00"
-                                                      value={quotePricesMap[clientName]?.[item.id] || ''}
-                                                      onChange={(e) => handlePriceChange(clientName, item, e.target.value)}
-                                                      className="w-full pl-5 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-right text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                                    />
-                                                  </div>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                  <input
-                                                    type="text"
-                                                    value={gstMap[clientName]?.[item.id] || '18'}
-                                                    onChange={(e) => handleGstChange(clientName, item.id, e.target.value)}
-                                                    className="w-14 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-right text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                                  />
-                                                </td>
-                                                <td className="px-4 py-3 text-right pr-6">
-                                                  <span className="text-xs font-bold text-slate-900">
-                                                    {formatCurrency((parseFloat(quotePricesMap[clientName]?.[item.id]) || 0) * (parseFloat(item.design_qty) || 0) * (1 + (parseFloat(gstMap[clientName]?.[item.id]) || 18) / 100))}
-                                                  </span>
-                                                </td>
-                                              </tr>
-                                            ))
-                                          )}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                    <div className="p-6 bg-slate-50/80 border-t border-slate-100">
-                                      {(() => {
-                                        const clientOrders = groupedByClient[clientName].orders;
-                                        let subTotal = 0;
-                                        let totalProfit = 0;
-                                        let totalTax = 0;
-
-                                        clientOrders.forEach(order => {
-                                          (order.items || []).forEach(item => {
-                                            const unitRate = parseFloat(quotePricesMap[clientName]?.[item.id]) || 0;
-                                            const qty = parseFloat(item.design_qty) || 0;
-                                            const profitP = parseFloat(profitMap[clientName]?.[item.id]) || 0;
-                                            const gstRate = parseFloat(gstMap[clientName]?.[item.id]) || 18;
-
-                                            const lineTotal = unitRate * qty;
-                                            subTotal += lineTotal;
-                                            totalTax += lineTotal * (gstRate / 100);
-                                            const basePrice = unitRate / (1 + profitP / 100);
-                                            totalProfit += (unitRate - basePrice) * qty;
-                                          });
-                                        });
-
-                                        return (
-                                          <div className="flex flex-col items-end gap-2">
-                                            <div className="space-y-1 w-72">
-                                              <div className="flex justify-between text-xs font-medium">
-                                                <span className="text-slate-500">Sub Total:</span>
-                                                <span className="text-slate-900">{formatCurrency(subTotal)}</span>
-                                              </div>
-                                              <div className="flex justify-between text-xs font-bold text-indigo-600">
-                                                <span>Est. Profit:</span>
-                                                <span>{formatCurrency(totalProfit)}</span>
-                                              </div>
-                                              <div className="flex justify-between text-xs font-medium">
-                                                <span className="text-slate-500">Tax (GST):</span>
-                                                <span className="text-slate-900">{formatCurrency(totalTax)}</span>
-                                              </div>
-                                              <div className="flex justify-between pt-2 mt-2 border-t border-slate-200">
-                                                <span className="text-sm font-bold text-slate-900">Grand Total:</span>
-                                                <span className="text-xl font-black text-indigo-600">{formatCurrency(subTotal + totalTax)}</span>
-                                              </div>
-                                            </div>
-                                            <button
-                                              onClick={() => handleSendQuote(clientName)}
-                                              disabled={sendingClientName === clientName || (subTotal + totalTax) === 0}
-                                              className="mt-4 w-72 flex justify-center items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
-                                            >
-                                              {sendingClientName === clientName ? (
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                              ) : (
-                                                <Save className="w-5 h-5" />
-                                              )}
-                                              {sendingClientName === clientName ? 'Creating Quotation...' : 'Create Quotation'}
-                                            </button>
-                                          </div>
-                                        );
-                                      })()}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
+      <div className="space-y-2">
+        <Card>
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="min-w-full divide-y divide-slate-100">
+              <thead className="bg-slate-50/50">
+                <tr>
+                  <th className=" p-2 text-left text-xs  text-slate-500  ">Quotation ID / Type</th>
+                  <th className=" p-2 text-left text-xs  text-slate-500  ">Client Details</th>
+                  <th className=" p-2 text-left text-xs  text-slate-500  ">Project / Items</th>
+                  <th className=" p-2 text-left text-xs  text-slate-500  ">Amount</th>
+                  <th className=" p-2 text-left text-xs  text-slate-500  ">Status</th>
+                  <th className=" p-2 text-right text-xs  text-slate-500  ">Action</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-50">
+                {combinedQuotations.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="py-12 text-center text-slate-500">
+                      No quotations found
+                    </td>
+                  </tr>
+                ) : (
+                  combinedQuotations.map((group) => {
+                    const key = group.uniqueKey;
+                    const isExpanded = group.type === 'PENDING' ? expandedClientName === group.company_name : expandedSentKey === key;
+                    const isPending = group.type === 'PENDING';
+                    
+                    return (
+                      <React.Fragment key={key}>
+                        <tr className={`hover:bg-indigo-50/30 transition-all ${isExpanded ? 'bg-indigo-50/20' : ''}`}>
+                          <td className=" p-2 whitespace-nowrap">
+                            {isPending ? (
+                              <span className="p-1 bg-amber-50 text-amber-600 rounded  text-xs  border border-amber-100">
+                                NEW PENDING
+                              </span>
+                            ) : (
+                              <span className="p-1 bg-indigo-50 text-indigo-600 rounded  text-xs  border border-indigo-100">
+                                QRT-{String(group.id).padStart(4, '0')}
+                              </span>
                             )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {(activeTab === 'sent' || activeTab === 'received') && (
-          <div className="space-y-6">
-            {(activeTab === 'sent' ? sentQuotations : receivedQuotations).length === 0 ? (
-              <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center">
-                <div className="flex flex-col items-center">
-                  <div className="p-4 bg-slate-50 rounded-2xl mb-4">
-                    <Mail className="w-12 h-12 text-slate-300" />
-                  </div>
-                  <p className="text-slate-500 font-bold text-lg">No {activeTab} quotations found</p>
-                  <p className="text-slate-400 text-sm mt-1 font-medium">Quotations will appear here once created or received</p>
-                </div>
-              </Card>
-            ) : (
-              <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    {activeTab === 'sent' ? <Mail className="w-5 h-5 text-indigo-600" /> : <ClipboardList className="w-5 h-5 text-indigo-600" />}
-                    {activeTab === 'sent' ? 'Sent Quotations History' : 'Received Quotations (Client Approved)'}
-                  </h2>
-                  <button
-                    onClick={activeTab === 'sent' ? fetchSentQuotations : fetchReceivedQuotations}
-                    disabled={loading}
-                    className="p-2.5 text-slate-500 hover:bg-slate-50 rounded-xl transition-all border border-slate-200 flex items-center gap-2 text-xs font-bold"
-                  >
-                    <RotateCw size={16} className={loading ? 'animate-spin' : ''} />
-                    Refresh
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-slate-100">
-                    <thead className="bg-slate-50/50">
-                      <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Quote ID</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Client Details</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project / Items</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-slate-50">
-                      {(activeTab === 'sent' ? sentQuotations : receivedQuotations).map((group) => {
-                        const key = group.uniqueKey;
-                        const isExpanded = expandedSentKey === key;
-                        
-                        return (
-                          <React.Fragment key={key}>
-                            <tr className={`hover:bg-indigo-50/30 transition-all ${isExpanded ? 'bg-indigo-50/20' : ''}`}>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black border border-indigo-100">
-                                  QRT-{String(group.id).padStart(4, '0')}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-bold text-slate-900">{group.company_name}</span>
-                                  <span className="text-[10px] text-slate-500 font-medium">
-                                    {new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="text-xs font-bold text-slate-700">
-                                    {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : group.quotes[0]?.project_name}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1 w-fit">
-                                    <span className="text-emerald-600 text-xs font-bold">₹</span>
-                                    <input
-                                      type="text"
-                                      value={editingSentAmounts[key] !== undefined ? editingSentAmounts[key] : (group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18).toFixed(2)}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                          handleSentAmountChange(key, val);
-                                        }
-                                      }}
-                                      className="w-24 bg-transparent text-emerald-700 text-xs font-black focus:outline-none"
-                                    />
-                                    {editingSentAmounts[key] !== undefined && (
-                                      <button
-                                        onClick={() => saveSentAmount(group)}
-                                        disabled={savingSentAmount === key}
-                                        className="p-1 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-all shadow-sm active:scale-90"
-                                      >
-                                        {savingSentAmount === key ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                                      </button>
-                                    )}
-                                  </div>
-                                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider ml-1">Incl. GST (18%)</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <StatusBadge status={group.status} />
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  {group.status === 'Sent' && (
+                          </td>
+                          <td className=" p-2 whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span className="text-xs  text-slate-900">{group.company_name}</span>
+                              <span className="text-xs text-slate-500 font-medium">
+                                {new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                          </td>
+                          <td className=" p-2 whitespace-nowrap">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs  text-slate-700">
+                                {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : (group.quotes[0]?.project_name || group.quotes[0]?.drawing_no || '—')}
+                              </span>
+                            </div>
+                          </td>
+                          <td className=" p-2 whitespace-nowrap">
+                            {isPending ? (
+                              <span className="text-xs text-slate-400">Pricing Pending</span>
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded  px-2 py-1 w-fit">
+                                  <span className="text-emerald-600 text-xs ">₹</span>
+                                  <input
+                                    type="text"
+                                    value={editingSentAmounts[key] !== undefined ? editingSentAmounts[key] : (group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18).toFixed(2)}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                        handleSentAmountChange(key, val);
+                                      }
+                                    }}
+                                    className="w-24 bg-transparent text-emerald-700 text-xs  focus:outline-none"
+                                  />
+                                  {editingSentAmounts[key] !== undefined && (
                                     <button
-                                      onClick={() => handleApproveQuote(group)}
-                                      className="p-2 bg-emerald-50 border border-emerald-100 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all active:scale-95 shadow-sm"
-                                      title="Approve Quotation"
+                                      onClick={() => saveSentAmount(group)}
+                                      disabled={savingSentAmount === key}
+                                      className="p-1 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-all shadow-sm active:scale-90"
                                     >
-                                      <CheckCircle size={18} />
+                                      {savingSentAmount === key ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
                                     </button>
                                   )}
-                                  {group.reply_pdf && (
-                                    <a
-                                      href={getFileUrl(group.reply_pdf)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100"
-                                      title="View Reply PDF"
-                                    >
-                                      <FileText size={18} />
-                                    </a>
-                                  )}
-                                  <button
-                                    onClick={() => setExpandedSentKey(isExpanded ? null : key)}
-                                    className={`p-2 rounded-xl transition-all active:scale-95 border ${
-                                      isExpanded 
-                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100' 
-                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                    }`}
-                                    title="View Drawings"
-                                  >
-                                    <Eye size={18} />
-                                  </button>
+                                </div>
+                                <span className="text-xs text-slate-400    ml-1">Incl. GST (18%)</span>
+                              </div>
+                            )}
+                          </td>
+                          <td className=" p-2 whitespace-nowrap">
+                            <StatusBadge status={group.displayStatus} />
+                          </td>
+                          <td className=" p-2 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {group.status === 'Sent' && (
+                                <button
+                                  onClick={() => handleApproveQuote(group)}
+                                  className="p-2 bg-emerald-50 border border-emerald-100 text-emerald-600 hover:bg-emerald-100 rounded  transition-all active:scale-95 shadow-sm"
+                                  title="Approve Quotation"
+                                >
+                                  <CheckCircle size={15} />
+                                </button>
+                              )}
+                              
+                              {!isPending && group.reply_pdf && (
+                                <a
+                                  href={getFileUrl(group.reply_pdf)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded  transition-all border border-transparent hover:border-blue-100"
+                                  title="View Reply PDF"
+                                >
+                                  <FileText size={15} />
+                                </a>
+                              )}
+
+                              <button
+                                onClick={() => {
+                                  if (isPending) {
+                                    setExpandedClientName(isExpanded ? null : group.company_name);
+                                  } else {
+                                    setExpandedSentKey(isExpanded ? null : key);
+                                  }
+                                }}
+                                className={`p-2 rounded  transition-all active:scale-95 border ${
+                                  isExpanded 
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100' 
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                                title={isPending ? "View & Price" : "View Drawings"}
+                              >
+                                {isPending ? (isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />) : <Eye size={15} />}
+                              </button>
+
+                              {!isPending && (
+                                <>
                                   <button
                                     onClick={() => openCommDrawer(group)}
-                                    className="p-2 relative bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all active:scale-95"
+                                    className="p-2 relative bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-slate-50 rounded  transition-all active:scale-95"
                                     title="Chat with Client"
                                   >
-                                    <MessageSquare size={18} />
+                                    <MessageSquare size={15} />
                                     {unreadCounts[group.id] > 0 && (
-                                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white shadow-sm ring-2 ring-white animate-bounce">
+                                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded bg-rose-500 text-xs  text-white shadow-sm ring-2 ring-white animate-bounce">
                                         {unreadCounts[group.id]}
                                       </span>
                                     )}
                                   </button>
                                   <button
                                     onClick={() => handleDownloadPDF(group)}
-                                    className="p-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-50 rounded-xl transition-all active:scale-95"
+                                    className="p-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-50 rounded  transition-all active:scale-95"
                                     title="Download PDF"
                                   >
-                                    <Download size={18} />
+                                    <Download size={15} />
                                   </button>
-                                  <button
-                                    onClick={() => handleDeleteSentQuotation(group)}
-                                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all active:scale-95"
-                                    title="Delete"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
+                                </>
+                              )}
 
-                            {isExpanded && (
-                              <tr>
-                                <td colSpan="6" className="px-6 py-4 bg-slate-50/50">
-                                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-in slide-in-from-top-2 duration-300">
-                                    <div className="px-5 py-3 border-b border-slate-50 bg-slate-50 flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <Package size={16} className="text-indigo-600" />
-                                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Quotation Breakdown</h3>
-                                      </div>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                      <table className="min-w-full divide-y divide-slate-100">
-                                        <thead className="bg-slate-50/30">
-                                          <tr>
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Drawing</th>
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                                            <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Qty</th>
-                                            <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Unit Price</th>
-                                            <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider pr-6">Total (Excl. GST)</th>
+                              <button
+                                onClick={() => isPending ? handleDeleteApprovedOrders(group.company_name) : handleDeleteSentQuotation(group)}
+                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all active:scale-95"
+                                title="Delete"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan="6" className=" p-2 bg-slate-200">
+                              <div className=" animate-in slide-in-from-top-2 duration-300">
+                                <div className="px-5 p-2 border-b border-slate-50 bg-slate-50 flex items-center gap-2">
+                                  <Package size={15} className="text-indigo-600" />
+                                  <h3 className="text-xs  text-slate-900">{isPending ? 'Approved Drawings & Pricing' : 'Quotation Details'}</h3>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-slate-100">
+                                    <thead className="bg-slate-50/30">
+                                      <tr>
+                                        <th className="px-4 p-2 text-left text-xs  text-slate-500  ">Drawing</th>
+                                        <th className="px-4 p-2 text-left text-xs  text-slate-500  ">Description</th>
+                                        <th className="px-4 p-2 text-center text-xs  text-slate-500  ">Qty</th>
+                                        {isPending ? (
+                                          <>
+                                            <th className="px-4 p-2 text-left text-xs  text-slate-500  ">BOM Cost</th>
+                                            <th className="px-4 p-2 text-left text-xs  text-slate-500   w-24">Profit %</th>
+                                            <th className="px-4 p-2 text-left text-xs  text-slate-500   w-32">Unit Rate</th>
+                                            <th className="px-4 p-2 text-left text-xs  text-slate-500   w-24">GST %</th>
+                                            <th className="px-4 p-2 text-right text-xs  text-slate-500   pr-6">Quote Price</th>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <th className="px-4 p-2 text-right text-xs  text-slate-500  ">Rate</th>
+                                            <th className="px-4 p-2 text-right text-xs  text-slate-500  ">Total (Base)</th>
+                                            <th className="px-4 p-2 text-right text-xs  text-slate-500  pr-6">Status</th>
+                                          </>
+                                        )}
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                      {isPending ? (
+                                        group.quotes.map((item) => (
+                                          <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-4 p-2">
+                                              <div className="flex flex-col">
+                                                <span className="text-xs  text-slate-900">{item.drawing_no || 'N/A'}</span>
+                                                {item.status === 'REJECTED' && (
+                                                  <span className="mt-1 px-1.5 py-0.5 bg-rose-100 text-rose-600 rounded text-xs  w-fit">Rejected</span>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="px-4 p-2 text-xs  text-slate-600">{item.description || '—'}</td>
+                                            <td className="px-4 p-2 text-center text-xs  text-slate-900">{item.design_qty || '0'} {item.unit || 'Pcs'}</td>
+                                            <td className="px-4 p-2 text-xs text-slate-600 font-medium">
+                                              {item.bom_cost ? `₹${Number(item.bom_cost).toLocaleString('en-IN')}` : '—'}
+                                            </td>
+                                            <td className="px-4 p-2">
+                                              <input
+                                                type="text"
+                                                value={profitMap[group.company_name]?.[item.id] || '0'}
+                                                onChange={(e) => handleProfitChange(group.company_name, item, e.target.value)}
+                                                className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded  text-right text-xs  focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                              />
+                                            </td>
+                                            <td className="px-4 p-2">
+                                              <div className="relative group">
+                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs group-focus-within:text-indigo-500 transition-colors">₹</span>
+                                                <input
+                                                  type="text"
+                                                  placeholder="0.00"
+                                                  value={quotePricesMap[group.company_name]?.[item.id] || ''}
+                                                  onChange={(e) => handlePriceChange(group.company_name, item, e.target.value)}
+                                                  className="w-full pl-5 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded  text-right text-xs  focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                                />
+                                              </div>
+                                            </td>
+                                            <td className="px-4 p-2">
+                                              <input
+                                                type="text"
+                                                value={gstMap[group.company_name]?.[item.id] || '18'}
+                                                onChange={(e) => handleGstChange(group.company_name, item.id, e.target.value)}
+                                                className="w-14 p-1.5 bg-slate-50 border border-slate-200 rounded  text-right text-xs  focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                              />
+                                            </td>
+                                            <td className="px-4 p-2 text-right pr-6">
+                                              <span className="text-xs  text-slate-900">
+                                                {formatCurrency((parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0) * (parseFloat(item.design_qty) || 0) * (1 + (parseFloat(gstMap[group.company_name]?.[item.id]) || 18) / 100))}
+                                              </span>
+                                            </td>
                                           </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                          {group.quotes.map((quote) => (
-                                            <tr key={quote.id} className="hover:bg-slate-50/50 transition-colors">
-                                              <td className="px-4 py-3">
-                                                <div className="flex flex-col">
-                                                  <span className="text-xs font-bold text-slate-900">{quote.drawing_no || 'N/A'}</span>
-                                                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">SO: {quote.sales_order_id}</span>
-                                                </div>
-                                              </td>
-                                              <td className="px-4 py-3 text-[11px] text-slate-600 font-medium">{quote.item_description || '—'}</td>
-                                              <td className="px-4 py-3 text-center text-xs font-bold text-slate-900">{quote.item_qty || '0'} {quote.item_unit || 'Pcs'}</td>
-                                              <td className="px-4 py-3 text-right text-xs font-bold text-slate-600">
-                                                ₹{Number(quote.quoted_price || (quote.total_amount / (quote.item_qty || 1)) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                              </td>
-                                              <td className="px-4 py-3 text-right pr-6">
-                                                <span className="text-xs font-black text-slate-900">
-                                                  ₹{Number(quote.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                </span>
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
+                                        ))
+                                      ) : (
+                                        group.quotes.map((quote) => (
+                                          <tr key={quote.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-4 p-2">
+                                              <div className="flex flex-col">
+                                                <span className="text-xs  text-slate-900">{quote.drawing_no || 'N/A'}</span>
+                                                <span className="text-xs text-slate-400">Project: {quote.project_name || '—'}</span>
+                                              </div>
+                                            </td>
+                                            <td className="px-4 p-2 text-xs  text-slate-600">{quote.description || '—'}</td>
+                                            <td className="px-4 p-2 text-center text-xs  text-slate-900">{quote.item_qty} {quote.uom}</td>
+                                            <td className="px-4 p-2 text-right text-xs  text-slate-900">{formatCurrency(quote.unit_rate)}</td>
+                                            <td className="px-4 p-2 text-right text-xs  text-slate-900 font-medium">{formatCurrency(quote.total_amount)}</td>
+                                            <td className="px-4 p-2 text-right pr-6">
+                                              <StatusBadge status={quote.status} />
+                                            </td>
+                                          </tr>
+                                        ))
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                                
+                                {isPending ? (
+                                  <div className="p-6 bg-slate-50/80 border-t border-slate-100">
+                                    {(() => {
+                                      const clientOrders = group.orders;
+                                      let subTotal = 0;
+                                      let totalProfit = 0;
+                                      let totalTax = 0;
+
+                                      clientOrders.forEach(order => {
+                                        (order.items || []).forEach(item => {
+                                          const unitRate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
+                                          const qty = parseFloat(item.design_qty) || 0;
+                                          const profitP = parseFloat(profitMap[group.company_name]?.[item.id]) || 0;
+                                          const gstRate = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
+
+                                          const lineTotal = unitRate * qty;
+                                          subTotal += lineTotal;
+                                          totalTax += lineTotal * (gstRate / 100);
+                                          const basePrice = unitRate / (1 + profitP / 100);
+                                          totalProfit += (unitRate - basePrice) * qty;
+                                        });
+                                      });
+
+                                      return (
+                                        <div className="flex flex-col items-end gap-2">
+                                          <div className="space-y-1 w-72">
+                                            <div className="flex justify-between text-xs font-medium">
+                                              <span className="text-slate-500">Sub Total:</span>
+                                              <span className="text-slate-900">{formatCurrency(subTotal)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs  text-indigo-600">
+                                              <span>Est. Profit:</span>
+                                              <span>{formatCurrency(totalProfit)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs font-medium">
+                                              <span className="text-slate-500">Tax (GST):</span>
+                                              <span className="text-slate-900">{formatCurrency(totalTax)}</span>
+                                            </div>
+                                            <div className="flex justify-between pt-2 mt-2 border-t border-slate-200">
+                                              <span className="text-xs  text-slate-900">Grand Total:</span>
+                                              <span className="text-xl  text-indigo-600">{formatCurrency(subTotal + totalTax)}</span>
+                                            </div>
+                                          </div>
+                                          <button
+                                            onClick={() => handleSendQuote(group.company_name)}
+                                            disabled={sendingClientName === group.company_name || (subTotal + totalTax) === 0}
+                                            className="mt-4 w-72 flex justify-center items-center gap-2 px-6 p-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
+                                          >
+                                            {sendingClientName === group.company_name ? (
+                                              <Loader2 className="w-5 h-5 animate-spin" />
+                                            ) : (
+                                              <Save className="w-5 h-5" />
+                                            )}
+                                            {sendingClientName === group.company_name ? 'Creating Quotation...' : 'Create Quotation'}
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                ) : (
+                                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                                    <div className="text-xs text-slate-500">
+                                      <span className="font-medium">Summary:</span> {group.quotes.length} items included in this quotation set.
                                     </div>
-                                    <div className="p-6 bg-slate-50/80 border-t border-slate-100 flex justify-end">
-                                      <div className="flex items-center gap-8">
-                                        <div className="flex flex-col items-end">
-                                          <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Sub Total</span>
-                                          <span className="text-sm font-bold text-slate-700">{formatCurrency(group.total_amount)}</span>
-                                        </div>
-                                        <div className="flex flex-col items-end">
-                                          <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">GST (18%)</span>
-                                          <span className="text-sm font-bold text-slate-700">{formatCurrency(group.total_amount * 0.18)}</span>
-                                        </div>
-                                        <div className="flex flex-col items-end">
-                                          <span className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">Net Amount</span>
-                                          <span className="text-xl font-black text-indigo-600 tracking-tight">
-                                            {formatCurrency(group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18)}
-                                          </span>
-                                        </div>
+                                    <div className="flex gap-4 text-xs">
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-slate-400">Base Amount</span>
+                                        <span className="text-slate-900 font-medium">{formatCurrency(group.total_amount)}</span>
+                                      </div>
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-slate-400">Total (Incl. GST)</span>
+                                        <span className="text-indigo-600 font-bold">{formatCurrency(group.received_amount > 0 ? group.received_amount : group.total_amount * 1.18)}</span>
                                       </div>
                                     </div>
                                   </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            )}
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+        </Card>
+      </div>
 
         {/* Communication Modal */}
         {showCommDrawer && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-10">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-6 md:p-10">
             <div 
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity duration-300"
               onClick={() => setShowCommDrawer(false)}
             />
-            <Card className="relative bg-white shadow-2xl w-full max-w-3xl h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-300 rounded-[2rem] border-0">
-              <div className="p-6 border-b border-slate-100 bg-white flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner">
-                    <MessageSquare size={24} />
+            <div className="relative w-full max-w-5xl h-full max-h-[800px] bg-white rounded-2xl shadow-2xl flex overflow-hidden animate-in zoom-in-95 duration-300">
+              {/* Left Sidebar - Quote Info */}
+              <div className="w-80 bg-slate-50 border-r border-slate-100 flex flex-col hidden md:flex">
+                <div className="p-6 border-b border-slate-200/60">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-100">
+                      <MessageSquare size={20} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900">Communication</h3>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                      Communication Portal
-                      {unreadCounts[selectedQuoteForComm?.id] > 0 && (
-                        <span className="px-2 py-0.5 bg-rose-500 text-white text-[10px] font-black rounded-full uppercase">New Messages</span>
-                      )}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2 mt-0.5">
-                      <span className="text-indigo-600 font-black">{selectedQuoteForComm?.company_name}</span>
-                      <span className="w-1 h-1 bg-slate-300 rounded-full" />
-                      QRT-{String(selectedQuoteForComm?.id).padStart(4, '0')}
-                    </p>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Client</p>
+                      <p className="text-sm font-semibold text-slate-700">{selectedQuoteForComm?.company_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Reference</p>
+                      <p className="text-sm font-mono text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md w-fit">
+                        QRT-{String(selectedQuoteForComm?.id).padStart(4, '0')}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={handleRefreshMessages}
-                    disabled={syncing}
-                    className="p-3 hover:bg-slate-50 rounded-2xl transition-all border border-slate-100 text-slate-500 hover:text-indigo-600 active:scale-95"
-                  >
-                    <RotateCw size={20} className={syncing ? 'animate-spin' : ''} />
-                  </button>
+                
+                <div className="flex-1 p-6 overflow-y-auto">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Quick Actions</h4>
+                  <div className="space-y-2">
+                    <button 
+                      onClick={handleRefreshMessages}
+                      disabled={syncing}
+                      className="w-full flex items-center gap-3 p-3 text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-md rounded-xl transition-all group"
+                    >
+                      <RotateCw size={18} className={syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-500'} />
+                      <span className="text-sm font-medium">Sync with Email</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Chat Area */}
+              <div className="flex-1 flex flex-col bg-white">
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="md:hidden p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                      <MessageSquare size={18} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900">{selectedQuoteForComm?.company_name}</h3>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-medium text-slate-400 uppercase">Active Channel</span>
+                      </div>
+                    </div>
+                  </div>
                   <button 
                     onClick={() => setShowCommDrawer(false)}
-                    className="p-3 hover:bg-rose-50 rounded-2xl transition-all border border-slate-100 text-slate-500 hover:text-rose-600 active:scale-95"
+                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-all"
                   >
                     <X size={20} />
                   </button>
                 </div>
-              </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30 custom-scrollbar">
-                {messages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4">
-                    <div className="w-20 h-20 bg-white rounded-3xl shadow-sm border border-slate-100 flex items-center justify-center">
-                      <MessageSquare className="w-10 h-10 opacity-20" />
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
+                  {messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center px-10">
+                      <div className="w-20 h-20 bg-white rounded-3xl shadow-sm border border-slate-100 flex items-center justify-center mb-4">
+                        <Mail className="w-10 h-10 text-slate-200" />
+                      </div>
+                      <h4 className="text-lg font-bold text-slate-900 mb-2">No conversations yet</h4>
+                      <p className="text-sm text-slate-500 max-w-xs leading-relaxed">
+                        Start a conversation with {selectedQuoteForComm?.company_name} regarding this quotation.
+                      </p>
                     </div>
-                    <div className="text-center">
-                      <p className="text-sm font-black text-slate-900 uppercase tracking-widest">No history found</p>
-                      <p className="text-xs font-bold text-slate-400 mt-1">Start a conversation with the client below</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {messages.map((msg, idx) => {
-                      const isSystem = msg.sender_type === 'SYSTEM';
-                      const showDate = idx === 0 || new Date(msg.created_at).toDateString() !== new Date(messages[idx-1].created_at).toDateString();
-                      
+                  ) : (
+                    messages.map((msg, idx) => {
+                      const isClient = msg.sender_type === 'CLIENT';
                       return (
-                        <React.Fragment key={msg.id}>
-                          {showDate && (
-                            <div className="flex justify-center my-4">
-                              <span className="px-4 py-1 bg-white border border-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
-                                {new Date(msg.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        <div key={idx} className={`flex ${isClient ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                          <div className={`max-w-[80%] flex flex-col ${isClient ? 'items-start' : 'items-end'}`}>
+                            <div className={`flex items-center gap-2 mb-1.5 ${isClient ? 'flex-row' : 'flex-row-reverse'}`}>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                {isClient ? 'Client' : 'Our Team'}
+                              </span>
+                              <span className="text-[10px] text-slate-300">•</span>
+                              <span className="text-[10px] text-slate-400">
+                                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
-                          )}
-                          <div className={`flex ${isSystem ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[75%] group`}>
-                              <div className={`flex flex-col ${isSystem ? 'items-end' : 'items-start'}`}>
-                                <div className={`px-5 py-3 rounded-2xl shadow-sm text-sm font-medium leading-relaxed ${
-                                  isSystem 
-                                    ? 'bg-indigo-600 text-white rounded-tr-none' 
-                                    : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'
-                                }`}>
-                                  {msg.message}
-                                </div>
-                                <div className={`flex items-center gap-2 mt-1.5 px-1 ${isSystem ? 'flex-row-reverse' : 'flex-row'}`}>
-                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">
-                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                  <span className="w-1 h-1 bg-slate-200 rounded-full" />
-                                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-tight">
-                                    {isSystem ? 'Our Team' : 'Client'}
-                                  </span>
-                                  {isSystem && msg.email_message_id && (
-                                    <div className="flex items-center gap-1 ml-1 text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                                      <CheckCheck size={10} />
-                                      <span className="text-[8px] font-black uppercase">Email Sent</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+                            <div className={`p-4 rounded-2xl shadow-sm ${
+                              isClient 
+                                ? 'bg-white text-slate-700 rounded-tl-none border border-slate-100' 
+                                : 'bg-indigo-600 text-white rounded-tr-none'
+                            }`}>
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                             </div>
+                            {!isClient && (
+                              <div className="flex items-center gap-1 mt-1.5">
+                                <CheckCheck size={12} className="text-indigo-400" />
+                                <span className="text-[10px] font-medium text-slate-400 uppercase">Sent</span>
+                              </div>
+                            )}
                           </div>
-                        </React.Fragment>
+                        </div>
                       );
-                    })}
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
+                    })
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
 
-              <div className="p-6 border-t border-slate-100 bg-white shrink-0">
-                <form onSubmit={handleSendMessage} className="flex flex-col gap-3">
-                  <div className="relative group">
+                {/* Input Area */}
+                <div className="p-6 bg-white border-t border-slate-100">
+                  <form onSubmit={handleSendMessage} className="relative">
                     <textarea
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       placeholder="Type your message here..."
-                      rows="3"
-                      className="w-full p-4 pr-12 text-sm font-medium border border-slate-100 rounded-3xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 bg-slate-50 transition-all resize-none placeholder:text-slate-400"
+                      className="w-full bg-slate-50 border-0 rounded-2xl p-4 pr-16 text-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all resize-none min-h-[100px]"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
@@ -1486,43 +1372,26 @@ const ClientQuotations = () => {
                         }
                       }}
                     />
-                    <div className="absolute right-4 bottom-4 flex items-center gap-2">
-                      <span className={`text-[10px] font-black transition-colors ${newMessage.trim() ? 'text-indigo-500' : 'text-slate-300'}`}>
-                        {newMessage.length} chars
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5 text-slate-400">
-                        <Mail size={14} className="text-slate-400" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">Client will receive via email</span>
-                      </div>
-                    </div>
                     <button
                       type="submit"
-                      disabled={sendingMsg || !newMessage.trim()}
-                      className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:scale-95 shadow-xl shadow-indigo-100 flex items-center gap-3 active:scale-95 group"
+                      disabled={!newMessage.trim() || sendingMsg}
+                      className="absolute bottom-4 right-4 p-3 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all active:scale-90"
                     >
                       {sendingMsg ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          SENDING...
-                        </>
+                        <Loader2 size={20} className="animate-spin" />
                       ) : (
-                        <>
-                          SEND MESSAGE
-                          <Send size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                        </>
+                        <Send size={20} />
                       )}
                     </button>
-                  </div>
-                </form>
+                  </form>
+                  <p className="mt-3 text-[10px] text-center text-slate-400 font-medium">
+                    Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 font-sans">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 font-sans">Shift+Enter</kbd> for new line.
+                  </p>
+                </div>
               </div>
-            </Card>
+            </div>
           </div>
         )}
-      </div>
     </div>
   );
 };

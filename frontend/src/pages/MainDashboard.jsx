@@ -34,9 +34,9 @@ const MainDashboard = ({ apiRequest }) => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-xs text-slate-500 font-bold tracking-widest uppercase text-xs">Loading Workspace...</p>
+      <div className="flex flex-col items-center justify-center p-22 space-y-2">
+        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
+        <p className="text-xs text-slate-500    text-xs">Loading Workspace...</p>
       </div>
     );
   }
@@ -72,9 +72,9 @@ const MainDashboard = ({ apiRequest }) => {
 
   return (
     <Suspense fallback={
-      <div className="flex flex-col items-center justify-center py-32 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-xs text-slate-500 font-bold tracking-widest uppercase text-xs">Initializing Departmental Hub...</p>
+      <div className="flex flex-col items-center justify-center p-22 space-y-2">
+        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
+        <p className="text-xs text-slate-500    text-xs">Initializing Departmental Hub...</p>
       </div>
     }>
       {renderDepartmentDashboard()}

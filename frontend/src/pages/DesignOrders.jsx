@@ -600,54 +600,54 @@ const DesignOrders = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 ">
-      <div className="max-w-7xl mx-auto">
+      <div className="p-4">
         {/* HEADER SECTION */}
         <div className="mb-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 rounded-xl text-indigo-600 shadow-sm border border-indigo-50">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-100 rounded  text-indigo-600 shadow-sm border border-indigo-50">
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-xl font-extrabold text-slate-900 tracking-tight leading-none">Design Engineering Hub</h1>
-                <p className="text-[11px] text-slate-500 mt-1 font-medium italic">Review customer drawings and create technical specifications</p>
+                <h1 className="text-xl  text-slate-900 tracking-tight leading-none">Design Engineering Hub</h1>
+                <p className="text-xs  text-slate-500 mt-1 italic">Review customer drawings and create technical specifications</p>
               </div>
             </div>
 
-            <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/60 shadow-inner">
+            <div className="flex items-center p-1 bg-slate-100 rounded  border border-slate-200/60 ">
               <button
                 onClick={() => setActiveTab('incoming')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 ${
+                className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all duration-300 ${
                   activeTab === 'incoming' 
-                    ? 'bg-white text-indigo-600 shadow-md ring-1 ring-slate-200/50' 
+                    ? 'bg-white text-indigo-600  ring-1 ring-slate-200/50' 
                     : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                 }`}
               >
-                <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'incoming' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
+                <div className={`w-1.5 h-1.5 rounded ${activeTab === 'incoming' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
                 Incoming Requests
               </button>
               <button
                 onClick={() => setActiveTab('progress')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 ${
+                className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all duration-300 ${
                   activeTab === 'progress' 
-                    ? 'bg-white text-indigo-600 shadow-md ring-1 ring-slate-200/50' 
+                    ? 'bg-white text-indigo-600  ring-1 ring-slate-200/50' 
                     : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                 }`}
               >
-                <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'progress' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
+                <div className={`w-1.5 h-1.5 rounded ${activeTab === 'progress' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
                 In Progress
               </button>
             </div>
           </div>
 
           {/* INFO BANNER */}
-          <div className="bg-white/60 backdrop-blur-md border border-indigo-100 rounded-xl p-2.5 flex items-center gap-3 shadow-sm group hover:shadow-md transition-all duration-500">
-            <div className="flex-shrink-0 w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 group-hover:rotate-12 transition-transform">
+          <div className="bg-white/60 backdrop-blur-md border border-indigo-100 rounded  p-2.5 flex items-center gap-2 shadow-sm group hover: transition-all duration-500">
+            <div className="flex-shrink-0 w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600 group-hover:rotate-12 transition-transform">
                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
             </div>
-            <p className="text-[10px] text-slate-600 font-medium leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed">
               {activeTab === 'incoming' 
                 ? 'Review incoming drawings from sales and accept them for design engineering review.'
                 : 'Manage active design tasks, create technical specifications, and track progress of approved drawings.'}
@@ -657,31 +657,31 @@ const DesignOrders = () => {
 
         {/* INCOMING REQUESTS SECTION */}
         {activeTab === 'incoming' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-              <div className="bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 p-4">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/20">
+          <div className="space-y-2">
+            <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden mb-6">
+              <div className="bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 p-2">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-white/10 rounded  backdrop-blur-md border border-white/20">
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
                       </svg>
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                      <h2 className="text-lg  text-white tracking-tight flex items-center gap-2">
                         Incoming Design Requests
                         {incomingOrders.length > 0 && (
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/30 backdrop-blur-sm">
+                          <span className="px-2 py-0.5 bg-white/20 rounded text-xs    border border-white/30 backdrop-blur-sm">
                             {incomingOrders.length} Pending
                           </span>
                         )}
                       </h2>
-                      <p className="text-blue-100/80 text-[11px] mt-0.5 font-medium">Review and approve drawings from sales department</p>
+                      <p className="text-blue-100/80 text-xs  mt-0.5 font-medium">Review and approve drawings from sales department</p>
                     </div>
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                    <div className="flex bg-black/10 p-1 rounded-lg backdrop-blur-md border border-white/10">
+                    <div className="flex bg-black/10 p-1 rounded  backdrop-blur-md border border-white/10">
                       <button
                         onClick={() => setViewMode('list')}
                         className={`p-1.5 rounded-md transition-all duration-300 ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-lg' : 'text-white/70 hover:text-white'}`}
@@ -700,7 +700,7 @@ const DesignOrders = () => {
                     <button
                       onClick={fetchIncomingOrders}
                       disabled={incomingLoading}
-                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[10px] font-bold text-white transition-all backdrop-blur-md flex items-center gap-1.5 group active:scale-95"
+                      className="p-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded  text-xs  text-white transition-all backdrop-blur-md flex items-center gap-1.5 group active:scale-95"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${incomingLoading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
                       Refresh
@@ -709,20 +709,20 @@ const DesignOrders = () => {
                 </div>
 
                 {selectedIncomingOrders.size > 0 && (
-                  <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="flex items-center gap-3">
-                      <div className="px-3 py-1.5 bg-white/10 rounded-lg border border-white/20 flex items-center gap-2 backdrop-blur-md">
+                  <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 animate-in fade-in slide-in-from-top-2 duration-500">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-white/10 rounded  border border-white/20 flex items-center gap-2 backdrop-blur-md">
                         <div className="relative">
-                          <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping absolute inset-0" />
-                          <div className="w-2 h-2 bg-emerald-400 rounded-full relative" />
+                          <div className="w-2 h-2 bg-emerald-400 rounded animate-ping absolute inset-0" />
+                          <div className="w-2 h-2 bg-emerald-400 rounded relative" />
                         </div>
-                        <span className="text-white text-xs font-bold tracking-tight">
+                        <span className="text-white text-xs  tracking-tight">
                           {selectedIncomingOrders.size} Selected
                         </span>
                       </div>
                       <button 
                         onClick={() => setSelectedIncomingOrders(new Set())}
-                        className="text-white/60 hover:text-white text-[10px] font-bold underline underline-offset-4 decoration-white/20"
+                        className="text-white/60 hover:text-white text-xs  underline underline-offset-4 decoration-white/20"
                       >
                         Clear
                       </button>
@@ -732,7 +732,7 @@ const DesignOrders = () => {
                       <button
                         onClick={handleBulkApprove}
                         disabled={bulkOperationLoading}
-                        className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl shadow-emerald-900/20 transition-all flex items-center gap-1.5 border border-emerald-400/50 active:scale-95 disabled:opacity-50"
+                        className="p-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded  text-xs    shadow-xl shadow-emerald-900/20 transition-all flex items-center gap-1.5 border border-emerald-400/50 active:scale-95 disabled:opacity-50"
                       >
                         <Check className="w-3.5 h-3.5" />
                         Approve
@@ -740,7 +740,7 @@ const DesignOrders = () => {
                       <button
                         onClick={handleBulkReject}
                         disabled={bulkOperationLoading}
-                        className="px-4 py-1.5 bg-rose-500 hover:bg-rose-400 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-xl shadow-rose-900/20 transition-all flex items-center gap-1.5 border border-rose-400/50 active:scale-95 disabled:opacity-50"
+                        className="p-2 bg-rose-500 hover:bg-rose-400 text-white rounded  text-xs    shadow-xl shadow-rose-900/20 transition-all flex items-center gap-1.5 border border-rose-400/50 active:scale-95 disabled:opacity-50"
                       >
                         <X className="w-3.5 h-3.5" />
                         Reject
@@ -751,31 +751,31 @@ const DesignOrders = () => {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2">
               {incomingLoading ? (
                 <div className="py-24 text-center">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded  animate-spin"></div>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-5 h-5 border-4 border-blue-600 border-t-transparent rounded  animate-spin"></div>
                     <p className="text-sm  text-slate-600 animate-pulse">Scanning for incoming requests...</p>
                   </div>
                 </div>
               ) : incomingOrders.length === 0 ? (
-                <div className="py-12 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200 shadow-inner group hover:border-indigo-300 transition-colors duration-500">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200 group-hover:scale-110 group-hover:bg-indigo-50 group-hover:text-indigo-200 transition-all duration-500 shadow-sm">
+                <div className="p-6 text-center bg-white rounded border-2 border-dashed border-slate-200  group hover:border-indigo-300 transition-colors duration-500">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-16 h-16 bg-slate-50 rounded flex items-center justify-center text-slate-200 group-hover:scale-110 group-hover:bg-indigo-50 group-hover:text-indigo-200 transition-all duration-500 shadow-sm">
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
                       </svg>
                     </div>
                     <div className="max-w-xs">
-                      <h3 className="text-lg font-black text-slate-900 tracking-tight">Inbox is Clear</h3>
-                      <p className="text-[10px] text-slate-500 mt-1 font-medium leading-relaxed uppercase tracking-wider">No new design requests waiting.</p>
+                      <h3 className="text-md  text-slate-900 tracking-tight">Inbox is Clear</h3>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed  ">No new design requests waiting.</p>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-2  bg-slate-100 rounded  mb-2">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 p-2  bg-slate-100 rounded  mb-2">
                     <input
                       type="checkbox"
                       checked={selectedIncomingOrders.size === incomingOrders.length && incomingOrders.length > 0}
@@ -783,7 +783,7 @@ const DesignOrders = () => {
                       className="w-4 h-4 rounded-md border-slate-300 text-blue-600 focus:ring-blue-500"
                       disabled={incomingOrders.length === 0}
                     />
-                    <span className="text-[10px]  text-slate-500  ">Select All Requests</span>
+                    <span className="text-xs  text-slate-500  ">Select All Requests</span>
                   </div>
                   
                   {Object.entries(groupedIncoming).map(([groupKey, group]) => {
@@ -796,8 +796,8 @@ const DesignOrders = () => {
                           onClick={() => toggleIncomingPo(groupKey)}
                           className={`p-2  flex flex-col md:flex-row justify-between items-start md:items-center cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50 border-b border-slate-200' : 'hover:bg-slate-50'}`}
                         >
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
                                 checked={allSelected}
@@ -818,21 +818,21 @@ const DesignOrders = () => {
                               </svg>
                             </div>
                             <div>
-                              <h3 className="text-sm  text-slate-900 flex items-center gap-2 ">
+                              <h3 className="text-xs  text-slate-900 flex items-center gap-2 ">
                                 {group.po_number === 'NO-PO' ? (group.project_name || 'Direct Design Request') : `PO: ${group.po_number}`}
                                 <span className="p-1  bg-blue-50 text-blue-600 roundedtext-xs  ">
                                   {group.orders.length} Drawings
                                 </span>
                               </h3>
-                              <p className="text-[10px] text-blue-500 font-semibold tracking-tight mt-0.5">
+                              <p className="text-xs text-blue-500 font-semibold tracking-tight mt-0.5">
                                 {group.company_name} {group.po_number !== 'NO-PO' && group.project_name && `| ${group.project_name}`}
                               </p>
                             </div>
                           </div>
                           
-                          <div className="flex items-center gap-4 mt-4 md:mt-0 ml-auto md:ml-0">
+                          <div className="flex items-center gap-2 mt-4 md:mt-0 ml-auto md:ml-0">
                             <div className="text-right">
-                              <p className="text-[9px] text-slate-400   ">Total Quantity</p>
+                              <p className="text-xs text-slate-400   ">Total Quantity</p>
                               <p className="text-sm  text-slate-800">
                                 {group.orders.reduce((sum, o) => sum + (Number(o.item_qty) || 1), 0)}
                               </p>
@@ -850,19 +850,19 @@ const DesignOrders = () => {
                         </div>
 
                         {isExpanded && (
-                          <div className="p-4 bg-slate-50/50">
+                          <div className="p-2 bg-slate-50/50">
                             {viewMode === 'grid' ? (
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                                 {group.orders.map((order, index) => (
                                   <div 
                                     key={order.item_id} 
                                     className={`bg-white rounded  border-2 transition-all group relative ${
-                                      selectedIncomingOrders.has(order.item_id) ? 'border-blue-500 shadow-md ring-4 ring-blue-50' : 'border-slate-100 hover:border-slate-300'
+                                      selectedIncomingOrders.has(order.item_id) ? 'border-blue-500  ring-4 ring-blue-50' : 'border-slate-100 hover:border-slate-300'
                                     } ${order.item_status === 'REJECTED' ? 'bg-red-50/30' : ''}`}
                                   >
-                                    <div className="p-4">
+                                    <div className="p-2">
                                       <div className="flex justify-between items-start mb-3">
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2">
                                           <input
                                             type="checkbox"
                                             checked={selectedIncomingOrders.has(order.item_id)}
@@ -873,37 +873,37 @@ const DesignOrders = () => {
                                             className="w-4 h-4 rounded-md border-slate-300 text-blue-600 focus:ring-blue-500"
                                           />
                                           <div>
-                                            <p className="text-sm  text-slate-900 truncate max-w-[150px]">
+                                            <p className="text-xs  text-slate-900 truncate max-w-[150px]">
                                               {order.drawing_no || 'NO DRAWING NO'}
                                             </p>
-                                            <p className="text-[10px] text-slate-400   ">{order.item_code || 'No Item Code'}</p>
+                                            <p className="text-xs text-slate-400   ">{order.item_code || 'No Item Code'}</p>
                                           </div>
                                         </div>
                                         <div className="text-right">
                                           <p className="text-xs  text-indigo-600">{order.item_qty || 1}</p>
-                                          <p className="text-[9px] text-slate-400   ">Qty</p>
+                                          <p className="text-xs text-slate-400   ">Qty</p>
                                         </div>
                                       </div>
 
                                       <div className="space-y-3">
                                         <div className="flex flex-wrap gap-1.5">
                                           {order.item_code ? (
-                                            <span className="p-1  bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[9px]   tracking-tight">
+                                            <span className="p-1  bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-xs   tracking-tight">
                                               {order.item_code}
                                             </span>
                                           ) : (
-                                            <span className="p-1  bg-slate-100 text-slate-400 italic rounded text-[9px] ">Pending Code</span>
+                                            <span className="p-1  bg-slate-100 text-slate-400 italic rounded text-xs ">Pending Code</span>
                                           )}
                                           {order.item_group && (
-                                            <span className="p-1  bg-slate-100 text-slate-600 border border-slate-200 rounded text-[9px]   tracking-tight">
+                                            <span className="p-1  bg-slate-100 text-slate-600 border border-slate-200 rounded text-xs   tracking-tight">
                                               {order.item_group}
                                             </span>
                                           )}
                                         </div>
 
                                         <div className="bg-slate-50/80 rounded  p-2.5 border border-slate-100">
-                                          <p className="text-[9px] text-slate-400    mb-1">Description</p>
-                                          <p className="text-[11px] text-slate-600 italic line-clamp-2 leading-relaxed">
+                                          <p className="text-xs text-slate-400    mb-1">Description</p>
+                                          <p className="text-xs  text-slate-600 italic line-clamp-2 leading-relaxed">
                                             {order.item_description || 'No description provided'}
                                           </p>
                                         </div>
@@ -913,7 +913,7 @@ const DesignOrders = () => {
                                             <StatusBadge status={order.item_status || order.status} />
                                             {(order.item_status === 'REJECTED' || order.status === 'REJECTED') && (order.item_rejection_reason || order.rejection_reason || order.reason) && (
                                               <div className="p-2 bg-red-50 rounded  border border-red-100">
-                                                <p className="text-[9px] text-red-500 italic leading-snug">
+                                                <p className="text-xs text-red-500 italic leading-snug">
                                                   <span className="  not-italic mr-1 text-[8px]">Reason:</span>
                                                   {order.item_rejection_reason || order.rejection_reason || order.reason}
                                                 </p>
@@ -998,7 +998,7 @@ const DesignOrders = () => {
                                         <td className="p-2 ">
                                           <div className="flex flex-col">
                                             <span className="text-xs  text-slate-900">{order.drawing_no || 'NO DRAWING NO'}</span>
-                                            <span className="text-[9px] text-slate-400 ">{order.item_code || 'No Item Code'}</span>
+                                            <span className="text-xs text-slate-400 ">{order.item_code || 'No Item Code'}</span>
                                           </div>
                                         </td>
                                         <td className="p-2 ">
@@ -1013,15 +1013,15 @@ const DesignOrders = () => {
                                               <div className="flex flex-col gap-1">
                                                 <StatusBadge status={order.item_status || order.status} />
                                                 {(order.item_status === 'REJECTED' || order.status === 'REJECTED') && (order.item_rejection_reason || order.rejection_reason || order.reason) && (
-                                                  <span className="text-[9px] text-red-500 italic truncate max-w-[150px]" title={order.item_rejection_reason || order.rejection_reason || order.reason}>
+                                                  <span className="text-xs text-red-500 italic truncate max-w-[150px]" title={order.item_rejection_reason || order.rejection_reason || order.reason}>
                                                     Reason: {order.item_rejection_reason || order.rejection_reason || order.reason}
                                                   </span>
                                                 )}
                                               </div>
                                             ) : order.item_code ? (
-                                              <span className="p-1  bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[9px] w-fit">{order.item_code}</span>
+                                              <span className="p-1  bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-xs w-fit">{order.item_code}</span>
                                             ) : (
-                                              <span className="p-1  bg-slate-100 text-slate-400 italic rounded text-[9px] w-fit">Pending Code</span>
+                                              <span className="p-1  bg-slate-100 text-slate-400 italic rounded text-xs w-fit">Pending Code</span>
                                             )}
                                           </div>
                                         </td>
@@ -1054,13 +1054,13 @@ const DesignOrders = () => {
                                               </>
                                             )}
                                             {(order.item_status === 'Approved ' || order.status === 'Approved ') && (
-                                              <span className="flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded text-[9px] font-semibold border border-emerald-200">
+                                              <span className="flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-semibold border border-emerald-200">
                                                 <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
                                                 Approved
                                               </span>
                                             )}
                                             {(order.item_status === 'REJECTED' || order.status === 'REJECTED') && (
-                                              <span className="flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded text-[9px] font-semibold border border-red-200">
+                                              <span className="flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold border border-red-200">
                                                 <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                                                 Rejected
                                               </span>
@@ -1086,26 +1086,26 @@ const DesignOrders = () => {
 
         {/* ACTIVE DESIGN TASKS SECTION */}
         {activeTab === 'progress' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-              <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-indigo-700 p-4">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/20">
+          <div className="space-y-2">
+            <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden mb-6">
+              <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-indigo-700 p-2">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-white/10 rounded  backdrop-blur-md border border-white/20">
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                       </svg>
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                      <h2 className="text-lg  text-white tracking-tight flex items-center gap-2">
                         Design Tasks in Progress
                         {orders.length > 0 && (
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/30 backdrop-blur-sm">
+                          <span className="px-2 py-0.5 bg-white/20 rounded text-xs    border border-white/30 backdrop-blur-sm">
                             {filteredOrders.length} Active
                           </span>
                         )}
                       </h2>
-                      <p className="text-purple-100/80 text-[11px] mt-0.5 font-medium">Manage active design orders and technical specifications</p>
+                      <p className="text-purple-100/80 text-xs  mt-0.5 font-medium">Manage active design orders and technical specifications</p>
                     </div>
                   </div>
                   
@@ -1117,10 +1117,10 @@ const DesignOrders = () => {
                         placeholder="Search tasks..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="bg-white/10 border border-white/20 text-white placeholder-purple-200/50 text-[10px] font-bold rounded-lg pl-8 pr-3 py-1.5 w-48 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all backdrop-blur-md"
+                        className="bg-white/10 border border-white/20 text-white placeholder-purple-200/50 text-xs  rounded  pl-8 pr-3 py-1.5 w-48 focus:outline-none focus:ring-2 focus:ring-white/30 transition-all backdrop-blur-md"
                       />
                     </div>
-                    <div className="flex bg-black/10 p-1 rounded-lg backdrop-blur-md border border-white/10">
+                    <div className="flex bg-black/10 p-1 rounded  backdrop-blur-md border border-white/10">
                       <button
                         onClick={() => setViewMode('list')}
                         className={`p-1.5 rounded-md transition-all duration-300 ${viewMode === 'list' ? 'bg-white text-purple-600 shadow-lg' : 'text-white/70 hover:text-white'}`}
@@ -1139,7 +1139,7 @@ const DesignOrders = () => {
                     <button
                       onClick={fetchOrders}
                       disabled={loading}
-                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[10px] font-bold text-white transition-all backdrop-blur-md flex items-center gap-1.5 group active:scale-95"
+                      className="p-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded  text-xs  text-white transition-all backdrop-blur-md flex items-center gap-1.5 group active:scale-95"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
                       Refresh
@@ -1149,23 +1149,23 @@ const DesignOrders = () => {
               </div>
             </div>
 
-          <div className="space-y-4 p-4">
+          <div className="space-y-2 p-2">
             {loading ? (
               <div className="py-24 text-center">
                 <div className="flex justify-center mb-4">
-                  <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
+                  <div className="w-5 h-5 border-4 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
                 </div>
                 <p className="text-slate-600 ">Loading design tasks...</p>
               </div>
             ) : Object.keys(groupedActive).length === 0 ? (
-              <div className="py-12 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200 shadow-inner group hover:border-indigo-300 transition-colors duration-500">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200 group-hover:scale-110 group-hover:bg-indigo-50 group-hover:text-indigo-200 transition-all duration-500 shadow-sm">
+              <div className="p-6 text-center bg-white rounded border-2 border-dashed border-slate-200  group hover:border-indigo-300 transition-colors duration-500">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-16 h-16 bg-slate-50 rounded flex items-center justify-center text-slate-200 group-hover:scale-110 group-hover:bg-indigo-50 group-hover:text-indigo-200 transition-all duration-500 shadow-sm">
                     <Search className="w-8 h-8" strokeWidth={1} />
                   </div>
                   <div className="max-w-xs">
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight">No active tasks</h3>
-                    <p className="text-[10px] text-slate-500 mt-1 font-medium leading-relaxed uppercase tracking-wider">Try adjusting search or refresh.</p>
+                    <h3 className="text-md  text-slate-900 tracking-tight">No active tasks</h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed  ">Try adjusting search or refresh.</p>
                   </div>
                 </div>
               </div>
@@ -1179,14 +1179,14 @@ const DesignOrders = () => {
                       onClick={() => toggleActivePo(groupKey)}
                       className={`p-2  flex flex-col md:flex-row justify-between items-start md:items-center cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50 border-b border-slate-200' : 'hover:bg-slate-50'}`}
                     >
-                      <div className="flex items-center gap-4 mb-4 md:mb-0">
+                      <div className="flex items-center gap-2 mb-4 md:mb-0">
                         <div className={`p-2.5 rounded  transition-all duration-300 ${isExpanded ? 'bg-indigo-600 text-white shadow-indigo-200 shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
                           <svg className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
                           </svg>
                         </div>
                         <div>
-                          <h3 className="text-sm  text-slate-900 flex items-center gap-2 ">
+                          <h3 className="text-xs  text-slate-900 flex items-center gap-2 ">
                             {group.po_number === 'NO-PO' ? (group.project_name || 'Direct Design Request') : `PO: ${group.po_number}`}
                             <span className="p-1  bg-indigo-50 text-indigo-600 rounded-md text-xs">
                               {group.orders.length} Drawings
@@ -1200,12 +1200,12 @@ const DesignOrders = () => {
                       
                       <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 mt-3 md:mt-0">
                         <div className="text-right">
-                          <p className="text-[10px] text-slate-400    mb-0.5">Total Quantity</p>
+                          <p className="text-xs text-slate-400    mb-0.5">Total Quantity</p>
                           <p className="text-sm  text-slate-800 tracking-tight">
                             {group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}
                           </p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                            <StatusBadge status={group.orders.some(o => o.status === 'DESIGN_QUERY') ? 'DESIGN_QUERY' : group.orders.some(o => o.status === 'IN_DESIGN') ? 'IN_DESIGN' : 'DRAFT'} />
                            <button className="p-1.5 hover:bg-slate-200 rounded  transition-colors text-slate-400">
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
@@ -1223,9 +1223,9 @@ const DesignOrders = () => {
                               const type = o.item_type?.toUpperCase();
                               return !type || ['FG', 'FINISHED_GOOD', 'FINISHED GOOD', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
                             }).map((order) => (
-                              <div key={`${order.id}-${order.item_id}`} className="bg-white rounded  border border-slate-200  hover:shadow-md transition-all duration-300 group flex flex-col h-full">
+                              <div key={`${order.id}-${order.item_id}`} className="bg-white rounded  border border-slate-200  hover: transition-all duration-300 group flex flex-col h-full">
                                 {/* Card Header */}
-                                <div className="p-2 border-b border-slate-100 flex justify-between items-start gap-3 bg-slate-50/30">
+                                <div className="p-2 border-b border-slate-100 flex justify-between items-start gap-2 bg-slate-50/30">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
                                       <span className="text-xs  text-slate-900 truncate">
@@ -1251,7 +1251,7 @@ const DesignOrders = () => {
                                     </div>
                                   </div>
                                   <div className="text-right flex-shrink-0">
-                                    <p className="text-[10px] text-slate-400    mb-0.5">Quantity</p>
+                                    <p className="text-xs text-slate-400    mb-0.5">Quantity</p>
                                     <p className="text-sm  text-indigo-600 leading-none">{order.total_quantity || 0}</p>
                                   </div>
                                 </div>
@@ -1265,18 +1265,18 @@ const DesignOrders = () => {
                                     </p>
                                     {order.item_status === 'REJECTED' && order.item_rejection_reason && (
                                       <div className="mt-3 p-2 bg-red-50 rounded  border border-red-100">
-                                        <p className="text-[10px] text-red-400   mb-0.5">Rejection Reason</p>
-                                        <p className="text-[10px] text-red-600 italic leading-snug">{order.item_rejection_reason}</p>
+                                        <p className="text-xs text-red-400   mb-0.5">Rejection Reason</p>
+                                        <p className="text-xs text-red-600 italic leading-snug">{order.item_rejection_reason}</p>
                                       </div>
                                     )}
                                   </div>
 
                                   <div className=" border-t border-slate-50">
-                                    <p className="text-[10px] text-slate-400    mb-2">Technical Status</p>
+                                    <p className="text-xs text-slate-400    mb-2">Technical Status</p>
                                     <select
                                       value={order.status}
                                       onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                                      className={`w-full text-xs  rounded  px-3 py-2 border-2 focus:ring-4 focus:ring-indigo-500/20 cursor-pointer transition-all appearance-none bg-no-repeat bg-[right_0.5rem_center] bg-[length:1rem_1rem] ${
+                                      className={`w-full text-xs  rounded  p-2 border-2 focus:ring-4 focus:ring-indigo-500/20 cursor-pointer transition-all appearance-none bg-no-repeat bg-[right_0.5rem_center] bg-[length:1rem_1rem] ${
                                         order.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                                         order.status === 'In-Design' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                                         'bg-slate-50 text-slate-600 border-slate-200'
@@ -1340,7 +1340,7 @@ const DesignOrders = () => {
                                     <td className="p-2 ">
                                       <div className="flex flex-col">
                                         <span className="text-xs  text-slate-900">{order.drawing_no || 'Pending Drawing'}</span>
-                                        <span className="text-[9px] text-slate-400 ">
+                                        <span className="text-xs text-slate-400 ">
                                           {order.item_code || 'No Code'}
                                         </span>
                                       </div>
@@ -1355,7 +1355,7 @@ const DesignOrders = () => {
                                       <select
                                         value={order.status}
                                         onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                                        className={`text-[10px] font-semibold rounded  px-2 py-1 border focus:outline-none transition-all ${
+                                        className={`text-xs font-semibold rounded  px-2 py-1 border focus:outline-none transition-all ${
                                           order.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                                           order.status === 'IN_DESIGN' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                                           'bg-slate-50 text-slate-600 border-slate-200'
@@ -1411,11 +1411,11 @@ const DesignOrders = () => {
     {/* Details Modal */}
       {showDetails && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 py-4">
+          <div className="flex items-center justify-center min-h-screen p-2 ">
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowDetails(false)}></div>
             <div className="relative bg-white rounded  shadow-2xl max-w-4xl w-full overflow-hidden transform transition-all">
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-2 border-b border-purple-700">
-                <div className="flex justify-between items-start gap-4">
+                <div className="flex justify-between items-start gap-2">
                   <div>
                     <h3 className="text-lg  text-white mb-1">
                       Technical Details: {selectedOrder?.po_number && selectedOrder?.po_number !== 'NO-PO' ? `PO ${selectedOrder.po_number}` : 'Design Request'}
@@ -1551,10 +1551,10 @@ const DesignOrders = () => {
                 )}
               </div>
 
-              <div className="bg-slate-50 p-2border-t border-slate-200 flex justify-end">
+              <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-end">
                 <button 
                   type="button" 
-                  className="px-4 py-1.5 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-colors"
+                  className="p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-colors"
                   onClick={() => setShowDetails(false)}
                 >
                   Close
@@ -1566,7 +1566,7 @@ const DesignOrders = () => {
       )}
 
       {showReviewModal && reviewOrder && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
           <div className="bg-white rounded  shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 sticky top-0">
               <h2 className="text-lg  text-white">
@@ -1578,22 +1578,22 @@ const DesignOrders = () => {
             </div>
 
             <div className="p-6 space-y-3">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs  text-slate-600 ">Customer</label>
-                  <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder.company_name}</p>
+                  <p className="text-xs  text-slate-900 text-xs mt-1">{reviewOrder.company_name}</p>
                 </div>
                 <div>
                   <label className="text-xs  text-slate-600 ">{reviewOrder.po_number === 'NO-PO' ? 'Request Type' : 'PO Number'}</label>
-                  <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder.po_number === 'NO-PO' ? 'Design Request' : reviewOrder.po_number || '—'}</p>
+                  <p className="text-xs  text-slate-900 text-xs mt-1">{reviewOrder.po_number === 'NO-PO' ? 'Design Request' : reviewOrder.po_number || '—'}</p>
                 </div>
                 <div>
                   <label className="text-xs  text-slate-600 ">Project</label>
-                  <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder.project_name}</p>
+                  <p className="text-xs  text-slate-900 text-xs mt-1">{reviewOrder.project_name}</p>
                 </div>
                 <div>
                   <label className="text-xs  text-slate-600 ">{reviewOrder.po_number === 'NO-PO' ? 'Request ID' : 'Sales Order'}</label>
-                  <p className="text-sm  text-slate-900 text-xs mt-1">{(reviewOrder.po_number === 'NO-PO' ? 'DR-' : 'SO-') + String(reviewOrder.id).padStart(4, '0')}</p>
+                  <p className="text-xs  text-slate-900 text-xs mt-1">{(reviewOrder.po_number === 'NO-PO' ? 'DR-' : 'SO-') + String(reviewOrder.id).padStart(4, '0')}</p>
                 </div>
               </div>
 
@@ -1606,9 +1606,9 @@ const DesignOrders = () => {
                 ) : reviewDetails.length > 0 ? (
                   <div className="space-y-3">
                     {reviewDetails.map((item, index) => (
-                      <div key={`${item.id}-${index}`} className="p-3 bg-slate-50 rounded border border-slate-200">
+                      <div key={`${item.id}-${index}`} className="p-2 bg-slate-50 rounded border border-slate-200">
                         <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center gap-3 flex-1">
+                          <div className="flex items-center gap-2 flex-1">
                             {item.drawing_pdf && (
                               <button 
                                 onClick={() => handlePreview(item)}
@@ -1618,7 +1618,7 @@ const DesignOrders = () => {
                                 <Eye className="w-4 h-4" />
                               </button>
                             )}
-                            <div className="grid grid-cols-4 gap-3 text-sm flex-1">
+                            <div className="grid grid-cols-4 gap-2 text-sm flex-1">
                               <div>
                                 <span className="text-xs text-slate-500">Drawing No</span>
                                 <p className=" text-slate-900 text-xs">{item.drawing_no || '—'}</p>
@@ -1627,7 +1627,7 @@ const DesignOrders = () => {
                               <span className="text-xs text-slate-500">Group</span>
                               <p className=" text-slate-900 text-xs">
                                 {item.item_group ? (
-                                  <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px]">
+                                  <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">
                                     {item.item_group}
                                   </span>
                                 ) : '—'}
@@ -1684,10 +1684,10 @@ const DesignOrders = () => {
                               </div>
                             ) : item.drawing_pdf.toLowerCase().endsWith('.pdf') ? (
                               <div className="p-6 flex flex-col items-center justify-center bg-slate-50/50">
-                                <div className="w-12 h-12 bg-red-100 text-red-600 rounded  flex items-center justify-center mb-3">
+                                <div className="w-5 h-5 bg-red-100 text-red-600 rounded  flex items-center justify-center mb-3">
                                   <FileText className="w-6 h-6" />
                                 </div>
-                                <h4 className="text-sm  text-slate-900 mb-1">PDF Drawing Available</h4>
+                                <h4 className="text-xs  text-slate-900 mb-1">PDF Drawing Available</h4>
                                 <p className="text-xs text-slate-500 mb-4">This drawing is in PDF format and cannot be previewed directly here.</p>
                                 <button 
                                   onClick={() => handlePreview(item)}
@@ -1707,7 +1707,7 @@ const DesignOrders = () => {
 
                         {(item.item_status === 'REJECTED' || item.status === 'REJECTED') && (item.item_rejection_reason || item.rejection_reason || item.reason) && (
                           <div className="mt-2 p-2 bg-red-50 rounded border border-red-100">
-                            <p className="text-[10px] text-red-500 italic leading-snug">
+                            <p className="text-xs text-red-500 italic leading-snug">
                               <span className="font-semibold not-italic mr-1">Reason:</span>
                               {item.item_rejection_reason || item.rejection_reason || item.reason}
                             </p>
@@ -1722,8 +1722,8 @@ const DesignOrders = () => {
               </div>
             </div>
 
-            <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-end gap-3">
-              <div className="flex gap-3">
+            <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-end gap-2">
+              <div className="flex gap-2">
                 <button 
                   onClick={() => setShowReviewModal(false)}
                   className="p-2  bg-slate-300 text-slate-900 rounded  text-xs  hover:bg-slate-400 transition-colors"
@@ -1748,7 +1748,7 @@ const DesignOrders = () => {
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowRejectModal(false)}></div>
             <div className="relative bg-white rounded  shadow-2xl max-w-lg w-full overflow-hidden transform transition-all border border-slate-200">
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 border-b border-white/10">
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 border-b border-white/10">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-xl  text-white mb-1">
@@ -1769,23 +1769,23 @@ const DesignOrders = () => {
                 </div>
               </div>
 
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="p-2 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-xs  text-slate-600 ">Customer</label>
-                    <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder?.company_name}</p>
+                    <p className="text-xs  text-slate-900 text-xs mt-1">{reviewOrder?.company_name}</p>
                   </div>
                   <div>
                     <label className="text-xs  text-slate-600 ">PO Number</label>
-                    <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder?.po_number || '—'}</p>
+                    <p className="text-xs  text-slate-900 text-xs mt-1">{reviewOrder?.po_number || '—'}</p>
                   </div>
                   <div>
                     <label className="text-xs  text-slate-600 ">Project</label>
-                    <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder?.project_name}</p>
+                    <p className="text-xs  text-slate-900 text-xs mt-1">{reviewOrder?.project_name}</p>
                   </div>
                   <div>
                     <label className="text-xs  text-slate-600 ">Sales Order</label>
-                    <p className="text-sm  text-slate-900 text-xs mt-1">{reviewOrder?.so_number || '—'}</p>
+                    <p className="text-xs  text-slate-900 text-xs mt-1">{reviewOrder?.so_number || '—'}</p>
                   </div>
                 </div>
 
@@ -1801,7 +1801,7 @@ const DesignOrders = () => {
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end gap-3">
+              <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-end gap-2">
                 <button 
                   onClick={() => setShowRejectModal(false)}
                   className="p-2  bg-slate-300 text-slate-900 rounded  text-xs  hover:bg-slate-400 transition-colors"

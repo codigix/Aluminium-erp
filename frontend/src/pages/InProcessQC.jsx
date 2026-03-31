@@ -15,10 +15,10 @@ const InProcessQC = () => {
             </div>
           </div>
           <h3 className="text-slate-900 ">In-Process Quality Control</h3>
-          <p className="text-slate-500 text-sm mt-1 max-w-xs text-center">
+          <p className="text-slate-500 text-xs  max-w-xs text-center">
             The real-time production monitoring module is currently under development.
           </p>
-          <div className="mt-6 px-4 py-1.5 bg-emerald-100 text-emerald-700text-xs     rounded  border border-emerald-200">
+          <div className="mt-6 p-2 bg-emerald-100 text-emerald-700text-xs     rounded  border border-emerald-200">
             Feature Coming Soon
           </div>
         </div>

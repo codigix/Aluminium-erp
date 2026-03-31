@@ -116,13 +116,13 @@ const ShipmentReturns = ({ apiRequest }) => {
       label: 'Return Code',
       key: 'return_code',
       sortable: true,
-      className: 'font-bold text-indigo-600'
+      className: ' text-indigo-600'
     },
     {
       label: 'Shipment Reference',
       key: 'shipment_code',
       sortable: true,
-      className: 'font-medium text-slate-500'
+      className: 'text-slate-500'
     },
     {
       label: 'Customer',
@@ -144,7 +144,7 @@ const ShipmentReturns = ({ apiRequest }) => {
         <div className="flex justify-end gap-2">
           <button
             onClick={() => handleViewDetails(row.id)}
-            className="p-1.5 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+            className="p-1.5 bg-slate-50 text-slate-600 rounded  hover:bg-slate-100 transition-colors border border-slate-200"
             title="View Details"
           >
             <Eye className="w-4 h-4" />
@@ -155,19 +155,19 @@ const ShipmentReturns = ({ apiRequest }) => {
   ];
 
   return (
-    <div className="p-6 space-y-8 bg-white/50 min-h-screen">
+    <div className="p-2 space-y-2 bg-white/50 min-h-screen">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Shipment Returns</h1>
-          <p className="text-slate-500 text-sm mt-1">Manage sales returns and RTOs (Reverse Logistics).</p>
+          <h1 className="text-xl  text-slate-900">Shipment Returns</h1>
+          <p className="text-slate-500 text-xs ">Manage sales returns and RTOs (Reverse Logistics).</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter className="w-4 h-4 text-slate-400" />
             Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>
@@ -175,21 +175,21 @@ const ShipmentReturns = ({ apiRequest }) => {
       </div>
 
       {/* KPI Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         {kpis.map((kpi, i) => (
-          <div key={i} className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl flex items-center gap-4">
-            <div className={`p-3 rounded-2xl ${kpi.color}`}>
+          <div key={i} className="p-2 bg-white border border-slate-100 shadow-sm rounded flex items-center gap-2">
+            <div className={`p-2 rounded ${kpi.color}`}>
               <kpi.icon className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{kpi.label}</p>
-              <p className="text-xl font-black text-slate-900">{kpi.value}</p>
+              <p className="text-xs  text-slate-400   leading-none mb-1">{kpi.label}</p>
+              <p className="text-xl  text-slate-900">{kpi.value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <Card className="bg-white border border-slate-100 rounded-[32px] shadow-sm overflow-hidden">
+      <Card className="bg-white border border-slate-100 rounded  shadow-sm overflow-hidden">
         <div className="p-6">
           <DataTable 
             columns={columns}
@@ -210,23 +210,23 @@ const ShipmentReturns = ({ apiRequest }) => {
       >
         {viewLoading ? (
           <div className="flex justify-center py-20">
-            <div className="w-8 h-8 border-4 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-slate-200 border-t-indigo-500 rounded animate-spin" />
           </div>
         ) : selectedReturn ? (
-          <div className="space-y-6">
+          <div className="space-y-2">
             <div className="flex justify-between items-start">
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">{selectedReturn.return_code}</h2>
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="text-xl  text-slate-900 ">{selectedReturn.return_code}</h2>
                   <StatusBadge status={selectedReturn.status} />
                 </div>
-                <p className="text-slate-500 text-sm font-medium">Origin Shipment: <span className="font-bold text-indigo-600 uppercase">{selectedReturn.shipment_code}</span></p>
+                <p className="text-slate-500 text-sm font-medium">Origin Shipment: <span className=" text-indigo-600 ">{selectedReturn.shipment_code}</span></p>
               </div>
               <div className="flex gap-2">
                 {selectedReturn.status === 'RETURN_INITIATED' && (
                   <button 
                     onClick={() => handleUpdateStatus(selectedReturn.id, 'RETURN_PICKUP_ASSIGNED', 'Assign Pickup')}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all"
+                    className="px-4 py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all"
                   >
                     Assign Pickup
                   </button>
@@ -234,7 +234,7 @@ const ShipmentReturns = ({ apiRequest }) => {
                 {selectedReturn.status === 'RETURN_PICKUP_ASSIGNED' && (
                   <button 
                     onClick={() => handleUpdateStatus(selectedReturn.id, 'RETURN_IN_TRANSIT', 'Start Transit')}
-                    className="px-4 py-2 bg-orange-600 text-white rounded-xl text-xs font-bold hover:bg-orange-700 transition-all"
+                    className="px-4 py-2 bg-orange-600 text-white rounded  text-xs  hover:bg-orange-700 transition-all"
                   >
                     Mark In-Transit
                   </button>
@@ -242,7 +242,7 @@ const ShipmentReturns = ({ apiRequest }) => {
                 {selectedReturn.status === 'RETURN_IN_TRANSIT' && (
                   <button 
                     onClick={() => handleUpdateStatus(selectedReturn.id, 'RETURN_RECEIVED', 'Receive Items')}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-all"
+                    className="px-4 py-2 bg-purple-600 text-white rounded  text-xs  hover:bg-purple-700 transition-all"
                   >
                     Receive & Inspect
                   </button>
@@ -250,7 +250,7 @@ const ShipmentReturns = ({ apiRequest }) => {
                 {selectedReturn.status === 'RETURN_RECEIVED' && (
                   <button 
                     onClick={() => handleUpdateStatus(selectedReturn.id, 'RETURN_COMPLETED', 'Complete Return')}
-                    className="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700 transition-all"
+                    className="px-4 py-2 bg-green-600 text-white rounded  text-xs  hover:bg-green-700 transition-all"
                   >
                     Complete Process
                   </button>
@@ -260,73 +260,73 @@ const ShipmentReturns = ({ apiRequest }) => {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reason</p>
-                <p className="text-xs font-black text-slate-700">{selectedReturn.reason}</p>
+                <p className="text-xs  text-slate-400  ">Reason</p>
+                <p className="text-xs  text-slate-700">{selectedReturn.reason}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Date</p>
-                <p className="text-xs font-black text-slate-700">{selectedReturn.pickup_date ? new Date(selectedReturn.pickup_date).toLocaleDateString('en-IN') : 'TBD'}</p>
+                <p className="text-xs  text-slate-400  ">Pickup Date</p>
+                <p className="text-xs  text-slate-700">{selectedReturn.pickup_date ? new Date(selectedReturn.pickup_date).toLocaleDateString('en-IN') : 'TBD'}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Condition</p>
-                <p className="text-xs font-black text-slate-700">{selectedReturn.condition_status || 'Pending Inspection'}</p>
+                <p className="text-xs  text-slate-400  ">Condition</p>
+                <p className="text-xs  text-slate-700">{selectedReturn.condition_status || 'Pending Inspection'}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Refund Amount</p>
-                <p className="text-xs font-black text-indigo-600">₹{parseFloat(selectedReturn.refund_amount || 0).toLocaleString('en-IN')}</p>
+                <p className="text-xs  text-slate-400  ">Refund Amount</p>
+                <p className="text-xs  text-indigo-600">₹{parseFloat(selectedReturn.refund_amount || 0).toLocaleString('en-IN')}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-50">
               {/* Customer Info */}
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded  flex items-center justify-center">
                     <User className="w-4 h-4" />
                   </div>
-                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Customer Information</h4>
+                  <h4 className="text-xs  text-slate-900  ">Customer Information</h4>
                 </div>
-                <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                <div className="bg-slate-50/50 p-2 rounded border border-slate-100 space-y-3">
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Customer Name</p>
-                    <p className="text-xs font-black text-slate-700 uppercase">{selectedReturn.customer_name}</p>
+                    <p className="text-xs  text-slate-400 ">Customer Name</p>
+                    <p className="text-xs  text-slate-700 ">{selectedReturn.customer_name}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Vehicle</p>
-                      <p className="text-xs font-black text-slate-700 uppercase">{selectedReturn.vehicle_number || 'N/A'}</p>
+                      <p className="text-xs  text-slate-400 ">Vehicle</p>
+                      <p className="text-xs  text-slate-700 ">{selectedReturn.vehicle_number || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Driver</p>
-                      <p className="text-xs font-black text-slate-700 uppercase">{selectedReturn.driver_name || 'N/A'}</p>
+                      <p className="text-xs  text-slate-400 ">Driver</p>
+                      <p className="text-xs  text-slate-700 ">{selectedReturn.driver_name || 'N/A'}</p>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Timeline */}
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 bg-orange-50 text-orange-600 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-orange-50 text-orange-600 rounded  flex items-center justify-center">
                     <Clock className="w-4 h-4" />
                   </div>
-                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Return Timeline</h4>
+                  <h4 className="text-xs  text-slate-900  ">Return Timeline</h4>
                 </div>
-                <div className="space-y-4 relative before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
+                <div className="space-y-2 relative before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
                   <div className="relative pl-8">
-                    <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.created_at ? 'bg-green-500' : 'bg-slate-200'}`} />
-                    <p className="text-[10px] font-black text-slate-700">Return Initiated</p>
-                    <p className="text-[9px] text-slate-400 font-bold">{selectedReturn.created_at ? new Date(selectedReturn.created_at).toLocaleString('en-IN') : '—'}</p>
+                    <div className={`absolute left-0 top-1 w-6 h-6 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.created_at ? 'bg-green-500' : 'bg-slate-200'}`} />
+                    <p className="text-xs  text-slate-700">Return Initiated</p>
+                    <p className="text-xs text-slate-400 ">{selectedReturn.created_at ? new Date(selectedReturn.created_at).toLocaleString('en-IN') : '—'}</p>
                   </div>
                   <div className="relative pl-8">
-                    <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.pickup_date ? 'bg-indigo-500' : 'bg-slate-200'}`} />
-                    <p className="text-[10px] font-black text-slate-700">Pickup Scheduled</p>
-                    <p className="text-[9px] text-slate-400 font-bold">{selectedReturn.pickup_date ? new Date(selectedReturn.pickup_date).toLocaleDateString('en-IN') : 'Awaiting Schedule'}</p>
+                    <div className={`absolute left-0 top-1 w-6 h-6 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.pickup_date ? 'bg-indigo-500' : 'bg-slate-200'}`} />
+                    <p className="text-xs  text-slate-700">Pickup Scheduled</p>
+                    <p className="text-xs text-slate-400 ">{selectedReturn.pickup_date ? new Date(selectedReturn.pickup_date).toLocaleDateString('en-IN') : 'Awaiting Schedule'}</p>
                   </div>
                   <div className="relative pl-8">
-                    <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.received_date ? 'bg-purple-500' : 'bg-slate-200'}`} />
-                    <p className="text-[10px] font-black text-slate-700">Received & Inspected</p>
-                    <p className="text-[9px] text-slate-400 font-bold">{selectedReturn.received_date ? new Date(selectedReturn.received_date).toLocaleDateString('en-IN') : 'Pending Receipt'}</p>
+                    <div className={`absolute left-0 top-1 w-6 h-6 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.received_date ? 'bg-purple-500' : 'bg-slate-200'}`} />
+                    <p className="text-xs  text-slate-700">Received & Inspected</p>
+                    <p className="text-xs text-slate-400 ">{selectedReturn.received_date ? new Date(selectedReturn.received_date).toLocaleDateString('en-IN') : 'Pending Receipt'}</p>
                   </div>
                 </div>
               </div>

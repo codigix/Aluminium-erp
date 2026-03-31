@@ -116,11 +116,11 @@ const ProjectRequests = () => {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 p-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl text-slate-900">Project Requests</h2>
-          <p className="text-sm text-slate-500 mt-1">New project requests from Sales department for production start</p>
+          <p className="text-xs text-slate-500 ">New project requests from Sales department for production start</p>
         </div>
         <button 
           onClick={fetchRequests}
@@ -139,9 +139,9 @@ const ProjectRequests = () => {
             <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded  animate-spin" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto ">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500   border-b border-slate-200">
+              <thead className="bg-white text-slate-500   border-b border-slate-200">
                 <tr>
                   <th className="p-2 text-left">SO Code</th>
                   <th className="p-2 text-left">Project / Customer</th>

@@ -65,7 +65,7 @@ const PaymentReceived = () => {
       label: 'Sales Order',
       key: 'so_number',
       sortable: true,
-      className: 'font-bold text-emerald-600'
+      className: ' text-emerald-600'
     },
     {
       label: 'Customer',
@@ -88,7 +88,7 @@ const PaymentReceived = () => {
       label: 'Status',
       key: 'source',
       render: (val) => (
-        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 uppercase">
+        <span className="px-2 py-1 rounded text-xs  bg-amber-50 text-amber-700 border border-amber-100 ">
           {val === 'SALES_ORDER' ? 'DESIGN BASED' : 'DIRECT ORDER'}
         </span>
       )
@@ -114,7 +114,7 @@ const PaymentReceived = () => {
               });
               setIsPaymentModalOpen(true);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all shadow-sm"
+            className="flex items-center gap-1 p-1.5 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all shadow-sm"
           >
             Record Payment
           </button>
@@ -133,21 +133,21 @@ const PaymentReceived = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payment Received</h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">Record customer payments and monitor receivables</p>
+          <h1 className="text-xl  text-slate-900 ">Payment Received</h1>
+          <p className="text-xs text-slate-500 mt-1">Record customer payments and monitor receivables</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="relative">
             <input 
               type="text" 
               placeholder="Search invoices..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all w-64 shadow-sm"
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all w-64 shadow-sm"
             />
             <svg className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -156,7 +156,7 @@ const PaymentReceived = () => {
           
           <button 
             onClick={fetchOutstandingInvoices}
-            className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-emerald-600 hover:border-emerald-100 transition-all shadow-sm"
+            className="p-2 bg-white border border-slate-200 rounded  text-slate-500 hover:text-emerald-600 hover:border-emerald-100 transition-all shadow-sm"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -168,7 +168,7 @@ const PaymentReceived = () => {
               setSelectedInvoice(null);
               setIsPaymentModalOpen(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-md"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all "
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -178,7 +178,7 @@ const PaymentReceived = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden">
         <DataTable
           columns={columns}
           data={filteredData}

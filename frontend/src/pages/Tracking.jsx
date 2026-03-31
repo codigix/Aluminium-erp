@@ -62,7 +62,7 @@ const MapRecenter = ({ center, zoom, shipmentId }) => {
 };
 
 const MapCard = ({ children, className = '' }) => (
-  <div className={`bg-white border border-slate-100 shadow-sm rounded-[40px] overflow-hidden relative ${className}`}>
+  <div className={`bg-white border border-slate-100 shadow-sm rounded  overflow-hidden relative ${className}`}>
     {children}
   </div>
 );
@@ -203,34 +203,34 @@ const Tracking = ({ apiRequest }) => {
   );
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50/50 min-h-screen flex flex-col h-screen overflow-hidden">
+    <div className="p-2 space-y-2 bg-slate-50/50 min-h-screen flex flex-col h-screen overflow-hidden">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 flex-shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Shipment Tracking</h1>
-          <p className="text-slate-500 text-sm mt-1">Real-time location and status monitoring.</p>
+          <h1 className="text-xl  text-slate-900">Shipment Tracking</h1>
+          <p className="text-slate-500 text-xs ">Real-time location and status monitoring.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter className="w-4 h-4 text-slate-400" />
             Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-5 gap-2">
         {kpis.map((kpi, i) => (
-          <div key={i} className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl flex items-center gap-4">
-            <div className={`p-3 rounded-2xl ${kpi.color}`}>
+          <div key={i} className="p-2 bg-white border border-slate-100 shadow-sm rounded flex items-center gap-2">
+            <div className={`p-2 rounded ${kpi.color}`}>
               <kpi.icon className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{kpi.label}</p>
-              <p className="text-xl font-black text-slate-900">{kpi.value}</p>
+              <p className="text-xs  text-slate-400   leading-none mb-1">{kpi.label}</p>
+              <p className="text-xl  text-slate-900">{kpi.value}</p>
             </div>
           </div>
         ))}
@@ -239,25 +239,25 @@ const Tracking = ({ apiRequest }) => {
       <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden min-h-0 pb-4">
         {/* Left Sidebar */}
         <MapCard className="col-span-3 flex flex-col h-full overflow-hidden">
-          <div className="p-6 border-b border-slate-50">
-            <h3 className="font-black text-slate-900 mb-4 tracking-tighter uppercase text-sm">Active Shipments</h3>
+          <div className="p-2 border-b border-slate-50">
+            <h3 className=" text-slate-900 mb-4 tracking-tighter  text-sm">Active Shipments</h3>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="text" 
                 placeholder="Search..."
-                className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-100 bg-slate-50/50 text-xs font-bold outline-none"
+                className="w-full pl-10 pr-4 py-2 rounded  border border-slate-100 bg-slate-50/50 text-xs  outline-none"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-2 space-y-3">
             {filteredShipments.map((s) => (
               <div 
                 key={s.id}
                 onClick={() => setSelectedShipment(s)}
-                className={`p-4 rounded-2xl cursor-pointer transition-all border-2 ${
+                className={`p-2 rounded cursor-pointer transition-all border-2 ${
                   selectedShipment?.id === s.id 
                     ? 'bg-indigo-50/50 border-indigo-100 shadow-sm' 
                     : 'bg-white border-transparent hover:bg-slate-50'
@@ -265,20 +265,20 @@ const Tracking = ({ apiRequest }) => {
               >
                 <div className="flex justify-between items-center mb-3">
                   <div className="flex items-center gap-2">
-                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-tighter">{s.code}</p>
+                    <p className="text-xs  text-slate-900  tracking-tighter">{s.code}</p>
                     {selectedShipment?.id === s.id && (
-                      <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+                      <div className="w-1.5 h-1.5 bg-indigo-500 rounded animate-pulse" />
                     )}
                   </div>
-                  <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${s.statusColor}`}>
+                  <div className={`px-2 py-0.5 rounded text-[8px]    ${s.statusColor}`}>
                     {s.status}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-[8px] font-black text-slate-400 uppercase">
+                  <div className="w-6 h-6 rounded  bg-slate-100 flex items-center justify-center text-[8px]  text-slate-400 ">
                     {s.customer.charAt(0)}
                   </div>
-                  <p className="text-[10px] font-black text-slate-700 truncate uppercase tracking-tighter">{s.customer}</p>
+                  <p className="text-xs  text-slate-700 truncate  tracking-tighter">{s.customer}</p>
                 </div>
               </div>
             ))}
@@ -308,60 +308,60 @@ const Tracking = ({ apiRequest }) => {
               </>
             )}
           </MapContainer>
-          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-2 rounded-xl border border-slate-100 shadow-sm z-[1000] flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
-            <span className="text-[10px] font-black text-slate-900 uppercase">Live Tracking Active</span>
+          <div className="absolute top-2 right-4 bg-white/90 backdrop-blur p-2 rounded  border border-slate-100 shadow-sm z-[1000] flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded animate-ping" />
+            <span className="text-xs  text-slate-900 ">Live Tracking Active</span>
           </div>
         </MapCard>
 
         {/* Right Sidebar - Full Data Binding */}
-        <MapCard className="col-span-3 flex flex-col h-full overflow-hidden p-6">
+        <MapCard className="col-span-3 flex flex-col h-full overflow-hidden p-2">
           {selectedShipment ? (
             <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex-1 overflow-y-auto space-y-6 pr-1 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 <div>
-                  <h3 className="text-lg font-black text-slate-900 mb-6 tracking-tight">{selectedShipment.code}</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <h3 className="text-md  text-slate-900 mb-6 tracking-tight">{selectedShipment.code}</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 p-2 bg-slate-50/50 rounded border border-slate-100">
+                      <div className="w-5 h-5 rounded  bg-indigo-50 flex items-center justify-center text-indigo-600">
                         <User className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-[11px] font-black text-slate-900 uppercase leading-none mb-1">{selectedShipment.customer}</p>
-                        <p className="text-[9px] font-bold text-slate-400 tracking-wider">Verified Client</p>
+                        <p className="text-xs   text-slate-900  leading-none mb-1">{selectedShipment.customer}</p>
+                        <p className="text-xs  text-slate-400 ">Verified Client</p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                    <div className="flex items-center gap-2 p-2 bg-slate-50/50 rounded border border-slate-100">
+                      <div className="w-5 h-5 rounded  bg-slate-50 flex items-center justify-center text-slate-400">
                         <Truck className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-[11px] font-black text-slate-900 uppercase leading-none mb-1">{selectedShipment.vehicle}</p>
-                        <p className="text-[9px] font-bold text-slate-400 tracking-wider">{selectedShipment.driver}</p>
+                        <p className="text-xs   text-slate-900  leading-none mb-1">{selectedShipment.vehicle}</p>
+                        <p className="text-xs  text-slate-400 ">{selectedShipment.driver}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                    <div className="flex items-center gap-2 p-2 bg-slate-50/50 rounded border border-slate-100">
+                      <div className="w-5 h-5 rounded  bg-slate-50 flex items-center justify-center text-slate-400">
                         <Phone className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-[11px] font-black text-slate-900 leading-none mb-1">{selectedShipment.driverPhone}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Driver Contact</p>
+                        <p className="text-xs   text-slate-900 leading-none mb-1">{selectedShipment.driverPhone}</p>
+                        <p className="text-xs  text-slate-400  ">Driver Contact</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-50 text-center">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 opacity-50">Avg Speed</p>
-                    <p className="text-lg font-black text-slate-900">{selectedShipment.speed}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 bg-slate-50/50 rounded border border-slate-50 text-center">
+                    <p className="text-[8px]  text-slate-400   mb-1 opacity-50">Avg Speed</p>
+                    <p className="text-md  text-slate-900">{selectedShipment.speed}</p>
                   </div>
-                  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-50 text-center">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 opacity-50">ETA (Time)</p>
-                    <p className="text-lg font-black text-indigo-600 animate-pulse">{routeData.duration}</p>
+                  <div className="p-2 bg-slate-50/50 rounded border border-slate-50 text-center">
+                    <p className="text-[8px]  text-slate-400   mb-1 opacity-50">ETA (Time)</p>
+                    <p className="text-lg  text-indigo-600 animate-pulse">{routeData.duration}</p>
                   </div>
                 </div>
               </div>
@@ -369,7 +369,7 @@ const Tracking = ({ apiRequest }) => {
               <div className="space-y-3 pt-6 border-t border-slate-50 flex-shrink-0 mt-4">
                 <a 
                   href={selectedShipment.driverPhone !== 'N/A' ? `tel:${selectedShipment.driverPhone}` : '#'}
-                  className={`w-full py-4 rounded-[24px] font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 transition-all ${
+                  className={`w-full py-4 rounded  text-xs    flex items-center justify-center gap-2 transition-all ${
                     selectedShipment.driverPhone !== 'N/A' 
                     ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-100' 
                     : 'bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -381,7 +381,7 @@ const Tracking = ({ apiRequest }) => {
                 {selectedShipment.status === 'DELIVERED' && (
                   <button 
                     onClick={() => handleInitiateReturn(selectedShipment)}
-                    className="w-full py-3.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-2xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    className="w-full p-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded  text-xs   transition-all flex items-center justify-center gap-2"
                   >
                     <AlertTriangle className="w-3 h-3" />
                     Initiate Return
@@ -391,8 +391,8 @@ const Tracking = ({ apiRequest }) => {
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
-              <Info className="w-12 h-12 mb-4 opacity-20" />
-              <p className="font-black text-[10px] uppercase tracking-widest opacity-20">Select Shipment</p>
+              <Info className="w-5 h-5 mb-4 opacity-20" />
+              <p className=" text-xs   opacity-20">Select Shipment</p>
             </div>
           )}
         </MapCard>

@@ -32,15 +32,15 @@ const CompanyMaster = ({
 }) => (
   <>
     {showCreatePanel && (
-      <form onSubmit={onInlineSubmit} className="bg-white border border-slate-200/80 rounded-[32px] shadow-xl overflow-hidden">
-        <div className="px-8 py-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-slate-100/80">
+      <form onSubmit={onInlineSubmit} className="bg-white border border-slate-200/80 rounded  shadow-xl overflow-hidden">
+        <div className="p-2  flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between border-b border-slate-100/80">
           <div>
             <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">New Entry</p>
             <h2 className="text-xl text-slate-900 text-xs">Register Company</h2>
             <p className="text-xs text-slate-500">Create a reusable master for downstream ERP flows.</p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={onToggleCreatePanel} className="px-5 py-2 rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={onToggleCreatePanel} className="p-2 rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300">
               Discard
             </button>
             <button type="submit" className="p-2.5 rounded  bg-slate-900 text-white text-sm   hover:bg-slate-800 disabled:opacity-60" disabled={loading}>
@@ -59,7 +59,7 @@ const CompanyMaster = ({
                 <FormControl label="Company Name">
                   <input className={fieldInputClass} value={companyForm.companyName} onChange={e => setCompanyForm(prev => ({ ...prev, companyName: e.target.value }))} required />
                 </FormControl>
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid sm:grid-cols-2 gap-2">
                   <FormControl label="Company Type">
                     <select className={fieldInputClass} value={companyForm.customerType} onChange={e => setCompanyForm(prev => ({ ...prev, customerType: e.target.value }))}>
                       <option value="REGULAR">Customer</option>
@@ -86,7 +86,7 @@ const CompanyMaster = ({
                 <FormControl label="GSTIN">
                   <input className={`${fieldInputClass} `} value={companyForm.gstin} onChange={e => setCompanyForm(prev => ({ ...prev, gstin: e.target.value }))} required />
                 </FormControl>
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid sm:grid-cols-2 gap-2">
                   <FormControl label="PAN">
                     <input className={fieldInputClass} value={companyForm.pan} onChange={e => setCompanyForm(prev => ({ ...prev, pan: e.target.value }))} />
                   </FormControl>
@@ -102,7 +102,7 @@ const CompanyMaster = ({
               <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">Commercial</p>
               <h3 className="text-md text-slate-900 text-xs">Terms & Policies</h3>
             </div>
-            <div className="grid gap-4 lg:grid-cols-5">
+            <div className="grid gap-2 lg:grid-cols-5">
               <div className="lg:col-span-2">
                 <FormControl label="Payment Terms">
                   <input className={fieldInputClass} value={companyForm.paymentTerms} onChange={e => setCompanyForm(prev => ({ ...prev, paymentTerms: e.target.value }))} />
@@ -158,7 +158,7 @@ const CompanyMaster = ({
       {companies.length ? (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 text-slate-500  tracking-[0.2em] text-[0.65rem]">
+            <thead className="bg-slate-100 text-slate-500   text-[0.65rem]">
               <tr>
                 <th className="px-5 py-4 text-left ">Company</th>
                 <th className="px-5 py-4 text-left ">GSTIN</th>

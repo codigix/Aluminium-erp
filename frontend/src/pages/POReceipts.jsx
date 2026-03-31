@@ -505,7 +505,7 @@ const POReceipts = () => {
       label: 'GRN Number',
       sortable: true,
       render: (val, row) => (
-        <span className="font-black text-slate-900 text-sm tracking-tight">{`GRN-${String(row.id).padStart(4, '0')}`}</span>
+        <span className=" text-slate-900 text-xs ">{`GRN-${String(row.id).padStart(4, '0')}`}</span>
       )
     },
     {
@@ -513,7 +513,7 @@ const POReceipts = () => {
       label: 'PO Number',
       sortable: true,
       render: (val) => (
-        <span className="text-xs  text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100  tracking-tight">#{val || 'Direct'}</span>
+        <span className="text-xs  text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100  ">#{val || 'Direct'}</span>
       )
     },
     { 
@@ -522,8 +522,8 @@ const POReceipts = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col">
-          <span className="font-black text-slate-900 text-sm tracking-tight">{val}</span>
-          <span className="text-[10px] text-slate-500 font-black  tracking-widest mt-0.5 tracking-tighter">Active Vendor</span>
+          <span className=" text-slate-900 text-xs ">{val}</span>
+          <span className="text-xs text-slate-500    mt-0.5 er">Active Vendor</span>
         </div>
       )
     },
@@ -543,11 +543,11 @@ const POReceipts = () => {
       label: 'Status',
       sortable: true,
       render: (val) => (
-        <span className={`inline-flex items-center gap-1.5 p-2  rounded text-xs  font-extrabold border  ${
-          val === 'DRAFT' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-          val === 'RECEIVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-          val === 'ACKNOWLEDGED' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-          'bg-slate-50 text-slate-700 border-slate-200'
+        <span className={`inline-flex items-center gap-1  rounded text-xs     ${
+          val === 'DRAFT' ? ' text-amber-700 border-amber-200' : 
+          val === 'RECEIVED' ? ' text-emerald-700 border-emerald-200' :
+          val === 'ACKNOWLEDGED' ? ' text-blue-700 border-blue-200' :
+          ' text-slate-700 border-slate-200'
         }`}>
           <div className={`w-1.5 h-1.5 rounded  ${
             val === 'DRAFT' ? 'bg-amber-500' : 
@@ -555,7 +555,7 @@ const POReceipts = () => {
             val === 'ACKNOWLEDGED' ? 'bg-blue-500' :
             'bg-slate-500'
           }`} />
-          <span className=" tracking-tight">{val}</span>
+          <span className=" ">{val}</span>
         </span>
       )
     },
@@ -609,7 +609,7 @@ const POReceipts = () => {
       label: 'Item Code',
       key: 'item_code',
       sortable: true,
-      render: (val) => <span className="text-slate-900 font-black">{val}</span>
+      render: (val) => <span className="text-slate-900 ">{val}</span>
     },
     {
       label: 'Material Name',
@@ -621,13 +621,13 @@ const POReceipts = () => {
       label: 'Material Type',
       key: 'material_type',
       sortable: true,
-      render: (val) => <span className="text-slate-500 text-xs    tracking-widest">{val || '—'}</span>
+      render: (val) => <span className="text-slate-500 text-xs    ">{val || '—'}</span>
     },
     {
       label: 'Warehouse',
       key: 'warehouse',
       sortable: true,
-      render: (val) => <span className="text-slate-500 text-xs    tracking-widest bg-slate-50 px-2 py-1 rounded  border border-slate-100">{val || '—'}</span>
+      render: (val) => <span className="text-slate-500 text-xs     bg-slate-50 px-2 py-1 rounded  border border-slate-100">{val || '—'}</span>
     },
     {
       label: 'Current Balance',
@@ -637,7 +637,7 @@ const POReceipts = () => {
       render: (val) => (
         <div className="flex items-center justify-end gap-2">
           <span className={`inline-block w-1.5 h-1.5 rounded  ${parseFloat(val || 0) <= 0 ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
-          <span className={`font-black text-xs ${parseFloat(val || 0) <= 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+          <span className={` text-xs ${parseFloat(val || 0) <= 0 ? 'text-rose-600' : 'text-slate-900'}`}>
             {parseFloat(val || 0).toFixed(3)}
           </span>
         </div>
@@ -647,40 +647,40 @@ const POReceipts = () => {
       label: 'Unit',
       key: 'unit',
       sortable: true,
-      render: (val) => <span className="text-slate-400text-xs  font-black ">{val || 'NOS'}</span>
+      render: (val) => <span className="text-slate-400text-xs   ">{val || 'NOS'}</span>
     }
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="animate-in p-4 fade-in duration-500">
       {/* Page Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 rounded  text-white shadow-indigo-200 shadow-xl">
-            <Warehouse className="w-6 h-6" />
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-600 rounded  text-white shadow-indigo-200 ">
+            <Warehouse className="w-3 h-3" />
           </div>
           <div>
-            <div className="flex items-center gap-2 text-xs  text-slate-400   tracking-widest">
+            <div className="flex items-center gap-2 text-xs  text-slate-400   ">
               <span>Buying</span>
               <ChevronRight className="w-2.5 h-2.5" />
               <span>Procurement</span>
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Purchase Receipts</h1>
+            <h1 className="text-xl  text-slate-900 ">Purchase Receipts</h1>
             <p className="text-xs text-slate-500 ">Process material receipts and quality inspections</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="flex bg-slate-100 p-1 rounded  border border-slate-200">
             <button 
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-2  p-2  rounded text-xs  font-black transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center gap-2  p-2  rounded text-xs   transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
               KANBAN
             </button>
             <button 
               onClick={() => setViewMode('list')}
-              className={`flex items-center gap-2  p-2  rounded text-xs  font-black transition-all ${viewMode === 'list' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center gap-2  p-2  rounded text-xs   transition-all ${viewMode === 'list' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <List className="w-3.5 h-3.5" />
               LIST
@@ -694,7 +694,7 @@ const POReceipts = () => {
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2  px-5 py-2.5 bg-blue-600 text-white rounded  text-sm font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+            className="flex items-center gap-2  p-2  bg-blue-600 text-white rounded  text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
             <Plus className="w-5 h-5" />
             Create GRN
@@ -703,7 +703,7 @@ const POReceipts = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 my-5 gap-2">
         {[
           { label: 'Total Receipts', value: stats?.total_receipts, sub: 'Total processing requests', icon: ClipboardCheck, color: 'blue', bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
           { label: 'Pending QC', value: stats?.draft_receipts, sub: 'Awaiting initial check', icon: History, color: 'orange', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-orange-50', iconColor: 'text-orange-500' },
@@ -712,34 +712,34 @@ const POReceipts = () => {
           { label: 'Completed', value: stats?.received_receipts, sub: 'Successfully stored', icon: CheckCircle2, color: 'emerald', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
           { label: 'Rejected', value: stats?.rejected_count || 0, sub: 'Failed quality criteria', icon: AlertCircle, color: 'rose', bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-rose-50', iconColor: 'text-rose-500' },
         ].map((stat, idx) => (
-          <div key={idx} className={`${stat.bg} border border-slate-200 rounded  p-4  hover:shadow-md transition-all relative overflow-hidden group`}>
+          <div key={idx} className={`${stat.bg} border border-slate-200 rounded  p-2  hover: transition-all relative overflow-hidden group`}>
             <div className="relative z-10">
               <div className="flex justify-between items-start mb-2">
-                <p className={`text-[10px] font-black ${stat.bg === 'bg-white' ? 'text-slate-500' : 'text-blue-100'}  tracking-widest`}>{stat.label}</p>
+                <p className={`text-xs  ${stat.bg === 'bg-white' ? 'text-slate-500' : 'text-blue-100'}  `}>{stat.label}</p>
                 <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded  `}>
                   <stat.icon className="w-4 h-4" />
                 </div>
               </div>
-              <p className={`text-2xl font-black ${stat.text} tracking-tight`}>{stat.value || 0}</p>
-              <p className={`text-[10px] ${stat.subText} mt-1 font-black  tracking-tighter opacity-80`}>{stat.sub}</p>
+              <p className={`text-xl  ${stat.text} `}>{stat.value || 0}</p>
+              <p className={`text-xs ${stat.subText} mt-1   er opacity-80`}>{stat.sub}</p>
             </div>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center my-5 gap-2">
         <div className="flex bg-white p-1 rounded  border border-slate-200 ">
           <button 
             onClick={() => setActiveTab('grn')}
-            className={`flex items-center gap-2  px-5 py-2 rounded  text-xs font-black transition-all ${activeTab === 'grn' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${activeTab === 'grn' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <FileText className="w-4 h-4" />
             GRN Request
           </button>
           <button 
             onClick={() => setActiveTab('stocks')}
-            className={`flex items-center gap-2  px-5 py-2 rounded  text-xs font-black transition-all ${activeTab === 'stocks' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${activeTab === 'stocks' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <Package className="w-4 h-4" />
             Available Stocks
@@ -748,16 +748,16 @@ const POReceipts = () => {
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center my-4 gap-2">
         <div className="relative flex-1">
           <input 
             type="text" 
             placeholder="Search by GRN #, PO #, or Supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded  text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
+            className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded  text-xs focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
           />
-          <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-3 h-3 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         </div>
 
         <div className="flex items-center gap-2  p-2  bg-white border border-slate-200 rounded  ">
@@ -766,7 +766,7 @@ const POReceipts = () => {
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-sm  text-blue-600 outline-none bg-transparent cursor-pointer"
+            className="text-xs  text-blue-600 outline-none bg-transparent cursor-pointer"
           >
             <option value="ALL">ALL STATUS</option>
             <option value="DRAFT">DRAFT</option>
@@ -775,13 +775,13 @@ const POReceipts = () => {
           </select>
         </div>
 
-        <button className="p-2.5 bg-emerald-500 text-white rounded  hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all active:scale-95">
-          <Filter className="w-5 h-5" />
+        <button className="p-2 bg-emerald-500 text-white rounded  hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all active:scale-95">
+          <Filter className="w-3 h-3" />
         </button>
       </div>
 
       {/* Main Table Section */}
-      <div className="bg-white rounded  border border-slate-200  overflow-hidden">
+      <div className=" rounded overflow-hidden">
         {activeTab === 'grn' ? (
           <DataTable
             columns={columns}
@@ -825,12 +825,12 @@ const POReceipts = () => {
         size="6xl"
       >
         {selectedReceiptForView && (
-          <div className="p-8 space-y-8 bg-slate-50/30">
+          <div className="p-2 space-y-2 bg-slate-50/30">
             {/* Header Status & Date */}
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black text-slate-500  tracking-widest">Status</span>
-                <div className={`flex items-center gap-2  p-2 .5 rounded  bordertext-xs  font-black  ${
+                <span className="text-xs  text-slate-500  ">Status</span>
+                <div className={`flex items-center gap-2  p-1 rounded  border text-xs    ${
                   selectedReceiptForView.status === 'RECEIVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                   selectedReceiptForView.status === 'DRAFT' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                   'bg-blue-50 text-blue-700 border-blue-200'
@@ -846,55 +846,55 @@ const POReceipts = () => {
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <span className="text-[10px] font-black text-slate-500  tracking-widest">Receipt Date</span>
-                <span className="text-sm font-black text-slate-900">
+                <span className="text-xs  text-slate-500  ">Receipt Date</span>
+                <span className="text-xs  text-slate-900">
                   {new Date(selectedReceiptForView.receipt_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                 </span>
               </div>
             </div>
 
             {/* Reference & Supplier Cards */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="p-5 bg-white border border-slate-200 rounded   space-y-3 hover:border-indigo-100 transition-colors">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2 bg-white border border-slate-200 rounded   space-y-3 hover:border-indigo-100 transition-colors">
                 <div className="flex items-center gap-2  text-indigo-500">
                   <Warehouse className="w-4 h-4" />
-                  <span className="text-[10px] font-black text-slate-400  tracking-widest">PO Reference</span>
+                  <span className="text-xs  text-slate-400  ">PO Reference</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <div className="p-2 bg-indigo-50 rounded ">
                     <FileText className="w-5 h-5 text-indigo-600" />
                   </div>
-                  <span className="text-sm font-black text-slate-900  tracking-tight">#{selectedReceiptForView.po_number || 'Direct'}</span>
+                  <span className="text-xs  text-slate-900  ">#{selectedReceiptForView.po_number || 'Direct'}</span>
                 </div>
               </div>
 
-              <div className="p-5 bg-white border border-slate-200 rounded   space-y-3 hover:border-blue-100 transition-colors">
+              <div className="p-2 bg-white border border-slate-200 rounded   space-y-3 hover:border-blue-100 transition-colors">
                 <div className="flex items-center gap-2  text-blue-500">
                   <User className="w-4 h-4" />
-                  <span className="text-[10px] font-black text-slate-400  tracking-widest">Supplier</span>
+                  <span className="text-xs  text-slate-400  ">Supplier</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <div className="p-2 bg-blue-50 rounded ">
                     <Warehouse className="w-5 h-5 text-blue-600" />
                   </div>
-                  <span className="text-sm font-black text-slate-900  tracking-tight">{selectedReceiptForView.vendor_name}</span>
+                  <span className="text-xs  text-slate-900  ">{selectedReceiptForView.vendor_name}</span>
                 </div>
               </div>
             </div>
 
             {/* Received Items Table */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 ">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
                   <Package className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-black text-slate-900  tracking-widest">Received Items</h4>
+                <h4 className="text-xs  text-slate-900  ">Received Items</h4>
               </div>
 
               <div className="bg-white border border-slate-200 rounded  overflow-hidden ">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/50">
-                    <tr className="text-[10px] font-black text-slate-400  tracking-widest border-b border-slate-200">
+                    <tr className="text-xs  text-slate-400   border-b border-slate-200">
                       <th className="p-2 ">Item</th>
                       <th className="p-2  text-center">Design Qty</th>
                       <th className="p-2  text-right">Received Qty</th>
@@ -905,17 +905,17 @@ const POReceipts = () => {
                     {(selectedReceiptForView.items || []).map((item, idx) => (
                       <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
                         <td className="p-2 ">
-                          <div className="text-xs font-black text-slate-900">{item.item_code}</div>
-                          <div className="text-[10px] text-slate-500   mt-0.5 tracking-tight">{item.material_name || item.description}</div>
+                          <div className="text-xs  text-slate-900">{item.item_code}</div>
+                          <div className="text-xs text-slate-500   mt-0.5 ">{item.material_name || item.description}</div>
                         </td>
-                        <td className="p-2  text-center font-black text-slate-500 text-xs">
+                        <td className="p-2  text-center  text-slate-500 text-xs">
                           {parseFloat(item.design_qty || item.expected_quantity || 0).toFixed(3)}
                         </td>
-                        <td className="p-2  text-right font-black text-slate-900 text-xs">
+                        <td className="p-2  text-right  text-slate-900 text-xs">
                           {parseFloat(item.received_quantity || 0).toFixed(3)}
                         </td>
                         <td className="p-2  text-right">
-                          <span className="text-[10px] font-black text-slate-400  tracking-widest bg-slate-100 px-2 py-1 rounded  border border-slate-200">
+                          <span className="text-xs  text-slate-400   bg-slate-100 px-2 py-1 rounded  border border-slate-200">
                             {item.unit || 'NOS'}
                           </span>
                         </td>
@@ -930,14 +930,14 @@ const POReceipts = () => {
             <div className="flex items-center justify-between pt-6 border-t border-slate-100">
               <button 
                 onClick={() => handleOpenPdfInNewTab(selectedReceiptForView)}
-                className="flex items-center gap-2  p-2.5 bg-emerald-600 text-white rounded  text-xs font-black hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+                className="flex items-center gap-2  p-2.5 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
               >
                 <Printer className="w-4 h-4" />
                 PRINT GRN
               </button>
               <button 
                 onClick={() => setShowViewModal(false)}
-                className="px-8 py-2.5 bg-emerald-500 text-white rounded  text-xs font-black hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+                className="px-8 py-2.5 bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95"
               >
                 Close
               </button>
@@ -954,17 +954,17 @@ const POReceipts = () => {
         size="6xl"
       >
         <form onSubmit={handleCreateReceipt} className="relative">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-2">
             {/* Sidebar: Receipt Context */}
-            <div className="lg:col-span-1 space-y-6 border-r border-slate-100 pr-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-600 rounded  flex items-center justify-center text-white shadow-lg shadow-blue-100">
+            <div className="lg:col-span-1 space-y-2 border-r border-slate-100 pr-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 bg-blue-600 rounded  flex items-center justify-center text-white shadow-lg shadow-blue-100">
                     <AlertCircle className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[10px] font-black text-slate-800  tracking-widest">Receipt Context</h4>
-                    <p className="text-[8px] text-slate-400   tracking-tighter">Link source and set date</p>
+                    <h4 className="text-xs  text-slate-800  ">Receipt Context</h4>
+                    <p className="text-[8px] text-slate-400   er">Link source and set date</p>
                   </div>
                 </div>
                 
@@ -973,7 +973,7 @@ const POReceipts = () => {
                     type="text"
                     value={`GRN-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(receipts.length + 1).padStart(4, '0')}`}
                     readOnly
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded text-xs font-black text-slate-900 outline-none"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-900 outline-none"
                   />
                 </FormControl>
 
@@ -981,7 +981,7 @@ const POReceipts = () => {
                   <select
                     value={formData.poId}
                     onChange={(e) => handlePoChange(e.target.value)}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                   >
                     <option value="">Select PO (Optional)</option>
                     {purchaseOrders.map(po => (
@@ -997,39 +997,39 @@ const POReceipts = () => {
                     type="date"
                     value={formData.receiptDate}
                     onChange={(e) => setFormData({...formData, receiptDate: e.target.value})}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                     required
                   />
                 </FormControl>
               </div>
 
               <div className="pt-6 border-t border-slate-100">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-slate-100 rounded  flex items-center justify-center text-slate-500">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-5 h-5 bg-slate-100 rounded  flex items-center justify-center text-slate-500">
                     <User className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[10px] font-black text-slate-800  tracking-widest">Supplier Info</h4>
-                    <p className="text-[8px] text-slate-400   tracking-tighter">Verified supplier details</p>
+                    <h4 className="text-xs  text-slate-800  ">Supplier Info</h4>
+                    <p className="text-[8px] text-slate-400   er">Verified supplier details</p>
                   </div>
                 </div>
                 
-                <div className="p-4 bg-slate-50 rounded  border border-slate-100 space-y-3 shadow-inner">
+                <div className="p-2 bg-slate-50 rounded  border border-slate-100 space-y-3 ">
                   {formData.vendorName ? (
                     <>
                       <div>
-                        <p className="text-[10px] text-slate-500 font-black  tracking-widest">Selected Supplier</p>
-                        <p className="text-sm font-black text-slate-900 mt-0.5">{formData.vendorName}</p>
+                        <p className="text-xs text-slate-500   ">Selected Supplier</p>
+                        <p className="text-xs  text-slate-900 mt-0.5">{formData.vendorName}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-500 font-black  tracking-widest">Supplier ID</p>
-                        <p className="text-xs font-black text-blue-600 mt-0.5 tracking-tight">#{formData.vendorId || 'N/A'}</p>
+                        <p className="text-xs text-slate-500   ">Supplier ID</p>
+                        <p className="text-xs  text-blue-600 mt-0.5 ">#{formData.vendorId || 'N/A'}</p>
                       </div>
                     </>
                   ) : (
                     <div className="text-center py-2">
-                      <p className="text-sm font-black text-slate-400 italic">No Supplier Linked</p>
-                      <p className="text-[10px] text-slate-400 mt-1  tracking-widest font-black">Link a PO above</p>
+                      <p className="text-sm  text-slate-400 italic">No Supplier Linked</p>
+                      <p className="text-xs text-slate-400 mt-1   ">Link a PO above</p>
                     </div>
                   )}
                 </div>
@@ -1037,38 +1037,38 @@ const POReceipts = () => {
             </div>
 
             {/* Main Content: Receipt Items */}
-            <div className="lg:col-span-3 space-y-6">
+            <div className="lg:col-span-3 space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
                     <ClipboardCheck className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-slate-800  tracking-tight">Receipt Items</h3>
-                    <p className="text-[10px] text-slate-400   tracking-widest">Verify received quantities against PO</p>
+                    <h3 className="text-sm  text-slate-800  ">Receipt Items</h3>
+                    <p className="text-xs text-slate-400   ">Verify received quantities against PO</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={handleAddLineItem}
-                  className="flex items-center gap-2  p-2  bg-white border border-blue-100 text-blue-600 rounded text-xs  font-black hover:bg-blue-50 transition-all  active:scale-95"
+                  className="flex items-center gap-2  p-2  bg-white border border-blue-100 text-blue-600 rounded text-xs   hover:bg-blue-50 transition-all  active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   Add Line Item
                 </button>
               </div>
 
-              <div className="bg-white border border-slate-100 rounded-[24px] overflow-hidden ">
+              <div className="bg-white border border-slate-100 rounded overflow-hidden ">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/80">
-                    <tr className="text-[10px] font-black text-slate-500  tracking-[0.2em] border-b border-slate-200">
+                    <tr className="text-xs  text-slate-500   border-b border-slate-200">
                       <th className="p-2 ">Item Details</th>
-                      <th className="px-4 py-4">Warehouse</th>
-                      <th className="px-4 py-4 text-center">Design Qty</th>
-                      <th className="px-4 py-4 text-center">Receiving Qty</th>
-                      <th className="px-4 py-4 text-center">Rate</th>
-                      <th className="px-4 py-4 text-center">Amount</th>
-                      <th className="px-4 py-4 text-center">Action</th>
+                      <th className="p-2 ">Warehouse</th>
+                      <th className="p-2  text-center">Design Qty</th>
+                      <th className="p-2  text-center">Receiving Qty</th>
+                      <th className="p-2  text-center">Rate</th>
+                      <th className="p-2  text-center">Amount</th>
+                      <th className="p-2  text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -1078,8 +1078,8 @@ const POReceipts = () => {
                           <div className="flex flex-col">
                             {item.poId || formData.poId ? (
                               <div className="flex flex-col">
-                                <span className="font-black text-slate-900 text-xs">{item.material_name || item.item_code || 'Select Item.'}</span>
-                                <span className="text-[10px] text-slate-500   mt-0.5 tracking-tight">
+                                <span className=" text-slate-900 text-xs">{item.material_name || item.item_code || 'Select Item.'}</span>
+                                <span className="text-xs text-slate-500   mt-0.5 ">
                                   {item.item_code ? `Code: ${item.item_code}` : 'Manual entry item'}
                                 </span>
                               </div>
@@ -1096,7 +1096,7 @@ const POReceipts = () => {
                                     handleItemChange(idx, 'rate', selectedItem.valuation_rate || 0);
                                   }
                                 }}
-                                className="bg-transparent font-black text-slate-900 text-xs w-full outline-none focus:text-blue-600 transition-colors appearance-none cursor-pointer"
+                                className="bg-transparent  text-slate-900 text-xs w-full outline-none focus:text-blue-600 transition-colors appearance-none cursor-pointer"
                               >
                                 <option value="">Select Item.</option>
                                 {stockItems.map(si => (
@@ -1104,16 +1104,16 @@ const POReceipts = () => {
                                 ))}
                               </select>
                             )}
-                            <p className="text-[10px] text-slate-500  mt-0.5 truncate max-w-[150px] italic">
+                            <p className="text-xs text-slate-500  mt-0.5 truncate max-w-[150px] italic">
                               {item.description || (item.poId ? 'Fetched from PO' : 'Manual entry item')}
                             </p>
                           </div>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="p-2 ">
                           <select
                             value={item.warehouse}
                             onChange={(e) => handleItemChange(idx, 'warehouse', e.target.value)}
-                            className="bg-white border border-slate-200 rounded  text-xs font-black py-2 px-3 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all  min-w-[120px]"
+                            className="bg-white border border-slate-200 rounded  text-xs  py-2 px-3 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all  min-w-[120px]"
                           >
                             {warehouses.length > 0 ? (
                               warehouses.map(w => (
@@ -1124,36 +1124,36 @@ const POReceipts = () => {
                             )}
                           </select>
                         </td>
-                        <td className="px-4 py-4 text-center font-black text-slate-500 text-xs">
+                        <td className="p-2  text-center  text-slate-500 text-xs">
                           {Number(item.design_qty > 0 ? item.design_qty : item.quantity).toFixed(3)}
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="p-2 ">
                           <div className="flex justify-center">
                             <input
                               type="number"
                               value={item.received_qty}
                               onChange={(e) => handleItemChange(idx, 'received_qty', e.target.value)}
-                              className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded  text-center text-xs font-black text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
+                              className="w-24 p-2 bg-slate-50 border border-slate-200 rounded  text-center text-xs  text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
                             />
                           </div>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="p-2 ">
                           <div className="flex justify-center">
                             <input
                               type="number"
                               value={item.rate}
                               onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
-                              className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded  text-center text-xs font-black text-emerald-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
+                              className="w-24 p-2 bg-slate-50 border border-slate-200 rounded  text-center text-xs  text-emerald-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
                             />
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-center">
+                        <td className="p-2  text-center">
                           <div className="flex flex-col items-center">
-                            <span className="font-black text-slate-900 text-xs">{formatCurrency(item.amount || 0)}</span>
-                            <span className="text-[9px] text-slate-400 font-normal">Incl. 18% GST: {formatCurrency((item.amount || 0) * 1.18)}</span>
+                            <span className=" text-slate-900 text-xs">{formatCurrency(item.amount || 0)}</span>
+                            <span className="text-xs text-slate-400 font-normal">Incl. 18% GST: {formatCurrency((item.amount || 0) * 1.18)}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-center">
+                        <td className="p-2  text-center">
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
@@ -1171,8 +1171,8 @@ const POReceipts = () => {
                     <div className="w-16 h-16 bg-slate-50 text-slate-200 rounded  flex items-center justify-center mx-auto mb-4">
                       <Package className="w-8 h-8" />
                     </div>
-                    <p className="text-xs  text-slate-400  tracking-widest">No items linked</p>
-                    <p className="text-[10px] text-slate-300 mt-1">Select a PO or add manual items</p>
+                    <p className="text-xs  text-slate-400  ">No items linked</p>
+                    <p className="text-xs text-slate-300 mt-1">Select a PO or add manual items</p>
                   </div>
                 )}
               </div>
@@ -1180,36 +1180,36 @@ const POReceipts = () => {
           </div>
 
           {/* Footer */}
-          <div className="border-t border-slate-200 p-6 flex items-center justify-between bg-slate-50 rounded-b-[24px]">
+          <div className="border-t border-slate-200 p-2 flex items-center justify-between bg-slate-50 rounded-b-[24px]">
             <div className="flex items-center gap-12">
               <div>
-                <p className="text-[10px] text-slate-500 font-black  tracking-widest">Total Quantity</p>
-                <p className="text-xl font-black text-slate-900">{formData.receivedQuantity || 0} <span className="text-xs text-slate-400  ml-1">Units</span></p>
+                <p className="text-xs text-slate-500   ">Total Quantity</p>
+                <p className="text-xl  text-slate-900">{formData.receivedQuantity || 0} <span className="text-xs text-slate-400  ml-1">Units</span></p>
               </div>
               <div className="h-10 w-[1px] bg-slate-200"></div>
               <div>
-                <p className="text-[10px] text-emerald-600 font-black  tracking-widest">Total Valuation</p>
-                <p className="text-xl font-black text-emerald-600">{formatCurrency(formData.totalValuation || 0)}</p>
+                <p className="text-xs text-emerald-600   ">Total Valuation</p>
+                <p className="text-xl  text-emerald-600">{formatCurrency(formData.totalValuation || 0)}</p>
               </div>
               <div className="h-10 w-[1px] bg-slate-200"></div>
               <div>
-                <p className="text-[10px] text-indigo-600 font-black  tracking-widest">Grand Total (18% GST)</p>
-                <p className="text-xl font-black text-indigo-600">{formatCurrency((formData.totalValuation || 0) * 1.18)}</p>
+                <p className="text-xs text-indigo-600   ">Grand Total (18% GST)</p>
+                <p className="text-xl  text-indigo-600">{formatCurrency((formData.totalValuation || 0) * 1.18)}</p>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-sm font-black hover:bg-slate-50 transition-all active:scale-95"
+                className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={formData.items.length === 0}
-                className={`flex items-center gap-2  px-8 py-2.5 bg-blue-600 text-white rounded  text-sm font-black transition-all shadow-lg shadow-blue-200 active:scale-95 ${formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'}`}
+                className={`flex items-center gap-2  px-8 py-2.5 bg-blue-600 text-white rounded  text-sm  transition-all shadow-lg shadow-blue-200 active:scale-95 ${formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'}`}
               >
                 Create GRN Request
               </button>
@@ -1219,14 +1219,14 @@ const POReceipts = () => {
       </Modal>
 
         <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit PO Receipt" size="xl">
-          <form onSubmit={handleUpdateReceipt} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleUpdateReceipt} className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <FormControl label="Receipt Date *">
                 <input
                   type="date"
                   value={editFormData.receiptDate}
                   onChange={(e) => setEditFormData({...editFormData, receiptDate: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                   required
                 />
               </FormControl>
@@ -1234,7 +1234,7 @@ const POReceipts = () => {
                 <select
                   value={editFormData.status}
                   onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                   required
                 >
                   <option value="DRAFT">Draft</option>
@@ -1250,7 +1250,7 @@ const POReceipts = () => {
                 type="number"
                 value={editFormData.receivedQuantity}
                 onChange={(e) => setEditFormData({...editFormData, receivedQuantity: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-indigo-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-indigo-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
               />
             </FormControl>
 
@@ -1258,22 +1258,22 @@ const POReceipts = () => {
               <textarea
                 value={editFormData.notes}
                 onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                 rows="3"
               />
             </FormControl>
 
-            <div className="flex gap-3 justify-end pt-4 border-t border-slate-100">
+            <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="p-2.5 border border-slate-200 rounded text-xs font-black text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+                className="p-2.5 border border-slate-200 rounded text-xs  text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="p-2.5 bg-blue-600 text-white rounded text-xs font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                className="p-2.5 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
               >
                 Update Receipt
               </button>

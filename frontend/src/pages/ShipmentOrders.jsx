@@ -104,13 +104,13 @@ const ShipmentOrders = ({ apiRequest }) => {
     { 
       label: 'Shipment Code', 
       key: 'shipment_code',
-      className: 'font-bold text-indigo-600'
+      className: ' text-indigo-600'
     },
     { 
       label: 'SO Number', 
       key: 'so_number',
       render: (_, row) => (
-        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+        <span className="text-xs  text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
           {row.so_number || `SO-${String(row.sales_order_id || row.id).padStart(4, '0')}`}
         </span>
       )
@@ -131,7 +131,7 @@ const ShipmentOrders = ({ apiRequest }) => {
       key: 'priority',
       className: 'text-center',
       render: (val) => (
-        <span className={`text-[10px] font-bold ${val === 'HIGH' ? 'text-rose-600' : 'text-slate-500'}`}>
+        <span className={`text-xs  ${val === 'HIGH' ? 'text-rose-600' : 'text-slate-500'}`}>
           {val}
         </span>
       )
@@ -152,14 +152,14 @@ const ShipmentOrders = ({ apiRequest }) => {
             <>
               <button
                 onClick={() => handleAction(order.id || order.shipment_order_id, 'ACCEPTED')}
-                className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors border border-blue-100"
+                className="p-1.5 bg-blue-50 text-blue-600 rounded  hover:bg-blue-100 transition-colors border border-blue-100"
                 title="Accept"
               >
                 <CheckCircle className="w-4 h-4" />
               </button>
               <button
                 onClick={() => handleAction(order.id || order.shipment_order_id, 'REJECTED')}
-                className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors border border-rose-100"
+                className="p-1.5 bg-rose-50 text-rose-600 rounded  hover:bg-rose-100 transition-colors border border-rose-100"
                 title="Reject"
               >
                 <XCircle className="w-4 h-4" />
@@ -168,14 +168,14 @@ const ShipmentOrders = ({ apiRequest }) => {
           )}
           <button
             onClick={() => handleViewDetails(order.id || order.shipment_order_id)}
-            className="p-1.5 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+            className="p-1.5 bg-slate-50 text-slate-600 rounded  hover:bg-slate-100 transition-colors border border-slate-200"
             title="View Details"
           >
             <Eye className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleDelete(order.id || order.shipment_order_id)}
-            className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors border border-rose-100"
+            className="p-1.5 bg-rose-50 text-rose-600 rounded  hover:bg-rose-100 transition-colors border border-rose-100"
             title="Delete Shipment"
           >
             <Trash2 className="w-4 h-4" />
@@ -186,39 +186,39 @@ const ShipmentOrders = ({ apiRequest }) => {
   ];
 
   return (
-    <div className="p-6 space-y-8 bg-white/50 min-h-screen">
+    <div className="p-2 space-y-2 bg-white/50 min-h-screen">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Shipment Orders</h1>
-          <p className="text-slate-500 text-sm mt-1">Manage and track shipment-ready sales orders.</p>
+          <h1 className="text-xl  text-slate-900">Shipment Orders</h1>
+          <p className="text-slate-500 text-xs ">Manage and track shipment-ready sales orders.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter className="w-4 h-4 text-slate-400" />
             Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>
         </div>
       </div>
 
-      <Card className="bg-white border border-slate-100 rounded-[32px] shadow-sm overflow-hidden">
+      <Card className="bg-white border border-slate-100 rounded  shadow-sm overflow-hidden">
         <div className="p-6">
-          <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-2">
             <div className="relative w-full md:w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search by Code, SO or Customer..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                className="w-full pl-10 pr-4 py-2.5 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+            <div className="flex items-center gap-2 text-xs  text-slate-500   bg-slate-50 p-1.5 rounded  border border-slate-100">
               <Package className="w-4 h-4 text-indigo-500" />
               <span>{filteredOrders.length} Shipment Orders</span>
             </div>
@@ -245,14 +245,14 @@ const ShipmentOrders = ({ apiRequest }) => {
       >
         {viewLoading ? (
           <div className="flex justify-center py-20">
-            <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-500 rounded animate-spin" />
           </div>
         ) : selectedOrder ? (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</p>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border 
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                <p className="text-xs  text-slate-400   mb-1">Status</p>
+                <span className={`px-2 py-0.5 rounded text-xs  border 
                   ${selectedOrder.shipment_status === 'PENDING_ACCEPTANCE' ? 'bg-amber-50 border-amber-200 text-amber-600' : 
                     selectedOrder.shipment_status === 'ACCEPTED' ? 'bg-blue-50 border-blue-200 text-blue-600' : 
                     selectedOrder.shipment_status === 'READY_TO_DISPATCH' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 
@@ -260,60 +260,60 @@ const ShipmentOrders = ({ apiRequest }) => {
                   {selectedOrder.shipment_status.replace(/_/g, ' ')}
                 </span>
               </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">SO / PO Number</p>
-                <p className="text-sm font-bold text-slate-900">
+              <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                <p className="text-xs  text-slate-400   mb-1">SO / PO Number</p>
+                <p className="text-xs  text-slate-900">
                   {selectedOrder.po_number || (selectedOrder.sales_order_id ? `SO-${String(selectedOrder.sales_order_id).padStart(4, '0')}` : '—')}
                 </p>
               </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Customer</p>
-                <p className="text-sm font-bold text-slate-900">{selectedOrder.company_name}</p>
+              <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                <p className="text-xs  text-slate-400   mb-1">Customer</p>
+                <p className="text-xs  text-slate-900">{selectedOrder.company_name}</p>
               </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Date</p>
-                <p className="text-sm font-bold text-slate-900">
+              <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                <p className="text-xs  text-slate-400   mb-1">Target Date</p>
+                <p className="text-xs  text-slate-900">
                   {selectedOrder.dispatch_target_date ? new Date(selectedOrder.dispatch_target_date).toLocaleDateString('en-IN') : '—'}
                 </p>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded  flex items-center justify-center">
                   <ListTodo className="w-4 h-4" />
                 </div>
-                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Items Verification</h4>
+                <h4 className="text-xs  text-slate-900  ">Items Verification</h4>
               </div>
 
-              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+              <div className="bg-white rounded border border-slate-100 overflow-hidden shadow-sm">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50">
-                    <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                      <th className="px-6 py-4">Item Details</th>
-                      <th className="px-4 py-4">Warehouse</th>
-                      <th className="px-4 py-4 text-center">Design Qty</th>
-                      <th className="px-4 py-4 text-center">Unit</th>
+                    <tr className="text-xs  text-slate-500   border-b border-slate-100">
+                      <th className=" p-2">Item Details</th>
+                      <th className="p-2 ">Warehouse</th>
+                      <th className="p-2  text-center">Design Qty</th>
+                      <th className="p-2  text-center">Unit</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {selectedOrder.items?.map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
+                        <td className=" p-2">
                           <div className="flex flex-col">
-                            <span className="font-bold text-slate-900 text-xs">{item.description || 'Unnamed Item'}</span>
-                            <span className="text-[10px] text-slate-400 font-medium">Code: {item.item_code}</span>
+                            <span className=" text-slate-900 text-xs">{item.description || 'Unnamed Item'}</span>
+                            <span className="text-xs text-slate-400 font-medium">Code: {item.item_code}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-4">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase bg-slate-100 px-2 py-1 rounded-lg">
+                        <td className="p-2 ">
+                          <span className="text-xs  text-slate-500  bg-slate-100 px-2 py-1 rounded ">
                             {item.warehouse || 'MAIN STORE'}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-center font-bold text-slate-700 text-xs">
+                        <td className="p-2  text-center  text-slate-700 text-xs">
                           {parseFloat(item.quantity || 0).toFixed(3)}
                         </td>
-                        <td className="px-4 py-4 text-center font-bold text-slate-500 text-xs">
+                        <td className="p-2  text-center  text-slate-500 text-xs">
                           {item.unit || 'PCS'}
                         </td>
                       </tr>

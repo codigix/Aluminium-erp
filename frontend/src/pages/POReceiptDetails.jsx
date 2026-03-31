@@ -129,10 +129,10 @@ const POReceiptDetails = () => {
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl text-slate-900">PO Receipt Details</h1>
+          <h1 className="text-xl text-slate-900">PO Receipt Details</h1>
           <button
             onClick={() => window.close()}
-            className="p-2  border border-slate-200 rounded text-sm  hover:bg-slate-50"
+            className="p-2  border border-slate-200 rounded text-xs  hover:bg-slate-50"
           >
             Close
           </button>
@@ -142,36 +142,36 @@ const POReceiptDetails = () => {
           <div className="p-8">
             {/* Header Info */}
             <div className="grid grid-cols-2 gap-6 mb-8">
-              <div className="bg-slate-50 p-4 rounded">
+              <div className="bg-slate-50 p-2 rounded">
                 <p className="text-xs text-slate-500    mb-1">PO Number</p>
                 <p className="text-xl text-slate-900">{receipt.po_number || '—'}</p>
               </div>
-              <div className="bg-slate-50 p-4 rounded">
+              <div className="bg-slate-50 p-2 rounded">
                 <p className="text-xs text-slate-500    mb-1">Vendor</p>
                 <p className="text-xl text-slate-900">{receipt.vendor_name || '—'}</p>
               </div>
-              <div className="bg-slate-50 p-4 rounded">
+              <div className="bg-slate-50 p-2 rounded">
                 <p className="text-xs text-slate-500    mb-1">Receipt Date</p>
                 <p className="text-xl text-slate-900">{formatDate(receipt.receipt_date)}</p>
               </div>
-              <div className="bg-slate-50 p-4 rounded">
+              <div className="bg-slate-50 p-2 rounded">
                 <p className="text-xs text-slate-500    mb-1">Status</p>
                 <span className={`inline-block p-2  rounded  text-sm  ${receiptStatusColors[receipt.status]?.badge}`}>
                   {receiptStatusColors[receipt.status]?.label || receipt.status}
                 </span>
               </div>
-              <div className="bg-slate-50 p-4 rounded">
+              <div className="bg-slate-50 p-2 rounded">
                 <p className="text-xs text-slate-500    mb-1">Received Quantity</p>
                 <p className="text-2xl  text-emerald-600">{receipt.received_quantity || 0}</p>
               </div>
-              <div className="bg-slate-50 p-4 rounded">
+              <div className="bg-slate-50 p-2 rounded">
                 <p className="text-xs text-slate-500    mb-1">Created</p>
                 <p className="text-xl text-slate-900">{formatDate(receipt.created_at)}</p>
               </div>
             </div>
 
             {/* Total Amount */}
-            <div className="bg-emerald-50 border border-emerald-200 p-6 rounded mb-8">
+            <div className="bg-emerald-50 border border-emerald-200 p-2 rounded mb-8">
               <p className="text-xs text-emerald-600    mb-2">Total Amount</p>
               <p className="text-4xl  text-emerald-700">₹{receipt.total_amount?.toLocaleString('en-IN') || '0'}</p>
             </div>
@@ -207,14 +207,14 @@ const POReceiptDetails = () => {
 
             {/* Notes */}
             {receipt.notes && (
-              <div className="mb-8 bg-blue-50 border border-blue-200 p-6 rounded">
+              <div className="mb-8 bg-blue-50 border border-blue-200 p-2 rounded">
                 <p className="text-xs text-blue-600    mb-2">Notes</p>
                 <p className="text-slate-700 text-sm leading-relaxed">{receipt.notes}</p>
               </div>
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-3 justify-end pt-6 border-t border-slate-200">
+            <div className="flex gap-2 justify-end pt-6 border-t border-slate-200">
               <button
                 onClick={handleExportPDF}
                 disabled={exporting}

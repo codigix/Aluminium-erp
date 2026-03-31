@@ -65,24 +65,24 @@ const DesignDashboard = ({ apiRequest }) => {
   };
 
   const StatCard = ({ title, count, subtitle, color, icon: Icon, trend }) => (
-    <div className="bg-white rounded-[32px] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
-      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
+    <div className="bg-white rounded  p-2 border border-slate-100 shadow-sm hover: transition-all group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
       
       <div className="flex items-start justify-between relative z-10">
         <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</p>
+          <p className="text-xs  text-slate-400   mb-1">{title}</p>
           <div className="flex items-baseline gap-2">
-            <h3 className="text-3xl font-black text-slate-900">{count}</h3>
+            <h3 className="text-xl  text-slate-900">{count}</h3>
             {trend && (
-              <span className={`flex items-center text-[10px] font-bold ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+              <span className={`flex items-center text-xs  ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {trend > 0 ? <TrendingUp className="w-3 h-3 mr-0.5" /> : <TrendingDown className="w-3 h-3 mr-0.5" />}
                 {Math.abs(trend)}%
               </span>
             )}
           </div>
-          <p className="text-[10px] text-slate-500 mt-1 font-medium">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
         </div>
-        <div className={`p-4 rounded-2xl ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
+        <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
           <Icon className="w-6 h-6" />
         </div>
       </div>
@@ -91,46 +91,46 @@ const DesignDashboard = ({ apiRequest }) => {
 
   if (loading || !stats) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-xs text-slate-500 font-bold tracking-widest uppercase">Initializing Design Studio Hub...</p>
+      <div className="flex flex-col items-center justify-center p-22 space-y-2">
+        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
+        <p className="text-xs text-slate-500   ">Initializing Design Studio Hub...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-2 pb-12">
       {/* Professional Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full -mr-32 -mt-32 blur-3xl" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100  relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded -mr-32 -mt-32 blur-3xl" />
         <div className="relative z-10 flex items-center gap-6">
-          <div className="p-4 bg-indigo-600 rounded-3xl shadow-xl shadow-indigo-200">
-            <Palette className="w-10 h-10 text-white" />
+          <div className="p-2 bg-indigo-600 rounded shadow-indigo-200">
+            <Palette className="w-5 h-5 text-white" />
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Design Studio</h1>
-              <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-100">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl  text-slate-900 ">Design Studio</h1>
+              <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-xs    border border-indigo-100">
                 Engineering
               </span>
             </div>
-            <div className="flex items-center gap-4 mt-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-1.5 text-xs  text-slate-400  ">
                 <Clock className="w-3.5 h-3.5" />
                 Updated {lastUpdated.toLocaleTimeString()}
               </div>
-              <div className="w-1 h-1 rounded-full bg-slate-200" />
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+              <div className="w-1 h-1 rounded bg-slate-200" />
+              <div className="flex items-center gap-1.5 text-xs  text-emerald-500  ">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 BOM Approval Rate: 94%
               </div>
             </div>
           </div>
         </div>
-        <div className="relative z-10 flex items-center gap-3">
+        <div className="relative z-10 flex items-center gap-2">
           <button 
             onClick={fetchDashboardData}
-            className="flex items-center gap-2 px-5 py-3 bg-slate-50 text-slate-600 rounded-2xl text-xs font-black hover:bg-slate-100 transition-all border border-slate-200"
+            className="flex items-center gap-2 px-5 p-2 bg-slate-50 text-slate-600 rounded text-xs  hover:bg-slate-100 transition-all border border-slate-200"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             REFRESH DATA
@@ -148,14 +148,14 @@ const DesignDashboard = ({ apiRequest }) => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Release Chart */}
-        <div className="xl:col-span-2 bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm">
+        <div className="xl:col-span-2 bg-white rounded] p-2 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-10">
             <div>
-              <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <h3 className="text-md  text-slate-900 tracking-tight flex items-center gap-2">
                 <TrendingUp className="w-6 h-6 text-indigo-600" />
                 Engineering velocity
               </h3>
-              <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">PROJECT RELEASE THROUGHPUT</p>
+              <p className="text-xs text-slate-500   mt-1 ">PROJECT RELEASE THROUGHPUT</p>
             </div>
           </div>
           <div className="h-[300px]">
@@ -178,9 +178,9 @@ const DesignDashboard = ({ apiRequest }) => {
         </div>
 
         {/* Design Health */}
-        <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Engineering Health</h3>
-          <div className="space-y-6 flex-1">
+        <div className="bg-white rounded] p-2 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-md  text-slate-900  mb-2">Engineering Health</h3>
+          <div className="space-y-2 flex-1">
             {(stats.health || [
               { label: 'BOM Accuracy', value: 0, color: 'bg-indigo-500' },
               { label: 'Timeline Adherence', value: 0, color: 'bg-emerald-500' },
@@ -189,11 +189,11 @@ const DesignDashboard = ({ apiRequest }) => {
             ]).map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <div className="flex justify-between items-end">
-                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{item.label}</span>
-                  <span className="text-lg font-black text-slate-900">{item.value}%</span>
+                  <span className="text-xs   text-slate-500  ">{item.label}</span>
+                  <span className="text-md  text-slate-900">{item.value}%</span>
                 </div>
-                <div className="h-3 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                  <div className={`h-full ${item.color} rounded-full transition-all duration-1000`} style={{ width: `${item.value}%` }} />
+                <div className="h-3 w-full bg-slate-50 rounded overflow-hidden border border-slate-100">
+                  <div className={`h-full ${item.color} rounded transition-all duration-1000`} style={{ width: `${item.value}%` }} />
                 </div>
               </div>
             ))}
@@ -202,32 +202,32 @@ const DesignDashboard = ({ apiRequest }) => {
       </div>
 
       {/* Pending Design Tasks */}
-      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+      <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
           <div>
-            <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <h3 className="text-xs  text-slate-900 tracking-tight flex items-center gap-2">
               <PencilRuler className="w-4 h-4 text-indigo-600" />
               CRITICAL DESIGN QUEUE
             </h3>
-            <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-widest">AWAITING DRAWINGS & BOM RELEASES</p>
+            <p className="text-xs text-slate-500  mt-0.5  ">AWAITING DRAWINGS & BOM RELEASES</p>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-50 bg-slate-50/20">
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Project Code</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Client</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Deadline</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
+                <th className="px-8 py-4 text-xs  text-slate-400  ">Project Code</th>
+                <th className="px-8 py-4 text-xs  text-slate-400  ">Client</th>
+                <th className="px-8 py-4 text-xs  text-slate-400  ">Deadline</th>
+                <th className="px-8 py-4 text-xs  text-slate-400  ">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {(stats.pendingTasks || []).map((task, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-8 py-4 text-xs font-black text-slate-900">{task.project_code}</td>
-                  <td className="px-8 py-4 text-xs font-medium text-slate-600">{task.company_name}</td>
-                  <td className="px-8 py-4 text-xs font-medium text-slate-600">{task.deadline}</td>
+                  <td className="px-8 py-4 text-xs  text-slate-900">{task.project_code}</td>
+                  <td className="px-8 py-4 text-xs text-slate-600">{task.company_name}</td>
+                  <td className="px-8 py-4 text-xs text-slate-600">{task.deadline}</td>
                   <td className="px-8 py-4">
                     <StatusBadge status={task.status} />
                   </td>
@@ -235,7 +235,7 @@ const DesignDashboard = ({ apiRequest }) => {
               ))}
               {(!stats.pendingTasks || stats.pendingTasks.length === 0) && (
                 <tr>
-                  <td colSpan="4" className="px-8 py-12 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">No pending design projects</td>
+                  <td colSpan="4" className="px-8 py-12 text-center text-xs text-slate-400   ">No pending design projects</td>
                 </tr>
               )}
             </tbody>

@@ -836,82 +836,82 @@ const JobCard = () => {
     const balanceWip = parseFloat(selectedJC.planned_qty || 0) - parseFloat(selectedJC.accepted_qty || 0);
 
     return (
-      <div className="space-y-8 pb-12">
+      <div className="space-y-2 pb-12">
         {/* New Header UI */}
         <div className="flex justify-between items-start">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-slate-900">Production Entry</h1>
-              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-bold uppercase tracking-wider border border-amber-100">
-                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl  text-slate-900">Production Entry</h1>
+              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 text-amber-700 rounded text-xs    border border-amber-100">
+                <span className="w-1.5 h-1.5 bg-amber-500 rounded animate-pulse"></span>
                 {selectedJC.status || 'In-Progress'}
               </span>
             </div>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="text-xs font-medium text-slate-500">{selectedJC.job_card_no}</span>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-slate-500">{selectedJC.job_card_no}</span>
               <span className="text-slate-300">•</span>
-              <span className="text-xs font-medium text-slate-500">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              <span className="text-xs text-slate-500">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
           </div>
           <button
             onClick={() => setShowProductionEntry(false)}
-            className="flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:text-slate-900 transition-colors"
+            className="flex items-center gap-2 p-1.5 text-slate-500 hover:text-slate-900 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-widest">Back</span>
+            <span className="text-xs   ">Back</span>
           </button>
         </div>
 
         {/* Target Item Summary */}
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+        <div className="bg-white p-2 rounded  border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-slate-50 rounded  flex items-center justify-center border border-slate-100">
                 <Box className="w-6 h-6 text-slate-400" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Target Item</p>
-                <h3 className="text-sm font-bold text-slate-900">{selectedJC.item_name}</h3>
-                <p className="text-[11px] font-medium text-slate-500 mt-0.5">{selectedJC.drawing_no || 'S-BASEFRAMEASSEMBLY'}</p>
+                <p className="text-xs  text-slate-400   mb-0.5">Target Item</p>
+                <h3 className="text-xs  text-slate-900">{selectedJC.item_name}</h3>
+                <p className="text-xs  text-slate-500 mt-0.5">{selectedJC.drawing_no || 'S-BASEFRAMEASSEMBLY'}</p>
               </div>
             </div>
 
             <div className="flex gap-10">
               <div className="text-center">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Planned</p>
-                <p className="text-sm font-bold text-slate-900">
-                  {selectedJC.planned_qty} <span className="text-[10px] font-medium text-slate-400">Units</span>
+                <p className="text-xs  text-slate-400   mb-1.5">Planned</p>
+                <p className="text-xs  text-slate-900">
+                  {selectedJC.planned_qty} <span className="text-xs text-slate-400">Units</span>
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Produced</p>
-                <p className="text-sm font-bold text-slate-900">
-                  {selectedJC.produced_qty || 0} <span className="text-[10px] font-medium text-slate-400">Units</span>
+                <p className="text-xs  text-slate-400   mb-1.5">Produced</p>
+                <p className="text-xs  text-slate-900">
+                  {selectedJC.produced_qty || 0} <span className="text-xs text-slate-400">Units</span>
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Accepted</p>
-                <p className="text-sm font-bold text-emerald-600">
-                  {selectedJC.accepted_qty || 0} <span className="text-[10px] font-medium text-emerald-400">Units</span>
+                <p className="text-xs  text-slate-400   mb-1.5">Accepted</p>
+                <p className="text-sm  text-emerald-600">
+                  {selectedJC.accepted_qty || 0} <span className="text-xs text-emerald-400">Units</span>
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 text-indigo-400">Transferred</p>
-                <p className="text-sm font-bold text-indigo-600">
-                  {selectedJC.transferred_qty || 0} <span className="text-[10px] font-medium text-indigo-400">Units</span>
+                <p className="text-xs  text-slate-400   mb-1.5 text-indigo-400">Transferred</p>
+                <p className="text-sm  text-indigo-600">
+                  {selectedJC.transferred_qty || 0} <span className="text-xs text-indigo-400">Units</span>
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1.5">Balance WIP</p>
-                <p className="text-sm font-bold text-amber-600">
-                  {balanceWip.toFixed(2)} <span className="text-[10px] font-medium text-amber-400">Units</span>
+                <p className="text-xs  text-amber-500   mb-1.5">Balance WIP</p>
+                <p className="text-sm  text-amber-600">
+                  {balanceWip.toFixed(2)} <span className="text-xs text-amber-400">Units</span>
                 </p>
               </div>
               <div className="text-right border-l border-slate-100 pl-8">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Current Op</p>
+                <p className="text-xs  text-slate-400   mb-1.5">Current Op</p>
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
-                  <p className="text-sm font-bold text-indigo-600">{selectedJC.operation_name}</p>
+                  <span className="w-2 h-2 bg-indigo-500 rounded animate-pulse"></span>
+                  <p className="text-sm  text-indigo-600">{selectedJC.operation_name}</p>
                 </div>
               </div>
             </div>
@@ -920,44 +920,44 @@ const JobCard = () => {
 
         {/* Efficiency, Quality Yield, Productivity Row */}
         <div className="grid grid-cols-3 gap-6">
-          <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
-            <div className="w-10 h-10 bg-rose-50 rounded-lg flex items-center justify-center text-rose-500">
+          <div className="bg-white p-5 rounded  border border-slate-100 shadow-sm flex items-center gap-2">
+            <div className="w-5 h-5 bg-rose-50 rounded  flex items-center justify-center text-rose-500">
               <Zap className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold text-slate-900">{calculateEfficiency(selectedJC)}%</span>
-                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">0 / 0 MIN</span>
+                <span className="text-xl  text-slate-900">{calculateEfficiency(selectedJC)}%</span>
+                <span className="text-xs text-slate-400  ">0 / 0 MIN</span>
               </div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Efficiency</p>
+              <p className="text-xs  text-slate-400   mt-0.5">Efficiency</p>
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
-            <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center text-amber-500">
+          <div className="bg-white p-5 rounded  border border-slate-100 shadow-sm flex items-center gap-2">
+            <div className="w-5 h-5 bg-amber-50 rounded  flex items-center justify-center text-amber-500">
               <Target className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold text-slate-900">
+                <span className="text-xl  text-slate-900">
                   {selectedJC.planned_qty > 0 ? Math.round(((selectedJC.accepted_qty || 0) / selectedJC.planned_qty) * 100) : 0}%
                 </span>
-                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Acceptance Rate</span>
+                <span className="text-xs text-slate-400  ">Acceptance Rate</span>
               </div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Quality Yield</p>
+              <p className="text-xs  text-slate-400   mt-0.5">Quality Yield</p>
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
-            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-500">
+          <div className="bg-white p-5 rounded  border border-slate-100 shadow-sm flex items-center gap-2">
+            <div className="w-5 h-5 bg-indigo-50 rounded  flex items-center justify-center text-indigo-500">
               <BarChart2 className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold text-slate-900">0</span>
-                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Units Per Hour</span>
+                <span className="text-xl  text-slate-900">0</span>
+                <span className="text-xs text-slate-400  ">Units Per Hour</span>
               </div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Productivity</p>
+              <p className="text-xs  text-slate-400   mt-0.5">Productivity</p>
             </div>
           </div>
         </div>
@@ -965,30 +965,30 @@ const JobCard = () => {
         {/* Sections */}
         <div className="space-y-12 mt-12">
           {/* 1. Add Time Log Section */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-3 px-1">
-              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+          <section className="space-y-2">
+            <div className="flex items-center gap-2 px-1">
+              <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
                 <Plus className="w-4 h-4" />
               </div>
-              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Add Time Log</h2>
+              <h2 className="text-sm  text-slate-800  ">Add Time Log</h2>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6">
                   <FormControl label="Day & Date" required>
                     <div className="flex items-center gap-1">
                       <input 
                         type="number" 
                         value={timeLogForm.day} 
                         onChange={e => setTimeLogForm({...timeLogForm, day: e.target.value})} 
-                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 font-bold" 
+                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 " 
                       />
                       <input 
                         type="date" 
                         value={timeLogForm.logDate} 
                         onChange={e => handleDateChange('time', e.target.value)} 
-                        className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" 
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" 
                       />
                     </div>
                   </FormControl>
@@ -1010,7 +1010,7 @@ const JobCard = () => {
                   </FormControl>
                   <FormControl label="Shift" required>
                     <div className="flex items-center gap-1">
-                      <select value={timeLogForm.shift} onChange={e => setTimeLogForm({...timeLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
+                      <select value={timeLogForm.shift} onChange={e => setTimeLogForm({...timeLogForm, shift: e.target.value})} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
                         <option value="SHIFT_A">A</option>
                         <option value="SHIFT_B">B</option>
                         <option value="SHIFT_C">C</option>
@@ -1022,17 +1022,17 @@ const JobCard = () => {
                   </FormControl>
                   <FormControl label="Produce Qty" required>
                     <div className="relative">
-                      <input type="number" value={timeLogForm.producedQty} onChange={e => setTimeLogForm({...timeLogForm, producedQty: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">Units</span>
+                      <input type="number" value={timeLogForm.producedQty} onChange={e => setTimeLogForm({...timeLogForm, producedQty: e.target.value})} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs  text-slate-400 ">Units</span>
                     </div>
                   </FormControl>
                 </div>
 
                 <div className="flex items-end gap-6">
-                  <div className="flex-1 grid grid-cols-2 gap-4">
+                  <div className="flex-1 grid grid-cols-2 gap-2">
                     <FormControl label="Production Period" required>
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded px-3 py-2 focus-within:border-indigo-500">
+                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded p-2 focus-within:border-indigo-500">
                           <input 
                             type="time" 
                             value={timeLogForm.startTime} 
@@ -1042,14 +1042,14 @@ const JobCard = () => {
                           <select 
                             value={timeLogForm.startAMPM} 
                             onChange={e => setTimeLogForm({...timeLogForm, startAMPM: e.target.value})}
-                            className="text-[10px] font-bold text-slate-400 outline-none ml-1 bg-transparent cursor-pointer"
+                            className="text-xs  text-slate-400 outline-none ml-1 bg-transparent cursor-pointer"
                           >
                             <option value="AM">AM</option>
                             <option value="PM">PM</option>
                           </select>
                         </div>
                         <ChevronRight className="w-3 h-3 text-slate-300" />
-                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded px-3 py-2 focus-within:border-indigo-500">
+                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded p-2 focus-within:border-indigo-500">
                           <input 
                             type="time" 
                             value={timeLogForm.endTime} 
@@ -1059,7 +1059,7 @@ const JobCard = () => {
                           <select 
                             value={timeLogForm.endAMPM} 
                             onChange={e => setTimeLogForm({...timeLogForm, endAMPM: e.target.value})}
-                            className="text-[10px] font-bold text-slate-400 outline-none ml-1 bg-transparent cursor-pointer"
+                            className="text-xs  text-slate-400 outline-none ml-1 bg-transparent cursor-pointer"
                           >
                             <option value="AM">AM</option>
                             <option value="PM">PM</option>
@@ -1072,13 +1072,13 @@ const JobCard = () => {
                         type="number" 
                         value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM)} 
                         readOnly 
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none font-bold text-slate-600" 
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600" 
                       />
                     </FormControl>
                   </div>
                   <button 
                     onClick={() => addTimeLog(timeLogForm)}
-                    className="px-10 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
+                    className="px-10 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
                   >
                     <Monitor className="w-4 h-4" />
                     Record Time
@@ -1089,12 +1089,12 @@ const JobCard = () => {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="border-b border-slate-100">
                       <tr>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Day</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date / Shift</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Operator</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Time Interval</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Produced Qty</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Action</th>
+                        <th className="p-2  text-slate-400   text-xs">Day</th>
+                        <th className="p-2  text-slate-400   text-xs">Date / Shift</th>
+                        <th className="p-2  text-slate-400   text-xs">Operator</th>
+                        <th className="p-2  text-slate-400   text-xs text-center">Time Interval</th>
+                        <th className="p-2  text-slate-400   text-xs text-right">Produced Qty</th>
+                        <th className="p-2  text-slate-400   text-xs text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -1110,24 +1110,24 @@ const JobCard = () => {
                           if (isEditing) {
                             return (
                               <tr key={log.id} className="bg-indigo-50/30">
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <input 
                                     type="number" 
                                     value={editTimeLogForm.day} 
-                                    className="w-12 px-1 py-1 border rounded text-[10px]" 
+                                    className="w-12 px-1 py-1 border rounded text-xs" 
                                     onChange={e => setEditTimeLogForm({...editTimeLogForm, day: e.target.value})}
                                   />
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <input 
                                     type="date" 
                                     value={editTimeLogForm.logDate} 
-                                    className="block w-full px-1 py-1 border rounded text-[10px] mb-1" 
+                                    className="block w-full px-1 py-1 border rounded text-xs mb-1" 
                                     onChange={e => setEditTimeLogForm({...editTimeLogForm, logDate: e.target.value})}
                                   />
                                   <select 
                                     value={editTimeLogForm.shift} 
-                                    className="w-full px-1 py-1 border rounded text-[10px]"
+                                    className="w-full px-1 py-1 border rounded text-xs"
                                     onChange={e => setEditTimeLogForm({...editTimeLogForm, shift: e.target.value})}
                                   >
                                     <option value="SHIFT_A">A</option>
@@ -1135,37 +1135,37 @@ const JobCard = () => {
                                     <option value="SHIFT_C">C</option>
                                   </select>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <select 
                                     value={editTimeLogForm.operatorId} 
-                                    className="w-full px-1 py-1 border rounded text-[10px]"
+                                    className="w-full px-1 py-1 border rounded text-xs"
                                     onChange={e => setEditTimeLogForm({...editTimeLogForm, operatorId: e.target.value})}
                                   >
                                     {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                                   </select>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <div className="flex items-center gap-1 justify-center">
-                                    <input type="time" value={editTimeLogForm.startTime} className="w-16 px-1 py-1 border rounded text-[10px]" onChange={e => setEditTimeLogForm({...editTimeLogForm, startTime: e.target.value})} />
-                                    <select value={editTimeLogForm.startAMPM} className="px-1 py-1 border rounded text-[10px]" onChange={e => setEditTimeLogForm({...editTimeLogForm, startAMPM: e.target.value})}>
+                                    <input type="time" value={editTimeLogForm.startTime} className="w-16 px-1 py-1 border rounded text-xs" onChange={e => setEditTimeLogForm({...editTimeLogForm, startTime: e.target.value})} />
+                                    <select value={editTimeLogForm.startAMPM} className="px-1 py-1 border rounded text-xs" onChange={e => setEditTimeLogForm({...editTimeLogForm, startAMPM: e.target.value})}>
                                       <option value="AM">AM</option><option value="PM">PM</option>
                                     </select>
                                     <ChevronRight className="w-3 h-3 text-slate-300" />
-                                    <input type="time" value={editTimeLogForm.endTime} className="w-16 px-1 py-1 border rounded text-[10px]" onChange={e => setEditTimeLogForm({...editTimeLogForm, endTime: e.target.value})} />
-                                    <select value={editTimeLogForm.endAMPM} className="px-1 py-1 border rounded text-[10px]" onChange={e => setEditTimeLogForm({...editTimeLogForm, endAMPM: e.target.value})}>
+                                    <input type="time" value={editTimeLogForm.endTime} className="w-16 px-1 py-1 border rounded text-xs" onChange={e => setEditTimeLogForm({...editTimeLogForm, endTime: e.target.value})} />
+                                    <select value={editTimeLogForm.endAMPM} className="px-1 py-1 border rounded text-xs" onChange={e => setEditTimeLogForm({...editTimeLogForm, endAMPM: e.target.value})}>
                                       <option value="AM">AM</option><option value="PM">PM</option>
                                     </select>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <input 
                                     type="number" 
                                     value={editTimeLogForm.producedQty} 
-                                    className="w-full px-1 py-1 border rounded text-[10px] text-right font-bold" 
+                                    className="w-full px-1 py-1 border rounded text-xs text-right " 
                                     onChange={e => setEditTimeLogForm({...editTimeLogForm, producedQty: e.target.value})}
                                   />
                                 </td>
-                                <td className="px-4 py-3 text-right">
+                                <td className="p-2 text-right">
                                   <div className="flex items-center justify-end gap-2">
                                     <button onClick={() => updateTimeLog(log.id, editTimeLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Save className="w-4 h-4" /></button>
                                     <button onClick={() => setEditingTimeLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-colors"><X className="w-4 h-4" /></button>
@@ -1177,31 +1177,31 @@ const JobCard = () => {
 
                           return (
                             <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <span className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-500">
+                              <td className="p-2">
+                                <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-500">
                                   {day}
                                 </span>
                               </td>
-                              <td className="px-4 py-3">
-                                <div className="font-bold text-slate-700">{new Date(log.log_date).toLocaleDateString('en-GB')}</div>
-                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{log.shift}</div>
+                              <td className="p-2">
+                                <div className=" text-slate-700">{new Date(log.log_date).toLocaleDateString('en-GB')}</div>
+                                <div className="text-xs text-slate-400   ">{log.shift}</div>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="p-2">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center text-[10px] font-bold text-slate-600">
+                                  <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-600">
                                     {log.operator_name?.[0]}
                                   </div>
-                                  <span className="font-medium text-slate-600">{log.operator_name}</span>
+                                  <span className="text-slate-600">{log.operator_name}</span>
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-center">
-                                <div className="font-medium text-slate-600">{formatLocalTime(log.start_time)} - {formatLocalTime(log.end_time)}</div>
-                                <div className="text-[10px] text-indigo-500 font-bold">{calculateISODuration(log.start_time, log.end_time)} mins</div>
+                              <td className="p-2 text-center">
+                                <div className="text-slate-600">{formatLocalTime(log.start_time)} - {formatLocalTime(log.end_time)}</div>
+                                <div className="text-xs text-indigo-500 ">{calculateISODuration(log.start_time, log.end_time)} mins</div>
                               </td>
-                              <td className="px-4 py-3 text-right font-bold text-indigo-600 uppercase tracking-wider">
+                              <td className="p-2 text-right  text-indigo-600  ">
                                 {parseFloat(log.produced_qty).toFixed(3)} UNITS
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td className="p-2 text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <button onClick={() => setViewingTimeLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"><Eye className="w-3.5 h-3.5" /></button>
                                   <button onClick={() => handleEditTimeLog(log)} className="p-1.5 text-slate-400 hover:text-amber-600 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
@@ -1217,19 +1217,19 @@ const JobCard = () => {
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <div className="flex items-center gap-2 text-xs  text-slate-400  ">
                     <span>Rows per page:</span>
                     <select className="bg-transparent outline-none cursor-pointer">
                       <option>10</option>
                     </select>
                   </div>
                   <div className="flex items-center gap-6">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <span className="text-xs  text-slate-400  ">
                       Page 1 of {Math.ceil(logs.timeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.timeLogs.length} total)</span>
                     </span>
                     <div className="flex items-center gap-2">
                       <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                      <button className="px-4 py-1 border border-slate-200 rounded text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-colors">Next</button>
+                      <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
                     </div>
                   </div>
                 </div>
@@ -1238,36 +1238,36 @@ const JobCard = () => {
           </section>
 
           {/* 2. Quality & Rejection Entry Section */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-3 px-1">
-              <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
+          <section className="space-y-2">
+            <div className="flex items-center gap-2 px-1">
+              <div className="w-8 h-8 bg-emerald-50 rounded  flex items-center justify-center text-emerald-600">
                 <ShieldCheck className="w-4 h-4" />
               </div>
-              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Quality & Rejection Entry</h2>
+              <h2 className="text-sm  text-slate-800  ">Quality & Rejection Entry</h2>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-7 gap-4 mb-6 border-b border-slate-50 pb-6">
+                <div className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-6 border-b border-slate-50 pb-6">
                   <FormControl label="Day & Date" required>
                     <div className="flex items-center gap-1">
                       <input 
                         type="number" 
                         value={qualityLogForm.day} 
                         onChange={e => setQualityLogForm({...qualityLogForm, day: e.target.value})} 
-                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 font-bold" 
+                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 " 
                       />
                       <input 
                         type="date" 
                         value={qualityLogForm.checkDate} 
                         onChange={e => handleDateChange('quality', e.target.value)} 
-                        className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500" 
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500" 
                       />
                     </div>
                   </FormControl>
                   <FormControl label="Shift" required>
                     <div className="flex items-center gap-1">
-                      <select value={qualityLogForm.shift} onChange={e => setQualityLogForm({...qualityLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 appearance-none">
+                      <select value={qualityLogForm.shift} onChange={e => setQualityLogForm({...qualityLogForm, shift: e.target.value})} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 appearance-none">
                         <option value="SHIFT_A">A</option>
                         <option value="SHIFT_B">B</option>
                         <option value="SHIFT_C">C</option>
@@ -1278,10 +1278,10 @@ const JobCard = () => {
                     </div>
                   </FormControl>
                   <FormControl label="Produce Qty" required>
-                    <input type="number" value={qualityLogForm.inspectedQty} onChange={e => setQualityLogForm({...qualityLogForm, inspectedQty: e.target.value})} className="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded text-xs outline-none font-bold text-indigo-600" />
+                    <input type="number" value={qualityLogForm.inspectedQty} onChange={e => setQualityLogForm({...qualityLogForm, inspectedQty: e.target.value})} className="w-full p-2 bg-indigo-50 border border-indigo-100 rounded text-xs outline-none  text-indigo-600" />
                   </FormControl>
                   <FormControl label="Rejection Reason">
-                    <select value={qualityLogForm.rejectionReason} onChange={e => setQualityLogForm({...qualityLogForm, rejectionReason: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500">
+                    <select value={qualityLogForm.rejectionReason} onChange={e => setQualityLogForm({...qualityLogForm, rejectionReason: e.target.value})} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500">
                       <option value="">Select Reason</option>
                       <option value="Size/Dimension Error">Size/Dimension Error</option>
                       <option value="Surface Finish Poor">Surface Finish Poor</option>
@@ -1294,36 +1294,36 @@ const JobCard = () => {
                     </select>
                   </FormControl>
                   <FormControl label="Accepted" required>
-                    <input type="number" value={qualityLogForm.acceptedQty} onChange={e => setQualityLogForm({...qualityLogForm, acceptedQty: e.target.value})} className="w-full px-3 py-2 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-600 outline-none font-bold" />
+                    <input type="number" value={qualityLogForm.acceptedQty} onChange={e => setQualityLogForm({...qualityLogForm, acceptedQty: e.target.value})} className="w-full p-2 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-600 outline-none " />
                   </FormControl>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                      Rejected <span className="text-slate-300 font-normal capitalize">(Scrap)</span> <span className="text-rose-400 font-bold">*</span>
+                    <label className="text-xs  text-slate-400   flex items-center gap-1">
+                      Rejected <span className="text-slate-300 font-normal capitalize">(Scrap)</span> <span className="text-rose-400 ">*</span>
                     </label>
                     <div className="flex items-center gap-2">
-                      <input type="number" value={qualityLogForm.rejectedQty} onChange={e => setQualityLogForm({...qualityLogForm, rejectedQty: e.target.value})} className="flex-1 px-3 py-2 bg-rose-50 border border-rose-100 rounded text-xs text-rose-600 outline-none font-bold" />
-                      <input type="number" readOnly value={qualityLogForm.scrapQty} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none font-bold text-slate-400" />
+                      <input type="number" value={qualityLogForm.rejectedQty} onChange={e => setQualityLogForm({...qualityLogForm, rejectedQty: e.target.value})} className="flex-1 p-2 bg-rose-50 border border-rose-100 rounded text-xs text-rose-600 outline-none " />
+                      <input type="number" readOnly value={qualityLogForm.scrapQty} className="flex-1 p-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none  text-slate-400" />
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-6 pt-2">
                   <div className="flex-1">
-                    <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
-                      <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="flex items-start gap-2 p-2 bg-amber-50 rounded  border border-amber-100">
+                      <div className="w-5 h-5 bg-amber-100 rounded flex items-center justify-center shrink-0 mt-0.5">
                         <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
                       </div>
                       <div>
-                        <p className="text-[11px] font-bold text-amber-800 tracking-tight">Quality Gate Active</p>
-                        <p className="text-[10px] text-amber-700 leading-relaxed mt-0.5">
-                          Only <span className="font-bold uppercase tracking-widest text-[9px] px-1 bg-amber-100 rounded-sm">Approved</span> quality inspection records contribute to the <span className="font-bold">Accepted Quantity</span> of this job card. Pending records will block the progression to subsequent operations.
+                        <p className="text-xs   text-amber-800 tracking-tight">Quality Gate Active</p>
+                        <p className="text-xs text-amber-700 leading-relaxed mt-0.5">
+                          Only <span className="   text-xs px-1 bg-amber-100 rounded-sm">Approved</span> quality inspection records contribute to the <span className="">Accepted Quantity</span> of this job card. Pending records will block the progression to subsequent operations.
                         </p>
                       </div>
                     </div>
                   </div>
                   <button 
                     onClick={() => addQualityLog({...qualityLogForm, status: 'PENDING'})}
-                    className="px-10 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-100 flex items-center gap-2 h-[38px]"
+                    className="px-10 py-2.5 bg-emerald-600 text-white rounded  hover:bg-emerald-700 transition-all text-xs    shadow-lg shadow-emerald-100 flex items-center gap-2 h-[38px]"
                   >
                     <Save className="w-4 h-4" />
                     Save Entry
@@ -1334,14 +1334,14 @@ const JobCard = () => {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="border-b border-slate-100">
                       <tr>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Day</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date / Shift</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Status</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Notes</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Accepted</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Rejected</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Scrap</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Actions</th>
+                        <th className="p-2  text-slate-400   text-xs">Day</th>
+                        <th className="p-2  text-slate-400   text-xs">Date / Shift</th>
+                        <th className="p-2  text-slate-400   text-xs">Status</th>
+                        <th className="p-2  text-slate-400   text-xs">Notes</th>
+                        <th className="p-2  text-slate-400   text-xs text-center">Accepted</th>
+                        <th className="p-2  text-slate-400   text-xs text-center">Rejected</th>
+                        <th className="p-2  text-slate-400   text-xs text-center">Scrap</th>
+                        <th className="p-2  text-slate-400   text-xs text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -1357,24 +1357,24 @@ const JobCard = () => {
                           if (isEditing) {
                             return (
                               <tr key={log.id} className="bg-emerald-50/30">
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <input 
                                     type="number" 
                                     value={editQualityLogForm.day} 
-                                    className="w-12 px-1 py-1 border rounded text-[10px]" 
+                                    className="w-12 px-1 py-1 border rounded text-xs" 
                                     onChange={e => setEditQualityLogForm({...editQualityLogForm, day: e.target.value})}
                                   />
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <input 
                                     type="date" 
                                     value={editQualityLogForm.checkDate} 
-                                    className="block w-full px-1 py-1 border rounded text-[10px] mb-1" 
+                                    className="block w-full px-1 py-1 border rounded text-xs mb-1" 
                                     onChange={e => setEditQualityLogForm({...editQualityLogForm, checkDate: e.target.value})}
                                   />
                                   <select 
                                     value={editQualityLogForm.shift} 
-                                    className="w-full px-1 py-1 border rounded text-[10px]"
+                                    className="w-full px-1 py-1 border rounded text-xs"
                                     onChange={e => setEditQualityLogForm({...editQualityLogForm, shift: e.target.value})}
                                   >
                                     <option value="SHIFT_A">A</option>
@@ -1382,40 +1382,40 @@ const JobCard = () => {
                                     <option value="SHIFT_C">C</option>
                                   </select>
                                 </td>
-                                <td className="px-4 py-3" colSpan="2">
+                                <td className="p-2" colSpan="2">
                                   <input 
                                     type="text" 
                                     placeholder="Notes..."
                                     value={editQualityLogForm.notes || ''} 
-                                    className="w-full px-1 py-1 border rounded text-[10px]" 
+                                    className="w-full px-1 py-1 border rounded text-xs" 
                                     onChange={e => setEditQualityLogForm({...editQualityLogForm, notes: e.target.value})}
                                   />
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <input 
                                     type="number" 
                                     value={editQualityLogForm.acceptedQty} 
-                                    className="w-full px-1 py-1 border rounded text-[10px] text-emerald-600 font-bold text-center" 
+                                    className="w-full px-1 py-1 border rounded text-xs text-emerald-600  text-center" 
                                     onChange={e => setEditQualityLogForm({...editQualityLogForm, acceptedQty: e.target.value})}
                                   />
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <input 
                                     type="number" 
                                     value={editQualityLogForm.rejectedQty} 
-                                    className="w-full px-1 py-1 border rounded text-[10px] text-rose-600 font-bold text-center" 
+                                    className="w-full px-1 py-1 border rounded text-xs text-rose-600  text-center" 
                                     onChange={e => setEditQualityLogForm({...editQualityLogForm, rejectedQty: e.target.value})}
                                   />
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="p-2">
                                   <input 
                                     type="number" 
                                     value={editQualityLogForm.scrapQty} 
-                                    className="w-full px-1 py-1 border rounded text-[10px] text-slate-600 font-bold text-center" 
+                                    className="w-full px-1 py-1 border rounded text-xs text-slate-600  text-center" 
                                     onChange={e => setEditQualityLogForm({...editQualityLogForm, scrapQty: e.target.value})}
                                   />
                                 </td>
-                                <td className="px-4 py-3 text-right">
+                                <td className="p-2 text-right">
                                   <div className="flex items-center justify-end gap-2">
                                     <button onClick={() => updateQualityLog(log.id, editQualityLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Save className="w-4 h-4" /></button>
                                     <button onClick={() => setEditingQualityLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-colors"><X className="w-4 h-4" /></button>
@@ -1427,17 +1427,17 @@ const JobCard = () => {
 
                           return (
                             <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <span className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-500">
+                              <td className="p-2">
+                                <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-500">
                                   {day}
                                 </span>
                               </td>
-                              <td className="px-4 py-3">
-                                <div className="font-bold text-slate-700">{new Date(log.check_date).toLocaleDateString('en-GB')}</div>
-                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{log.shift}</div>
+                              <td className="p-2">
+                                <div className=" text-slate-700">{new Date(log.check_date).toLocaleDateString('en-GB')}</div>
+                                <div className="text-xs text-slate-400   ">{log.shift}</div>
                               </td>
-                              <td className="px-4 py-3">
-                                <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                              <td className="p-2">
+                                <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs  border ${
                                   log.status?.trim() === 'APPROVED' 
                                     ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
                                     : 'bg-amber-50 text-amber-600 border-amber-100'
@@ -1446,8 +1446,8 @@ const JobCard = () => {
                                   {log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Pending Approval'}
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
-                                <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold border ${
+                              <td className="p-2">
+                                <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs  border ${
                                   (log.rejected_qty > 0 || log.scrap_qty > 0)
                                     ? 'bg-rose-50 text-rose-600 border-rose-100'
                                     : 'bg-emerald-50 text-emerald-600 border-emerald-100'
@@ -1458,16 +1458,16 @@ const JobCard = () => {
                                   {log.rejection_reason || log.notes || 'No notes'}
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-center font-bold text-emerald-600">
+                              <td className="p-2 text-center  text-emerald-600">
                                 {parseFloat(log.accepted_qty).toLocaleString()}
                               </td>
-                              <td className="px-4 py-3 text-center font-bold text-rose-600">
+                              <td className="p-2 text-center  text-rose-600">
                                 {parseFloat(log.rejected_qty).toLocaleString()}
                               </td>
-                              <td className="px-4 py-3 text-center font-bold text-slate-600">
+                              <td className="p-2 text-center  text-slate-600">
                                 {parseFloat(log.scrap_qty).toLocaleString()}
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td className="p-2 text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <button onClick={() => setViewingQualityLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
                                   <button onClick={() => handleEditQualityLog(log)} className="p-1.5 text-slate-400 hover:text-amber-600 transition-colors" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
@@ -1493,19 +1493,19 @@ const JobCard = () => {
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <div className="flex items-center gap-2 text-xs  text-slate-400  ">
                     <span>Rows per page:</span>
                     <select className="bg-transparent outline-none cursor-pointer">
                       <option>10</option>
                     </select>
                   </div>
                   <div className="flex items-center gap-6">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <span className="text-xs  text-slate-400  ">
                       Page 1 of {Math.ceil(logs.qualityLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.qualityLogs.length} total)</span>
                     </span>
                     <div className="flex items-center gap-2">
                       <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                      <button className="px-4 py-1 border border-slate-200 rounded text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-colors">Next</button>
+                      <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
                     </div>
                   </div>
                 </div>
@@ -1514,36 +1514,36 @@ const JobCard = () => {
           </section>
 
           {/* 3. Operational Downtime Section */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-3 px-1">
-              <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600">
+          <section className="space-y-2">
+            <div className="flex items-center gap-2 px-1">
+              <div className="w-8 h-8 bg-amber-50 rounded  flex items-center justify-center text-amber-600">
                 <AlertTriangle className="w-4 h-4" />
               </div>
-              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Operational Downtime</h2>
+              <h2 className="text-sm  text-slate-800  ">Operational Downtime</h2>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6 border-b border-slate-50 pb-6">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6 border-b border-slate-50 pb-6">
                   <FormControl label="Day & Date" required>
                     <div className="flex items-center gap-1">
                       <input 
                         type="number" 
                         value={downtimeLogForm.day} 
                         onChange={e => setDowntimeLogForm({...downtimeLogForm, day: e.target.value})} 
-                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 font-bold" 
+                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 " 
                       />
                       <input 
                         type="date" 
                         value={downtimeLogForm.downtimeDate} 
                         onChange={e => handleDateChange('downtime', e.target.value)} 
-                        className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500" 
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500" 
                       />
                     </div>
                   </FormControl>
                   <FormControl label="Shift" required>
                     <div className="flex items-center gap-1">
-                      <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({...downtimeLogForm, shift: e.target.value})} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
+                      <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({...downtimeLogForm, shift: e.target.value})} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
                         <option value="SHIFT_A">A</option>
                         <option value="SHIFT_B">B</option>
                         <option value="SHIFT_C">C</option>
@@ -1554,7 +1554,7 @@ const JobCard = () => {
                     </div>
                   </FormControl>
                   <FormControl label="Downtime Type" required>
-                    <select value={downtimeLogForm.downtimeType} onChange={e => setDowntimeLogForm({...downtimeLogForm, downtimeType: e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500">
+                    <select value={downtimeLogForm.downtimeType} onChange={e => setDowntimeLogForm({...downtimeLogForm, downtimeType: e.target.value})} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500">
                       <option value="">Select Type</option>
                       <option value="Planned Downtime">Planned Downtime</option>
                       <option value="Unplanned Downtime">Unplanned Downtime</option>
@@ -1562,7 +1562,7 @@ const JobCard = () => {
                     </select>
                   </FormControl>
                   <FormControl label="Start Time" required>
-                    <div className="flex items-center bg-white border border-slate-200 rounded px-3 py-2 focus-within:border-amber-500">
+                    <div className="flex items-center bg-white border border-slate-200 rounded p-2 focus-within:border-amber-500">
                       <input 
                         type="time" 
                         value={downtimeLogForm.startTime} 
@@ -1572,7 +1572,7 @@ const JobCard = () => {
                       <select 
                         value={downtimeLogForm.startAMPM} 
                         onChange={e => setDowntimeLogForm({...downtimeLogForm, startAMPM: e.target.value})}
-                        className="text-[10px] font-bold text-amber-600 outline-none ml-1 bg-transparent cursor-pointer"
+                        className="text-xs  text-amber-600 outline-none ml-1 bg-transparent cursor-pointer"
                       >
                         <option value="AM">AM</option>
                         <option value="PM">PM</option>
@@ -1580,7 +1580,7 @@ const JobCard = () => {
                     </div>
                   </FormControl>
                   <FormControl label="End Time" required>
-                    <div className="flex items-center bg-white border border-slate-200 rounded px-3 py-2 focus-within:border-amber-500">
+                    <div className="flex items-center bg-white border border-slate-200 rounded p-2 focus-within:border-amber-500">
                       <input 
                         type="time" 
                         value={downtimeLogForm.endTime} 
@@ -1590,7 +1590,7 @@ const JobCard = () => {
                       <select 
                         value={downtimeLogForm.endAMPM} 
                         onChange={e => setDowntimeLogForm({...downtimeLogForm, endAMPM: e.target.value})}
-                        className="text-[10px] font-bold text-amber-600 outline-none ml-1 bg-transparent cursor-pointer"
+                        className="text-xs  text-amber-600 outline-none ml-1 bg-transparent cursor-pointer"
                       >
                         <option value="AM">AM</option>
                         <option value="PM">PM</option>
@@ -1602,7 +1602,7 @@ const JobCard = () => {
                       type="number" 
                       readOnly 
                       value={calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM)} 
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none font-bold text-slate-400" 
+                      className="w-full p-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none  text-slate-400" 
                     />
                   </FormControl>
                 </div>
@@ -1610,13 +1610,13 @@ const JobCard = () => {
                 <div className="flex items-center justify-between gap-6">
                   <div className="flex-1">
                     {logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED') && (
-                      <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
-                        <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="flex items-start gap-2 p-2 bg-amber-50 rounded  border border-amber-100">
+                        <div className="w-5 h-5 bg-amber-100 rounded flex items-center justify-center shrink-0 mt-0.5">
                           <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
                         </div>
                         <div>
-                          <p className="text-[11px] font-bold text-amber-800 tracking-tight uppercase tracking-widest">QC Verification Pending</p>
-                          <p className="text-[10px] text-amber-700 leading-relaxed mt-0.5 font-bold">
+                          <p className="text-xs   text-amber-800 tracking-tight  ">QC Verification Pending</p>
+                          <p className="text-xs text-amber-700 leading-relaxed mt-0.5 ">
                             Cannot record downtime while quality logs are pending approval. Please verify quality entries first.
                           </p>
                         </div>
@@ -1626,7 +1626,7 @@ const JobCard = () => {
                   <button 
                     onClick={() => addDowntimeLog(downtimeLogForm)}
                     disabled={logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')}
-                    className={`px-10 py-2.5 rounded-lg transition-all text-xs font-bold uppercase tracking-widest shadow-lg flex items-center gap-2 h-[38px] ${
+                    className={`px-10 py-2.5 rounded  transition-all text-xs    shadow-lg flex items-center gap-2 h-[38px] ${
                       logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')
                         ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                         : 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-100'
@@ -1641,12 +1641,12 @@ const JobCard = () => {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="border-b border-slate-100">
                       <tr>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Day</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Date / Shift</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Category / Reason</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-center">Interval</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Duration</th>
-                        <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Action</th>
+                        <th className="p-2  text-slate-400   text-xs">Day</th>
+                        <th className="p-2  text-slate-400   text-xs">Date / Shift</th>
+                        <th className="p-2  text-slate-400   text-xs">Category / Reason</th>
+                        <th className="p-2  text-slate-400   text-xs text-center">Interval</th>
+                        <th className="p-2  text-slate-400   text-xs text-right">Duration</th>
+                        <th className="p-2  text-slate-400   text-xs text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -1657,24 +1657,24 @@ const JobCard = () => {
                       ) : (
                         logs.downtimeLogs.map((log, index) => (
                           <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-4 py-3">
-                              <span className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-500">
+                            <td className="p-2">
+                              <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-500">
                                 {log.day || '-'}
                               </span>
                             </td>
-                            <td className="px-4 py-3">
-                              <div className="font-bold text-slate-700">{new Date(log.downtime_date).toLocaleDateString('en-GB')}</div>
-                              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{log.shift}</div>
+                            <td className="p-2">
+                              <div className=" text-slate-700">{new Date(log.downtime_date).toLocaleDateString('en-GB')}</div>
+                              <div className="text-xs text-slate-400   ">{log.shift}</div>
                             </td>
-                            <td className="px-4 py-3 font-bold text-amber-600 uppercase tracking-wider">{log.downtime_type}</td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="font-medium text-slate-600">{formatLocalTime(log.start_time)} - {formatLocalTime(log.end_time)}</div>
-                              <div className="text-[10px] text-amber-500 font-bold">{calculateISODuration(log.start_time, log.end_time)} mins</div>
+                            <td className="p-2  text-amber-600  ">{log.downtime_type}</td>
+                            <td className="p-2 text-center">
+                              <div className="text-slate-600">{formatLocalTime(log.start_time)} - {formatLocalTime(log.end_time)}</div>
+                              <div className="text-xs text-amber-500 ">{calculateISODuration(log.start_time, log.end_time)} mins</div>
                             </td>
-                            <td className="px-4 py-3 text-right font-bold text-slate-700">
+                            <td className="p-2 text-right  text-slate-700">
                               {calculateISODuration(log.start_time, log.end_time)} Min
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="p-2 text-right">
                               <button onClick={() => deleteDowntimeLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1687,19 +1687,19 @@ const JobCard = () => {
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <div className="flex items-center gap-2 text-xs  text-slate-400  ">
                     <span>Rows per page:</span>
                     <select className="bg-transparent outline-none cursor-pointer">
                       <option>10</option>
                     </select>
                   </div>
                   <div className="flex items-center gap-6">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <span className="text-xs  text-slate-400  ">
                       Page 1 of {Math.ceil(logs.downtimeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.downtimeLogs.length} total)</span>
                     </span>
                     <div className="flex items-center gap-2">
                       <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                      <button className="px-4 py-1 border border-slate-200 rounded text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-colors">Next</button>
+                      <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
                     </div>
                   </div>
                 </div>
@@ -1708,20 +1708,20 @@ const JobCard = () => {
           </section>
 
           {/* 4. Next Stage Configuration Section */}
-          <section className="space-y-6">
+          <section className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
                   <Play className="w-4 h-4" />
                 </div>
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Next Stage Configuration</h2>
-                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold uppercase border border-emerald-100">Active</span>
+                <h2 className="text-sm  text-slate-800  ">Next Stage Configuration</h2>
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-xs   border border-emerald-100">Active</span>
               </div>
               <div className="flex items-center gap-6">
                 <button 
                   onClick={handleReadyForDispatch}
                   disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
-                  className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg transition-all ${
+                  className={`flex items-center gap-2 p-1.5 border rounded  transition-all ${
                     logs.qualityLogs.some(log => log.status !== 'APPROVED')
                       ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
                       : 'bg-white border-emerald-100 text-emerald-600 shadow-sm hover:bg-emerald-50'
@@ -1729,10 +1729,10 @@ const JobCard = () => {
                   title={logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'Approve all quality records to proceed' : 'Mark Ready'}
                 >
                   <Zap className={`w-3.5 h-3.5 ${logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'text-slate-200' : 'text-emerald-500 animate-pulse'}`} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Ready for Dispatch</span>
+                  <span className="text-xs   ">Ready for Dispatch</span>
                 </button>
                 <div className="text-right">
-                  <p className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <p className="flex items-center gap-1.5 text-xs  text-slate-400  ">
                     <Box className="w-3 h-3" />
                     Transferred so far: <span className="text-slate-700">{ (selectedJC.transferred_qty || 0).toFixed(2) }</span>
                   </p>
@@ -1740,9 +1740,9 @@ const JobCard = () => {
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-400 italic px-1">Specify destination and operational parameters for the next manufacturing phase</p>
+            <p className="text-xs  text-slate-400 italic px-1">Specify destination and operational parameters for the next manufacturing phase</p>
 
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm p-2">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <FormControl label="Next Operation" required>
                   <SearchableSelect
@@ -1769,20 +1769,20 @@ const JobCard = () => {
                   />
                 </FormControl>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Execution Mode:</label>
-                  <div className="flex items-center gap-2 p-1 bg-slate-50 rounded-lg w-fit">
+                  <label className="text-xs  text-slate-400  ">Execution Mode:</label>
+                  <div className="flex items-center gap-2 p-1 bg-slate-50 rounded  w-fit">
                     <button 
                       onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'In-house' })}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all ${nextStageForm.executionMode === 'In-house' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                      className={`flex items-center gap-2 p-1.5 rounded-md text-xs    transition-all ${nextStageForm.executionMode === 'In-house' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                     >
-                      <span className={`w-2.5 h-2.5 rounded-full ${nextStageForm.executionMode === 'In-house' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
+                      <span className={`w-2.5 h-2.5 rounded ${nextStageForm.executionMode === 'In-house' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
                       In-house
                     </button>
                     <button 
                       onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'Outsource' })}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all ${nextStageForm.executionMode === 'Outsource' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                      className={`flex items-center gap-2 p-1.5 rounded-md text-xs    transition-all ${nextStageForm.executionMode === 'Outsource' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                     >
-                      <span className={`w-2.5 h-2.5 rounded-full ${nextStageForm.executionMode === 'Outsource' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
+                      <span className={`w-2.5 h-2.5 rounded ${nextStageForm.executionMode === 'Outsource' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
                       Outsource
                     </button>
                   </div>
@@ -1793,13 +1793,13 @@ const JobCard = () => {
                 <button
                   onClick={handleReadyForDispatch}
                   disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
-                  className={`group relative flex items-center gap-4 px-8 py-3 rounded-xl transition-all ${
+                  className={`group relative flex items-center gap-2 p-2  rounded  transition-all ${
                     logs.qualityLogs.some(log => log.status !== 'APPROVED')
                       ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
                       : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
                   }`}
                 >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                  <div className={`w-8 h-8 rounded  flex items-center justify-center transition-colors ${
                     logs.qualityLogs.some(log => log.status !== 'APPROVED')
                       ? 'bg-slate-100 text-slate-200'
                       : 'bg-white/20 text-white'
@@ -1807,8 +1807,8 @@ const JobCard = () => {
                     <CheckCircle className="w-4 h-4" />
                   </div>
                   <div className="text-left">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Finalize & Dispatch</p>
-                    <p className="text-sm font-bold">Complete Production</p>
+                    <p className="text-xs    opacity-80">Finalize & Dispatch</p>
+                    <p className="text-sm ">Complete Production</p>
                   </div>
                   <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${
                     logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'opacity-20' : 'opacity-100'
@@ -1819,26 +1819,26 @@ const JobCard = () => {
           </section>
 
           {/* 5. Daily Production Report Section */}
-          <section className="space-y-6">
+          <section className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
                   <ClipboardList className="w-4 h-4" />
                 </div>
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Daily Production Report</h2>
+                <h2 className="text-sm  text-slate-800  ">Daily Production Report</h2>
               </div>
               <button 
                 onClick={handleDownloadReport}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors border border-indigo-100"
               >
                 <Download className="w-4 h-4" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Download CSV</span>
+                <span className="text-xs   ">Download CSV</span>
               </button>
             </div>
             
-            <p className="text-[11px] text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
+            <p className="text-xs  text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
 
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
               <div className="p-0">
                 {consolidatedReport.length === 0 ? (
                   <div className="p-12 text-center">
@@ -1849,36 +1849,36 @@ const JobCard = () => {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px]">Date</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px]">Shift</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px]">Operator</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Mins</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Produced</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Accepted</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Rejected</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-center">Scrap</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-right">Downtime</th>
-                          <th className="px-4 py-3 font-bold text-slate-700 uppercase tracking-widest text-[10px] text-right">Actions</th>
+                          <th className="p-2  text-slate-700   text-xs">Date</th>
+                          <th className="p-2  text-slate-700   text-xs">Shift</th>
+                          <th className="p-2  text-slate-700   text-xs">Operator</th>
+                          <th className="p-2  text-slate-700   text-xs text-center">Mins</th>
+                          <th className="p-2  text-slate-700   text-xs text-center">Produced</th>
+                          <th className="p-2  text-slate-700   text-xs text-center">Accepted</th>
+                          <th className="p-2  text-slate-700   text-xs text-center">Rejected</th>
+                          <th className="p-2  text-slate-700   text-xs text-center">Scrap</th>
+                          <th className="p-2  text-slate-700   text-xs text-right">Downtime</th>
+                          <th className="p-2  text-slate-700   text-xs text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {consolidatedReport.map((row, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-4 py-4 font-medium text-slate-900">{new Date(row.date).toLocaleDateString('en-GB')}</td>
-                            <td className="px-4 py-4">
-                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-bold uppercase">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
+                            <td className="p-2  text-slate-900">{new Date(row.date).toLocaleDateString('en-GB')}</td>
+                            <td className="p-2 ">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs  ">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
                             </td>
-                            <td className="px-4 py-4 text-slate-600 font-medium">{row.operator || 'N/A'}</td>
-                            <td className="px-4 py-4 text-center font-bold text-blue-600">{row.mins}</td>
-                            <td className="px-4 py-4 text-center font-bold text-slate-900">{row.produced}</td>
-                            <td className="px-4 py-4 text-center font-bold text-emerald-600">{row.accepted}</td>
-                            <td className="px-4 py-4 text-center font-bold text-rose-500">{row.rejected}</td>
-                            <td className="px-4 py-4 text-center font-bold text-slate-400">{row.scrap}</td>
-                            <td className="px-4 py-4 text-right">
-                              <span className="font-bold text-amber-600">{row.downtime}</span>
-                              <span className="text-[10px] text-slate-400 ml-1">min</span>
+                            <td className="p-2  text-slate-600 font-medium">{row.operator || 'N/A'}</td>
+                            <td className="p-2  text-center  text-blue-600">{row.mins}</td>
+                            <td className="p-2  text-center  text-slate-900">{row.produced}</td>
+                            <td className="p-2  text-center  text-emerald-600">{row.accepted}</td>
+                            <td className="p-2  text-center  text-rose-500">{row.rejected}</td>
+                            <td className="p-2  text-center  text-slate-400">{row.scrap}</td>
+                            <td className="p-2  text-right">
+                              <span className=" text-amber-600">{row.downtime}</span>
+                              <span className="text-xs text-slate-400 ml-1">min</span>
                             </td>
-                            <td className="px-4 py-4 text-right">
+                            <td className="p-2  text-right">
                               <button className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all">
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
@@ -1892,19 +1892,19 @@ const JobCard = () => {
               </div>
 
               <div className="p-6 border-t border-slate-50 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <div className="flex items-center gap-2 text-xs  text-slate-400  ">
                   <span>Rows per page:</span>
                   <select className="bg-transparent outline-none cursor-pointer">
                     <option>10</option>
                   </select>
                 </div>
                 <div className="flex items-center gap-6">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <span className="text-xs  text-slate-400  ">
                     Page 1 of {Math.ceil(logs.timeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.timeLogs.length} total)</span>
                   </span>
                   <div className="flex items-center gap-2">
                     <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                    <button className="px-4 py-1 border border-slate-200 rounded text-[10px] font-bold text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-colors">Next</button>
+                    <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
                   </div>
                 </div>
               </div>
@@ -1920,27 +1920,27 @@ const JobCard = () => {
           maxWidth="max-w-xl"
         >
           {viewingTimeLog && (
-            <div className="space-y-6">
+            <div className="space-y-2">
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date & Shift</p>
-                  <p className="text-sm font-bold text-slate-700">
+                  <p className="text-xs  text-slate-400   mb-1">Date & Shift</p>
+                  <p className="text-sm  text-slate-700">
                     {new Date(viewingTimeLog.log_date).toLocaleDateString('en-GB')} - {viewingTimeLog.shift}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Operator</p>
-                  <p className="text-sm font-bold text-slate-700">{viewingTimeLog.operator_name}</p>
+                  <p className="text-xs  text-slate-400   mb-1">Operator</p>
+                  <p className="text-sm  text-slate-700">{viewingTimeLog.operator_name}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Time Interval</p>
-                  <p className="text-sm font-bold text-slate-700">
+                  <p className="text-xs  text-slate-400   mb-1">Time Interval</p>
+                  <p className="text-sm  text-slate-700">
                     {viewingTimeLog.start_time?.slice(11, 16)} - {viewingTimeLog.end_time?.slice(11, 16)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Produced Quantity</p>
-                  <p className="text-sm font-bold text-indigo-600">
+                  <p className="text-xs  text-slate-400   mb-1">Produced Quantity</p>
+                  <p className="text-sm  text-indigo-600">
                     {parseFloat(viewingTimeLog.produced_qty).toFixed(3)} Units
                   </p>
                 </div>
@@ -1948,7 +1948,7 @@ const JobCard = () => {
               <div className="flex justify-end pt-4 border-t border-slate-50">
                 <button
                   onClick={() => setViewingTimeLog(null)}
-                  className="px-6 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                  className="px-6 py-2 bg-slate-100 text-slate-600 rounded  text-xs    hover:bg-slate-200 transition-colors"
                 >
                   Close
                 </button>
@@ -1964,38 +1964,38 @@ const JobCard = () => {
           maxWidth="max-w-xl"
         >
           {viewingQualityLog && (
-            <div className="space-y-6">
+            <div className="space-y-2">
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date & Shift</p>
-                  <p className="text-sm font-bold text-slate-700">
+                  <p className="text-xs  text-slate-400   mb-1">Date & Shift</p>
+                  <p className="text-sm  text-slate-700">
                     {new Date(viewingQualityLog.check_date).toLocaleDateString('en-GB')} - {viewingQualityLog.shift}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Inspected Quantity</p>
-                  <p className="text-sm font-bold text-slate-700">{viewingQualityLog.inspected_qty} Units</p>
+                  <p className="text-xs  text-slate-400   mb-1">Inspected Quantity</p>
+                  <p className="text-sm  text-slate-700">{viewingQualityLog.inspected_qty} Units</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Accepted Quantity</p>
-                  <p className="text-sm font-bold text-emerald-600">{viewingQualityLog.accepted_qty} Units</p>
+                  <p className="text-xs  text-slate-400   mb-1">Accepted Quantity</p>
+                  <p className="text-sm  text-emerald-600">{viewingQualityLog.accepted_qty} Units</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Rejected Quantity</p>
-                  <p className="text-sm font-bold text-rose-600">{viewingQualityLog.rejected_qty} Units</p>
+                  <p className="text-xs  text-slate-400   mb-1">Rejected Quantity</p>
+                  <p className="text-sm  text-rose-600">{viewingQualityLog.rejected_qty} Units</p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Rejection Reason</p>
-                  <p className="text-sm font-medium text-slate-600">{viewingQualityLog.rejection_reason || 'N/A'}</p>
+                  <p className="text-xs  text-slate-400   mb-1">Rejection Reason</p>
+                  <p className="text-sm text-slate-600">{viewingQualityLog.rejection_reason || 'N/A'}</p>
                 </div>
                 {viewingQualityLog.vendor_invoice && (
                   <div className="col-span-2">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vendor Invoice</p>
+                    <p className="text-xs  text-slate-400   mb-1">Vendor Invoice</p>
                     <a 
                       href={`${API_BASE.replace('/api', '')}/${viewingQualityLog.vendor_invoice}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
+                      className="inline-flex items-center gap-2 p-2 bg-emerald-50 text-emerald-700 rounded  text-xs  hover:bg-emerald-100 transition-colors"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       View Invoice Copy
@@ -2006,7 +2006,7 @@ const JobCard = () => {
               <div className="flex justify-end pt-4 border-t border-slate-50">
                 <button
                   onClick={() => setViewingQualityLog(null)}
-                  className="px-6 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                  className="px-6 py-2 bg-slate-100 text-slate-600 rounded  text-xs    hover:bg-slate-200 transition-colors"
                 >
                   Close
                 </button>
@@ -2617,41 +2617,41 @@ const JobCard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-6 space-y-6">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 ">
       {!showProductionEntry ? (
         <>
           {/* Header Section */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100">
             <ClipboardList className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl  text-slate-900 tracking-tight text-[28px]">Job Cards</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl  text-slate-900  ">Job Cards</h1>
               <span className="p-2  bg-indigo-50 text-indigo-600 text-xs  rounded  border border-indigo-100  ">
                 Live Operations
               </span>
             </div>
-            <p className="text-slate-500  text-sm mt-1">
+            <p className="text-slate-500  text-xs mt-1">
               Manufacturing Intelligence <ChevronRight className="w-3 h-3 inline mx-1" /> <span className="text-indigo-600">Operational Controls</span>
             </p>
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 p-2  bg-white rounded  border border-slate-200 ">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 p-2  bg-white rounded  border border-slate-200 ">
             <div className="w-2 h-2 bg-emerald-500 rounded  animate-pulse"></div>
-            <span className="text-xs  text-slate-500  tracking-widest">System Status</span>
-            <span className="text-sm  text-slate-900">{new Date().toLocaleTimeString()}</span>
+            <span className="text-xs  text-slate-500  ">System Status</span>
+            <span className="text-xs  text-slate-900">{new Date().toLocaleTimeString()}</span>
           </div>
-          <button className="flex items-center gap-2  p-2 .5 text-rose-600 hover:bg-rose-50 rounded  transition-all  text-sm">
+          <button className="flex items-center gap-2  p-2 text-rose-600 hover:bg-rose-50 rounded  transition-all  text-xs">
             <Trash2 className="w-4 h-4" />
             Reset Queue
           </button>
           <button 
             onClick={handleCreateNew}
-            className="flex items-center gap-2  p-2.5 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all  text-sm shadow-lg shadow-slate-200"
+            className="flex items-center gap-2  p-2 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all  text-xs shadow-lg shadow-slate-200"
           >
             <Play className="w-4 h-4" />
             Create Job Card
@@ -2660,15 +2660,15 @@ const JobCard = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 my-5">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white rounded-[32px] border border-slate-100 p-6 flex items-center justify-between  hover:shadow-md transition-all group">
+          <div key={i} className="bg-white rounded  border border-slate-100 p-2 flex items-center justify-between  hover: transition-all group">
             <div>
-              <p className="text-[10px]  text-slate-400  tracking-widest mb-2">{stat.label}</p>
+              <p className="text-xs  text-slate-400   mb-2">{stat.label}</p>
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl  text-slate-900">{stat.value}</p>
+                <p className="text-xl  text-slate-900">{stat.value}</p>
               </div>
-              <p className="text-[10px]  text-slate-400  tracking-widest mt-2 flex items-center gap-1">
+              <p className="text-xs  text-slate-400   mt-2 flex items-center gap-1">
                 {stat.subValue}
               </p>
             </div>
@@ -2685,18 +2685,18 @@ const JobCard = () => {
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
         <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input 
             type="text" 
             placeholder="Search by Work Order ID or Item name..."
-            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all "
+            className="w-full pl-12 pr-4 p-2 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all "
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <button className="flex items-center gap-2  px-6 py-3 bg-white border border-slate-200 rounded  text-sm  text-slate-600 hover:bg-slate-50 transition-all ">
+        <button className="flex items-center gap-2  p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50 transition-all ">
           <Filter className="w-4 h-4" />
           All Operational States
           <ChevronDown className="w-4 h-4 ml-2" />
@@ -2704,81 +2704,81 @@ const JobCard = () => {
       </div>
 
       {/* Flat Table Layout */}
-      <Card className="border-none bg-white rounded-xl shadow-sm overflow-hidden">
+      <Card className="border-none bg-white rounded  shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[140px]">ID</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operation</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Execution Type</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Qty To Manufacture</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Produced Qty</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Accepted Qty</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Workstation</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Assignee</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                <th className="p-2 text-xs  text-slate-500   min-w-[140px]">ID</th>
+                <th className="p-2 text-xs  text-slate-500  ">Operation</th>
+                <th className="p-2 text-xs  text-slate-500  ">Status</th>
+                <th className="p-2 text-xs  text-slate-500  ">Execution Type</th>
+                <th className="p-2 text-xs  text-slate-500  ">Qty To Manufacture</th>
+                <th className="p-2 text-xs  text-slate-500  ">Produced Qty</th>
+                <th className="p-2 text-xs  text-slate-500  ">Accepted Qty</th>
+                <th className="p-2 text-xs  text-slate-500  ">Workstation</th>
+                <th className="p-2 text-xs  text-slate-500  ">Assignee</th>
+                <th className="p-2 text-xs  text-slate-500   text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredJobCards.map((jc) => (
                 <tr key={jc.id} className="group hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="p-2 whitespace-nowrap">
                     <div className="flex flex-col">
-                      <span className="text-xs font-bold text-indigo-600">
+                      <span className="text-xs  text-indigo-600">
                         {jc.job_card_no}
                       </span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">
+                      <span className="text-xs text-slate-400 mt-0.5">
                         WO: {jc.wo_number}
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="p-2">
                     <div className="flex flex-col">
-                      <span className="text-xs font-bold text-slate-900">{jc.operation_name}</span>
-                      <span className="text-[10px] text-slate-400 mt-0.5 leading-tight">{jc.item_name}</span>
+                      <span className="text-xs  text-slate-900">{jc.operation_name}</span>
+                      <span className="text-xs text-slate-400 mt-0.5 leading-tight">{jc.item_name}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`text-[11px] font-semibold ${
+                  <td className="p-2 ">
+                    <span className={`text-xs  font-semibold ${
                       jc.status === 'IN_PROGRESS' ? 'text-amber-600' : 
                       jc.status === 'COMPLETED' ? 'text-emerald-600' : 'text-slate-500'
                     }`}>
                       {jc.status === 'IN_PROGRESS' ? 'In-Progress' : jc.status?.charAt(0) + jc.status?.slice(1).toLowerCase()}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`text-[11px] font-medium ${jc.outward_challan_id ? 'text-amber-600' : 'text-blue-600'}`}>
+                  <td className="p-2 ">
+                    <span className={`text-xs  ${jc.outward_challan_id ? 'text-amber-600' : 'text-blue-600'}`}>
                       {jc.outward_challan_id ? 'Subcontract' : 'In-house'}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className="text-[11px] font-bold text-slate-900">
+                  <td className="p-2 ">
+                    <span className="text-xs   text-slate-900">
                       {jc.planned_qty || 0} <span className="text-slate-400 font-normal">units</span>
                     </span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className="text-[11px] font-bold text-indigo-600">
+                  <td className="p-2 ">
+                    <span className="text-xs   text-indigo-600">
                       {parseFloat(jc.produced_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
                     </span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className="text-[11px] font-bold text-emerald-600">
+                  <td className="p-2 ">
+                    <span className="text-xs   text-emerald-600">
                       {parseFloat(jc.accepted_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
                     </span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`text-[11px] ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-600'}`}>
+                  <td className="p-2 ">
+                    <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-600'}`}>
                       {jc.outward_challan_id ? 'Subcontract' : (jc.workstation_name || 'N/A')}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`text-[11px] ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-600'}`}>
+                  <td className="p-2 ">
+                    <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-600'}`}>
                       {jc.outward_challan_id ? 'N/A' : (jc.operator_name || 'Unassigned')}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="p-2  text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button 
                         onClick={() => setViewingJobCard(jc)}
@@ -2854,8 +2854,8 @@ const JobCard = () => {
               {filteredJobCards.length === 0 && !loading && (
                 <tr>
                   <td colSpan="10" className="px-6 py-8 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-5 h-5 bg-slate-50 text-slate-300 rounded flex items-center justify-center">
                         <AlertCircle className="w-6 h-6" />
                       </div>
                       <p className="text-slate-400 text-sm italic">No job cards found</p>
@@ -2868,11 +2868,11 @@ const JobCard = () => {
         </div>
 
         {/* Pagination Footer */}
-        <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className=" p-2 bg-slate-200 border-t border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">Rows per page:</span>
-              <select className="text-xs border-none bg-transparent font-medium text-slate-700 focus:ring-0 cursor-pointer">
+              <select className="text-xs border-none bg-transparent text-slate-700 focus:ring-0 cursor-pointer">
                 <option>20</option>
                 <option>50</option>
                 <option>100</option>
@@ -2885,10 +2885,10 @@ const JobCard = () => {
               Page 1 of 1 <span className="text-slate-400 ml-1">({filteredJobCards.length} total)</span>
             </span>
             <div className="flex items-center gap-2">
-              <button className="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors">
+              <button className="flex items-center gap-1 p-1 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors">
                 ← Prev
               </button>
-              <button className="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors border border-slate-200 rounded-md bg-white shadow-sm">
+              <button className="flex items-center gap-1 p-1 text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors border border-slate-200 rounded-md bg-white shadow-sm">
                 Next →
               </button>
             </div>
@@ -2908,41 +2908,41 @@ const JobCard = () => {
         maxWidth="max-w-2xl"
       >
         {viewingJobCard && (
-          <div className="space-y-6">
+          <div className="space-y-2">
             {/* Header with Operation Name and Progress */}
-            <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-lg p-6 text-white">
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded  p-2 text-white">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-2xl font-bold">{viewingJobCard.operation_name}</h3>
+                  <h3 className="text-2xl ">{viewingJobCard.operation_name}</h3>
                   <p className="text-slate-300 text-sm mt-1">Work Order: {viewingJobCard.wo_number}</p>
                 </div>
-                <span className="text-4xl font-bold text-indigo-300">
+                <span className="text-4xl  text-indigo-300">
                   {viewingJobCard.planned_qty > 0 ? Math.round((parseFloat(viewingJobCard.accepted_qty || 0) / viewingJobCard.planned_qty) * 100) : 0}%
                 </span>
               </div>
 
               {/* Metrics Grid */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-4 gap-2">
                 <div>
-                  <p className="text-slate-400 text-xs uppercase tracking-wider">Planned Capacity</p>
+                  <p className="text-slate-400 text-xs  ">Planned Capacity</p>
                   <p className="text-xl font-semibold mt-1">{viewingJobCard.planned_qty || 0}.00 <span className="text-sm font-normal text-slate-300">Units</span></p>
                 </div>
                 <div>
-                  <p className="text-slate-400 text-xs uppercase tracking-wider">Accepted Output</p>
+                  <p className="text-slate-400 text-xs  ">Accepted Output</p>
                   <p className="text-xl font-semibold mt-1 text-emerald-400">{parseFloat(viewingJobCard.accepted_qty || 0).toFixed(2)} <span className="text-sm font-normal text-slate-300">Units</span></p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Total Produced: {parseFloat(viewingJobCard.produced_qty || 0).toFixed(2)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Total Produced: {parseFloat(viewingJobCard.produced_qty || 0).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 text-xs uppercase tracking-wider">Transferred</p>
+                  <p className="text-slate-400 text-xs  ">Transferred</p>
                   <p className="text-xl font-semibold mt-1 text-indigo-400">{parseFloat(viewingJobCard.accepted_qty || 0).toFixed(2)} <span className="text-sm font-normal text-slate-300">Units</span></p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Available: {(parseFloat(viewingJobCard.accepted_qty || 0)).toFixed(2)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Available: {(parseFloat(viewingJobCard.accepted_qty || 0)).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 text-xs uppercase tracking-wider">Production Progress</p>
+                  <p className="text-slate-400 text-xs  ">Production Progress</p>
                   <p className="text-xl font-semibold mt-1">
                     {viewingJobCard.planned_qty > 0 ? Math.round((parseFloat(viewingJobCard.produced_qty || 0) / viewingJobCard.planned_qty) * 100) : 0}%
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Available: {(parseFloat(viewingJobCard.accepted_qty || 0)).toFixed(2)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Available: {(parseFloat(viewingJobCard.accepted_qty || 0)).toFixed(2)}</p>
                 </div>
               </div>
             </div>
@@ -2957,7 +2957,7 @@ const JobCard = () => {
                 <button
                   key={tab.id}
                   onClick={() => setViewTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex items-center gap-2 p-2 text-xs border-b-2 transition-colors ${
                     viewTab === tab.id
                       ? 'border-indigo-600 text-indigo-600'
                       : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -2972,47 +2972,47 @@ const JobCard = () => {
             {/* Tab Content */}
             <div>
               {viewTab === 'timeline' && (
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Scheduled Start</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-slate-50 p-2 rounded ">
+                    <p className="text-xs text-slate-500   mb-2">Scheduled Start</p>
                     <p className="text-sm font-semibold text-slate-900">N/A</p>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Estimated End</p>
+                  <div className="bg-slate-50 p-2 rounded ">
+                    <p className="text-xs text-slate-500   mb-2">Estimated End</p>
                     <p className="text-sm font-semibold text-slate-900">N/A</p>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Actual Duration</p>
+                  <div className="bg-slate-50 p-2 rounded ">
+                    <p className="text-xs text-slate-500   mb-2">Actual Duration</p>
                     <p className="text-sm font-semibold text-slate-900">-</p>
                   </div>
                 </div>
               )}
 
               {viewTab === 'costing' && (
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Hourly Rate</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-slate-50 p-2 rounded ">
+                    <p className="text-xs text-slate-500   mb-2">Hourly Rate</p>
                     <p className="text-sm font-semibold text-slate-900">₹{parseFloat(viewingJobCard.hourly_rate || 0).toFixed(2)}</p>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Actual Cost</p>
+                  <div className="bg-slate-50 p-2 rounded ">
+                    <p className="text-xs text-slate-500   mb-2">Actual Cost</p>
                     <p className="text-sm font-semibold text-indigo-600">₹0.00</p>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Estimated Cost</p>
+                  <div className="bg-slate-50 p-2 rounded ">
+                    <p className="text-xs text-slate-500   mb-2">Estimated Cost</p>
                     <p className="text-sm font-semibold text-slate-900">₹0.00</p>
                   </div>
                 </div>
               )}
 
               {viewTab === 'assignment' && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Assigned Unit</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-slate-50 p-2 rounded ">
+                    <p className="text-xs text-slate-500   mb-2">Assigned Unit</p>
                     <p className="text-sm font-semibold text-slate-900">{viewingJobCard.workstation_name || 'N/A'}</p>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Operator / Vendor</p>
+                  <div className="bg-slate-50 p-2 rounded ">
+                    <p className="text-xs text-slate-500   mb-2">Operator / Vendor</p>
                     <p className="text-sm font-semibold text-slate-900">{viewingJobCard.operator_name || 'Unassigned'}</p>
                   </div>
                 </div>
@@ -3020,7 +3020,7 @@ const JobCard = () => {
             </div>
 
             {/* Intelligence Notes */}
-            <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">
+            <div className="bg-amber-50 border border-amber-100 rounded  p-2">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-lg">🧠</span>
                 <h4 className="font-semibold text-slate-900">Intelligence Notes</h4>
@@ -3044,7 +3044,7 @@ const JobCard = () => {
                     handleUpdateStatus(viewingJobCard.id, 'COMPLETED');
                     setViewingJobCard(null);
                   }}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:shadow-lg transition-all font-medium"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded  hover:shadow-lg transition-all font-medium"
                 >
                   <span>⚡</span>
                   Transition to completed
@@ -3061,14 +3061,14 @@ const JobCard = () => {
         onClose={() => setIsModalOpen(false)} 
         title={formData.id ? "Edit Job Card" : "Create Job Card"}
       >
-        <form onSubmit={handleSubmit} className="space-y-6 p-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <form onSubmit={handleSubmit} className="space-y-2 p-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <FormControl label="Job Card Number">
               <input 
                 type="text" 
                 value={formData.jcNumber} 
                 disabled 
-                className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm  text-slate-400  tracking-widest cursor-not-allowed"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-400   cursor-not-allowed"
               />
             </FormControl>
             <FormControl label="Work Order" required>
@@ -3079,7 +3079,7 @@ const JobCard = () => {
                   setSelectedWO(wo);
                   setFormData(prev => ({ ...prev, workOrderId: e.target.value, plannedQty: wo?.quantity || 0 }));
                 }}
-                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
               >
                 <option value="">Select Work Order</option>
                 {workOrders.map(wo => (
@@ -3087,9 +3087,6 @@ const JobCard = () => {
                 ))}
               </select>
             </FormControl>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormControl label="Operation" required>
               <select 
                 value={formData.operationId}
@@ -3097,7 +3094,7 @@ const JobCard = () => {
                   const op = operations.find(o => String(o.id) === e.target.value);
                   setFormData(prev => ({ ...prev, operationId: e.target.value, workstationId: op?.workstation_id || prev.workstationId }));
                 }}
-                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
               >
                 <option value="">Select Operation</option>
                 {operations.map(op => (
@@ -3109,7 +3106,7 @@ const JobCard = () => {
               <select 
                 value={formData.workstationId}
                 onChange={(e) => setFormData(prev => ({ ...prev, workstationId: e.target.value }))}
-                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
               >
                 <option value="">Select Workstation</option>
                 {workstations.map(ws => (
@@ -3117,14 +3114,11 @@ const JobCard = () => {
                 ))}
               </select>
             </FormControl>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormControl label="Operator Name">
+             <FormControl label="Operator Name">
               <select 
                 value={formData.assignedTo}
                 onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
-                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
               >
                 <option value="">Select Operator</option>
                 {users.map(user => (
@@ -3140,12 +3134,14 @@ const JobCard = () => {
                   type="number" 
                   value={formData.plannedQty}
                   onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
-                  className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 tracking-widest">Unit</span>
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 ">Unit</span>
               </div>
             </FormControl>
           </div>
+
+         
 
           <FormControl label="Job Remarks">
             <textarea 
@@ -3156,17 +3152,17 @@ const JobCard = () => {
             />
           </FormControl>
 
-          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-6 border-t border-slate-100">
             <button 
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="p-2.5 text-sm  text-slate-500 hover:text-slate-700 transition-colors  tracking-widest"
+              className="p-2 text-xs  text-slate-500 hover:text-slate-700 transition-colors  "
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="px-8 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all  text-sm shadow-lg shadow-indigo-100  tracking-widest"
+              className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all  text-xs shadow-lg shadow-indigo-100  "
             >
               {formData.id ? "Update Job Card" : "Initialize Job Card"}
             </button>
@@ -3181,9 +3177,9 @@ const JobCard = () => {
         title="Outward Challan"
         size="2xl"
       >
-        <div className="p-1 space-y-6">
-          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-100">
-            <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+        <div className="p-1 space-y-2">
+          <div className="flex items-center gap-2 p-2 bg-slate-50 rounded  border border-slate-100">
+            <div className="p-2 bg-indigo-100 text-indigo-600 rounded ">
               <Package className="w-5 h-5" />
             </div>
             <div>
@@ -3192,23 +3188,23 @@ const JobCard = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <FormControl label="Operation">
-              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-700">
+              <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700">
                 {outwardFormData.operationName}
               </div>
             </FormControl>
             <FormControl label="Quantity">
-              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-700">
+              <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700">
                 {outwardFormData.plannedQty} units
               </div>
             </FormControl>
           </div>
 
-          <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-4 space-y-4">
+          <div className="bg-amber-50/50 border border-amber-100 rounded  p-2 space-y-2">
             <div className="flex items-center gap-2 text-amber-800">
               <User className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-wider">Assign Vendor</span>
+              <span className="text-xs   ">Assign Vendor</span>
             </div>
             <SearchableSelect
               options={vendors.map(v => ({ value: v.id, label: v.vendor_name, category: v.category }))}
@@ -3224,27 +3220,27 @@ const JobCard = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-slate-700">
                 <ClipboardList className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">Required Material Release</span>
+                <span className="text-xs   ">Required Material Release</span>
               </div>
               <button 
                 onClick={() => setOutwardFormData({
                   ...outwardFormData,
                   materialItems: [...outwardFormData.materialItems, { itemCode: '', requiredQty: 0, releaseQty: 0 }]
                 })}
-                className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 uppercase tracking-widest px-2 py-1 bg-indigo-50 rounded"
+                className="flex items-center gap-1 text-xs  text-indigo-600 hover:text-indigo-700   px-2 py-1 bg-indigo-50 rounded"
               >
                 <Plus className="w-3 h-3" /> Add Item
               </button>
             </div>
             
-            <div className="border border-slate-100 rounded-lg">
-              <table className="w-full text-left text-[11px]">
+            <div className="border border-slate-100 rounded ">
+              <table className="w-full text-left text-xs ">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
-                    <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider">Item Code</th>
-                    <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-center">Required Qty</th>
-                    <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-center">Release Qty</th>
-                    <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-right">Action</th>
+                    <th className="p-2 font-semibold text-slate-500  ">Item Code</th>
+                    <th className="p-2 font-semibold text-slate-500   text-center">Required Qty</th>
+                    <th className="p-2 font-semibold text-slate-500   text-center">Release Qty</th>
+                    <th className="p-2 font-semibold text-slate-500   text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -3313,14 +3309,14 @@ const JobCard = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <FormControl label="Expected Return Date">
               <div className="relative">
                 <input 
                   type="date" 
                   value={outwardFormData.expectedReturnDate}
                   onChange={(e) => setOutwardFormData({ ...outwardFormData, expectedReturnDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+                  className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
                 />
               </div>
             </FormControl>
@@ -3330,9 +3326,9 @@ const JobCard = () => {
                   type="number" 
                   value={outwardFormData.dispatchQty}
                   onChange={(e) => setOutwardFormData({ ...outwardFormData, dispatchQty: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
                 />
-                <span className="absolute right-3 top-2 text-[10px] text-slate-400 font-bold">Units</span>
+                <span className="absolute right-3 top-2 text-xs text-slate-400 ">Units</span>
               </div>
             </FormControl>
           </div>
@@ -3343,20 +3339,20 @@ const JobCard = () => {
               placeholder="Any specific instructions for the vendor..."
               value={outwardFormData.dispatchNotes}
               onChange={(e) => setOutwardFormData({ ...outwardFormData, dispatchNotes: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 resize-none"
+              className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 resize-none"
             />
           </FormControl>
 
-          <div className="flex justify-end items-center gap-3 pt-4 border-t border-slate-100">
+          <div className="flex justify-end items-center gap-2 pt-4 border-t border-slate-100">
             <button
               onClick={() => setIsOutwardModalOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest"
+              className="px-4 py-2 text-xs  text-slate-500 hover:text-slate-700  "
             >
               Cancel
             </button>
             <button
               onClick={handleCreateOutwardChallan}
-              className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100"
+              className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100"
             >
               <CheckCircle className="w-4 h-4" />
               Create Outward Challan
@@ -3371,9 +3367,9 @@ const JobCard = () => {
         title="Vendor Receipt (Inward)"
         size="xl"
       >
-        <div className="p-1 space-y-6">
-          <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
-            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+        <div className="p-1 space-y-2">
+          <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded  border border-emerald-100">
+            <div className="p-2 bg-emerald-100 text-emerald-600 rounded ">
               <Package className="w-5 h-5" />
             </div>
             <div>
@@ -3382,13 +3378,13 @@ const JobCard = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <FormControl label="Received Date">
               <input 
                 type="date" 
                 value={inwardFormData.receivedDate}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, receivedDate: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500"
+                className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500"
               />
             </FormControl>
             <FormControl label="Received Quantity">
@@ -3396,18 +3392,18 @@ const JobCard = () => {
                 type="number" 
                 value={inwardFormData.receivedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, receivedQty: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500"
+                className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500"
               />
             </FormControl>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <FormControl label="Accepted Qty">
               <input 
                 type="number" 
                 value={inwardFormData.acceptedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, acceptedQty: e.target.value })}
-                className="w-full px-3 py-2 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-700 outline-none"
+                className="w-full p-2 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-700 outline-none"
               />
             </FormControl>
             <FormControl label="Rejected Qty">
@@ -3415,7 +3411,7 @@ const JobCard = () => {
                 type="number" 
                 value={inwardFormData.rejectedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, rejectedQty: e.target.value })}
-                className="w-full px-3 py-2 bg-rose-50 border border-rose-100 rounded text-xs text-rose-700 outline-none"
+                className="w-full p-2 bg-rose-50 border border-rose-100 rounded text-xs text-rose-700 outline-none"
               />
             </FormControl>
             <FormControl label="Scrap Qty">
@@ -3423,7 +3419,7 @@ const JobCard = () => {
                 type="number" 
                 value={inwardFormData.scrapQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, scrapQty: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 outline-none"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 outline-none"
               />
             </FormControl>
           </div>
@@ -3432,25 +3428,25 @@ const JobCard = () => {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-slate-700">
                 <Package className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">Outward Items Breakdown</span>
+                <span className="text-xs   ">Outward Items Breakdown</span>
               </div>
-              <div className="border border-slate-100 rounded-lg overflow-hidden">
-                <table className="w-full text-left text-[11px]">
+              <div className="border border-slate-100 rounded  overflow-hidden">
+                <table className="w-full text-left text-xs ">
                   <thead className="bg-slate-50 border-b border-slate-100">
                     <tr>
-                      <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider">Item Code</th>
-                      <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-center">Released Qty</th>
-                      <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-right">Rate</th>
+                      <th className="p-2 font-semibold text-slate-500  ">Item Code</th>
+                      <th className="p-2 font-semibold text-slate-500   text-center">Released Qty</th>
+                      <th className="p-2 font-semibold text-slate-500   text-right">Rate</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {inwardFormData.inwardItems.map((item, idx) => (
                       <tr key={idx} className="bg-white">
-                        <td className="px-3 py-2 font-medium text-slate-700">{item.item_code}</td>
-                        <td className="px-3 py-2 text-center text-slate-600 font-bold">{item.release_qty}</td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="p-2 text-slate-700">{item.item_code}</td>
+                        <td className="p-2 text-center text-slate-600 ">{item.release_qty}</td>
+                        <td className="p-2 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <span className="text-[10px] text-slate-400">₹</span>
+                            <span className="text-xs text-slate-400">₹</span>
                             <input 
                               type="number" 
                               className="w-24 px-2 py-1 border border-slate-200 rounded text-right outline-none focus:border-emerald-500"
@@ -3466,22 +3462,22 @@ const JobCard = () => {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-slate-50/50 border-t border-slate-100 font-bold">
+                  <tfoot className="bg-slate-50/50 border-t border-slate-100 ">
                     <tr>
-                      <td colSpan="2" className="px-3 py-2 text-right text-slate-500 uppercase tracking-wider text-[10px]">Sub Total</td>
-                      <td className="px-3 py-2 text-right text-slate-700">
+                      <td colSpan="2" className="p-2 text-right text-slate-500   text-xs">Sub Total</td>
+                      <td className="p-2 text-right text-slate-700">
                         ₹ {inwardFormData.inwardItems.reduce((sum, item) => sum + (Number(item.release_qty || 0) * Number(item.rate || 0)), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                     <tr>
-                      <td colSpan="2" className="px-3 py-2 text-right text-slate-500 uppercase tracking-wider text-[10px]">GST (18%)</td>
-                      <td className="px-3 py-2 text-right text-indigo-600">
+                      <td colSpan="2" className="p-2 text-right text-slate-500   text-xs">GST (18%)</td>
+                      <td className="p-2 text-right text-indigo-600">
                         ₹ {(inwardFormData.inwardItems.reduce((sum, item) => sum + (Number(item.release_qty || 0) * Number(item.rate || 0)), 0) * 0.18).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                     <tr className="bg-slate-100/50">
-                      <td colSpan="2" className="px-3 py-2 text-right text-slate-900 uppercase tracking-wider text-[10px]">Grand Total</td>
-                      <td className="px-3 py-2 text-right text-emerald-600 text-sm">
+                      <td colSpan="2" className="p-2 text-right text-slate-900   text-xs">Grand Total</td>
+                      <td className="p-2 text-right text-emerald-600 text-sm">
                         ₹ {(inwardFormData.inwardItems.reduce((sum, item) => sum + (Number(item.release_qty || 0) * Number(item.rate || 0)), 0) * 1.18).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -3491,7 +3487,7 @@ const JobCard = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <FormControl label="Vendor Invoice">
               <div className="relative group">
                 <input 
@@ -3503,16 +3499,16 @@ const JobCard = () => {
                 />
                 <label 
                   htmlFor="vendorInvoice"
-                  className="flex items-center gap-3 px-3 py-2 border border-dashed border-slate-300 rounded-lg cursor-pointer group-hover:border-emerald-500 group-hover:bg-emerald-50/30 transition-all"
+                  className="flex items-center gap-2 p-2 border border-dashed border-slate-300 rounded  cursor-pointer group-hover:border-emerald-500 group-hover:bg-emerald-50/30 transition-all"
                 >
                   <div className="p-1.5 bg-slate-100 text-slate-500 rounded group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
                     <Upload className="w-3.5 h-3.5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-medium text-slate-600 truncate">
+                    <p className="text-xs  text-slate-600 truncate">
                       {inwardFormData.vendorInvoice ? inwardFormData.vendorInvoice.name : 'Upload Invoice Copy'}
                     </p>
-                    <p className="text-[9px] text-slate-400">PDF, Excel or Images (Max 10MB)</p>
+                    <p className="text-xs text-slate-400">PDF, Excel or Images (Max 10MB)</p>
                   </div>
                   {inwardFormData.vendorInvoice && (
                     <div className="text-emerald-500">
@@ -3528,21 +3524,21 @@ const JobCard = () => {
                 placeholder="Notes..."
                 value={inwardFormData.remarks}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, remarks: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 resize-none h-[42px]"
+                className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 resize-none h-[42px]"
               />
             </FormControl>
           </div>
 
-          <div className="flex justify-end items-center gap-3 pt-4 border-t border-slate-100">
+          <div className="flex justify-end items-center gap-2 pt-4 border-t border-slate-100">
             <button
               onClick={() => setIsInwardModalOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest"
+              className="px-4 py-2 text-xs  text-slate-500 hover:text-slate-700  "
             >
               Cancel
             </button>
             <button
               onClick={handleVendorInward}
-              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-100"
+              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 transition-all text-xs    shadow-lg shadow-emerald-100"
             >
               <CheckCircle className="w-4 h-4" />
               Complete Receipt

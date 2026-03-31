@@ -60,9 +60,9 @@ const Vendors = ({ onAddVendor }) => {
           <button
             type="button"
             onClick={onAddVendor}
-            className="flex items-center gap-2 mx-auto px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all shadow-md active:scale-95"
+            className="flex items-center gap-2 mx-auto px-4 py-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
           >
-            <Plus size={16} />
+            <Plus size={15} />
             Add Vendor
           </button>
         </div>
@@ -70,7 +70,7 @@ const Vendors = ({ onAddVendor }) => {
       {vendors.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
+            <thead className="bg-slate-50 text-slate-500   text-xs">
               <tr>
                 <th className="p-2 text-left ">Vendor Name</th>
                 <th className="p-2 text-left ">Contact</th>
@@ -82,20 +82,20 @@ const Vendors = ({ onAddVendor }) => {
             <tbody>
               {vendors.map((vendor) => (
                 <tr key={`vendor-${vendor.id}`} className="border-t border-slate-100 group hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-4  text-slate-900 ">{vendor.name}</td>
-                  <td className="px-4 py-4 text-slate-600">{vendor.contact}</td>
-                  <td className="px-4 py-4 text-slate-600">{vendor.email}</td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-block px-2 py-1  rounded text-[10px]  uppercase tracking-wider border ${vendorStatusColors[vendor.status]?.bg} ${vendorStatusColors[vendor.status]?.text} ${vendorStatusColors[vendor.status]?.border}`}>
+                  <td className="p-2   text-slate-900 ">{vendor.name}</td>
+                  <td className="p-2  text-slate-600">{vendor.contact}</td>
+                  <td className="p-2  text-slate-600">{vendor.email}</td>
+                  <td className="p-2 ">
+                    <span className={`inline-block px-2 py-1  rounded text-xs    border ${vendorStatusColors[vendor.status]?.bg} ${vendorStatusColors[vendor.status]?.text} ${vendorStatusColors[vendor.status]?.border}`}>
                       {vendorStatusColors[vendor.status]?.label || vendor.status}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-right space-x-2">
+                  <td className="p-2  text-right space-x-2">
                     <button 
-                      className="p-2 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 transition-all"
+                      className="p-2 rounded  border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 transition-all"
                       title="View Details"
                     >
-                      <Eye size={16} />
+                      <Eye size={15} />
                     </button>
                   </td>
                 </tr>
@@ -121,9 +121,9 @@ const Quotations = ({ onCreateRFQ }) => {
           <button
             type="button"
             onClick={onCreateRFQ}
-            className="flex items-center gap-2 mx-auto px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all shadow-md active:scale-95"
+            className="flex items-center gap-2 mx-auto px-4 py-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
           >
-            <Plus size={16} />
+            <Plus size={15} />
             Create RFQ
           </button>
         </div>
@@ -131,7 +131,7 @@ const Quotations = ({ onCreateRFQ }) => {
       {rfqs.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
+            <thead className="bg-slate-50 text-slate-500   text-xs">
               <tr>
                 <th className="p-2 text-left ">RFQ #</th>
                 <th className="p-2 text-left ">Vendor</th>
@@ -144,21 +144,21 @@ const Quotations = ({ onCreateRFQ }) => {
             <tbody>
               {rfqs.map((rfq) => (
                 <tr key={`rfq-${rfq.id}`} className="border-t border-slate-100 group hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-4  text-slate-900 ">RFQ-{String(rfq.id).padStart(4, '0')}</td>
-                  <td className="px-4 py-4 text-slate-600">{rfq.vendor_name}</td>
-                  <td className="px-4 py-4 text-slate-600">{rfq.items_count} items</td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-block px-2 py-1  rounded text-[10px]  uppercase tracking-wider border ${rfqStatusColors[rfq.status]?.bg} ${rfqStatusColors[rfq.status]?.text} ${rfqStatusColors[rfq.status]?.border}`}>
+                  <td className="p-2   text-slate-900 ">RFQ-{String(rfq.id).padStart(4, '0')}</td>
+                  <td className="p-2  text-slate-600">{rfq.vendor_name}</td>
+                  <td className="p-2  text-slate-600">{rfq.items_count} items</td>
+                  <td className="p-2 ">
+                    <span className={`inline-block px-2 py-1  rounded text-xs    border ${rfqStatusColors[rfq.status]?.bg} ${rfqStatusColors[rfq.status]?.text} ${rfqStatusColors[rfq.status]?.border}`}>
                       {rfqStatusColors[rfq.status]?.label || rfq.status}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-slate-600">{formatDate(rfq.sent_date)}</td>
-                  <td className="px-4 py-4 text-right space-x-2">
+                  <td className="p-2  text-slate-600">{formatDate(rfq.sent_date)}</td>
+                  <td className="p-2  text-right space-x-2">
                     <button 
-                      className="p-2 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 transition-all"
+                      className="p-2 rounded  border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 transition-all"
                       title="View Details"
                     >
-                      <Eye size={16} />
+                      <Eye size={15} />
                     </button>
                   </td>
                 </tr>
@@ -184,9 +184,9 @@ const PurchaseOrders = ({ onCreatePO }) => {
           <button
             type="button"
             onClick={onCreatePO}
-            className="flex items-center gap-2 mx-auto px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all shadow-md active:scale-95"
+            className="flex items-center gap-2 mx-auto px-4 py-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
           >
-            <Plus size={16} />
+            <Plus size={15} />
             Create PO
           </button>
         </div>
@@ -194,7 +194,7 @@ const PurchaseOrders = ({ onCreatePO }) => {
       {pos.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-500  tracking-[0.2em] text-xs">
+            <thead className="bg-slate-50 text-slate-500   text-xs">
               <tr>
                 <th className="p-2 text-left ">PO #</th>
                 <th className="p-2 text-left ">Vendor</th>
@@ -207,21 +207,21 @@ const PurchaseOrders = ({ onCreatePO }) => {
             <tbody>
               {pos.map((po) => (
                 <tr key={`po-${po.id}`} className="border-t border-slate-100 group hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-4  text-slate-900 ">PO-{String(po.id).padStart(4, '0')}</td>
-                  <td className="px-4 py-4 text-slate-600">{po.vendor_name}</td>
-                  <td className="px-4 py-4 text-slate-900 text-xs ">{formatCurrency(po.total_amount)}</td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-block px-2 py-1  rounded text-[10px]  uppercase tracking-wider border ${poStatusColors[po.status]?.bg} ${poStatusColors[po.status]?.text} ${poStatusColors[po.status]?.border}`}>
+                  <td className="p-2   text-slate-900 ">PO-{String(po.id).padStart(4, '0')}</td>
+                  <td className="p-2  text-slate-600">{po.vendor_name}</td>
+                  <td className="p-2  text-slate-900 text-xs ">{formatCurrency(po.total_amount)}</td>
+                  <td className="p-2 ">
+                    <span className={`inline-block px-2 py-1  rounded text-xs    border ${poStatusColors[po.status]?.bg} ${poStatusColors[po.status]?.text} ${poStatusColors[po.status]?.border}`}>
                       {poStatusColors[po.status]?.label || po.status}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-slate-600">{formatDate(po.created_at)}</td>
-                  <td className="px-4 py-4 text-right space-x-2">
+                  <td className="p-2  text-slate-600">{formatDate(po.created_at)}</td>
+                  <td className="p-2  text-right space-x-2">
                     <button 
-                      className="p-2 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 transition-all"
+                      className="p-2 rounded  border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 transition-all"
                       title="View Details"
                     >
-                      <Eye size={16} />
+                      <Eye size={15} />
                     </button>
                   </td>
                 </tr>
@@ -250,29 +250,29 @@ const VendorManagement = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-4 border-b border-slate-200">
+    <div className="space-y-2">
+      <div className="flex gap-2 border-b border-slate-200">
         <button
           onClick={() => setActiveTab('vendors')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all relative ${activeTab === 'vendors' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`flex items-center gap-2 p-2 text-xs transition-all relative ${activeTab === 'vendors' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <Users size={16} />
+          <Users size={15} />
           Vendors
           {activeTab === 'vendors' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full" />}
         </button>
         <button
           onClick={() => setActiveTab('quotations')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all relative ${activeTab === 'quotations' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`flex items-center gap-2 p-2 text-xs transition-all relative ${activeTab === 'quotations' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <FileText size={16} />
+          <FileText size={15} />
           Quotations (RFQ)
           {activeTab === 'quotations' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full" />}
         </button>
         <button
           onClick={() => setActiveTab('purchase-orders')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all relative ${activeTab === 'purchase-orders' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`flex items-center gap-2 p-2 text-xs transition-all relative ${activeTab === 'purchase-orders' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <ShoppingCart size={16} />
+          <ShoppingCart size={15} />
           Purchase Orders
           {activeTab === 'purchase-orders' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full" />}
         </button>

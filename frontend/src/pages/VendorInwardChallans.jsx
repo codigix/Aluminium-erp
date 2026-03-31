@@ -125,7 +125,7 @@ const VendorInwardChallans = () => {
       label: 'Job Card',
       key: 'job_card_number',
       sortable: true,
-      className: 'text-blue-600 font-bold'
+      className: 'text-blue-600 '
     },
     {
       label: 'Vendor',
@@ -142,14 +142,14 @@ const VendorInwardChallans = () => {
       label: 'Amount',
       key: 'amount',
       sortable: true,
-      className: 'font-bold text-emerald-600',
+      className: ' text-emerald-600',
       render: (val) => formatCurrency(val)
     },
     {
       label: 'Status',
       key: 'status',
       render: (val) => (
-        <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
+        <span className={`px-2 py-1 rounded text-xs  border   ${
           val === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
           val === 'PROCESSING' ? 'bg-blue-50 text-blue-700 border-blue-100' :
           val === 'APPROVED' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 
@@ -189,7 +189,7 @@ const VendorInwardChallans = () => {
               title="Process Payment"
             >
               {processingId === row.id ? (
-                <div className="w-4 h-4 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-emerald-600/30 border-t-emerald-600 rounded animate-spin"></div>
               ) : (
                 <Send className="w-4 h-4" />
               )}
@@ -206,21 +206,21 @@ const VendorInwardChallans = () => {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Vendor Inward Challans</h1>
-          <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Manage costs and invoices from vendor receipts</p>
+          <h1 className="text-xl  text-slate-900 ">Vendor Inward Challans</h1>
+          <p className="text-xs text-slate-500 mt-1   ">Manage costs and invoices from vendor receipts</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="relative">
             <input 
               type="text" 
               placeholder="Search challans..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all w-64"
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all w-64"
             />
             <svg className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -256,24 +256,24 @@ const VendorInwardChallans = () => {
         maxWidth="max-w-2xl"
       >
         {selectedReceipt && (
-          <div className="space-y-6">
-             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-2">
+             <div className="bg-slate-50 border border-slate-200 rounded  p-2 grid grid-cols-2 md:grid-cols-4 gap-2">
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Job Card</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedReceipt.job_card_number}</p>
+                  <p className="text-xs   text-slate-400 ">Job Card</p>
+                  <p className="text-xs  text-slate-900 mt-1">{selectedReceipt.job_card_number}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Vendor</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedReceipt.vendor_name}</p>
+                  <p className="text-xs   text-slate-400 ">Vendor</p>
+                  <p className="text-xs  text-slate-900 mt-1">{selectedReceipt.vendor_name}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Inward Date</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{formatDate(selectedReceipt.date)}</p>
+                  <p className="text-xs   text-slate-400 ">Inward Date</p>
+                  <p className="text-xs  text-slate-900 mt-1">{formatDate(selectedReceipt.date)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Status</p>
+                  <p className="text-xs   text-slate-400 ">Status</p>
                   <div className="mt-1">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${
+                    <span className={`px-2 py-0.5 rounded text-xs  border   ${
                       selectedReceipt.status === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
                       selectedReceipt.status === 'PROCESSING' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                       selectedReceipt.status === 'APPROVED' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 
@@ -287,18 +287,18 @@ const VendorInwardChallans = () => {
 
              <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-1 bg-blue-500 rounded-full"></div>
-                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Inward Items & Costing</h4>
+                  <div className="h-4 w-1 bg-blue-500 rounded"></div>
+                  <h4 className="text-xs  text-slate-900  ">Inward Items & Costing</h4>
                 </div>
 
-                <div className="border border-slate-100 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-[11px]">
+                <div className="border border-slate-100 rounded  overflow-hidden">
+                  <table className="w-full text-left text-xs ">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
-                        <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider">Item Code</th>
-                        <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-center">Qty</th>
-                        <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-right">Rate</th>
-                        <th className="px-3 py-2 font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                        <th className="p-2 font-semibold text-slate-500  ">Item Code</th>
+                        <th className="p-2 font-semibold text-slate-500   text-center">Qty</th>
+                        <th className="p-2 font-semibold text-slate-500   text-right">Rate</th>
+                        <th className="p-2 font-semibold text-slate-500   text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -306,25 +306,25 @@ const VendorInwardChallans = () => {
                         <tr><td colSpan="4" className="px-3 py-4 text-center text-slate-400">Loading items...</td></tr>
                       ) : receiptItems.map((item, idx) => (
                         <tr key={idx} className="bg-white hover:bg-slate-50 transition-colors">
-                          <td className="px-3 py-2 font-medium text-slate-700">{item.item_code}</td>
-                          <td className="px-3 py-2 text-center text-slate-600 font-bold">{item.release_qty}</td>
-                          <td className="px-3 py-2 text-right text-slate-900 font-medium">{formatCurrency(item.rate)}</td>
-                          <td className="px-3 py-2 text-right text-slate-900 font-bold">{formatCurrency(Number(item.release_qty) * Number(item.rate))}</td>
+                          <td className="p-2 text-slate-700">{item.item_code}</td>
+                          <td className="p-2 text-center text-slate-600 ">{item.release_qty}</td>
+                          <td className="p-2 text-right text-slate-900 font-medium">{formatCurrency(item.rate)}</td>
+                          <td className="p-2 text-right text-slate-900 ">{formatCurrency(Number(item.release_qty) * Number(item.rate))}</td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-slate-50/50 border-t border-slate-100 font-bold">
+                    <tfoot className="bg-slate-50/50 border-t border-slate-100 ">
                       <tr>
-                        <td colSpan="3" className="px-3 py-2 text-right text-slate-500 uppercase tracking-wider text-[10px]">Sub Total</td>
-                        <td className="px-3 py-2 text-right text-slate-700">{formatCurrency(selectedReceipt.sub_total)}</td>
+                        <td colSpan="3" className="p-2 text-right text-slate-500   text-xs">Sub Total</td>
+                        <td className="p-2 text-right text-slate-700">{formatCurrency(selectedReceipt.sub_total)}</td>
                       </tr>
                       <tr>
-                        <td colSpan="3" className="px-3 py-2 text-right text-slate-500 uppercase tracking-wider text-[10px]">GST (18%)</td>
-                        <td className="px-3 py-2 text-right text-indigo-600">{formatCurrency(selectedReceipt.gst_amount)}</td>
+                        <td colSpan="3" className="p-2 text-right text-slate-500   text-xs">GST (18%)</td>
+                        <td className="p-2 text-right text-indigo-600">{formatCurrency(selectedReceipt.gst_amount)}</td>
                       </tr>
                       <tr className="bg-slate-100/50">
-                        <td colSpan="3" className="px-3 py-2 text-right text-slate-900 uppercase tracking-wider text-[10px]">Grand Total</td>
-                        <td className="px-3 py-2 text-right text-emerald-600 text-sm">{formatCurrency(selectedReceipt.amount)}</td>
+                        <td colSpan="3" className="p-2 text-right text-slate-900   text-xs">Grand Total</td>
+                        <td className="p-2 text-right text-emerald-600 text-sm">{formatCurrency(selectedReceipt.amount)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -335,7 +335,7 @@ const VendorInwardChallans = () => {
                <div className="flex justify-center pt-4">
                  <button 
                   onClick={() => window.open(`${API_BASE}/${selectedReceipt.invoice_url}`, '_blank')}
-                  className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100"
+                  className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100"
                  >
                    <FileText className="w-4 h-4" />
                    View Vendor Invoice

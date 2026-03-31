@@ -40,7 +40,7 @@ const QualityRejections = () => {
       render: (val, row) => (
         <div className="flex flex-col">
           <span className=" text-slate-900 text-xs">{val || row.item_code}</span>
-          <span className="text-[10px] text-indigo-600  ">{row.item_code}</span>
+          <span className="text-xs text-indigo-600  ">{row.item_code}</span>
         </div>
       )
     },
@@ -49,7 +49,7 @@ const QualityRejections = () => {
       key: 'rejected_qty',
       className: 'text-center',
       render: (val) => (
-        <span className="font-black text-rose-600">
+        <span className=" text-rose-600">
           {parseFloat(val || 0).toFixed(3)}
         </span>
       )
@@ -61,14 +61,14 @@ const QualityRejections = () => {
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
             <Hash className="w-3 h-3 text-slate-400" />
-            <span className="text-[10px] font-black text-slate-700">{val}</span>
+            <span className="text-xs  text-slate-700">{val}</span>
             <span className={`text-[8px] px-1.5 py-0.5 rounded-md  ${row.ref_type === 'GRN' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
               {row.ref_type}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             <ShoppingBag className="w-3 h-3 text-slate-400" />
-            <span className="text-[10px]  text-slate-500">{row.po_number || '—'}</span>
+            <span className="text-xs  text-slate-500">{row.po_number || '—'}</span>
           </div>
         </div>
       )
@@ -108,7 +108,7 @@ const QualityRejections = () => {
         };
         
         return (
-          <span className={`inline-flex items-center px-2 py-1 rounded-mdtext-xs  font-black  border ${colors[val] || colors.REJECTED}`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded-mdtext-xs    border ${colors[val] || colors.REJECTED}`}>
             {val || 'REJECTED'}
           </span>
         );
@@ -118,7 +118,7 @@ const QualityRejections = () => {
       label: 'Reason/Remarks',
       key: 'item_remarks',
       render: (val) => (
-        <p className="text-[10px] text-slate-500 italic max-w-xs truncate">
+        <p className="text-xs text-slate-500 italic max-w-xs truncate">
           {val || 'No remarks provided'}
         </p>
       )
@@ -126,10 +126,10 @@ const QualityRejections = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl  text-slate-900">Quality Rejections</h1>
+          <h1 className="text-xl  text-slate-900">Quality Rejections</h1>
           <p className="text-sm text-slate-500">Analysis and tracking of non-conforming materials and products</p>
         </div>
         <button 

@@ -257,15 +257,15 @@ const CustomerPO = ({
     {
       label: 'PO Details',
       render: (_, row) => (
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
             <FileText className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-900 uppercase tracking-tight">{row.po_number}</p>
+            <p className="text-xs  text-slate-900  tracking-tight">{row.po_number}</p>
             <div className="flex items-center gap-1.5 mt-0.5">
               <Building2 className="w-3 h-3 text-slate-400" />
-              <p className="text-[10px] font-medium text-slate-500">{row.company_name}</p>
+              <p className="text-xs text-slate-500">{row.company_name}</p>
             </div>
           </div>
         </div>
@@ -277,11 +277,11 @@ const CustomerPO = ({
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5 text-slate-600">
             <Calendar className="w-3 h-3" />
-            <span className="text-[11px] font-bold">
+            <span className="text-xs  ">
               {new Date(row.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
             </span>
           </div>
-          <span className="text-[9px] text-slate-400 font-medium ml-4.5">Captured Date</span>
+          <span className="text-xs text-slate-400 ml-4.5">Captured Date</span>
         </div>
       )
     },
@@ -289,10 +289,10 @@ const CustomerPO = ({
       label: 'Amount',
       render: (_, row) => (
         <div className="flex flex-col">
-          <div className="flex items-center gap-1 text-emerald-600 font-black">
-            <span className="text-[11px]">{formatCurrency(row.net_total)}</span>
+          <div className="flex items-center gap-1 text-emerald-600 ">
+            <span className="text-xs ">{formatCurrency(row.net_total)}</span>
           </div>
-          <div className="flex items-center gap-1 text-[9px] text-slate-400 font-bold uppercase">
+          <div className="flex items-center gap-1 text-xs text-slate-400  ">
             <span>Incl. Taxes</span>
           </div>
         </div>
@@ -305,7 +305,7 @@ const CustomerPO = ({
         const config = poStatusColors[status] || poStatusColors.DRAFT;
         const Icon = config.icon;
         return (
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${config.bg} ${config.text} border ${config.border} shadow-sm`}>
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs    ${config.bg} ${config.text} border ${config.border} shadow-sm`}>
             <Icon className="w-3 h-3" />
             {status}
           </span>
@@ -319,14 +319,14 @@ const CustomerPO = ({
         <div className="flex items-center justify-end gap-2">
           <button 
             onClick={() => handleDownloadPdf(row.id, row.po_number)}
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100 shadow-sm hover:shadow-md"
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100 shadow-sm hover:"
             title="View PDF"
           >
             <FileText className="w-4 h-4" />
           </button>
           <button 
             onClick={() => fetchPoDetails(row.id)}
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100 shadow-sm hover:shadow-md"
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100 shadow-sm hover:"
             title="View Details"
           >
             <Eye className="w-4 h-4" />
@@ -337,26 +337,26 @@ const CustomerPO = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-6 space-y-6">
+    <div className="min-h-screen bg-[#f8fafc] p-2 space-y-2">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+          <h1 className="text-xl  text-slate-900  flex items-center gap-2">
             Customer Purchase Orders
-            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-[10px] rounded-md font-black uppercase tracking-widest">Enterprise</span>
+            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-xs rounded-md   ">Enterprise</span>
           </h1>
-          <p className="text-slate-500 text-sm font-medium mt-1">Manage and track external purchase orders from your clients</p>
+          <p className="text-slate-500 text-xs ">Manage and track external purchase orders from your clients</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button 
             onClick={() => onRefresh && onRefresh()}
-            className="p-2.5 text-slate-500 hover:bg-white hover:text-indigo-600 rounded-xl transition-all border border-slate-200 bg-slate-50/50 shadow-sm active:scale-95"
+            className="p-2.5 text-slate-500 hover:bg-white hover:text-indigo-600 rounded  transition-all border border-slate-200 bg-slate-50/50 shadow-sm active:scale-95"
           >
             <RefreshCw className="w-5 h-5" />
           </button>
           <button 
             onClick={() => setShowPoForm(true)}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95"
+            className="flex items-center gap-2 bg-indigo-600 text-white p-2  rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             New Purchase Order
@@ -365,7 +365,7 @@ const CustomerPO = ({
       </div>
 
       {/* Stats Section (Optional - can be added later if needed) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
         {[
           { label: 'Total Orders', value: customerPos.length, color: 'indigo', icon: FileText },
           { label: 'Pending Approval', value: customerPos.filter(p => p.status === 'PENDING').length, color: 'amber', icon: Clock },
@@ -374,13 +374,13 @@ const CustomerPO = ({
         ].map((stat, idx) => {
           const Icon = stat.icon;
           return (
-            <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all group">
+            <div key={idx} className="bg-white border border-slate-200 rounded p-2 shadow-sm hover: transition-all group">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</p>
-                  <p className="text-xl font-black text-slate-800 mt-1">{stat.value}</p>
+                  <p className="text-xs  text-slate-400  ">{stat.label}</p>
+                  <p className="text-xl  text-slate-800 mt-1">{stat.value}</p>
                 </div>
-                <div className={`p-2 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl`}>
+                <div className={`p-2 bg-${stat.color}-50 text-${stat.color}-600 rounded `}>
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
@@ -390,7 +390,7 @@ const CustomerPO = ({
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-col md:flex-row items-center gap-4">
+      <div className="flex flex-col md:flex-row items-center gap-2">
         <div className="relative flex-1 w-full">
           <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
@@ -398,16 +398,16 @@ const CustomerPO = ({
             placeholder="Search by PO number or client name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm font-medium"
+            className="w-full pl-11 pr-4 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm font-medium"
           />
         </div>
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm w-full md:w-auto">
+        <div className="flex items-center gap-2 p-2  bg-white border border-slate-200 rounded shadow-sm w-full md:w-auto">
           <Filter className="w-4 h-4 text-slate-400" />
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Status:</span>
+          <span className="text-xs text-slate-400   ">Status:</span>
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-sm font-bold text-indigo-600 outline-none bg-transparent cursor-pointer min-w-[100px]"
+            className="text-xs  text-indigo-600 outline-none bg-transparent cursor-pointer min-w-[100px]"
           >
             <option value="ALL">All Orders</option>
             <option value="DRAFT">Draft</option>
@@ -419,7 +419,7 @@ const CustomerPO = ({
       </div>
 
       {/* Main Table Section */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden">
         <DataTable
           columns={columns}
           data={filteredPOs}
@@ -429,52 +429,52 @@ const CustomerPO = ({
         />
         {filteredPOs.length === 0 && !customerPosLoading && (
           <div className="py-20 text-center">
-            <div className="bg-slate-50 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-slate-100">
+            <div className="bg-slate-50 w-16 h-16 rounded flex items-center justify-center mx-auto mb-4 border border-slate-100">
               <Package className="w-8 h-8 text-slate-300" />
             </div>
-            <h3 className="text-slate-900 font-bold text-lg">No orders found</h3>
-            <p className="text-slate-500 text-sm mt-1 font-medium">Try adjusting your filters or search term</p>
+            <h3 className="text-slate-900  text-lg">No orders found</h3>
+            <p className="text-slate-500 text-xs  font-medium">Try adjusting your filters or search term</p>
           </div>
         )}
       </div>
 
       {/* Manual PO Form Modal */}
       {showPoForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={closePoForm} />
-          <div className="relative w-full max-w-5xl bg-white shadow-2xl rounded-[32px] flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
+          <div className="relative w-full max-w-5xl bg-white shadow-2xl rounded  flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
             {/* Modal Header */}
-            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+            <div className="p-2  border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
               <div>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight">New Customer Purchase Order</h2>
-                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Manual Data Entry Workflow</p>
+                <h2 className="text-xl  text-slate-900 ">New Customer Purchase Order</h2>
+                <p className="text-xs text-slate-500    mt-1">Manual Data Entry Workflow</p>
               </div>
               <button 
                 onClick={closePoForm}
-                className="p-3 rounded-2xl hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50"
+                className="p-2 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
               <form onSubmit={handlePoSubmit} id="po-manual-form" className="space-y-10">
                 {/* Header Information Section */}
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded ">
                       <FileText className="w-5 h-5" />
                     </div>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">General Information</h3>
+                    <h3 className="text-sm  text-slate-800  ">General Information</h3>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quotation No (Fetch Details)</label>
+                      <label className="text-xs  text-slate-400   ml-1">Quotation No (Fetch Details)</label>
                       <select 
                         value={selectedQuoteId}
                         onChange={(e) => handleQuotationSelect(e.target.value)}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700 appearance-none"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
                       >
                         <option value="">Manual Entry (No Quotation)</option>
                         {(() => {
@@ -506,12 +506,12 @@ const CustomerPO = ({
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Company / Client *</label>
+                      <label className="text-xs  text-slate-400   ml-1">Company / Client *</label>
                       <select 
                         required
                         value={poForm.companyId}
                         onChange={(e) => setPoForm(prev => ({ ...prev, companyId: e.target.value }))}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700 appearance-none"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
                       >
                         <option value="">Select Company</option>
                         {companies.map(c => (
@@ -520,52 +520,52 @@ const CustomerPO = ({
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">PO Number *</label>
+                      <label className="text-xs  text-slate-400   ml-1">PO Number *</label>
                       <input 
                         required
                         type="text"
                         value={poForm.poNumber}
                         onChange={(e) => setPoForm(prev => ({ ...prev, poNumber: e.target.value }))}
                         placeholder="e.g. PO/2026/001"
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">PO Date *</label>
+                      <label className="text-xs  text-slate-400   ml-1">PO Date *</label>
                       <input 
                         required
                         type="date"
                         value={poForm.poDate}
                         onChange={(e) => setPoForm(prev => ({ ...prev, poDate: e.target.value }))}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Payment Terms</label>
+                      <label className="text-xs  text-slate-400   ml-1">Payment Terms</label>
                       <input 
                         type="text"
                         value={poForm.paymentTerms}
                         onChange={(e) => setPoForm(prev => ({ ...prev, paymentTerms: e.target.value }))}
                         placeholder="e.g. 30 Days Net"
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Credit Days</label>
+                      <label className="text-xs  text-slate-400   ml-1">Credit Days</label>
                       <input 
                         type="number"
                         value={poForm.creditDays}
                         onChange={(e) => setPoForm(prev => ({ ...prev, creditDays: e.target.value }))}
                         placeholder="e.g. 30"
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Currency</label>
+                      <label className="text-xs  text-slate-400   ml-1">Currency</label>
                       <select 
                         value={poForm.currency}
                         onChange={(e) => setPoForm(prev => ({ ...prev, currency: e.target.value }))}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700 appearance-none"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
                       >
                         <option value="INR">INR - Indian Rupee</option>
                         <option value="USD">USD - US Dollar</option>
@@ -576,38 +576,38 @@ const CustomerPO = ({
                 </div>
 
                 {/* Line Items Section */}
-                <div className="space-y-6">
+                <div className="space-y-2">
                   <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
                         <Package className="w-5 h-5" />
                       </div>
-                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Purchase Items</h3>
+                      <h3 className="text-sm  text-slate-800  ">Purchase Items</h3>
                     </div>
                     <button 
                       type="button"
                       onClick={handleAddItem}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all active:scale-95 shadow-sm"
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 shadow-sm"
                     >
                       <Plus className="w-3.5 h-3.5 stroke-[3]" />
                       Add Line Item
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto rounded-[24px] border-2 border-slate-100 bg-white shadow-sm">
+                  <div className="overflow-x-auto rounded border-2 border-slate-100 bg-white ">
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b-2 border-slate-100">
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left w-32">Drawing No *</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Description *</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-24">Qty *</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-20">Unit</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-32">Rate *</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-20">CGST %</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-20">SGST %</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-20">IGST %</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-6 w-32">Total</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-16">Action</th>
+                          <th className="p-2  text-xs  text-slate-400   text-left w-32">Drawing No *</th>
+                          <th className="p-2  text-xs  text-slate-400   text-left">Description *</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-24">Qty *</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-20">Unit</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-32">Rate *</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-20">CGST %</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-20">SGST %</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-20">IGST %</th>
+                          <th className="p-2  text-xs  text-slate-400   text-right pr-6 w-32">Total</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-16">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -625,7 +625,7 @@ const CustomerPO = ({
                                   value={item.drawingNo}
                                   onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value)}
                                   placeholder="DRW-101"
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                                 />
                               </td>
                               <td className="p-2">
@@ -635,7 +635,7 @@ const CustomerPO = ({
                                   value={item.description}
                                   onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                   placeholder="Item description..."
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-700"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                                 />
                               </td>
                               <td className="p-2">
@@ -644,7 +644,7 @@ const CustomerPO = ({
                                   type="number"
                                   value={item.quantity}
                                   onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-center focus:border-indigo-500 focus:bg-white outline-none transition-all font-black text-slate-800"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-800"
                                 />
                               </td>
                               <td className="p-2">
@@ -653,7 +653,7 @@ const CustomerPO = ({
                                   type="text"
                                   value={item.unit}
                                   onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-center focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-600 uppercase"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600 "
                                 />
                               </td>
                               <td className="p-2">
@@ -662,7 +662,7 @@ const CustomerPO = ({
                                   type="number"
                                   value={item.rate}
                                   onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-                                  className="w-full bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 text-[11px] text-center focus:border-indigo-500 focus:bg-white outline-none transition-all font-black text-indigo-600 placeholder:text-indigo-200"
+                                  className="w-full bg-indigo-50 border border-indigo-100 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-indigo-600 placeholder:text-indigo-200"
                                   placeholder="0.00"
                                 />
                               </td>
@@ -671,7 +671,7 @@ const CustomerPO = ({
                                   type="number"
                                   value={item.cgstPercent}
                                   onChange={(e) => handleItemChange(index, 'cgstPercent', e.target.value)}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-center focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-600"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
                                 />
                               </td>
                               <td className="p-2">
@@ -679,7 +679,7 @@ const CustomerPO = ({
                                   type="number"
                                   value={item.sgstPercent}
                                   onChange={(e) => handleItemChange(index, 'sgstPercent', e.target.value)}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-center focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-600"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
                                 />
                               </td>
                               <td className="p-2">
@@ -687,18 +687,18 @@ const CustomerPO = ({
                                   type="number"
                                   value={item.igstPercent}
                                   onChange={(e) => handleItemChange(index, 'igstPercent', e.target.value)}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-center focus:border-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-600"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
                                 />
                               </td>
                               <td className="p-2 text-right pr-6">
-                                <span className="text-[11px] font-black text-slate-900">{formatCurrency(total)}</span>
+                                <span className="text-xs   text-slate-900">{formatCurrency(total)}</span>
                               </td>
                               <td className="p-2 text-center">
                                 {poForm.items.length > 1 && (
                                   <button 
                                     type="button"
                                     onClick={() => handleRemoveItem(index)}
-                                    className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
+                                    className="p-2 bg-slate-50 border border-slate-200 rounded  text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
                                     title="Remove Item"
                                   >
                                     <Trash2 className="w-4 h-4" />
@@ -711,9 +711,9 @@ const CustomerPO = ({
                       </tbody>
                       <tfoot className="bg-slate-50/50">
                         <tr>
-                          <td colSpan="8" className="px-4 py-3 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Grand Total (Incl. Taxes)</td>
-                          <td className="px-4 py-3 text-right pr-6">
-                            <span className="text-sm font-black text-indigo-600">
+                          <td colSpan="8" className="px-4 p-2 text-right text-xs  text-slate-400  ">Grand Total (Incl. Taxes)</td>
+                          <td className="px-4 p-2 text-right pr-6">
+                            <span className="text-sm  text-indigo-600">
                               {formatCurrency(poForm.items.reduce((sum, item) => {
                                 const sub = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
                                 const tax = sub * ((parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0)) / 100;
@@ -728,34 +728,34 @@ const CustomerPO = ({
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-                    <div className="p-2 bg-slate-50 text-slate-600 rounded-xl">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
+                    <div className="p-2 bg-slate-50 text-slate-600 rounded ">
                       <AlertCircle className="w-5 h-5" />
                     </div>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Additional Notes</h3>
+                    <h3 className="text-sm  text-slate-800  ">Additional Notes</h3>
                   </div>
                   <textarea 
                     value={poForm.remarks}
                     onChange={(e) => setPoForm(prev => ({ ...prev, remarks: e.target.value }))}
                     rows="4"
-                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-[24px] px-6 py-4 text-sm focus:border-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 shadow-inner"
+                    className="w-full bg-slate-50 border-2 border-slate-100 rounded  p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 "
                     placeholder="Enter any additional remarks, special instructions, or terms..."
                   />
                 </div>
               </form>
             </div>
 
-            <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/80 backdrop-blur-md flex items-center justify-between sticky bottom-0 z-10">
+            <div className="p-2  border-t border-slate-100 bg-slate-50/80 backdrop-blur-md flex items-center justify-between sticky bottom-0 z-10">
               <div className="hidden md:block">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Mandatory Fields *</p>
-                <p className="text-[11px] text-slate-500 font-bold mt-1">Check all line items before submitting</p>
+                <p className="text-xs  text-slate-400  ">Mandatory Fields *</p>
+                <p className="text-xs  text-slate-500  mt-1">Check all line items before submitting</p>
               </div>
-              <div className="flex items-center gap-4 w-full md:w-auto">
+              <div className="flex items-center gap-2 w-full md:w-auto">
                 <button 
                   type="button"
                   onClick={closePoForm}
-                  className="flex-1 md:flex-none px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all active:scale-95"
+                  className="flex-1 md:flex-none p-2  rounded text-xs    text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all active:scale-95"
                 >
                   Cancel
                 </button>
@@ -763,7 +763,7 @@ const CustomerPO = ({
                   form="po-manual-form"
                   type="submit"
                   disabled={poFormLoading}
-                  className="flex-1 md:flex-none bg-indigo-600 text-white px-10 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-3"
+                  className="flex-1 md:flex-none bg-indigo-600 text-white p-2  rounded text-xs    hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
                 >
                   {poFormLoading ? (
                     <>
@@ -782,106 +782,106 @@ const CustomerPO = ({
 
       {/* PO Details Modal */}
       {viewingPo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewingPo(null)} />
-          <div className="relative w-full max-w-5xl bg-white shadow-2xl rounded-[32px] flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
+          <div className="relative w-full max-w-5xl bg-white shadow-2xl rounded  flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
             {/* Modal Header */}
-            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl shadow-inner">
+            <div className="p-2  border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
                   <FileText className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                  <h2 className="text-xl  text-slate-900  flex items-center gap-2">
                     {viewingPo.po_number}
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest border ${poStatusColors[viewingPo.status || 'DRAFT'].bg} ${poStatusColors[viewingPo.status || 'DRAFT'].text} ${poStatusColors[viewingPo.status || 'DRAFT'].border}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-xs    border ${poStatusColors[viewingPo.status || 'DRAFT'].bg} ${poStatusColors[viewingPo.status || 'DRAFT'].text} ${poStatusColors[viewingPo.status || 'DRAFT'].border}`}>
                       {viewingPo.status || 'DRAFT'}
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
+                  <p className="text-xs text-slate-500    mt-1 flex items-center gap-2">
                     <Building2 className="w-3 h-3 text-indigo-500" />
                     {viewingPo.company_name}
-                    <span className="w-1 h-1 bg-slate-300 rounded-full mx-1" />
+                    <span className="w-1 h-1 bg-slate-300 rounded mx-1" />
                     <Calendar className="w-3 h-3 text-indigo-500" />
                     {new Date(viewingPo.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button 
                   onClick={() => handleDownloadPdf(viewingPo.id, viewingPo.po_number)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 text-slate-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-100 transition-all active:scale-95 border border-slate-200 shadow-sm"
+                  className="flex items-center gap-2 p-2  bg-slate-50 text-slate-700 rounded  text-xs    hover:bg-slate-100 transition-all active:scale-95 border border-slate-200 shadow-sm"
                 >
                   <Download className="w-4 h-4" />
                   Download PDF
                 </button>
                 <button 
                   onClick={() => setViewingPo(null)}
-                  className="p-3 rounded-2xl hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50 border border-slate-200"
+                  className="p-2 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50 border border-slate-200"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Currency</p>
-                  <p className="text-sm font-black text-slate-700">{viewingPo.currency || 'INR'}</p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div className="bg-slate-50/50 rounded p-2 border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1">Currency</p>
+                  <p className="text-sm  text-slate-700">{viewingPo.currency || 'INR'}</p>
                 </div>
-                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Payment Terms</p>
-                  <p className="text-sm font-black text-slate-700">{viewingPo.payment_terms || '—'}</p>
+                <div className="bg-slate-50/50 rounded p-2 border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1">Payment Terms</p>
+                  <p className="text-sm  text-slate-700">{viewingPo.payment_terms || '—'}</p>
                 </div>
-                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Credit Days</p>
-                  <p className="text-sm font-black text-slate-700">{viewingPo.credit_days || '—'} Days</p>
+                <div className="bg-slate-50/50 rounded p-2 border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1">Credit Days</p>
+                  <p className="text-sm  text-slate-700">{viewingPo.credit_days || '—'} Days</p>
                 </div>
-                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Order Type</p>
-                  <p className="text-sm font-black text-slate-700">{viewingPo.order_type || 'STANDARD'}</p>
+                <div className="bg-slate-50/50 rounded p-2 border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1">Order Type</p>
+                  <p className="text-sm  text-slate-700">{viewingPo.order_type || 'STANDARD'}</p>
                 </div>
               </div>
 
               {/* Items Table */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
                     <Package className="w-5 h-5" />
                   </div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Order Items</h3>
+                  <h3 className="text-sm  text-slate-800  ">Order Items</h3>
                 </div>
                 
-                <div className="overflow-hidden rounded-[24px] border-2 border-slate-100 bg-white shadow-sm">
+                <div className="overflow-hidden rounded border-2 border-slate-100 bg-white shadow-sm">
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-slate-50 border-b-2 border-slate-100">
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Drawing No</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Description</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Qty</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Rate</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-8">Total</th>
+                        <th className=" p-2 text-xs  text-slate-400   text-left">Drawing No</th>
+                        <th className=" p-2 text-xs  text-slate-400   text-left">Description</th>
+                        <th className=" p-2 text-xs  text-slate-400   text-center">Qty</th>
+                        <th className=" p-2 text-xs  text-slate-400   text-right">Rate</th>
+                        <th className=" p-2 text-xs  text-slate-400   text-right pr-8">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {viewingPo.items?.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4">
-                            <span className="text-xs font-black text-slate-900">{item.drawing_no}</span>
+                          <td className=" p-2">
+                            <span className="text-xs  text-slate-900">{item.drawing_no}</span>
                           </td>
-                          <td className="px-6 py-4">
-                            <p className="text-xs font-bold text-slate-600">{item.description}</p>
+                          <td className=" p-2">
+                            <p className="text-xs  text-slate-600">{item.description}</p>
                           </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className="text-xs font-black text-slate-900">{item.quantity} {item.unit}</span>
+                          <td className=" p-2 text-center">
+                            <span className="text-xs  text-slate-900">{item.quantity} {item.unit}</span>
                           </td>
-                          <td className="px-6 py-4 text-right">
-                            <span className="text-xs font-bold text-slate-600">{formatCurrency(item.rate)}</span>
+                          <td className=" p-2 text-right">
+                            <span className="text-xs  text-slate-600">{formatCurrency(item.rate)}</span>
                           </td>
-                          <td className="px-6 py-4 text-right pr-8">
-                            <span className="text-xs font-black text-slate-900">{formatCurrency(item.basic_amount)}</span>
+                          <td className=" p-2 text-right pr-8">
+                            <span className="text-xs  text-slate-900">{formatCurrency(item.basic_amount)}</span>
                           </td>
                         </tr>
                       ))}
@@ -892,18 +892,18 @@ const CustomerPO = ({
 
               {/* Financial Summary */}
               <div className="flex justify-end">
-                <div className="w-full max-w-md bg-slate-50 rounded-3xl p-6 space-y-4 border border-slate-200/50">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <div className="w-full max-w-md bg-slate-50 rounded p-2 space-y-2 border border-slate-200/50">
+                  <div className="flex justify-between items-center text-xs  text-slate-500  ">
                     <span>Sub Total</span>
                     <span className="text-slate-900">{formatCurrency(viewingPo.subtotal)}</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <div className="flex justify-between items-center text-xs  text-slate-500  ">
                     <span>Tax Amount</span>
                     <span className="text-slate-900">{formatCurrency(viewingPo.tax_total)}</span>
                   </div>
                   <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
-                    <span className="text-sm font-black text-indigo-600 uppercase tracking-widest">Net Amount</span>
-                    <span className="text-2xl font-black text-indigo-600 tracking-tight">{formatCurrency(viewingPo.net_total)}</span>
+                    <span className="text-sm  text-indigo-600  ">Net Amount</span>
+                    <span className="text-md  text-indigo-600 ">{formatCurrency(viewingPo.net_total)}</span>
                   </div>
                 </div>
               </div>
@@ -911,8 +911,8 @@ const CustomerPO = ({
               {/* Remarks */}
               {viewingPo.remarks && (
                 <div className="space-y-3">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Remarks / Notes</h4>
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/50 text-sm text-slate-600 font-medium italic">
+                  <h4 className="text-xs  text-slate-400   ml-1">Remarks / Notes</h4>
+                  <div className="bg-slate-50 rounded p-2 border border-slate-200/50 text-sm text-slate-600 italic">
                     {viewingPo.remarks}
                   </div>
                 </div>
@@ -925,9 +925,9 @@ const CustomerPO = ({
       {/* Loading Overlay */}
       {loadingPoDetails && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px]">
-          <div className="bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-            <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Loading Details...</p>
+          <div className="bg-white p-2 rounded shadow-2xl flex flex-col items-center gap-2">
+            <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+            <p className="text-xs  text-slate-900  ">Loading Details...</p>
           </div>
         </div>
       )}

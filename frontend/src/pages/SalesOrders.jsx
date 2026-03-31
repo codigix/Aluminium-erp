@@ -655,11 +655,11 @@ const SalesOrders = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col py-1">
-          <span className="font-bold text-indigo-600 tracking-tight">
+          <span className=" text-indigo-600 tracking-tight">
             {val || `ORD-${String(row.id).padStart(4, '0')}`}
           </span>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-400 font-medium px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100 uppercase">
+            <span className="text-xs text-slate-400 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100 ">
               {row.order_type || 'Sales Order'}
             </span>
           </div>
@@ -671,13 +671,13 @@ const SalesOrders = () => {
       key: 'client',
       sortable: true,
       render: (val, row) => (
-        <div className="flex items-center gap-3 py-1">
-          <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm shadow-sm">
+        <div className="flex items-center gap-2 py-1">
+          <div className="w-9 h-9 rounded  bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600  text-sm shadow-sm">
             {val ? val.substring(0, 2).toUpperCase() : 'C'}
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-slate-900 leading-tight">{val}</span>
-            <span className="text-[11px] text-slate-500 font-medium italic">
+            <span className="text-xs  text-slate-500 italic">
               {row.projectName || 'General Project'}
             </span>
           </div>
@@ -703,7 +703,7 @@ const SalesOrders = () => {
         <div className="flex items-center gap-2">
           {val ? (
             <>
-              <div className={`w-2 h-2 rounded-full ${new Date(val) < new Date() ? 'bg-rose-400 animate-pulse' : 'bg-emerald-400'}`} />
+              <div className={`w-2 h-2 rounded ${new Date(val) < new Date() ? 'bg-rose-400 animate-pulse' : 'bg-emerald-400'}`} />
               <span className="text-xs text-slate-600 font-medium">
                 {new Date(val).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
               </span>
@@ -720,11 +720,11 @@ const SalesOrders = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col py-1">
-          <div className="flex items-center gap-1 font-bold text-slate-900">
+          <div className="flex items-center gap-1  text-slate-900">
             <span className="text-indigo-600 font-medium">₹</span>
             <span>{Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
-          <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+          <span className="text-xs text-emerald-600 font-semibold flex items-center gap-0.5">
             <Check className="w-3 h-3" /> Inclusive of Tax
           </span>
         </div>
@@ -748,7 +748,7 @@ const SalesOrders = () => {
         <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
           <button 
             onClick={() => handleCreateShipment(row)} 
-            className="p-2 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
+            className="p-2 hover:bg-blue-50 rounded  text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
             title="Create Shipment"
           >
             <Truck className="w-4 h-4 group-hover:scale-110" />
@@ -756,21 +756,21 @@ const SalesOrders = () => {
           <div className="h-4 w-[1px] bg-slate-100 mx-0.5" />
           <button 
             onClick={() => handleViewOrder(row)} 
-            className="p-2 hover:bg-indigo-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100 group shadow-sm"
+            className="p-2 hover:bg-indigo-50 rounded  text-slate-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100 group shadow-sm"
             title="View Details"
           >
             <Eye className="w-4 h-4 group-hover:scale-110" />
           </button>
           <button 
             onClick={() => handleEditOrder(row)} 
-            className="p-2 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-all border border-transparent hover:border-amber-100 group shadow-sm"
+            className="p-2 hover:bg-amber-50 rounded  text-slate-400 hover:text-amber-600 transition-all border border-transparent hover:border-amber-100 group shadow-sm"
             title="Edit Order"
           >
             <Pencil className="w-4 h-4 group-hover:scale-110" />
           </button>
           <button 
             onClick={() => handleDeleteOrder(row.id)} 
-            className="p-2 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            className="p-2 hover:bg-rose-50 rounded  text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
             title="Delete Order"
           >
             <Trash2 className="w-4 h-4 group-hover:scale-110" />
@@ -786,49 +786,49 @@ const SalesOrders = () => {
     const completedOrders = orders.filter(o => ['COMPLETED', 'FULFILLED', 'DELIVERED'].includes(o.status?.toUpperCase())).length;
 
     return (
-      <div className="space-y-6 pb-10">
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 shadow-inner">
+      <div className="space-y-2 pb-10">
+        <div className="bg-white p-2 rounded border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 rounded text-indigo-600 ">
                <Package className="w-8 h-8" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Sales Orders</h1>
-              <div className="flex items-center gap-3 mt-1">
+              <h1 className="text-xl  text-slate-900 ">Sales Orders</h1>
+              <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                  <span className="w-2 h-2 rounded bg-indigo-500" />
                   {totalOrders} Total
                 </span>
                 <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span className="w-2 h-2 rounded bg-amber-500" />
                   {pendingOrders} Processing
                 </span>
                 <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="w-2 h-2 rounded bg-emerald-500" />
                   {completedOrders} Finalized
                 </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
              <button 
               onClick={fetchOrders}
-              className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-100"
+              className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-slate-100"
               title="Refresh Data"
             >
               <Loader2 className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button 
               onClick={handleAddOrder}
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95 text-sm font-bold"
+              className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95 text-xs "
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-3 h-3" />
               Create New Order
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-2">
+        <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden p-2">
           <DataTable 
             columns={columns}
             data={orders}
@@ -855,7 +855,7 @@ const SalesOrders = () => {
 
   return (
     <div className="space-y-2 pb-20">
-      <div className="flex items-center gap-4 bg-white p-2 rounded  border border-slate-200  sticky top-0 z-10">
+      <div className="flex items-center gap-2 bg-white p-2 rounded  border border-slate-200  sticky top-0 z-10">
         <button 
           onClick={() => setViewMode('list')}
           className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-500"
@@ -863,7 +863,7 @@ const SalesOrders = () => {
           <ArrowLeft className="w-6 h-6" />
         </button>
         <div className="flex-1">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="p-2 bg-indigo-50 rounded ">
                 <FileText className="w-5 h-5 text-indigo-600" />
             </div>
@@ -873,7 +873,7 @@ const SalesOrders = () => {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
            <button 
               onClick={() => setViewMode('list')}
               className="p-2 bg-slate-100 text-slate-600 text-xs rounded  hover:bg-slate-200 transition-colors "
@@ -892,13 +892,13 @@ const SalesOrders = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-2">
           {/* Order Information */}
           <Card title="Order Information" className='bg-white' subtitle="Basic details about the order">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 p-2">
               <FormControl label="Series">
                 <input 
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs bg-slate-50 text-slate-500" 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs bg-slate-50 text-slate-500" 
                   value={formData.series} 
                   disabled 
                 />
@@ -906,7 +906,7 @@ const SalesOrders = () => {
               <FormControl label="Order Date *">
                 <input 
                   type="date" 
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
                   value={formData.orderDate}
                   onChange={(e) => setFormData({...formData, orderDate: e.target.value})}
                   disabled={formMode === 'view'}
@@ -915,7 +915,7 @@ const SalesOrders = () => {
               <FormControl label="Delivery Date">
                 <input 
                   type="date" 
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
                   value={formData.deliveryDate}
                   onChange={(e) => setFormData({...formData, deliveryDate: e.target.value})}
                   disabled={formMode === 'view'}
@@ -923,7 +923,7 @@ const SalesOrders = () => {
               </FormControl>
               <FormControl label="Order Type">
                 <select 
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
                   value={formData.orderType}
                   onChange={(e) => setFormData({...formData, orderType: e.target.value})}
                   disabled={formMode === 'view'}
@@ -937,7 +937,7 @@ const SalesOrders = () => {
 
           {/* Customer Details */}
           <Card title="Customer Details" className='bg-white' subtitle="Customer contact information">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 p-2">
               <FormControl label="Customer *">
                 <SearchableSelect 
                   options={companies.map(c => ({ value: c.id, label: c.company_name }))}
@@ -962,7 +962,7 @@ const SalesOrders = () => {
               </FormControl>
               <FormControl label="Email">
                 <input 
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
                   value={formData.customerEmail}
                   onChange={(e) => setFormData({...formData, customerEmail: e.target.value})}
                   disabled={formMode === 'view'}
@@ -970,7 +970,7 @@ const SalesOrders = () => {
               </FormControl>
               <FormControl label="Phone">
                 <input 
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
                   value={formData.customerPhone}
                   onChange={(e) => setFormData({...formData, customerPhone: e.target.value})}
                   disabled={formMode === 'view'}
@@ -981,7 +981,7 @@ const SalesOrders = () => {
 
           {/* Customer Purchase Order and storage */}
           <Card title="Customer Purchase Order and storage" className='bg-white' subtitle="PO & Inventory">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-2">
               <FormControl label="Select Customer PO *">
                 <div className="flex gap-2">
                   <div className="flex-1">
@@ -1012,7 +1012,7 @@ const SalesOrders = () => {
               </FormControl>
               <FormControl label="Warehouse">
                 <select 
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
                   value={formData.warehouse}
                   onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
                   disabled={formMode === 'view'}
@@ -1029,13 +1029,13 @@ const SalesOrders = () => {
           {/* Items included in selected PO */}
           {formData.items.length > 0 && (
             <Card title="Items included in selected PO" className='bg-white' subtitle="Order Items">
-              <div className="p-2 bg-blue-50/50 rounded  mb-4 border border-blue-100 flex items-center gap-4">
+              <div className="p-2 bg-blue-50/50 rounded  mb-4 border border-blue-100 flex items-center gap-2">
                 <div className="p-2 bg-white rounded   border border-blue-100">
                     <Package className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>
-                  <p className="text-[10px] text-indigo-600  ">PO Number: {formData.customerPoId ? (String(formData.customerPoId).includes('_') ? formData.customerPoId.split('_')[1] : formData.customerPoId) : 'N/A'}</p>
+                  <p className="text-xs  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>
+                  <p className="text-xs text-indigo-600  ">PO Number: {formData.customerPoId ? (String(formData.customerPoId).includes('_') ? formData.customerPoId.split('_')[1] : formData.customerPoId) : 'N/A'}</p>
                 </div>
               </div>
 
@@ -1055,7 +1055,7 @@ const SalesOrders = () => {
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-2    text-indigo-600">
                           {item.drawing_no || item.item_code}
-                          <div className="text-[10px] text-slate-400 font-sans mt-0.5">{item.description}</div>
+                          <div className="text-xs text-slate-400 font-sans mt-0.5">{item.description}</div>
                         </td>
                         <td className="p-2  text-slate-500">{item.type || 'Standard'}</td>
                         <td className="p-2  text-center">
@@ -1072,13 +1072,13 @@ const SalesOrders = () => {
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-2">
           {/* Order Status & Taxes */}
           <Card title="Order Status & Taxes" className='bg-white'>
-            <div className="space-y-4 p-4">
+            <div className="space-y-2 p-2">
               <FormControl label="Status">
                 <select 
-                  className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
                   value={formData.status}
                   onChange={(e) => setFormData({...formData, status: e.target.value})}
                   disabled={formMode === 'view'}
@@ -1089,11 +1089,11 @@ const SalesOrders = () => {
                   <option value="Cancelled">Cancelled</option>
                 </select>
               </FormControl>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2">
                 <FormControl label="CGST Rate (%)">
                   <input 
                     type="number"
-                    className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                    className="w-full p-2 border border-slate-200 rounded  text-xs" 
                     value={formData.cgstRate}
                     onChange={(e) => setFormData({...formData, cgstRate: Number(e.target.value)})}
                     disabled={formMode === 'view'}
@@ -1102,7 +1102,7 @@ const SalesOrders = () => {
                 <FormControl label="SGST Rate (%)">
                   <input 
                     type="number"
-                    className="w-full px-3 py-2 border border-slate-200 rounded  text-xs" 
+                    className="w-full p-2 border border-slate-200 rounded  text-xs" 
                     value={formData.sgstRate}
                     onChange={(e) => setFormData({...formData, sgstRate: Number(e.target.value)})}
                     disabled={formMode === 'view'}
@@ -1114,12 +1114,12 @@ const SalesOrders = () => {
 
           {/* Price Summary */}
           <Card title="Order Summary" className='bg-white'>
-            <div className="space-y-3 p-4">
+            <div className="space-y-3 p-2">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Items Subtotal:</span>
                 <span className=" text-slate-700">₹ {(Number(subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-              <div className="flex justify-between text-xs pt-3 border-t border-slate-100 font-medium text-blue-600">
+              <div className="flex justify-between text-xs pt-3 border-t border-slate-100 text-blue-600">
                 <span>Total Profit:</span>
                 <span>₹ {(Number(totalProfitVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
@@ -1132,7 +1132,7 @@ const SalesOrders = () => {
                    <p className="text-sm font-semibold text-slate-700">Total Order Value:</p>
                 </div>
                 <div className="text-right">
-                   <p className="text-xl font-bold text-emerald-600">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                   <p className="text-xl  text-emerald-600">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
@@ -1141,7 +1141,7 @@ const SalesOrders = () => {
       </div>
 
       {/* Bottom Actions */}
-      <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">
+      <div className="flex justify-end gap-2 mt-6 pt-6 border-t border-slate-200">
         <button 
           onClick={() => setViewMode('list')}
           className="p-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-colors  flex items-center gap-2 "

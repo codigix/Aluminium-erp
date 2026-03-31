@@ -387,39 +387,39 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] p-4">
       {/* Header Bar */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
+      <div className=" border-b border-slate-200 sticky top-0 z-30">
+        <div className=" mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
               <FileText className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-lg  text-slate-900">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl  text-slate-900">
                   {workOrderId ? 'Edit Manufacturing Order' : 'Create Manufacturing Order'}
                 </h1>
                 <span className="p-1  bg-slate-100 text-slate-500 text-xs   rounded   border border-slate-200">
                   {formData.status?.toLowerCase()}
                 </span>
               </div>
-              <p className="text-[10px]  text-slate-400  tracking-widest mt-0.5">
+              <p className="text-xs  text-slate-400   mt-0.5">
                 {formData.status === 'DRAFT' ? 'DRAFT-NEW' : formData.status} • {new Date().toLocaleDateString('en-GB')}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button 
               onClick={onBack}
-              className="p-2  text-sm  text-slate-600 hover:text-slate-900 transition-colors"
+              className="p-2  text-xs  text-slate-600 hover:text-slate-900 transition-colors"
             >
               Close
             </button>
             <button 
               onClick={() => handleSubmit(formData.status === 'DRAFT' ? 'RELEASED' : formData.status)}
               disabled={saving}
-              className={`flex items-center gap-2  p-2  rounded  transition-all text-sm   ${
+              className={`flex items-center gap-2  p-2  rounded  transition-all text-xs   ${
                 formData.status === 'DRAFT' 
                   ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
                   : 'bg-slate-900 hover:bg-slate-800 text-white'
@@ -432,14 +432,14 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className=" mx-auto ">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-8">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2  py-4 text-xs   tracking-widest transition-all relative ${
+                  className={`flex items-center gap-2  py-4 text-xs    transition-all relative ${
                     activeTab === tab.id ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
@@ -452,35 +452,35 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
               ))}
             </div>
 
-            <div className="flex items-center gap-3 p-2 .5 bg-slate-900 text-white rounded  border border-slate-800 ">
+            <div className="flex items-center gap-2 p-2 .5 bg-slate-900 text-white rounded  border border-slate-800 ">
               <div className="flex items-center gap-2 ">
                 <div className="w-1.5 h-1.5 bg-indigo-500 rounded  animate-pulse" />
-                <span className="text-[10px]   tracking-widest text-slate-400">Execution Pulse</span>
+                <span className="text-xs    text-slate-400">Execution Pulse</span>
               </div>
               <div className="h-3 w-px bg-slate-700 mx-1" />
-              <span className="text-[10px]  text-indigo-400">{stats.completionRate.toFixed(1)}%</span>
+              <span className="text-xs  text-indigo-400">{stats.completionRate.toFixed(1)}%</span>
               <Activity className="w-3 h-3 text-indigo-400" />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-6 py-8">
+      <div className="my-5">
         <div className="flex gap-8">
           {/* Main Content Area */}
-          <div className="flex-1 space-y-8">
+          <div className="flex-1 space-y-2">
             {activeTab === 'foundation' && (
-              <div className="space-y-8">
+              <div className="space-y-2">
                 {/* 01 Foundation Setup */}
                 <section>
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
                       <Settings className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm  text-slate-800  tracking-widest">01 Foundation Setup</h2>
+                    <h2 className="text-sm  text-slate-800  ">01 Foundation Setup</h2>
                   </div>
                   
-                  <Card className="p-8 border-slate-200/60 ">
+                  <Card className=" border-slate-200/60 ">
                     <div className="grid grid-cols-2 gap-x-8 gap-y-6">
                       <FormControl label="Target Item to Manufacture" required>
                         <SearchableSelect 
@@ -520,23 +520,23 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                         />
                       </FormControl>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-2">
                         <FormControl label="Quantity to Produce" required>
                           <div className="relative">
                             <input 
                               type="number"
-                              className={`w-full pl-3 pr-12 py-2.5 bg-white border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all ${isLocked ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                              className={`w-full pl-3 pr-12 py-2 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all ${isLocked ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                               value={formData.quantity}
                               disabled={isLocked}
                               onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
                             />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2text-xs   text-slate-400 ">UNIT</span>
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs   text-slate-400 ">UNIT</span>
                           </div>
                         </FormControl>
 
                         <FormControl label="Priority Level">
                           <select 
-                            className={`w-full px-3 py-2.5 bg-white border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
+                            className={`w-full p-2 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
                             value={formData.priority}
                             disabled={isLocked}
                             onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
@@ -573,20 +573,20 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
 
                 {/* 02 Production Timeline */}
                 <section>
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
                       <Clock className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm  text-slate-800  tracking-widest">02 Production Timeline</h2>
+                    <h2 className="text-sm  text-slate-800  ">02 Production Timeline</h2>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-6">
-                    <Card className="p-6 border-slate-200/60 ">
+                  <div className="grid grid-cols-3 gap-2">
+                    <Card className="border-slate-200/60 ">
                       <FormControl label="Planned Start Date" required>
                         <div className="relative">
                           <input 
                             type="date"
-                            className={`w-full px-3 py-2.5 bg-white border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
+                            className={`w-full p-2 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
                             value={formData.startDate}
                             disabled={isLocked}
                             onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
@@ -598,12 +598,12 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                       </FormControl>
                     </Card>
 
-                    <Card className="p-6 border-slate-200/60 ">
+                    <Card className="border-slate-200/60 ">
                       <FormControl label="Planned Completion Date" required>
                         <div className="relative">
                           <input 
                             type="date"
-                            className={`w-full px-3 py-2.5 bg-white border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
+                            className={`w-full p-2 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
                             value={formData.endDate}
                             disabled={isLocked}
                             onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
@@ -616,11 +616,11 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                       </FormControl>
                     </Card>
 
-                    <Card className="p-6 border-slate-200/60 ">
+                    <Card className="border-slate-200/60 ">
                       <FormControl label="Delivery Commitment">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm  text-slate-700">{formData.deliveryCommitment}</span>
-                          <span className="p-1  bg-amber-50 text-amber-600text-xs   rounded  ">Target</span>
+                          <span className="text-xs  text-slate-700">{formData.deliveryCommitment}</span>
+                          <span className="p-1  bg-amber-50 text-amber-600 text-xs   rounded  ">Target</span>
                         </div>
                       </FormControl>
                     </Card>
@@ -629,11 +629,11 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
 
                 {/* 03 Operation Sequence */}
                 <section>
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
                       <List className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm  text-slate-800  tracking-widest">03 Operation Sequence</h2>
+                    <h2 className="text-sm  text-slate-800  ">03 Operation Sequence</h2>
                   </div>
 
                   {operations.length > 0 ? (
@@ -641,11 +641,11 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                       <table className="w-full text-left text-xs">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
-                            <th className="p-2   text-slate-400  tracking-widest">Step</th>
-                            <th className="p-2   text-slate-400  tracking-widest">Operation</th>
-                            <th className="p-2   text-slate-400  tracking-widest">Workstation</th>
-                            <th className="p-2   text-slate-400  tracking-widest text-right">Base Time</th>
-                            <th className="p-2   text-slate-400  tracking-widest">Source Item</th>
+                            <th className="p-2   text-slate-400  ">Step</th>
+                            <th className="p-2   text-slate-400  ">Operation</th>
+                            <th className="p-2   text-slate-400  ">Workstation</th>
+                            <th className="p-2   text-slate-400   text-right">Base Time</th>
+                            <th className="p-2   text-slate-400  ">Source Item</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -666,8 +666,8 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                       </table>
                     </Card>
                   ) : (
-                    <Card className="p-12 border-slate-200/60  border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
-                      <div className="w-12 h-12 bg-white rounded  flex items-center justify-center mb-4  border border-slate-100">
+                    <Card className="p-5 border-slate-200/60  border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
+                      <div className="w-5 h-5 bg-white rounded  flex items-center justify-center mb-4  border border-slate-100">
                         <Activity className="w-6 h-6 text-slate-300 animate-pulse" />
                       </div>
                       <h3 className="text-sm  text-slate-600">Production Logic Not Found</h3>
@@ -680,11 +680,11 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
 
                 {/* 04 Required Inventory */}
                 <section>
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
                       <Package className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm  text-slate-800  tracking-widest">04 Required Inventory</h2>
+                    <h2 className="text-sm  text-slate-800  ">04 Required Inventory</h2>
                   </div>
 
                   {inventory.length > 0 ? (
@@ -692,10 +692,10 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                       <table className="w-full text-left text-xs">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
-                            <th className="p-2   text-slate-400  tracking-widest">Material</th>
-                            <th className="p-2   text-slate-400  tracking-widest text-right">Required Qty</th>
-                            <th className="p-2   text-slate-400  tracking-widest">Source Assembly</th>
-                            <th className="p-2   text-slate-400  tracking-widest">Status</th>
+                            <th className="p-2   text-slate-400  ">Material</th>
+                            <th className="p-2   text-slate-400   text-right">Required Qty</th>
+                            <th className="p-2   text-slate-400  ">Source Assembly</th>
+                            <th className="p-2   text-slate-400  ">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -703,7 +703,7 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                             <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                               <td className="p-2 ">
                                 <div className=" text-slate-700">{inv.material_name}</div>
-                                <div className="text-[10px] text-slate-400">{inv.item_code}</div>
+                                <div className="text-xs text-slate-400">{inv.item_code}</div>
                               </td>
                               <td className="p-2  text-slate-900  text-right">
                                 {inv.required_qty || (inv.qty_per_pc * formData.quantity).toFixed(2)} 
@@ -726,8 +726,8 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                       </table>
                     </Card>
                   ) : (
-                    <Card className="p-12 border-slate-200/60  border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
-                      <div className="w-12 h-12 bg-white rounded  flex items-center justify-center mb-4  border border-slate-100">
+                    <Card className="p-5 border-slate-200/60  border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
+                      <div className="w-5 h-5 bg-white rounded  flex items-center justify-center mb-4  border border-slate-100">
                         <Search className="w-6 h-6 text-slate-300" />
                       </div>
                       <h3 className="text-sm  text-slate-600">Stock Requirements Empty</h3>
@@ -737,25 +737,25 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                     </Card>
                   )}
 
-                  <div className="mt-6 bg-indigo-600 rounded  overflow-hidden relative">
+                  <div className="mt-2 bg-indigo-600 rounded  overflow-hidden relative">
                     <div className="absolute top-0 right-0 w-64 h-full bg-white/5 skew-x-12 -mr-12" />
-                    <div className="p-6 relative flex items-center gap-6">
-                      <div className="w-12 h-12 bg-white/10 rounded  flex items-center justify-center">
+                    <div className="p-2 relative flex items-center gap-6">
+                      <div className="w-5 h-5 bg-white/10 rounded  flex items-center justify-center">
                         <ShieldCheck className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 ">
-                          <span className="text-xs  text-white  tracking-widest">Inventory Advisory</span>
+                          <span className="text-xs  text-white  ">Inventory Advisory</span>
                         </div>
                         <p className="text-xs text-indigo-100 mt-1">
                           System tracks real-time material transfers. Ensure all raw materials are transferred from "Stores" to "Production" before consumption.
                         </p>
-                        <div className="flex items-center gap-4 mt-4">
-                          <span className="text-[10px]  text-indigo-200  tracking-widest">Transfer Status</span>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs  text-indigo-200  ">Transfer Status</span>
                           <div className="flex-1 h-1 bg-white/20 rounded  overflow-hidden">
                             <div className="h-full bg-white w-[0%]" />
                           </div>
-                          <span className="text-[10px]  text-white">0%</span>
+                          <span className="text-xs  text-white">0%</span>
                         </div>
                       </div>
                     </div>
@@ -765,13 +765,13 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                 {/* 05 Daily Production History */}
                 <section>
                   <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
                         <History className="w-4 h-4" />
                       </div>
-                      <h2 className="text-sm  text-slate-800  tracking-widest">05 Daily Production History</h2>
+                      <h2 className="text-sm  text-slate-800  ">05 Daily Production History</h2>
                     </div>
-                    <button className="p-2 .5 bg-indigo-600 text-whitetext-xs   rounded  hover:bg-indigo-700 transition-colors  tracking-widest">
+                    <button className="p-2 bg-indigo-600 text-white text-xs   rounded  hover:bg-indigo-700 transition-colors  ">
                       Export CSV
                     </button>
                   </div>
@@ -780,36 +780,36 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">DATE</th>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">SHIFT</th>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">OPERATOR</th>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">MINS</th>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">PRODUCED</th>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">ACCEPTED</th>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">REJECTED</th>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">SCRAP</th>
-                          <th className="p-3  text-[10px] text-slate-400  tracking-widest">DOWNTIME</th>
+                          <th className="p-2  text-xs text-slate-400  ">DATE</th>
+                          <th className="p-2  text-xs text-slate-400  ">SHIFT</th>
+                          <th className="p-2  text-xs text-slate-400  ">OPERATOR</th>
+                          <th className="p-2  text-xs text-slate-400  ">MINS</th>
+                          <th className="p-2  text-xs text-slate-400  ">PRODUCED</th>
+                          <th className="p-2  text-xs text-slate-400  ">ACCEPTED</th>
+                          <th className="p-2  text-xs text-slate-400  ">REJECTED</th>
+                          <th className="p-2  text-xs text-slate-400  ">SCRAP</th>
+                          <th className="p-2  text-xs text-slate-400  ">DOWNTIME</th>
                         </tr>
                       </thead>
                       <tbody>
                         {consolidatedReport.length > 0 ? (
                           consolidatedReport.map((row, idx) => (
                             <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
-                              <td className="p-3 font-medium text-slate-700">{row.date}</td>
-                              <td className="p-3">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-medium tracking-wider">
+                              <td className="p-2 text-slate-700">{row.date}</td>
+                              <td className="p-2">
+                                <span className="p-2 bg-slate-100 text-slate-600 rounded text-xs ">
                                   {row.shift}
                                 </span>
                               </td>
-                              <td className="p-3 text-slate-500">
+                              <td className="p-2 text-slate-500">
                                 {Array.from(row.operators).join(', ') || 'N/A'}
                               </td>
-                              <td className="p-3 font-medium text-indigo-600">{row.mins}</td>
-                              <td className="p-3 font-bold text-slate-900">{row.produced.toFixed(3)}</td>
-                              <td className="p-3 font-bold text-emerald-600">{row.accepted.toFixed(3)}</td>
-                              <td className="p-3 font-bold text-rose-600">{row.rejected.toFixed(3)}</td>
-                              <td className="p-3 font-bold text-amber-600">{row.scrap.toFixed(3)}</td>
-                              <td className="p-3 font-medium text-amber-600">
+                              <td className="p-2 text-indigo-600">{row.mins}</td>
+                              <td className="p-2  text-slate-900">{row.produced.toFixed(3)}</td>
+                              <td className="p-2  text-emerald-600">{row.accepted.toFixed(3)}</td>
+                              <td className="p-2  text-rose-600">{row.rejected.toFixed(3)}</td>
+                              <td className="p-2  text-amber-600">{row.scrap.toFixed(3)}</td>
+                              <td className="p-2 text-amber-600">
                                 {row.downtime > 0 ? `${row.downtime} min` : '--'}
                               </td>
                             </tr>
@@ -830,55 +830,55 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
           </div>
 
           {/* Right Sidebar */}
-          <div className="w-[320px] space-y-4">
+          <div className=" space-y-2">
             {/* Efficiency Projection */}
-            <Card className="p-6 border-slate-200/60  overflow-hidden relative">
-              <div className="absolute -top-12 -right-12 w-24 h-24 bg-emerald-50 rounded " />
+            <Card className="border-slate-200/60  overflow-hidden relative">
+              <div className="absolute -top-12 -right-12  bg-emerald-50 rounded " />
               <div className="relative">
                 <div className="flex items-center gap-2  mb-4">
                   <BarChart3 className="w-4 h-4 text-emerald-500" />
-                  <span className="text-[10px]  text-slate-400  tracking-widest">Efficiency Projection</span>
+                  <span className="text-xs  text-slate-400  ">Efficiency Projection</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl  text-slate-900">0%</span>
+                  <span className="text-xl  text-slate-900">0%</span>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                <p className="text-xs text-slate-400 mt-2 leading-relaxed">
                   Predicted production efficiency based on workstation load.
                 </p>
               </div>
             </Card>
 
             {/* Execution Pulse */}
-            <div className="bg-slate-900 rounded  p-6 shadow-xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4">
+            <div className="bg-slate-900 rounded  p-2 shadow-xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-2">
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 bg-indigo-500 rounded  animate-pulse" />
-                  <span className="text-[8px]  text-indigo-400  tracking-widest">Execution Pulse</span>
-                  <span className="text-[8px]  text-slate-500 ml-2">{stats.completionRate.toFixed(1)}%</span>
+                  <span className="text-xs  text-indigo-400  ">Execution Pulse</span>
+                  <span className="text-xs  text-slate-500 ml-2">{stats.completionRate.toFixed(1)}%</span>
                 </div>
               </div>
               <div className="mt-8 flex items-baseline gap-2">
-                <span className="text-4xl  text-white tracking-tighter">{stats.actualHours.toFixed(1)}h</span>
+                <span className="text-xl  text-white tracking-tighter">{stats.actualHours.toFixed(1)}h</span>
               </div>
-              <p className="text-[9px]  text-slate-500  tracking-widest mt-2">
+              <p className="text-xs  text-slate-500   mt-2">
                 Cumulative machine hours logged against this order.
               </p>
             </div>
 
             {/* Execution Health */}
-            <Card className="p-6 border-slate-200/60 ">
-              <div className="flex items-center gap-2  mb-6">
+            <Card className="border-slate-200/60 ">
+              <div className="flex items-center gap-2  mb-2">
                 <Activity className="w-4 h-4 text-indigo-500" />
-                <span className="text-[10px]  text-slate-400  tracking-widest">Execution Health</span>
+                <span className="text-xs  text-slate-400  ">Execution Health</span>
               </div>
-              <div className="flex justify-between items-end mb-8">
+              <div className="flex justify-between items-end mb-2">
                 <div>
-                  <p className="text-[9px]  text-slate-400  tracking-widest mb-1">Completion Rate</p>
+                  <p className="text-xs  text-slate-400   mb-1">Completion Rate</p>
                   <div className="flex items-center gap-2 ">
                     <div className="w-12 h-1 bg-slate-100 rounded  overflow-hidden">
                       <div className="h-full bg-indigo-500" style={{ width: `${stats.completionRate}%` }} />
                     </div>
-                    <span className="text-lg  text-slate-900">{stats.completionRate.toFixed(0)}%</span>
+                    <span className="text-md  text-slate-900">{stats.completionRate.toFixed(0)}%</span>
                   </div>
                 </div>
                 <div className="flex items-end gap-1">
@@ -887,13 +887,13 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+              <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-4">
                 <div>
-                  <p className="text-[8px]  text-slate-400  tracking-widest mb-1">Yield</p>
+                  <p className="text-xs  text-slate-400   mb-1">Yield</p>
                   <p className="text-xs  text-slate-800">{stats.yieldRate.toFixed(1)}%</p>
                 </div>
                 <div>
-                  <p className="text-[8px]  text-slate-400  tracking-widest mb-1">Actual Hrs</p>
+                  <p className="text-xs  text-slate-400   mb-1">Actual Hrs</p>
                   <p className="text-xs  text-slate-800">{stats.actualHours.toFixed(1)}h</p>
                 </div>
               </div>
@@ -901,44 +901,44 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
 
             {/* Panel Buttons */}
             <div className="space-y-2">
-              <button className="w-full p-4 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-between group hover:bg-indigo-100 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white rounded  flex items-center justify-center ">
+              <button className="w-full p-2 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-between group hover:bg-indigo-100 transition-colors">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-white rounded  flex items-center justify-center ">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
-                  <span className="text-[10px]   tracking-widest">Operational Panel</span>
+                  <span className="text-xs   ">Operational Panel</span>
                 </div>
                 <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
               </button>
 
-              <button className="w-full p-4 bg-white border border-slate-200 text-slate-600 rounded  flex items-center justify-between group hover:bg-slate-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-slate-50 rounded  flex items-center justify-center">
+              <button className="w-full p-2 bg-white border border-slate-200 text-slate-600 rounded  flex items-center justify-between group hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-slate-50 rounded  flex items-center justify-center">
                     <List className="w-4 h-4" />
                   </div>
-                  <span className="text-[10px]   tracking-widest">Commit Progress</span>
+                  <span className="text-xs   ">Commit Progress</span>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-300" />
               </button>
 
-              <button className="w-full p-4 bg-slate-900 text-white rounded  flex items-center justify-between group hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white/10 rounded  flex items-center justify-center">
+              <button className="w-full p-2 bg-slate-200  hover:text-white rounded  flex items-center justify-between group hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-white/10 rounded  flex items-center justify-center">
                     <Play className="w-4 h-4 text-amber-500" />
                   </div>
-                  <span className="text-[10px]   tracking-widest">Release job cards</span>
+                  <span className="text-xs   ">Release job cards</span>
                 </div>
                 <div className="w-2 h-2 bg-amber-500 rounded  animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.5)]" />
               </button>
             </div>
 
             {/* Yield Note */}
-            <div className="p-4 bg-white border border-slate-200 rounded ">
-              <div className="flex items-start gap-3">
+            <div className="p-2 bg-white border border-slate-200 rounded ">
+              <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-slate-400 mt-0.5" />
                 <div>
-                  <p className="text-[10px]  text-slate-600  tracking-widest mb-1">Yield Note</p>
-                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                  <p className="text-xs  text-slate-600   mb-1">Yield Note</p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
                     Yield loss is automatically calculated as the delta between transferred and consumed quantities.
                   </p>
                 </div>

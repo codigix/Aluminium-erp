@@ -361,15 +361,15 @@ const ItemsMaster = () => {
   };
 
   const itemColumns = [
-    { label: 'Item Code', key: 'item_code', sortable: true, className: 'font-bold text-indigo-600' },
+    { label: 'Item Code', key: 'item_code', sortable: true, className: ' text-indigo-600' },
     { label: 'Item Name', key: 'material_name', sortable: true },
-    { label: 'Group', key: 'material_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px]">{val}</span> },
+    { label: 'Group', key: 'material_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{val}</span> },
     { label: 'UOM', key: 'unit', sortable: true },
     { 
       label: 'Valuation Rate (₹)', 
       key: 'valuation_rate', 
       sortable: true, 
-      className: 'text-right font-medium text-slate-700',
+      className: 'text-right text-slate-700',
       render: (val) => `₹${(parseFloat(val) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
     },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
@@ -389,7 +389,7 @@ const ItemsMaster = () => {
 
   const groupColumns = [
     { label: 'Group Name', key: 'name', sortable: true, className: 'font-medium' },
-    { label: 'Type', key: 'group_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded text-[10px]">{val || 'OTHER'}</span> },
+    { label: 'Type', key: 'group_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded text-xs">{val || 'OTHER'}</span> },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
     { 
       label: 'Actions', 
@@ -405,44 +405,44 @@ const ItemsMaster = () => {
   ];
 
   return (
-    <div className="p-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-200">
-            <Package size={24} />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-600 text-white rounded ">
+            <Package size={15} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Items Master</h1>
-            <p className="text-sm text-slate-500 font-medium">Manage your products, materials, and categories</p>
+            <h1 className="text-xl  text-slate-900 ">Items Master</h1>
+            <p className="text-xs text-slate-500 ">Manage your products, materials, and categories</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded ">
           <button 
             onClick={() => setActiveTab('items')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'items' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded  text-sm  transition-all ${activeTab === 'items' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <Package size={16} /> Items List
+            <Package size={15} /> Items List
           </button>
           <button 
             onClick={() => setActiveTab('groups')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'groups' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded  text-sm  transition-all ${activeTab === 'groups' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <Layers size={16} /> Item Groups
+            <Layers size={15} /> Item Groups
           </button>
         </div>
       </div>
 
       {activeTab === 'items' && !showItemForm && (
-        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-6 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <Card className="">
+          <div className=" border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-2">
             <div className="relative flex-1 max-w-md group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={15} />
               <input 
                 type="text"
                 placeholder="Search items by code, name, or drawing..."
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -450,16 +450,16 @@ const ItemsMaster = () => {
             <div className="flex items-center gap-2">
               <button 
                 onClick={fetchItemsList}
-                className="p-2.5 text-slate-500 hover:bg-slate-50 rounded-xl transition-all border border-slate-200"
+                className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
                 title="Refresh"
               >
-                <RefreshCw size={18} className={itemsLoading ? 'animate-spin' : ''} />
+                <RefreshCw size={15} className={itemsLoading ? 'animate-spin' : ''} />
               </button>
               <button 
                 onClick={() => { handleClearItemForm(); setShowItemForm(true); fetchNextItemCode(); }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
               >
-                <Plus size={18} /> Add New Item
+                <Plus size={15} /> Add New Item
               </button>
             </div>
           </div>
@@ -480,29 +480,29 @@ const ItemsMaster = () => {
       )}
 
       {activeTab === 'items' && showItemForm && (
-        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-          <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+        <Card className=" animate-in slide-in-from-bottom-4 duration-500">
+          <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-100 text-indigo-600 rounded ">
                 <Plus size={20} />
               </div>
-              <h2 className="text-lg font-bold text-slate-900">{isEditingItem ? 'Edit Item' : 'Add New Item'}</h2>
+              <h2 className="text-md  text-slate-900">{isEditingItem ? 'Edit Item' : 'Add New Item'}</h2>
             </div>
             <button 
               onClick={() => setShowItemForm(false)}
-              className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg text-sm font-bold transition-all"
+              className="p-2 text-slate-500 hover:bg-slate-100 rounded text-xs  transition-all"
             >
               Cancel
             </button>
           </div>
-          <form onSubmit={handleItemSubmit} className="p-8 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <form onSubmit={handleItemSubmit} className="p-2 space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Item Code *</label>
+                <label className="text-xs  text-slate-500  ">Item Code *</label>
                 <div className="flex gap-2">
                   <input 
                     type="text"
-                    className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                     placeholder="e.g. ITM-001"
                     value={itemFormData.itemCode}
                     onChange={(e) => setItemFormData({...itemFormData, itemCode: e.target.value})}
@@ -512,16 +512,16 @@ const ItemsMaster = () => {
                     <button 
                       type="button"
                       onClick={() => fetchNextItemCode(itemFormData.itemName, itemFormData.itemGroup)}
-                      className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all border border-slate-200"
+                      className="p-2 bg-slate-100 text-slate-600 rounded  hover:bg-slate-200 transition-all border border-slate-200"
                       title="Generate Code"
                     >
-                      <RefreshCw size={18} />
+                      <RefreshCw size={15} />
                     </button>
                   )}
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Item Name *</label>
+                <label className="text-xs  text-slate-500  ">Item Name *</label>
                 <SearchableSelect 
                   options={[
                     ...approvedDrawings.map(d => ({
@@ -543,9 +543,9 @@ const ItemsMaster = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Item Group *</label>
+                <label className="text-xs  text-slate-500  ">Item Group *</label>
                 <select 
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none"
                   value={itemFormData.itemGroup}
                   onChange={(e) => {
                     const group = e.target.value;
@@ -561,9 +561,9 @@ const ItemsMaster = () => {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">UOM</label>
+                <label className="text-xs  text-slate-500  ">UOM</label>
                 <select 
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   value={itemFormData.defaultUom}
                   onChange={(e) => setItemFormData({...itemFormData, defaultUom: e.target.value})}
                 >
@@ -584,27 +584,27 @@ const ItemsMaster = () => {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Valuation Rate (₹)</label>
+                <label className="text-xs  text-slate-500  ">Valuation Rate (₹)</label>
                 <input 
                   type="number"
                   step="0.01"
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   value={itemFormData.valuationRate}
                   onChange={(e) => setItemFormData({...itemFormData, valuationRate: parseFloat(e.target.value) || 0})}
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Weight per Unit</label>
+                <label className="text-xs  text-slate-500  ">Weight per Unit</label>
                 <div className="flex gap-2">
                   <input 
                     type="number"
                     step="0.001"
-                    className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                     value={itemFormData.weightPerUnit}
                     onChange={(e) => setItemFormData({...itemFormData, weightPerUnit: parseFloat(e.target.value) || 0})}
                   />
                   <select 
-                    className="w-24 p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-24 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
                     value={itemFormData.weightUom}
                     onChange={(e) => setItemFormData({...itemFormData, weightUom: e.target.value})}
                   >
@@ -628,18 +628,18 @@ const ItemsMaster = () => {
               </div>
             </div>
             
-            <div className="pt-6 border-t border-slate-50 flex justify-end gap-3">
+            <div className="pt-6 border-t border-slate-50 flex justify-end gap-2">
               <button 
                 type="button" 
                 onClick={handleClearItemForm}
-                className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
+                className="p-2 bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all"
               >
                 Clear Form
               </button>
               <button 
                 type="submit" 
                 disabled={isSubmittingItem}
-                className="px-10 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
+                className="p-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
               >
                 {isSubmittingItem ? 'Saving...' : (isEditingItem ? 'Update Item' : 'Save Item')}
               </button>
@@ -649,22 +649,22 @@ const ItemsMaster = () => {
       )}
 
       {activeTab === 'groups' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-          <Card className="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-slate-100 h-fit sticky top-4">
-            <div className="p-6 border-b border-slate-50 bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 animate-in fade-in duration-500">
+          <Card className="lg:col-span-1 bg-white rounded shadow-sm border border-slate-100 h-fit sticky top-2">
+            <div className=" border-b border-slate-50 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded ">
                   <Plus size={20} />
                 </div>
-                <h2 className="text-lg font-bold text-slate-900">{isEditingGroup ? 'Edit Group' : 'Add New Group'}</h2>
+                <h2 className="text-md  text-slate-900">{isEditingGroup ? 'Edit Group' : 'Add New Group'}</h2>
               </div>
             </div>
-            <form onSubmit={handleGroupSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleGroupSubmit} className="p-2 space-y-2">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Group Name *</label>
+                <label className="text-xs  text-slate-500  ">Group Name *</label>
                 <input 
                   type="text"
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   placeholder="e.g. Raw Material"
                   value={groupFormData.name}
                   onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
@@ -672,9 +672,9 @@ const ItemsMaster = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Group Type *</label>
+                <label className="text-xs  text-slate-500  ">Group Type *</label>
                 <select 
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   value={groupFormData.group_type}
                   onChange={(e) => setGroupFormData({...groupFormData, group_type: e.target.value})}
                   required
@@ -694,7 +694,7 @@ const ItemsMaster = () => {
                 <button 
                   type="submit" 
                   disabled={isSubmittingGroup}
-                  className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                  className="flex-1 p-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
                 >
                   {isSubmittingGroup ? 'Saving...' : (isEditingGroup ? 'Update' : 'Add Group')}
                 </button>
@@ -702,7 +702,7 @@ const ItemsMaster = () => {
                   <button 
                     type="button"
                     onClick={() => { setIsEditingGroup(false); setGroupFormData({ name: '', group_type: '', status: 'ACTIVE' }); }}
-                    className="px-4 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
+                    className="px-4 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs  hover:bg-slate-50 transition-all"
                   >
                     Cancel
                   </button>
@@ -711,9 +711,9 @@ const ItemsMaster = () => {
             </form>
           </Card>
 
-          <Card className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <Card className="lg:col-span-2 ">
+            <div className="p-2 border-b border-slate-50 flex items-center justify-between">
+              <h2 className="text-md  text-slate-900 flex items-center gap-2">
                 <Layers size={20} className="text-indigo-600" />
                 Existing Groups
               </h2>
@@ -721,7 +721,7 @@ const ItemsMaster = () => {
                 onClick={fetchItemGroups}
                 className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
               >
-                <RefreshCw size={18} className={groupsLoading ? 'animate-spin' : ''} />
+                <RefreshCw size={15} className={groupsLoading ? 'animate-spin' : ''} />
               </button>
             </div>
             <div className="p-2">

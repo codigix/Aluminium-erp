@@ -12,7 +12,7 @@ const Sidebar = ({ items = [] }) => (
     <nav>
       {items.map(item => (
         <NavLink key={item.path} to={item.path} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          <item.icon size={18} />
+          <item.icon size={15} />
           <span>{item.label}</span>
         </NavLink>
       ))}

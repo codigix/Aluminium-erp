@@ -80,7 +80,7 @@ const CustomerDrawing = () => {
         <div className="flex flex-col">
           <span className=" text-slate-900">{row.contact_phone || val || '—'}</span>
           {row.contact_phone && val && val !== row.contact_phone && (
-            <span className="text-[10px] text-slate-500">{val}</span>
+            <span className="text-xs text-slate-500">{val}</span>
           )}
         </div>
       )
@@ -958,44 +958,44 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className="p-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-200">
-            <FileText size={24} />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-600 text-white rounded ">
+            <FileText size={15} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Drawing Master</h1>
-            <p className="text-sm text-slate-500 font-medium">Manage customer reference drawings and technical documentation</p>
+            <h1 className="text-xl  text-slate-900 ">Customer Drawing Master</h1>
+            <p className="text-xs text-slate-500 ">Manage customer reference drawings and technical documentation</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button 
             onClick={() => setShowFormModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+            className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
           >
-            <Plus size={18} /> Client Requirement
+            <Plus size={15} /> Client Requirement
           </button>
           <button 
             onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+            className="flex items-center gap-2 p-2  bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
           >
-            <Check size={18} /> Approved Drawings
+            <Check size={15} /> Approved Drawings
           </button>
         </div>
       </div>
 
       {/* SEARCH SECTION */}
-      <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-6 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <Card className="">
+        <div className=" border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-2">
           <form onSubmit={handleSearch} className="relative flex-1 max-w-md group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={15} />
             <input 
               type="text"
               placeholder="Search drawings, clients..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -1003,13 +1003,13 @@ const CustomerDrawing = () => {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => { setSearchTerm(''); fetchDrawings(''); }}
-              className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all active:scale-95"
+              className="p-2  bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all active:scale-95"
             >
               Reset
             </button>
             <button 
               onClick={handleSearch}
-              className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+              className="px-6 py-2.5 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
             >
               Search
             </button>
@@ -1018,9 +1018,9 @@ const CustomerDrawing = () => {
       </Card>
 
         {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
-        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 ">
+        <Card className="">
+          <div className="border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+            <h2 className="text-md  text-slate-900 flex items-center gap-2 ">
               <FileText className="w-5 h-5 text-indigo-600" />
               Client Requirements
             </h2>
@@ -1036,10 +1036,10 @@ const CustomerDrawing = () => {
         </Card>
 
         {/* SECTION 3: CUSTOMER DRAWINGS TABLE */}
-        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <Card className="">
+          <div className="border-b border-slate-50 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-2">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <h2 className="text-md  text-slate-900 flex items-center gap-2">
                 <Package className="w-5 h-5 text-indigo-600" />
                 Drawings Database
               </h2>
@@ -1047,7 +1047,7 @@ const CustomerDrawing = () => {
             </div>
             <div className="flex items-center gap-2">
               <select 
-                className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
+                className="p-2  bg-white border border-slate-200 rounded text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
                 value={clientFilter}
                 onChange={(e) => setClientFilter(e.target.value)}
               >
@@ -1059,7 +1059,7 @@ const CustomerDrawing = () => {
                   <option key={client} value={client}>{client}</option>
                 ))}
               </select>
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded ">
                 <button 
                   onClick={() => {
                     const allExpanded = Object.keys(groupedDrawings).reduce((acc, client) => {
@@ -1068,51 +1068,51 @@ const CustomerDrawing = () => {
                     }, {});
                     setExpandedClients(allExpanded);
                   }}
-                  className="p-2 bg-white text-indigo-600 rounded-lg shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+                  className="p-2 bg-white text-indigo-600 rounded  shadow-sm hover:bg-slate-50 transition-all active:scale-95"
                   title="Expand All"
                 >
-                  <ChevronDown size={18} />
+                  <ChevronDown size={15} />
                 </button>
                 <button 
                   onClick={() => setExpandedClients({})}
-                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-lg transition-all active:scale-95"
+                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-white rounded  transition-all active:scale-95"
                   title="Collapse All"
                 >
-                  <ChevronUp size={18} />
+                  <ChevronUp size={15} />
                 </button>
               </div>
             </div>
           </div>
         
-          <div className="p-6">
+          <div className="my-3">
             {loading ? (
               <div className="py-12 text-center">
                 <Loader2 className="mx-auto h-8 w-8 text-indigo-600 animate-spin mb-4" />
                 <p className="text-slate-500 font-medium">Loading drawings...</p>
               </div>
             ) : Object.keys(groupedDrawings).length === 0 ? (
-              <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <div className="py-12 text-center bg-slate-50 rounded border border-dashed border-slate-200">
                 <Package className="mx-auto h-12 w-12 text-slate-200 mb-4" />
-                <p className="text-slate-500 font-bold">No drawings found</p>
+                <p className="text-slate-500 ">No drawings found</p>
                 <p className="text-slate-400 text-sm">Add drawings using the Client Requirement form</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {Object.entries(groupedDrawings).map(([clientName, clientDrawings]) => (
-                  <div key={clientName} className="border border-slate-100 rounded-2xl bg-white overflow-hidden transition-all hover:shadow-md hover:border-indigo-100">
+                  <div key={clientName} className="border border-slate-100 rounded bg-white overflow-hidden transition-all hover: hover:border-indigo-100">
                     {/* CLIENT GROUP HEADER */}
                     <div 
                       onClick={() => toggleClientGroup(clientName)}
-                      className={`p-4 cursor-pointer flex justify-between items-center transition-all group ${expandedClients[clientName] ? 'bg-indigo-50/50 border-b border-slate-100' : 'hover:bg-slate-50'}`}
+                      className={`p-2 cursor-pointer flex justify-between items-center transition-all group ${expandedClients[clientName] ? 'bg-indigo-50/50 border-b border-slate-100' : 'hover:bg-slate-50'}`}
                     >
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className={`p-1.5 rounded-lg text-indigo-600 bg-white shadow-sm transition-all ${expandedClients[clientName] ? 'rotate-180 bg-indigo-600 text-white' : ''}`}>
-                          <ChevronDown size={16} />
+                      <div className="flex items-center gap-2 flex-1">
+                        <div className={`p-1.5 rounded  text-indigo-600 bg-white shadow-sm transition-all ${expandedClients[clientName] ? 'rotate-180 bg-indigo-600 text-white' : ''}`}>
+                          <ChevronDown size={15} />
                         </div>
                         <div className="flex flex-col flex-1">
-                          <span className="text-sm font-bold text-slate-900">{clientName}</span>
+                          <span className="text-xs  text-slate-900">{clientName}</span>
                         </div>
-                        <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold">
+                        <span className="p-1 bg-indigo-100 text-indigo-700 rounded text-xs ">
                           {clientDrawings.length} Drawings
                         </span>
                         {clientDrawings.some(d => !d.status || d.status !== 'SHARED') && (
@@ -1121,7 +1121,7 @@ const CustomerDrawing = () => {
                               e.stopPropagation();
                               handleShareClientGroupWithDesign(clientName);
                             }}
-                            className="px-4 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm active:scale-95"
+                            className="p-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded  text-xs  transition-all flex items-center gap-2 shadow-sm active:scale-95"
                           >
                             <Send size={14} /> Send to Design
                           </button>
@@ -1132,10 +1132,10 @@ const CustomerDrawing = () => {
                           e.stopPropagation();
                           handleDeleteClientGroup(clientName);
                         }}
-                        className="p-2 ml-4 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all active:scale-95"
+                        className="p-2 ml-4 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all active:scale-95"
                         title="Delete all drawings for this client"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
 
@@ -1145,72 +1145,72 @@ const CustomerDrawing = () => {
                         <table className="min-w-full divide-y divide-slate-100">
                           <thead className="bg-slate-50/50">
                             <tr>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">#</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Drawing</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Rev</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Qty</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider text-center">File</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">By</th>
-                              <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                              <th className=" p-2 text-left text-xs  text-slate-500  ">#</th>
+                              <th className=" p-2 text-left text-xs  text-slate-500  ">Drawing</th>
+                              <th className=" p-2 text-left text-xs  text-slate-500  ">Description</th>
+                              <th className=" p-2 text-left text-xs  text-slate-500   text-center">Rev</th>
+                              <th className=" p-2 text-left text-xs  text-slate-500   text-center">Qty</th>
+                              <th className=" p-2 text-left text-xs  text-slate-500   text-center">File</th>
+                              <th className=" p-2 text-left text-xs  text-slate-500  ">By</th>
+                              <th className=" p-2 text-right text-xs  text-slate-500  ">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-50">
                             {clientDrawings.map((drawing, idx) => (
                               <tr key={drawing.id || `${drawing.drawing_no}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="px-6 py-4 whitespace-nowrap text-xs font-medium text-slate-400">{idx + 1}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">{drawing.drawing_no}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                                <td className=" p-2 whitespace-nowrap text-xs text-slate-400">{idx + 1}</td>
+                                <td className=" p-2 whitespace-nowrap text-xs  text-slate-900">{drawing.drawing_no}</td>
+                                <td className=" p-2 whitespace-nowrap text-sm text-slate-600">
                                   {drawing.description || <span className="text-slate-300 italic">No description</span>}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center">
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                                <td className=" p-2 whitespace-nowrap text-center">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs  bg-slate-100 text-slate-700">
                                     {drawing.revision || drawing.revision_no || '0'}
                                   </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-indigo-600">
+                                <td className=" p-2 whitespace-nowrap text-center text-sm  text-indigo-600">
                                   {drawing.qty || 1}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <td className=" p-2 whitespace-nowrap text-center">
                                   {(drawing.file_path || drawing.drawing_pdf) ? (
                                     <button 
                                       onClick={() => handlePreview(drawing)}
-                                      className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95"
+                                      className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-600 hover:text-white transition-all active:scale-95"
                                       title="View Drawing"
                                     >
-                                      <Eye size={16} />
+                                      <Eye size={15} />
                                     </button>
                                   ) : (
                                     <span className="text-slate-300">
-                                      <FileText size={16} className="mx-auto opacity-30" />
+                                      <FileText size={15} className="mx-auto opacity-30" />
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                                <td className=" p-2 whitespace-nowrap text-sm text-slate-600">
                                   {drawing.uploaded_by || '—'}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <td className=" p-2 whitespace-nowrap text-right text-sm font-medium">
                                   <div className="flex items-center justify-end gap-2">
                                     <button 
                                       onClick={() => handleViewRevisions(drawing)}
-                                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
                                       title="Revision History"
                                     >
-                                      <History size={16} />
+                                      <History size={15} />
                                     </button>
                                     <button 
                                       onClick={() => handleEdit(drawing)}
-                                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all"
                                       title="Edit Drawing"
                                     >
-                                      <Edit2 size={16} />
+                                      <Edit2 size={15} />
                                     </button>
                                     <button 
                                       onClick={() => handleDelete(drawing.id)}
-                                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all"
                                       title="Delete"
                                     >
-                                      <Trash2 size={16} />
+                                      <Trash2 size={15} />
                                     </button>
                                   </div>
                                 </td>
@@ -1235,8 +1235,8 @@ const CustomerDrawing = () => {
         title={modalMode === 'view' ? 'View Drawing Details' : 'Edit Drawing'}
         size="4xl"
       >
-        <form onSubmit={handleSave} className="space-y-4 pb-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded  border border-slate-200">
+        <form onSubmit={handleSave} className="space-y-2 pb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 bg-white p-2 rounded  border border-slate-200">
             {/* Client Info Section */}
             <div className="lg:col-span-1">
               <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
@@ -1352,8 +1352,8 @@ const CustomerDrawing = () => {
           {/* Drawing Details Section */}
           <div className="mt-4">
             <h3 className="text-xs  text-slate-700 mb-2">Drawing Details</h3>
-            <div className="bg-slate-50 p-4 rounded border border-slate-200 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-50 p-2 rounded border border-slate-200 space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-xs text-slate-700 mb-1">Drawing # *</label>
                   <input 
@@ -1406,7 +1406,7 @@ const CustomerDrawing = () => {
               {modalMode === 'edit' && (
                 <div>
                   <label className="block text-xs text-slate-700 mb-1">Update PDF File</label>
-                  <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-4 hover:border-indigo-400 transition-colors bg-white cursor-pointer relative">
+                  <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-2 hover:border-indigo-400 transition-colors bg-white cursor-pointer relative">
                     <input 
                       type="file" 
                       accept=".pdf"
@@ -1440,7 +1440,7 @@ const CustomerDrawing = () => {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <button 
               type="button"
               onClick={() => setShowEditModal(false)}
@@ -1467,7 +1467,7 @@ const CustomerDrawing = () => {
       {/* Revisions Modal */}
       {showRevisions && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 py-4">
+          <div className="flex items-center justify-center min-h-screen p-2 ">
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowRevisions(false)}></div>
             <div className="relative bg-white rounded  shadow-2xl max-w-3xl w-full p-5">
               <div className="flex justify-between items-center mb-3">
@@ -1492,11 +1492,11 @@ const CustomerDrawing = () => {
                   <table className="min-w-full divide-y divide-slate-200 bg-white">
                     <thead className="bg-slate-100">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs  text-slate-700">Revision</th>
-                        <th className="px-3 py-2 text-left text-xs  text-slate-700">Date</th>
-                        <th className="px-3 py-2 text-left text-xs  text-slate-700">Description</th>
-                        <th className="px-3 py-2 text-left text-xs  text-slate-700">File</th>
-                        <th className="px-3 py-2 text-right text-xs  text-slate-700">Reference</th>
+                        <th className="p-2 text-left text-xs  text-slate-700">Revision</th>
+                        <th className="p-2 text-left text-xs  text-slate-700">Date</th>
+                        <th className="p-2 text-left text-xs  text-slate-700">Description</th>
+                        <th className="p-2 text-left text-xs  text-slate-700">File</th>
+                        <th className="p-2 text-right text-xs  text-slate-700">Reference</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
@@ -1509,14 +1509,14 @@ const CustomerDrawing = () => {
                       ) : (
                         revisions.map((rev, i) => (
                           <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="p-2 whitespace-nowrap">
                               <span className="p-1  bg-indigo-100 text-indigo-700 rounded text-xs ">{rev.revision_no || '0'}</span>
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-slate-600 ">
+                            <td className="p-2 whitespace-nowrap text-slate-600 ">
                               {new Date(rev.created_at).toLocaleDateString('en-IN')}
                             </td>
-                            <td className="px-3 py-2 text-slate-600">{rev.description || '—'}</td>
-                            <td className="px-3 py-2 text-center">
+                            <td className="p-2 text-slate-600">{rev.description || '—'}</td>
+                            <td className="p-2 text-center">
                               {rev.drawing_pdf ? (
                                 <button 
                                   onClick={() => handlePreview({ ...rev, file_path: rev.drawing_pdf })}
@@ -1532,7 +1532,7 @@ const CustomerDrawing = () => {
                                 <span className="text-slate-400">—</span>
                               )}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-right">
+                            <td className="p-2 whitespace-nowrap text-right">
                               <div className="text-slate-900 text-xs ">{rev.po_number || '—'}</div>
                               <div className="text-xs text-slate-500">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
                             </td>
@@ -1551,7 +1551,7 @@ const CustomerDrawing = () => {
       {/* Approved Drawings Modal */}
       {showApprovedDrawings && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 py-4">
+          <div className="flex items-center justify-center min-h-screen p-2 ">
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowApprovedDrawings(false)}></div>
             <div className="relative bg-white rounded  shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-5">
               <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pb-3 border-b border-slate-200">
@@ -1586,7 +1586,7 @@ const CustomerDrawing = () => {
                         <button
                           key={clientName}
                           onClick={() => handleSelectApprovedClient(clientName)}
-                          className="w-full p-3 text-left border border-slate-200 rounded hover:border-emerald-400 hover:bg-emerald-50 transition-all group"
+                          className="w-full p-2 text-left border border-slate-200 rounded hover:border-emerald-400 hover:bg-emerald-50 transition-all group"
                         >
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
@@ -1624,17 +1624,17 @@ const CustomerDrawing = () => {
                         <table className="min-w-full divide-y divide-slate-100 text-xs">
                           <thead className="bg-slate-100">
                             <tr>
-                              <th className="px-3 py-2 text-left  text-slate-700">Drawing</th>
-                              <th className="px-3 py-2 text-left  text-slate-700">Description</th>
-                              <th className="px-3 py-2 text-center  text-slate-700">Qty</th>
-                              <th className="px-3 py-2 text-left  text-slate-700">Unit</th>
-                              <th className="px-3 py-2 text-right  text-slate-700">Price</th>
+                              <th className="p-2 text-left  text-slate-700">Drawing</th>
+                              <th className="p-2 text-left  text-slate-700">Description</th>
+                              <th className="p-2 text-center  text-slate-700">Qty</th>
+                              <th className="p-2 text-left  text-slate-700">Unit</th>
+                              <th className="p-2 text-right  text-slate-700">Price</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {selectedApprovedItems.map((item) => (
                               <tr key={item.id} className="hover:bg-emerald-50/30 transition-colors">
-                                <td className="px-3 py-2 whitespace-nowrap text-slate-900">
+                                <td className="p-2 whitespace-nowrap text-slate-900">
                                   <div className="flex items-center gap-2 ">
                                     {item.drawing_pdf && (
                                       <button 
@@ -1648,10 +1648,10 @@ const CustomerDrawing = () => {
                                     {item.drawing_no}
                                   </div>
                                 </td>
-                                <td className="px-3 py-2 text-slate-600">{item.description || '—'}</td>
-                                <td className="px-3 py-2 text-center text-slate-900 ">{item.quantity}</td>
-                                <td className="px-3 py-2 text-slate-600">{item.unit}</td>
-                                <td className="px-3 py-2 text-right">
+                                <td className="p-2 text-slate-600">{item.description || '—'}</td>
+                                <td className="p-2 text-center text-slate-900 ">{item.quantity}</td>
+                                <td className="p-2 text-slate-600">{item.unit}</td>
+                                <td className="p-2 text-right">
                                   <input
                                     type="number"
                                     placeholder="0.00"
@@ -1667,17 +1667,17 @@ const CustomerDrawing = () => {
                         </table>
                       </div>
 
-                      <div className="space-y-2 p-3 bg-slate-50 rounded border border-slate-200">
+                      <div className="space-y-2 p-2 bg-slate-50 rounded border border-slate-200">
                         <label className="block text-xs  text-slate-700 ">Notes</label>
                         <textarea
                           value={quotationNotes}
                           onChange={(e) => setQuotationNotes(e.target.value)}
                           placeholder="Add any special notes or terms..."
-                          className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-emerald-500 min-h-[60px] resize-none"
+                          className="w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-emerald-500 min-h-[60px] resize-none"
                         />
                       </div>
 
-                      <div className="flex items-center justify-between p-3 bg-emerald-50 rounded border border-emerald-200">
+                      <div className="flex items-center justify-between p-2 bg-emerald-50 rounded border border-emerald-200">
                         <div>
                           <p className="text-xs text-slate-600">Total Quotation Value</p>
                           <p className="text-xl  text-emerald-700">
@@ -1707,9 +1707,9 @@ const CustomerDrawing = () => {
         onClose={() => setShowFormModal(false)}
         title="Add Client Requirement"
       >
-        <form onSubmit={handleAddDrawing} className="space-y-4">
-          <div className="flex justify-between items-center bg-slate-50 p-3 rounded  border border-slate-200">
-            <div className="flex items-center gap-4">
+        <form onSubmit={handleAddDrawing} className="space-y-2">
+          <div className="flex justify-between items-center bg-slate-50 p-2 rounded  border border-slate-200">
+            <div className="flex items-center gap-2">
               <label className="flex items-center gap-2  cursor-pointer group">
                 <input 
                   type="radio" 
@@ -1731,7 +1731,7 @@ const CustomerDrawing = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded  border border-slate-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 bg-white p-2 rounded  border border-slate-200">
             {/* Client Selection */}
             <div className="lg:col-span-1">
               <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
@@ -1754,7 +1754,7 @@ const CustomerDrawing = () => {
                           key={company.id}
                           type="button"
                           onClick={() => handleSelectClient(company)}
-                          className="w-full text-left px-3 py-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
+                          className="w-full text-left p-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
                         >
                           <div className="text-slate-900 text-xs">{company.company_name}</div>
                           {company.contact_email && <div className="text-slate-500 text-xs">{company.contact_email}</div>}
@@ -1887,13 +1887,13 @@ const CustomerDrawing = () => {
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs   text-slate-500  ">Drawing # *</th>
-                      <th className="px-3 py-2 text-left text-xs   text-slate-500  ">Description</th>
-                      <th className="px-3 py-2 text-left text-xs   text-slate-500   w-16">Rev</th>
-                      <th className="px-3 py-2 text-left text-xs   text-slate-500   w-16">Qty</th>
-                      <th className="px-3 py-2 text-left text-xs   text-slate-500  ">File *</th>
-                      <th className="px-3 py-2 text-left text-xs   text-slate-500  ">Notes</th>
-                      <th className="px-3 py-2 text-center text-xs   text-slate-500   w-10"></th>
+                      <th className="p-2 text-left text-xs   text-slate-500  ">Drawing # *</th>
+                      <th className="p-2 text-left text-xs   text-slate-500  ">Description</th>
+                      <th className="p-2 text-left text-xs   text-slate-500   w-16">Rev</th>
+                      <th className="p-2 text-left text-xs   text-slate-500   w-16">Qty</th>
+                      <th className="p-2 text-left text-xs   text-slate-500  ">File *</th>
+                      <th className="p-2 text-left text-xs   text-slate-500  ">Notes</th>
+                      <th className="p-2 text-center text-xs   text-slate-500   w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
@@ -1983,10 +1983,10 @@ const CustomerDrawing = () => {
             </div>
           ) : (
             /* BULK MODE */
-            <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs  text-slate-700 mb-2">Excel File <span className="text-red-500">*</span></label>
-                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-6 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
                   <input 
                     type="file" 
                     required
@@ -1998,7 +1998,7 @@ const CustomerDrawing = () => {
                   <label htmlFor="bulk-file" className="cursor-pointer text-center w-full">
                     <svg className="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
                     <p className="text-sm text-slate-900 ">{newDrawing.file ? newDrawing.file.name : 'Upload Excel File'}</p>
-                    <p className="text-[10px] text-slate-500 mt-1">Format: Drawing No, Revision, Description, Qty, Drawing_File</p>
+                    <p className="text-xs text-slate-500 mt-1">Format: Drawing No, Revision, Description, Qty, Drawing_File</p>
                     {newDrawing.file && (
                       <p className="mt-2 text-xs text-emerald-600  flex items-center justify-center gap-1">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
@@ -2011,7 +2011,7 @@ const CustomerDrawing = () => {
 
               <div>
                 <label className="block text-xs  text-slate-700 mb-2">ZIP File (Drawings)</label>
-                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-6 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
                   <input 
                     type="file" 
                     accept=".zip"
@@ -2022,7 +2022,7 @@ const CustomerDrawing = () => {
                   <label htmlFor="bulk-zip" className="cursor-pointer text-center w-full">
                     <svg className="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                     <p className="text-sm text-slate-900 ">{newDrawing.zipFile ? newDrawing.zipFile.name : 'Upload ZIP File'}</p>
-                    <p className="text-[10px] text-slate-500 mt-1">Contains images or PDFs of drawings</p>
+                    <p className="text-xs text-slate-500 mt-1">Contains images or PDFs of drawings</p>
                     {newDrawing.zipFile && (
                       <p className="mt-2 text-xs text-emerald-600  flex items-center justify-center gap-1">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
@@ -2035,7 +2035,7 @@ const CustomerDrawing = () => {
             </div>
           )}
 
-          <div className="mt-6 flex gap-3 justify-end border-t border-slate-200 pt-4">
+          <div className="mt-6 flex gap-2 justify-end border-t border-slate-200 pt-4">
             <button 
               type="button"
               onClick={() => {
@@ -2069,9 +2069,9 @@ const CustomerDrawing = () => {
           </div>
 
           {lastUploadedDrawings && lastUploadedDrawings.clientName && (
-            <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded ">
+            <div className="mt-4 p-2 bg-emerald-50 border border-emerald-200 rounded ">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <div className="p-2 bg-emerald-100 rounded  text-emerald-600">
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                   </div>

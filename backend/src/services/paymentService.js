@@ -361,7 +361,7 @@ const generatePaymentVoucherPDF = async (paymentId) => {
         .voucher-title { text-align: right; }
         .voucher-title h2 { margin: 0; color: #64748b; font-size: 18px; }
         .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-        .section-label { font-weight: bold; color: #64748b; font-size: 12px; margin-bottom: 8px; text-transform: uppercase; }
+        .section-label { font-weight: bold; color: #64748b; font-size: 12px; margin-bottom: 8px; text-transform: ; }
         .payment-info { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 30px; }
         .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #e2e8f0; }
         .info-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
