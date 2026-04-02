@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -56,6 +57,7 @@ const statusColors = {
 };
 
 const ProjectRequests = () => {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
@@ -227,7 +229,20 @@ const ProjectRequests = () => {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-xs text-emerald-600 ">Accepted</span>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => navigate('/production-plan', { state: { salesOrderId: req.id } })}
+                              className="px-3 py-1.5 bg-indigo-50 text-indigo-600 text-[10px]  rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all"
+                            >
+                              Production Plan
+                            </button>
+                            <button
+                              onClick={() => navigate('/work-order-form', { state: { salesOrderId: req.id, salesOrderItemId: req.item_id } })}
+                              className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[10px]  rounded border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all"
+                            >
+                              Work Order
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

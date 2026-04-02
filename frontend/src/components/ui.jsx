@@ -228,16 +228,16 @@ export const FormControl = ({ label, children }) => (
 )
 
 export const StatusBadge = ({ status }) => {
-  const normalized = (status || 'ACTIVE').toUpperCase()
+  const normalized = (status || 'ACTIVE').trim().toUpperCase()
   
   const getStatusStyles = (s) => {
     switch (s) {
       case 'DRAFT':
       case 'CREATED':
         return 'bg-slate-50 border-slate-200 text-slate-600'
-      case 'Approved':
-      case 'DESIGN_Approved':
-      case 'BOM_Approved':
+      case 'APPROVED':
+      case 'DESIGN_APPROVED':
+      case 'BOM_APPROVED':
         return 'bg-blue-50 border-blue-200 text-blue-600'
       case 'PROCESSING':
       case 'DESIGN_IN_REVIEW':

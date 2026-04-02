@@ -34,7 +34,8 @@ const formatOrderCode = (id) => {
 };
 
 const SalesOrderRow = ({ order, onAction, actionLoading }) => {
-  const currentStatus = statusColors[order.status] || statusColors.CREATED;
+  const normalizedStatus = (order.status || 'CREATED').trim();
+  const currentStatus = statusColors[normalizedStatus] || statusColors.CREATED;
   const isProcessing = actionLoading === order.id;
   const rejectedItems = (order.items || []).filter(item => item.status === 'REJECTED');
 

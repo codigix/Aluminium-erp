@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
@@ -12,8 +12,9 @@ import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const ProductionPlan = () => {
+const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -55,6 +56,14 @@ const ProductionPlan = () => {
     fetchPlans();
     fetchWorkstations();
   }, []);
+
+  useEffect(() => {
+    const sId = propSalesOrderId || location.state?.salesOrderId;
+    if (sId) {
+      handleCreateNew();
+      handleOrderSelect(sId.toString());
+    }
+  }, [propSalesOrderId, location.state?.salesOrderId]);
 
   // Sync item quantities with header target quantity
   useEffect(() => {

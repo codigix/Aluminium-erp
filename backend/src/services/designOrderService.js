@@ -78,9 +78,11 @@ const updateDesignOrderStatus = async (designOrderId, status) => {
     let updateFields = 'status = ?';
     const params = [status];
     
-    if (status === 'IN_DESIGN') {
+    const upperStatus = (status || '').toUpperCase();
+    
+    if (upperStatus === 'IN_DESIGN') {
       updateFields += ', start_date = CURRENT_TIMESTAMP';
-    } else if (status === 'COMPLETED') {
+    } else if (upperStatus === 'COMPLETED') {
       updateFields += ', completion_date = CURRENT_TIMESTAMP';
     }
     
@@ -88,16 +90,15 @@ const updateDesignOrderStatus = async (designOrderId, status) => {
     
     await connection.execute(`UPDATE design_orders SET ${updateFields} WHERE id = ?`, params);
 
-    if (status === 'COMPLETED') {
+    if (upperStatus === 'COMPLETED') {
       const [doRows] = await connection.query('SELECT sales_order_id FROM design_orders WHERE id = ?', [designOrderId]);
       if (doRows.length > 0) {
         const salesOrderId = doRows[0].sales_order_id;
-        /*
+        
         await connection.execute(
           "UPDATE sales_orders SET status = 'DESIGN_Approved ', current_department = 'PROCUREMENT', updated_at = NOW() WHERE id = ?",
           [salesOrderId]
         );
-        */
       }
     }
 

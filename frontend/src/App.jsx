@@ -1678,7 +1678,9 @@ function App() {
                 )}
 
                 {activeModule === 'production-plan' && (
-                  <ProductionPlan />
+                  <ProductionPlan 
+                    salesOrderId={location.state?.salesOrderId}
+                  />
                 )}
 
                 {activeModule === 'work-order' && (
@@ -1688,6 +1690,8 @@ function App() {
                 {activeModule === 'work-order-form' && (
                   <WorkOrderForm 
                     workOrderId={location.state?.workOrderId} 
+                    salesOrderId={location.state?.salesOrderId}
+                    salesOrderItemId={location.state?.salesOrderItemId}
                     onBack={() => navigate('/work-order')}
                     onSuccess={() => navigate('/work-order')}
                   />

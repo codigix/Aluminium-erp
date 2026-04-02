@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   FileText, Clock, CheckCircle2, X, Play, Package, 
   Settings, Activity, BarChart3, List, History, 
@@ -9,7 +10,9 @@ import { successToast, errorToast } from '../utils/toast.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
+const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrderItemId: propSalesOrderItemId, onBack, onSuccess }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('foundation');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -137,8 +140,18 @@ const WorkOrderForm = ({ workOrderId, onBack, onSuccess }) => {
       fetchWorkOrderDetails(effectiveWorkOrderId);
     } else {
       fetchNextWONumber();
+      
+      const sId = propSalesOrderId || location.state?.salesOrderId;
+      const siId = propSalesOrderItemId || location.state?.salesOrderItemId;
+      
+      if (sId) {
+        handleSOChange(sId);
+        if (siId) {
+          setFormData(prev => ({ ...prev, salesOrderItemId: siId }));
+        }
+      }
     }
-  }, [workOrderId, location.state?.workOrderId]);
+  }, [workOrderId, location.state?.workOrderId, propSalesOrderId, location.state?.salesOrderId, propSalesOrderItemId, location.state?.salesOrderItemId]);
 
   useEffect(() => {
     // Only fetch BOM details if NOT linked to a production plan
