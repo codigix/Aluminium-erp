@@ -782,105 +782,105 @@ const CustomerPO = ({
 
       {/* PO Details Modal */}
       {viewingPo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewingPo(null)} />
           <div className="relative w-full max-w-5xl bg-white shadow-2xl rounded  flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
             {/* Modal Header */}
-            <div className="p-2  border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
+            <div className="p-4  border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded ">
                   <FileText className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-xl  text-slate-900  flex items-center gap-2">
-                    {viewingPo.po_number}
-                    <span className={`px-2 py-0.5 rounded-md text-xs    border ${poStatusColors[viewingPo.status || 'DRAFT'].bg} ${poStatusColors[viewingPo.status || 'DRAFT'].text} ${poStatusColors[viewingPo.status || 'DRAFT'].border}`}>
+                  <h2 className="text-xl  text-slate-900  flex items-center gap-3">
+                    {viewingPo.po_number || 'N/A'}
+                    <span className={`px-2.5 py-1 rounded-md text-xs    border ${poStatusColors[viewingPo.status || 'DRAFT'].bg} ${poStatusColors[viewingPo.status || 'DRAFT'].text} ${poStatusColors[viewingPo.status || 'DRAFT'].border}`}>
                       {viewingPo.status || 'DRAFT'}
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-500    mt-1 flex items-center gap-2">
-                    <Building2 className="w-3 h-3 text-indigo-500" />
-                    {viewingPo.company_name}
+                  <p className="text-xs text-slate-500    mt-1.5 flex items-center gap-3">
+                    <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                    {viewingPo.company_name || 'N/A'}
                     <span className="w-1 h-1 bg-slate-300 rounded mx-1" />
-                    <Calendar className="w-3 h-3 text-indigo-500" />
-                    {new Date(viewingPo.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                    {viewingPo.po_date ? new Date(viewingPo.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button 
                   onClick={() => handleDownloadPdf(viewingPo.id, viewingPo.po_number)}
-                  className="flex items-center gap-2 p-2  bg-slate-50 text-slate-700 rounded  text-xs    hover:bg-slate-100 transition-all active:scale-95 border border-slate-200 shadow-sm"
+                  className="flex items-center gap-2.5 px-4 py-2 bg-slate-50 text-slate-700 rounded  text-xs    hover:bg-slate-100 transition-all active:scale-95 border border-slate-200 shadow-sm"
                 >
                   <Download className="w-4 h-4" />
                   Download PDF
                 </button>
                 <button 
                   onClick={() => setViewingPo(null)}
-                  className="p-2 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50 border border-slate-200"
+                  className="p-2.5 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50 border border-slate-200"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                <div className="bg-slate-50/50 rounded p-2 border border-slate-100">
-                  <p className="text-xs  text-slate-400   mb-1">Currency</p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1.5">Currency</p>
                   <p className="text-sm  text-slate-700">{viewingPo.currency || 'INR'}</p>
                 </div>
-                <div className="bg-slate-50/50 rounded p-2 border border-slate-100">
-                  <p className="text-xs  text-slate-400   mb-1">Payment Terms</p>
+                <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1.5">Payment Terms</p>
                   <p className="text-sm  text-slate-700">{viewingPo.payment_terms || '—'}</p>
                 </div>
-                <div className="bg-slate-50/50 rounded p-2 border border-slate-100">
-                  <p className="text-xs  text-slate-400   mb-1">Credit Days</p>
+                <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1.5">Credit Days</p>
                   <p className="text-sm  text-slate-700">{viewingPo.credit_days || '—'} Days</p>
                 </div>
-                <div className="bg-slate-50/50 rounded p-2 border border-slate-100">
-                  <p className="text-xs  text-slate-400   mb-1">Order Type</p>
-                  <p className="text-sm  text-slate-700">{viewingPo.order_type || 'STANDARD'}</p>
+                <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+                  <p className="text-xs  text-slate-400   mb-1.5">Order Type</p>
+                  <p className="text-sm  text-slate-700 uppercase">{viewingPo.order_type || 'STANDARD'}</p>
                 </div>
               </div>
 
               {/* Items Table */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded ">
                     <Package className="w-5 h-5" />
                   </div>
                   <h3 className="text-sm  text-slate-800  ">Order Items</h3>
                 </div>
                 
-                <div className="overflow-hidden rounded border-2 border-slate-100 bg-white shadow-sm">
+                <div className="overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b-2 border-slate-100">
-                        <th className=" p-2 text-xs  text-slate-400   text-left">Drawing No</th>
-                        <th className=" p-2 text-xs  text-slate-400   text-left">Description</th>
-                        <th className=" p-2 text-xs  text-slate-400   text-center">Qty</th>
-                        <th className=" p-2 text-xs  text-slate-400   text-right">Rate</th>
-                        <th className=" p-2 text-xs  text-slate-400   text-right pr-8">Total</th>
+                      <tr className="bg-slate-50/80 border-b border-slate-200">
+                        <th className="px-4 py-3 text-xs  text-slate-400   text-left">Drawing No</th>
+                        <th className="px-4 py-3 text-xs  text-slate-400   text-left">Description</th>
+                        <th className="px-4 py-3 text-xs  text-slate-400   text-center">Qty</th>
+                        <th className="px-4 py-3 text-xs  text-slate-400   text-right">Rate</th>
+                        <th className="px-4 py-3 text-xs  text-slate-400   text-right pr-8">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {viewingPo.items?.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className=" p-2">
-                            <span className="text-xs  text-slate-900">{item.drawing_no}</span>
+                          <td className="px-4 py-3">
+                            <span className="text-xs  text-slate-900">{item.drawing_no || '—'}</span>
                           </td>
-                          <td className=" p-2">
-                            <p className="text-xs  text-slate-600">{item.description}</p>
+                          <td className="px-4 py-3">
+                            <p className="text-xs  text-slate-600">{item.description || '—'}</p>
                           </td>
-                          <td className=" p-2 text-center">
+                          <td className="px-4 py-3 text-center">
                             <span className="text-xs  text-slate-900">{item.quantity} {item.unit}</span>
                           </td>
-                          <td className=" p-2 text-right">
+                          <td className="px-4 py-3 text-right">
                             <span className="text-xs  text-slate-600">{formatCurrency(item.rate)}</span>
                           </td>
-                          <td className=" p-2 text-right pr-8">
+                          <td className="px-4 py-3 text-right pr-8">
                             <span className="text-xs  text-slate-900">{formatCurrency(item.basic_amount)}</span>
                           </td>
                         </tr>
@@ -891,8 +891,8 @@ const CustomerPO = ({
               </div>
 
               {/* Financial Summary */}
-              <div className="flex justify-end">
-                <div className="w-full max-w-md bg-slate-50 rounded p-2 space-y-2 border border-slate-200/50">
+              <div className="flex justify-end pt-6">
+                <div className="w-full max-w-sm bg-slate-50/80 rounded-2xl p-6 space-y-4 border border-slate-200/50 shadow-sm">
                   <div className="flex justify-between items-center text-xs  text-slate-500  ">
                     <span>Sub Total</span>
                     <span className="text-slate-900">{formatCurrency(viewingPo.subtotal)}</span>
@@ -902,8 +902,8 @@ const CustomerPO = ({
                     <span className="text-slate-900">{formatCurrency(viewingPo.tax_total)}</span>
                   </div>
                   <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
-                    <span className="text-sm  text-indigo-600  ">Net Amount</span>
-                    <span className="text-md  text-indigo-600 ">{formatCurrency(viewingPo.net_total)}</span>
+                    <span className="text-xs  text-slate-900">Net Amount</span>
+                    <span className="text-xl  text-indigo-600 ">{formatCurrency(viewingPo.net_total)}</span>
                   </div>
                 </div>
               </div>
@@ -912,7 +912,7 @@ const CustomerPO = ({
               {viewingPo.remarks && (
                 <div className="space-y-3">
                   <h4 className="text-xs  text-slate-400   ml-1">Remarks / Notes</h4>
-                  <div className="bg-slate-50 rounded p-2 border border-slate-200/50 text-sm text-slate-600 italic">
+                  <div className="bg-slate-50 rounded p-4 border border-slate-200/50 text-sm text-slate-600 italic">
                     {viewingPo.remarks}
                   </div>
                 </div>
