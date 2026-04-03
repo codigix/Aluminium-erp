@@ -1018,39 +1018,45 @@ const ItemsMaster = () => {
             </div>
           </Card>
 
-          <Card className="lg:col-span-2 space-y-4">
-            <div>
-              <div className="p-3 border-b border-slate-50 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                  <Layers size={14} className="text-indigo-500" /> Existing Groups
-                </h3>
+          <Card className="lg:col-span-2">
+            {activeForm === 'group' && (
+              <div>
+                <div className="p-3 border-b border-slate-50 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                    <Layers size={14} className="text-indigo-500" /> Existing Groups
+                  </h3>
+                </div>
+                <div className="p-2">
+                  <DataTable columns={groupColumns} data={itemGroups} loading={groupsLoading} pageSize={5} />
+                </div>
               </div>
-              <div className="p-2">
-                <DataTable columns={groupColumns} data={itemGroups} loading={groupsLoading} pageSize={5} />
-              </div>
-            </div>
+            )}
 
-            <div>
-              <div className="p-3 border-b border-slate-50 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                  <Layers size={14} className="text-indigo-500" /> Existing Shapes
-                </h3>
+            {activeForm === 'shape' && (
+              <div>
+                <div className="p-3 border-b border-slate-50 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                    <Layers size={14} className="text-indigo-500" /> Existing Shapes
+                  </h3>
+                </div>
+                <div className="p-2">
+                  <DataTable columns={shapeColumns} data={shapes} loading={shapesLoading} pageSize={5} />
+                </div>
               </div>
-              <div className="p-2">
-                <DataTable columns={shapeColumns} data={shapes} loading={shapesLoading} pageSize={5} />
-              </div>
-            </div>
+            )}
 
-            <div>
-              <div className="p-3 border-b border-slate-50 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                  <Layers size={14} className="text-indigo-500" /> Existing Materials
-                </h3>
+            {activeForm === 'material' && (
+              <div>
+                <div className="p-3 border-b border-slate-50 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                    <Layers size={14} className="text-indigo-500" /> Existing Materials
+                  </h3>
+                </div>
+                <div className="p-2">
+                  <DataTable columns={materialColumns} data={materials} loading={materialsLoading} pageSize={5} />
+                </div>
               </div>
-              <div className="p-2">
-                <DataTable columns={materialColumns} data={materials} loading={materialsLoading} pageSize={5} />
-              </div>
-            </div>
+            )}
           </Card>
         </div>
       )}
