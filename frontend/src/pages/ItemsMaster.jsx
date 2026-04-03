@@ -14,6 +14,10 @@ const ItemsMaster = () => {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemGroups, setItemGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [shapes, setShapes] = useState([]);
+  const [shapesLoading, setShapesLoading] = useState(false);
+  const [materials, setMaterials] = useState([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
   const [approvedDrawings, setApprovedDrawings] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -38,14 +42,28 @@ const ItemsMaster = () => {
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
   // Group Form State
+  const [activeForm, setActiveForm] = useState('group'); // 'group', 'shape', 'material'
   const [groupFormData, setGroupFormData] = useState({ name: '', group_type: '', status: 'ACTIVE' });
+  const [shapeFormData, setShapeFormData] = useState({ name: '', status: 'ACTIVE' });
+  const [materialFormData, setMaterialFormData] = useState({ name: '', density: '', status: 'ACTIVE' });
+  
   const [isEditingGroup, setIsEditingGroup] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
 
+  const [isEditingShape, setIsEditingShape] = useState(false);
+  const [editingShapeId, setEditingShapeId] = useState(null);
+  const [isSubmittingShape, setIsSubmittingShape] = useState(false);
+
+  const [isEditingMaterial, setIsEditingMaterial] = useState(false);
+  const [editingMaterialId, setEditingMaterialId] = useState(null);
+  const [isSubmittingMaterial, setIsSubmittingMaterial] = useState(false);
+
   useEffect(() => {
     fetchItemsList();
     fetchItemGroups();
+    fetchShapes();
+    fetchMaterials();
     fetchApprovedDrawings();
     
     // Check if we have initial data from navigation
@@ -97,6 +115,42 @@ const ItemsMaster = () => {
       console.error('Failed to fetch item groups:', error);
     } finally {
       setGroupsLoading(false);
+    }
+  };
+
+  const fetchShapes = async () => {
+    try {
+      setShapesLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/shapes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setShapes(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch shapes:', error);
+    } finally {
+      setShapesLoading(false);
+    }
+  };
+
+  const fetchMaterials = async () => {
+    try {
+      setMaterialsLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/materials`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMaterials(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch materials:', error);
+    } finally {
+      setMaterialsLoading(false);
     }
   };
 
@@ -334,6 +388,120 @@ const ItemsMaster = () => {
     }
   };
 
+  const handleShapeSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setIsSubmittingShape(true);
+      const token = localStorage.getItem('authToken');
+      const url = isEditingShape ? `${API_BASE}/shapes/${editingShapeId}` : `${API_BASE}/shapes`;
+      const method = isEditingShape ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(shapeFormData)
+      });
+      
+      if (!response.ok) throw new Error('Failed to save shape');
+      
+      successToast(isEditingShape ? 'Shape updated' : 'Shape added');
+      fetchShapes();
+      setShapeFormData({ name: '', status: 'ACTIVE' });
+      setIsEditingShape(false);
+      setEditingShapeId(null);
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setIsSubmittingShape(false);
+    }
+  };
+
+  const handleMaterialSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setIsSubmittingMaterial(true);
+      const token = localStorage.getItem('authToken');
+      const url = isEditingMaterial ? `${API_BASE}/materials/${editingMaterialId}` : `${API_BASE}/materials`;
+      const method = isEditingMaterial ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(materialFormData)
+      });
+      
+      if (!response.ok) throw new Error('Failed to save material');
+      
+      successToast(isEditingMaterial ? 'Material updated' : 'Material added');
+      fetchMaterials();
+      setMaterialFormData({ name: '', density: '', status: 'ACTIVE' });
+      setIsEditingMaterial(false);
+      setEditingMaterialId(null);
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setIsSubmittingMaterial(false);
+    }
+  };
+
+  const handleDeleteShape = (id) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: "Delete this shape?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Yes, delete it!'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const token = localStorage.getItem('authToken');
+          const response = await fetch(`${API_BASE}/shapes/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!response.ok) throw new Error('Failed to delete shape');
+          successToast('Shape deleted');
+          fetchShapes();
+        } catch (error) {
+          errorToast(error.message);
+        }
+      }
+    });
+  };
+
+  const handleDeleteMaterial = (id) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: "Delete this material?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Yes, delete it!'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const token = localStorage.getItem('authToken');
+          const response = await fetch(`${API_BASE}/materials/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!response.ok) throw new Error('Failed to delete material');
+          successToast('Material deleted');
+          fetchMaterials();
+        } catch (error) {
+          errorToast(error.message);
+        }
+      }
+    });
+  };
+
   const handleDeleteGroup = (id) => {
     Swal.fire({
       title: 'Are you sure?',
@@ -397,8 +565,41 @@ const ItemsMaster = () => {
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-end gap-2">
-          <button onClick={() => { setGroupFormData({ name: row.name, group_type: row.group_type || 'OTHER', status: row.status || 'ACTIVE' }); setIsEditingGroup(true); setEditingGroupId(row.id); }} className="p-1 text-amber-500 hover:bg-amber-50 rounded"><Edit2 size={14} /></button>
+          <button onClick={() => { setActiveForm('group'); setGroupFormData({ name: row.name, group_type: row.group_type || 'OTHER', status: row.status || 'ACTIVE' }); setIsEditingGroup(true); setEditingGroupId(row.id); }} className="p-1 text-amber-500 hover:bg-amber-50 rounded"><Edit2 size={14} /></button>
           <button onClick={() => handleDeleteGroup(row.id)} className="p-1 text-rose-500 hover:bg-rose-50 rounded"><Trash2 size={14} /></button>
+        </div>
+      )
+    }
+  ];
+
+  const shapeColumns = [
+    { label: 'Shape Name', key: 'name', sortable: true, className: 'font-medium' },
+    { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
+    { 
+      label: 'Actions', 
+      key: 'actions', 
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex justify-end gap-2">
+          <button onClick={() => { setActiveForm('shape'); setShapeFormData({ name: row.name, status: row.status || 'ACTIVE' }); setIsEditingShape(true); setEditingShapeId(row.id); }} className="p-1 text-amber-500 hover:bg-amber-50 rounded"><Edit2 size={14} /></button>
+          <button onClick={() => handleDeleteShape(row.id)} className="p-1 text-rose-500 hover:bg-rose-50 rounded"><Trash2 size={14} /></button>
+        </div>
+      )
+    }
+  ];
+
+  const materialColumns = [
+    { label: 'Material Name', key: 'name', sortable: true, className: 'font-medium' },
+    { label: 'Density', key: 'density', sortable: true, render: (val) => `${val} g/cm³` },
+    { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
+    { 
+      label: 'Actions', 
+      key: 'actions', 
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex justify-end gap-2">
+          <button onClick={() => { setActiveForm('material'); setMaterialFormData({ name: row.name, density: row.density, status: row.status || 'ACTIVE' }); setIsEditingMaterial(true); setEditingMaterialId(row.id); }} className="p-1 text-amber-500 hover:bg-amber-50 rounded"><Edit2 size={14} /></button>
+          <button onClick={() => handleDeleteMaterial(row.id)} className="p-1 text-rose-500 hover:bg-rose-50 rounded"><Trash2 size={14} /></button>
         </div>
       )
     }
@@ -651,87 +852,204 @@ const ItemsMaster = () => {
       {activeTab === 'groups' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 animate-in fade-in duration-500">
           <Card className="lg:col-span-1 bg-white rounded shadow-sm border border-slate-100 h-fit sticky top-2">
-            <div className=" border-b border-slate-50 bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-100 text-indigo-600 rounded ">
-                  <Plus size={20} />
-                </div>
-                <h2 className="text-md  text-slate-900">{isEditingGroup ? 'Edit Group' : 'Add New Group'}</h2>
-              </div>
-            </div>
-            <form onSubmit={handleGroupSubmit} className="p-2 space-y-2">
-              <div className="space-y-2">
-                <label className="text-xs  text-slate-500  ">Group Name *</label>
-                <input 
-                  type="text"
-                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  placeholder="e.g. Raw Material"
-                  value={groupFormData.name}
-                  onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs  text-slate-500  ">Group Type *</label>
-                <select 
-                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={groupFormData.group_type}
-                  onChange={(e) => setGroupFormData({...groupFormData, group_type: e.target.value})}
-                  required
-                >
-                  <option value="">Select Type</option>
-                  <option value="RM">RM (Raw Material)</option>
-                  <option value="FG">FG (Finished Goods)</option>
-                  <option value="SFG">SFG (Semi-Finished Goods)</option>
-                  <option value="SA">SA (Sub-Assembly)</option>
-                  <option value="CON">CON (Consumables)</option>
-                  <option value="PAC">PAC (Packing Material)</option>
-                  <option value="SCRAP">SCRAP</option>
-                  <option value="OTHER">OTHER</option>
-                </select>
-              </div>
-              <div className="flex gap-2 pt-4">
-                <button 
-                  type="submit" 
-                  disabled={isSubmittingGroup}
-                  className="flex-1 p-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
-                >
-                  {isSubmittingGroup ? 'Saving...' : (isEditingGroup ? 'Update' : 'Add Group')}
-                </button>
-                {isEditingGroup && (
-                  <button 
-                    type="button"
-                    onClick={() => { setIsEditingGroup(false); setGroupFormData({ name: '', group_type: '', status: 'ACTIVE' }); }}
-                    className="px-4 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs  hover:bg-slate-50 transition-all"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-          </Card>
-
-          <Card className="lg:col-span-2 ">
-            <div className="p-2 border-b border-slate-50 flex items-center justify-between">
-              <h2 className="text-md  text-slate-900 flex items-center gap-2">
-                <Layers size={20} className="text-indigo-600" />
-                Existing Groups
-              </h2>
+            <div className="p-0">
               <button 
-                onClick={fetchItemGroups}
-                className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                onClick={() => setActiveForm('group')}
+                className={`w-full flex items-center gap-3 p-3 text-sm transition-all border-b border-slate-50 ${activeForm === 'group' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
               >
-                <RefreshCw size={15} className={groupsLoading ? 'animate-spin' : ''} />
+                <div className={`p-1.5 rounded ${activeForm === 'group' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                  <Plus size={14} />
+                </div>
+                Add New Group
+              </button>
+              <button 
+                onClick={() => setActiveForm('shape')}
+                className={`w-full flex items-center gap-3 p-3 text-sm transition-all border-b border-slate-50 ${activeForm === 'shape' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <div className={`p-1.5 rounded ${activeForm === 'shape' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                  <Plus size={14} />
+                </div>
+                Add Shape Master
+              </button>
+              <button 
+                onClick={() => setActiveForm('material')}
+                className={`w-full flex items-center gap-3 p-3 text-sm transition-all border-b border-slate-50 ${activeForm === 'material' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <div className={`p-1.5 rounded ${activeForm === 'material' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                  <Plus size={14} />
+                </div>
+                Add Material Master
               </button>
             </div>
-            <div className="p-2">
-              <DataTable 
-                columns={groupColumns}
-                data={itemGroups}
-                loading={groupsLoading}
-                pageSize={5}
-                hideHeader={true}
-              />
+
+            <div className="p-3">
+              {activeForm === 'group' && (
+                <form onSubmit={handleGroupSubmit} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Group Name *</label>
+                    <input 
+                      type="text"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      placeholder="e.g. Raw Material"
+                      value={groupFormData.name}
+                      onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Group Type *</label>
+                    <select 
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      value={groupFormData.group_type}
+                      onChange={(e) => setGroupFormData({...groupFormData, group_type: e.target.value})}
+                      required
+                    >
+                      <option value="">Select Type</option>
+                      <option value="RM">RM (Raw Material)</option>
+                      <option value="FG">FG (Finished Goods)</option>
+                      <option value="SFG">SFG (Semi-Finished Goods)</option>
+                      <option value="SA">SA (Sub-Assembly)</option>
+                      <option value="CON">CON (Consumables)</option>
+                      <option value="PAC">PAC (Packing Material)</option>
+                      <option value="SCRAP">SCRAP</option>
+                      <option value="OTHER">OTHER</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button 
+                      type="submit" 
+                      disabled={isSubmittingGroup}
+                      className="flex-1 p-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                    >
+                      {isSubmittingGroup ? 'Saving...' : (isEditingGroup ? 'Update Group' : 'Save Group')}
+                    </button>
+                    {isEditingGroup && (
+                      <button 
+                        type="button"
+                        onClick={() => { setIsEditingGroup(false); setGroupFormData({ name: '', group_type: '', status: 'ACTIVE' }); }}
+                        className="px-3 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs hover:bg-slate-50 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+
+              {activeForm === 'shape' && (
+                <form onSubmit={handleShapeSubmit} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Shape Name *</label>
+                    <input 
+                      type="text"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      placeholder="e.g. Round"
+                      value={shapeFormData.name}
+                      onChange={(e) => setShapeFormData({...shapeFormData, name: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button 
+                      type="submit" 
+                      disabled={isSubmittingShape}
+                      className="flex-1 p-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                    >
+                      {isSubmittingShape ? 'Saving...' : (isEditingShape ? 'Update Shape' : 'Save Shape')}
+                    </button>
+                    {isEditingShape && (
+                      <button 
+                        type="button"
+                        onClick={() => { setIsEditingShape(false); setShapeFormData({ name: '', status: 'ACTIVE' }); }}
+                        className="px-3 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs hover:bg-slate-50 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+
+              {activeForm === 'material' && (
+                <form onSubmit={handleMaterialSubmit} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Material Name *</label>
+                    <input 
+                      type="text"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      placeholder="e.g. Aluminum 6063"
+                      value={materialFormData.name}
+                      onChange={(e) => setMaterialFormData({...materialFormData, name: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Density *</label>
+                    <input 
+                      type="number"
+                      step="0.0001"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      placeholder="e.g. 2.7"
+                      value={materialFormData.density}
+                      onChange={(e) => setMaterialFormData({...materialFormData, density: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button 
+                      type="submit" 
+                      disabled={isSubmittingMaterial}
+                      className="flex-1 p-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                    >
+                      {isSubmittingMaterial ? 'Saving...' : (isEditingMaterial ? 'Update Material' : 'Save Material')}
+                    </button>
+                    {isEditingMaterial && (
+                      <button 
+                        type="button"
+                        onClick={() => { setIsEditingMaterial(false); setMaterialFormData({ name: '', density: '', status: 'ACTIVE' }); }}
+                        className="px-3 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs hover:bg-slate-50 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
+          </Card>
+
+          <Card className="lg:col-span-2 space-y-4">
+            <div>
+              <div className="p-3 border-b border-slate-50 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <Layers size={14} className="text-indigo-500" /> Existing Groups
+                </h3>
+              </div>
+              <div className="p-2">
+                <DataTable columns={groupColumns} data={itemGroups} loading={groupsLoading} pageSize={5} />
+              </div>
+            </div>
+
+            <div>
+              <div className="p-3 border-b border-slate-50 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <Layers size={14} className="text-indigo-500" /> Existing Shapes
+                </h3>
+              </div>
+              <div className="p-2">
+                <DataTable columns={shapeColumns} data={shapes} loading={shapesLoading} pageSize={5} />
+              </div>
+            </div>
+
+            <div>
+              <div className="p-3 border-b border-slate-50 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <Layers size={14} className="text-indigo-500" /> Existing Materials
+                </h3>
+              </div>
+              <div className="p-2">
+                <DataTable columns={materialColumns} data={materials} loading={materialsLoading} pageSize={5} />
+              </div>
             </div>
           </Card>
         </div>
