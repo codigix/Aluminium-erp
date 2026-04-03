@@ -863,13 +863,13 @@ const ItemsMaster = () => {
               {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && (
                 <>
                   <div className="space-y-2">
-                    <label className="text-xs text-slate-500">Material *</label>
+                    <label className="text-xs text-slate-500">Select Material Type *</label>
                     <select 
                       className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                       value={itemFormData.materialId}
                       onChange={(e) => {
                         const mId = e.target.value;
-                        const selectedMaterial = materials.find(m => m.id === parseInt(mId));
+                        const selectedMaterial = materials.find(m => String(m.id) === String(mId));
                         setItemFormData({
                           ...itemFormData, 
                           materialId: mId,
@@ -880,22 +880,14 @@ const ItemsMaster = () => {
                     >
                       <option value="">Select Material</option>
                       {materials.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
+                        <option key={m.id} value={m.id}>
+                          {m.name} {m.density ? `(${parseFloat(m.density).toFixed(4)})` : ''}
+                        </option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-slate-500">Density (g/cm³)</label>
-                    <input 
-                      type="text"
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none"
-                      value={itemFormData.density}
-                      readOnly
-                      placeholder="Auto-fetched"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-500">Shape *</label>
+                    <label className="text-xs text-slate-500">Select Shape Type *</label>
                     <select 
                       className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                       value={itemFormData.shapeId}
