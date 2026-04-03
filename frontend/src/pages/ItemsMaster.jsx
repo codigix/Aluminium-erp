@@ -860,7 +860,7 @@ const ItemsMaster = () => {
                 </select>
               </div>
 
-              {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM'].includes(itemFormData.itemGroup) && (
+              {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && (
                 <>
                   <div className="space-y-2">
                     <label className="text-xs text-slate-500">Material *</label>
