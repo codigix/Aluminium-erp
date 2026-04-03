@@ -37,7 +37,15 @@ const ItemsMaster = () => {
     weightUom: '',
     drawingNo: '',
     revision: '',
-    materialGrade: ''
+    materialGrade: '',
+    materialId: '',
+    density: '',
+    shapeId: '',
+    length: '',
+    width: '',
+    thickness: '',
+    diameter: '',
+    outerDiameter: ''
   });
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
@@ -281,7 +289,15 @@ const ItemsMaster = () => {
       weightUom: '',
       drawingNo: '',
       revision: '',
-      materialGrade: ''
+      materialGrade: '',
+      materialId: '',
+      density: '',
+      shapeId: '',
+      length: '',
+      width: '',
+      thickness: '',
+      diameter: '',
+      outerDiameter: ''
     });
     setIsEditingItem(false);
     setEditingItemId(null);
@@ -290,10 +306,19 @@ const ItemsMaster = () => {
   const handleEditItem = (item) => {
     setIsEditingItem(true);
     setEditingItemId(item.id);
+    
+    // Find the original group name if it was normalized
+    let displayGroup = item.material_type || '';
+    const matchingGroup = itemGroups.find(g => 
+      g.name === displayGroup || 
+      g.name.toUpperCase().replace(/ /g, '_') === displayGroup
+    );
+    if (matchingGroup) displayGroup = matchingGroup.name;
+
     setItemFormData({
       itemCode: item.item_code || '',
       itemName: item.material_name || '',
-      itemGroup: item.material_type || '',
+      itemGroup: displayGroup,
       defaultUom: item.unit || 'Nos',
       valuationRate: item.valuation_rate || 0,
       sellingRate: item.selling_rate || 0,
@@ -302,16 +327,32 @@ const ItemsMaster = () => {
       weightUom: item.weight_uom || '',
       drawingNo: item.drawing_no || '',
       revision: item.revision || '',
-      materialGrade: item.material_grade || ''
+      materialGrade: item.material_grade || '',
+      materialId: item.material_id || '',
+      density: item.density || '',
+      shapeId: item.shape_id || '',
+      length: item.length || '',
+      width: item.width || '',
+      thickness: item.thickness || '',
+      diameter: item.diameter || '',
+      outerDiameter: item.outer_diameter || ''
     });
     setShowItemForm(true);
   };
 
   const handleCopyItem = (item) => {
+    // Find the original group name if it was normalized
+    let displayGroup = item.material_type || '';
+    const matchingGroup = itemGroups.find(g => 
+      g.name === displayGroup || 
+      g.name.toUpperCase().replace(/ /g, '_') === displayGroup
+    );
+    if (matchingGroup) displayGroup = matchingGroup.name;
+
     setItemFormData({
       itemCode: '',
       itemName: item.material_name || '',
-      itemGroup: item.material_type || '',
+      itemGroup: displayGroup,
       defaultUom: item.unit || 'Nos',
       valuationRate: item.valuation_rate || 0,
       sellingRate: item.selling_rate || 0,
@@ -320,7 +361,15 @@ const ItemsMaster = () => {
       weightUom: item.weight_uom || '',
       drawingNo: item.drawing_no || '',
       revision: item.revision || '',
-      materialGrade: item.material_grade || ''
+      materialGrade: item.material_grade || '',
+      materialId: item.material_id || '',
+      density: item.density || '',
+      shapeId: item.shape_id || '',
+      length: item.length || '',
+      width: item.width || '',
+      thickness: item.thickness || '',
+      diameter: item.diameter || '',
+      outerDiameter: item.outer_diameter || ''
     });
     setIsEditingItem(false);
     setEditingItemId(null);
@@ -605,6 +654,55 @@ const ItemsMaster = () => {
     }
   ];
 
+  const selectedShape = (shapes.find(s => String(s.id) === String(itemFormData.shapeId))?.name || '').trim();
+
+  // Auto-calculate Weight per Unit
+  useEffect(() => {
+    const shape = selectedShape.toLowerCase();
+    const density = parseFloat(itemFormData.density) || 0;
+    let calculatedWeight = 0;
+
+    if (density > 0) {
+      if (shape === 'plate') {
+        const l = parseFloat(itemFormData.length) || 0;
+        const w = parseFloat(itemFormData.width) || 0;
+        const t = parseFloat(itemFormData.thickness) || 0;
+        // Formula: L * W * T * Density / 1,000,000
+        calculatedWeight = (l * w * t * density) / 1000000;
+      } else if (shape === 'round') {
+        const d = parseFloat(itemFormData.diameter) || 0;
+        const l = parseFloat(itemFormData.length) || 0;
+        // Formula: π * (D² / 4) * Length * Density / 1,000,000
+        calculatedWeight = (Math.PI * Math.pow(d, 2) / 4 * l * density) / 1000000;
+      } else if (shape === 'pipe') {
+        const od = parseFloat(itemFormData.outerDiameter) || 0;
+        const t = parseFloat(itemFormData.thickness) || 0;
+        const l = parseFloat(itemFormData.length) || 0;
+        const id = od - (2 * t);
+        // Formula: π * (OD² - ID²) / 4 * Length * Density / 1,000,000
+        if (id >= 0) {
+          calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * l * density) / 1000000;
+        }
+      }
+    }
+
+    if (calculatedWeight > 0) {
+      setItemFormData(prev => ({
+        ...prev,
+        weightPerUnit: parseFloat(calculatedWeight.toFixed(3)),
+        weightUom: 'Kg'
+      }));
+    }
+  }, [
+    itemFormData.length, 
+    itemFormData.width, 
+    itemFormData.thickness, 
+    itemFormData.diameter, 
+    itemFormData.outerDiameter, 
+    itemFormData.density, 
+    selectedShape
+  ]);
+
   return (
     <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
       {/* Header */}
@@ -761,6 +859,112 @@ const ItemsMaster = () => {
                   ))}
                 </select>
               </div>
+
+              {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM'].includes(itemFormData.itemGroup) && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-500">Material *</label>
+                    <select 
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      value={itemFormData.materialId}
+                      onChange={(e) => {
+                        const mId = e.target.value;
+                        const selectedMaterial = materials.find(m => m.id === parseInt(mId));
+                        setItemFormData({
+                          ...itemFormData, 
+                          materialId: mId,
+                          density: selectedMaterial ? selectedMaterial.density : ''
+                        });
+                      }}
+                      required
+                    >
+                      <option value="">Select Material</option>
+                      {materials.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-500">Density (g/cm³)</label>
+                    <input 
+                      type="text"
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none"
+                      value={itemFormData.density}
+                      readOnly
+                      placeholder="Auto-fetched"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-500">Shape *</label>
+                    <select 
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      value={itemFormData.shapeId}
+                      onChange={(e) => setItemFormData({...itemFormData, shapeId: e.target.value})}
+                      required
+                    >
+                      <option value="">Select Shape</option>
+                      {shapes.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedShape && (
+                    <div className="md:col-span-3 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100 space-y-3">
+                      <div className="flex items-center gap-2 text-indigo-700 font-medium text-sm">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                        {selectedShape} Dimensions (All in mm)
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        {selectedShape.toLowerCase() === 'plate' && (
+                          <>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Width (mm) *</label>
+                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.width} onChange={(e) => setItemFormData({...itemFormData, width: e.target.value})} required />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Thickness (mm) *</label>
+                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
+                            </div>
+                          </>
+                        )}
+                        {selectedShape.toLowerCase() === 'round' && (
+                          <>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Diameter (mm) *</label>
+                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.diameter} onChange={(e) => setItemFormData({...itemFormData, diameter: e.target.value})} required />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                            </div>
+                          </>
+                        )}
+                        {selectedShape.toLowerCase() === 'pipe' && (
+                          <>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Outer Diameter (mm) *</label>
+                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, outerDiameter: e.target.value})} required />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Thickness (mm) *</label>
+                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               <div className="space-y-2">
                 <label className="text-xs  text-slate-500  ">UOM</label>
                 <select 

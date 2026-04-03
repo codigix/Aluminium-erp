@@ -157,6 +157,14 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       MAX(drawing_id) as drawing_id,
       MAX(revision) as revision,
       MAX(material_grade) as material_grade,
+      MAX(material_id) as material_id,
+      MAX(shape_id) as shape_id,
+      MAX(length) as length,
+      MAX(width) as width,
+      MAX(thickness) as thickness,
+      MAX(diameter) as diameter,
+      MAX(outer_diameter) as outer_diameter,
+      MAX(density) as density,
       MAX(warehouse) as warehouse,
       MAX(last_updated) as last_updated,
       SUM(current_balance) as current_balance
@@ -212,6 +220,14 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       drawing_id: balance.drawing_id,
       revision: balance.revision,
       material_grade: balance.material_grade,
+      material_id: balance.material_id,
+      shape_id: balance.shape_id,
+      length: balance.length,
+      width: balance.width,
+      thickness: balance.thickness,
+      diameter: balance.diameter,
+      outer_diameter: balance.outer_diameter,
+      density: balance.density,
       warehouse: balance.warehouse,
       last_updated: balance.last_updated
     });
@@ -684,8 +700,10 @@ const createItem = async (itemData) => {
         item_code, material_name, material_type, unit, 
         valuation_rate, selling_rate, no_of_cavity, 
         weight_per_unit, weight_uom, drawing_no, 
-        revision, material_grade
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        revision, material_grade,
+        material_id, shape_id, length, width, thickness, 
+        diameter, outer_diameter, density
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       itemCode,
       itemData.itemName,
@@ -698,7 +716,15 @@ const createItem = async (itemData) => {
       itemData.weightUom || null,
       itemData.drawingNo || null,
       itemData.revision || null,
-      itemData.materialGrade || null
+      itemData.materialGrade || null,
+      itemData.materialId || null,
+      itemData.shapeId || null,
+      itemData.length || null,
+      itemData.width || null,
+      itemData.thickness || null,
+      itemData.diameter || null,
+      itemData.outerDiameter || null,
+      itemData.density || null
     ]);
 
     await connection.commit();
@@ -724,7 +750,10 @@ const updateItem = async (id, itemData) => {
         item_code = ?, material_name = ?, material_type = ?, unit = ?, 
         valuation_rate = ?, selling_rate = ?, no_of_cavity = ?, 
         weight_per_unit = ?, weight_uom = ?, drawing_no = ?, 
-        revision = ?, material_grade = ?, last_updated = CURRENT_TIMESTAMP
+        revision = ?, material_grade = ?,
+        material_id = ?, shape_id = ?, length = ?, width = ?, thickness = ?, 
+        diameter = ?, outer_diameter = ?, density = ?,
+        last_updated = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
       itemData.itemCode,
@@ -739,6 +768,14 @@ const updateItem = async (id, itemData) => {
       itemData.drawingNo || null,
       itemData.revision || null,
       itemData.materialGrade || null,
+      itemData.materialId || null,
+      itemData.shapeId || null,
+      itemData.length || null,
+      itemData.width || null,
+      itemData.thickness || null,
+      itemData.diameter || null,
+      itemData.outerDiameter || null,
+      itemData.density || null,
       id
     ]);
 
