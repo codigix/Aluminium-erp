@@ -155,7 +155,7 @@ const BOMFormPage = () => {
     quantity: 1
   });
 
-  const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' });
+  const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' });
   const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
@@ -1678,7 +1678,7 @@ const BOMFormPage = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                    <div className="md:col-span-4 space-y-1">
+                    <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Material Selection <span className="text-rose-500">*</span></label>
                       <SearchableSelect
                         placeholder="Select material..."
@@ -1760,7 +1760,8 @@ const BOMFormPage = () => {
                             itemGroup: autoGroup,
                             rate: item ? (bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0))) : materialForm.rate,
                             uom: item ? (item.unit || 'Kg') : materialForm.uom,
-                            description: item ? item.material_name : materialForm.description
+                            description: item ? item.material_name : materialForm.description,
+                            weightPerUnit: item ? (item.weight_per_unit || 0) : ''
                           });
                         }}
                         subLabelField="subLabel"
@@ -1791,9 +1792,34 @@ const BOMFormPage = () => {
                       </select>
                     </div>
 
-                    <div className="md:col-span-3 space-y-1 flex flex-col justify-end">
+                    {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CON'].includes(materialForm.itemGroup) && (
+                      <>
+                        <div className="md:col-span-1 space-y-1">
+                          <label className="text-xs  text-slate-500 ml-1">Weight/Unit</label>
+                          <input 
+                            type="number" 
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none" 
+                            value={materialForm.weightPerUnit} 
+                            readOnly 
+                            placeholder="Auto"
+                          />
+                        </div>
+                        <div className="md:col-span-1 space-y-1">
+                          <label className="text-xs  text-slate-500 ml-1">Scrap %</label>
+                          <input 
+                            type="number" 
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
+                            value={materialForm.scrapPercent} 
+                            onChange={(e) => setMaterialForm({ ...materialForm, scrapPercent: e.target.value })}
+                            placeholder="0"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className={`space-y-1 flex flex-col justify-end ${['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CON'].includes(materialForm.itemGroup) ? 'md:col-span-2' : 'md:col-span-4'}`}>
                       <button
-                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '' })}
+                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' })}
                         className="w-full py-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <Plus className="w-4 h-4" />
