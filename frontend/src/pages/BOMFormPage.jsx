@@ -38,7 +38,15 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
 
   const qty = parseFloat(actualType === 'material' ? item.qty_per_pc : (item.quantity || item.qty || 0));
   const rate = parseFloat(item.rate || 0);
-  const baseCost = qty * rate;
+  const weightPerUnit = actualType === 'material' ? parseFloat(item.weight_per_unit || 0) : 0;
+  const scrapPercent = actualType === 'material' ? parseFloat(item.scrap_percent || 0) : 0;
+
+  let baseCost = qty * rate;
+  if (actualType === 'material' && weightPerUnit > 0) {
+    // Total Cost = Qty * WeightPerUnit * (1 + ScrapPercent / 100) * Rate
+    baseCost = qty * weightPerUnit * (1 + (scrapPercent / 100)) * rate;
+  }
+
   const itemLossPercent = actualType === 'component' ? parseFloat(item.loss_percent || item.lossPercent || 0) : 0;
 
   // Cumulative loss factor calculation
@@ -731,11 +739,15 @@ const BOMFormPage = () => {
         }
         payload.qtyPerPc = parseFloat(formData.qty) || 0;
         payload.qty_per_pc = payload.qtyPerPc;
+        payload.weight_per_unit = parseFloat(formData.weightPerUnit) || 0;
+        payload.scrap_percent = parseFloat(formData.scrapPercent) || 0;
         payload.materialType = 'Raw Material';
         payload.material_name = payload.materialName;
         payload.item_group = payload.itemGroup;
         payload.rate = parseFloat(payload.rate) || 0;
         delete payload.qty;
+        delete payload.weightPerUnit;
+        delete payload.scrapPercent;
       } else if (section === 'components') {
         if (!payload.componentCode || !payload.quantity) {
           throw new Error('Component Code and Quantity are required');
@@ -1018,9 +1030,16 @@ const BOMFormPage = () => {
   // Helper for recursive cost calculation
   const calculateRecursiveCost = useCallback((item, allItems) => {
     const isMaterial = !!item.material_name;
-    const qty = parseFloat(isMaterial ? item.qty_per_pc : (item.quantity || item.qty || 0));
+    const qty = parseFloat(isMaterial ? (item.qty_per_pc || item.qtyPerPc || 0) : (item.quantity || item.qty || 0));
     const rate = parseFloat(item.rate || 0);
-    const baseItemCost = qty * rate;
+    const weightPerUnit = isMaterial ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
+    const scrapPercent = isMaterial ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
+
+    let baseItemCost = qty * rate;
+    if (isMaterial && weightPerUnit > 0) {
+      // Total Cost = Qty * WeightPerUnit * (1 + ScrapPercent / 100) * Rate
+      baseItemCost = qty * weightPerUnit * (1 + (scrapPercent / 100)) * rate;
+    }
 
     // Find children
     const children = allItems.filter(child => String(child.parent_id || child.parentId) === String(item.id));
