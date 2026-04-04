@@ -30,38 +30,103 @@ import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type: providedType, inheritedLoss = 0 }) => {
+const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type: providedType, inheritedLoss = 0, isComponentSection = false }) => {
   // Determine if this item is a material or component if type not provided or to be sure
   const actualType = providedType || (item.material_name ? 'material' : 'component');
+  
+  const isConsumable = (item.item_group || '').toLowerCase().includes('consumable') || 
+                       (item.material_type || '').toLowerCase().includes('consumable') || 
+                       (item.material_name || '').toLowerCase().includes('consumable');
 
   const children = allItems.filter(child => String(child.parent_id || child.parentId) === String(item.id));
 
   const qty = parseFloat(actualType === 'material' ? (item.qty_per_pc || item.qtyPerPc || item.qty || item.quantity || 0) : (item.quantity || item.qty || 0));
   const rate = parseFloat(item.rate || 0);
-  const weightPerUnit = actualType === 'material' ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
-  const scrapPercent = actualType === 'material' ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
+  const weightPerUnit = (actualType === 'material' || isConsumable) ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
+  const scrapPercent = (actualType === 'material' || isConsumable) ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
 
-  const unitWeight = weightPerUnit * (1 + scrapPercent);
+  const unitWeight = weightPerUnit * (1 + (scrapPercent > 1 ? scrapPercent / 100 : scrapPercent));
   const totalWeight = qty * unitWeight;
 
   let baseCost = qty * rate;
-  if (actualType === 'material' && weightPerUnit > 0) {
+  if ((actualType === 'material' || isConsumable) && weightPerUnit > 0) {
     // Total Cost = Total Weight * Rate
     baseCost = totalWeight * rate;
   }
 
   const itemLossPercent = actualType === 'component' ? parseFloat(item.loss_percent || item.lossPercent || 0) : 0;
-
-  // Cumulative loss factor calculation
-  // Effective factor = (1 - L_parent/100) * (1 - L_this/100)
-  // But wait, the formula for cost increase is 1 / (1 - L/100).
-  // Cumulative increase = 1 / [(1 - L1/100) * (1 - L2/100) * ...]
+  
   const currentLevelLossFactor = 1 - (inheritedLoss / 100);
   const itemLossFactor = 1 - (itemLossPercent / 100);
   const cumulativeLossFactor = currentLevelLossFactor * itemLossFactor;
 
   // This item's cost increased by its parent's loss (if any) AND its own loss
   const netCost = baseCost / cumulativeLossFactor;
+
+  if (isComponentSection) {
+    return (
+      <>
+        <tr className={`${level > 0 ? 'bg-slate-50/50' : 'bg-white'} border-b border-slate-100 hover:bg-blue-50/30 transition-colors`}>
+          <td className="p-2 ">
+            <div className="flex items-center gap-2 " style={{ paddingLeft: `${level * 20}px` }}>
+              {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
+              <div className="flex flex-col">
+                <span className="text-xs  text-slate-800 font-medium">
+                  {item.component_code || item.componentCode || item.material_name}
+                </span>
+                {item.description && (
+                  <span className="text-xs text-slate-400 truncate max-w-[200px]">{cleanText(item.description)}</span>
+                )}
+              </div>
+            </div>
+          </td>
+          <td className="p-2 text-center">
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600 font-medium">
+              {isConsumable ? 'Consumable' : 'Assembly'}
+            </span>
+          </td>
+          <td className="p-2 text-center text-xs text-slate-600">
+            {(qty / cumulativeLossFactor).toFixed(2)}
+          </td>
+          <td className="p-2 text-center text-xs text-slate-600">
+            {item.uom}
+          </td>
+          <td className="p-2 text-center text-xs text-slate-600">
+            {unitWeight > 0 ? `${unitWeight.toFixed(3)} Kg` : '—'}
+          </td>
+          <td className="p-2 text-center text-xs text-slate-600">
+            {totalWeight > 0 ? `${(totalWeight / cumulativeLossFactor).toFixed(3)} Kg` : '—'}
+          </td>
+          <td className="p-2 text-center text-xs text-slate-600">₹{rate.toFixed(2)}</td>
+          <td className="p-2 text-center text-xs text-slate-900 font-medium">
+            ₹{netCost.toFixed(2)}
+          </td>
+          {!isReadOnly && (
+            <td className="p-2 text-right">
+              <button
+                onClick={() => onRemove('components', item.id, item.isLocal)}
+                className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </td>
+          )}
+        </tr>
+        {children.map(child => (
+          <RecursiveBOMRow
+            key={`${child.material_name ? 'mat' : 'comp'}-${child.id}`}
+            item={child}
+            level={level + 1}
+            onRemove={onRemove}
+            isReadOnly={isReadOnly}
+            allItems={allItems}
+            isComponentSection={true}
+            inheritedLoss={100 * (1 - cumulativeLossFactor)}
+          />
+        ))}
+      </>
+    );
+  }
 
   return (
     <>
@@ -182,7 +247,7 @@ const BOMFormPage = () => {
   });
 
   const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' });
-  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
+  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' });
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
@@ -291,7 +356,10 @@ const BOMFormPage = () => {
           subLabel: item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0)),
           uom: item.unit || 'Kg',
-          description: item.material_name
+          description: item.material_name,
+          weightPerUnit: item.weight_per_unit || 0,
+          itemGroup: item.material_type || item.item_group || "",
+          scrapPercent: item.scrap_percent || 0
         });
         seenCodes.add(item.item_code);
       }
@@ -337,7 +405,10 @@ const BOMFormPage = () => {
           subLabel: `Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.rate || 0),
           uom: item.unit || 'Kg',
-          description: item.description || item.material_name
+          description: item.description || item.material_name,
+          weightPerUnit: item.weight_per_unit || 0,
+          itemGroup: item.item_group || "",
+          scrapPercent: item.scrap_percent || 0
         });
         seenCodes.add(item.item_code);
       }
@@ -791,6 +862,9 @@ const BOMFormPage = () => {
         payload.quantity = parseFloat(payload.quantity) || 0;
         payload.rate = parseFloat(payload.rate) || 0;
         payload.lossPercent = parseFloat(payload.lossPercent) || 0;
+        payload.item_group = payload.itemGroup;
+        payload.weight_per_unit = parseFloat(payload.weightPerUnit) || 0;
+        payload.scrap_percent = parseFloat(payload.scrapPercent) || 0;
       } else if (section === 'operations') {
         if (!payload.operationName || payload.hourlyRate === '') {
           throw new Error('Operation Name and Hourly Rate are required');
@@ -1048,15 +1122,20 @@ const BOMFormPage = () => {
   // Helper for recursive cost calculation
   const calculateRecursiveCost = useCallback((item, allItems) => {
     const isMaterial = !!item.material_name;
+    const isConsumable = (item.item_group || '').toLowerCase().includes('consumable') || 
+                         (item.material_type || '').toLowerCase().includes('consumable') || 
+                         (item.material_name || '').toLowerCase().includes('consumable');
+
     const qty = parseFloat(isMaterial ? (item.qty_per_pc || item.qtyPerPc || 0) : (item.quantity || item.qty || 0));
     const rate = parseFloat(item.rate || 0);
-    const weightPerUnit = isMaterial ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
-    const scrapPercent = isMaterial ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
+    const weightPerUnit = (isMaterial || isConsumable) ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
+    const scrapPercent = (isMaterial || isConsumable) ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
 
     let baseItemCost = qty * rate;
-    if (isMaterial && weightPerUnit > 0) {
-      // Total Cost = Qty * WeightPerUnit * (1 + ScrapPercent / 100) * Rate
-      baseItemCost = qty * weightPerUnit * (1 + (scrapPercent / 100)) * rate;
+    if ((isMaterial || isConsumable) && weightPerUnit > 0) {
+      // Total Cost = Qty * WeightPerUnit * (1 + ScrapPercent) * Rate
+      const sP = scrapPercent > 1 ? scrapPercent / 100 : scrapPercent;
+      baseItemCost = qty * weightPerUnit * (1 + sP) * rate;
     }
 
     // Find children
@@ -1555,13 +1634,17 @@ const BOMFormPage = () => {
                         options={componentOptions}
                         value={componentForm.componentCode}
                         onChange={(e) => {
-                          const item = componentOptions.find(i => i.value === e.target.value);
+                          const item = componentOptions.find(i => i.value === e.target.value) || 
+                                       stockItems.find(si => si.item_code === e.target.value);
                           setComponentForm({
                             ...componentForm,
                             componentCode: e.target.value,
                             rate: item ? item.rate : componentForm.rate,
                             uom: item ? item.uom : componentForm.uom,
-                            description: item ? item.description : componentForm.description
+                            description: item ? item.description : componentForm.description,
+                            weightPerUnit: item ? (item.weight_per_unit || item.weightPerUnit || 0) : '',
+                            itemGroup: item ? (item.itemGroup || item.item_group || "") : '',
+                            scrapPercent: item ? (item.scrapPercent || item.scrap_percent || 0) : '0'
                           });
                         }}
                         subLabelField="subLabel"
@@ -1592,9 +1675,10 @@ const BOMFormPage = () => {
                         <option value="Mtr">Mtr</option>
                       </select>
                     </div>
+                    
                     <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
                       <button
-                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' })}
+                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' })}
                         className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <Plus className="w-4 h-4" />
@@ -1624,11 +1708,14 @@ const BOMFormPage = () => {
                   <table className="min-w-full divide-y divide-slate-100 bg-white">
                     <thead className="bg-slate-50/50">
                       <tr>
-                        <th className="p-2  text-left text-xs   text-slate-400 ">Component / Assembly</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Qty / UOM</th>
+                        <th className="p-2  text-left text-xs   text-slate-400 ">Item</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Type</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Qty</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">UOM</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Unit Wt</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Total Wt</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Loss %</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Net Amount (₹)</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Total (₹)</th>
                         {!isReadOnly && <th className="p-2  text-right text-xs   text-slate-400 ">Actions</th>}
                       </tr>
                     </thead>
@@ -1641,6 +1728,7 @@ const BOMFormPage = () => {
                           isReadOnly={isReadOnly}
                           allItems={[...bomData.materials, ...bomData.components]}
                           type="component"
+                          isComponentSection={true}
                         />
                       ))}
                     </tbody>
