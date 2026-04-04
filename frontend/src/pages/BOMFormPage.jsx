@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
@@ -36,15 +36,18 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
 
   const children = allItems.filter(child => String(child.parent_id || child.parentId) === String(item.id));
 
-  const qty = parseFloat(actualType === 'material' ? item.qty_per_pc : (item.quantity || item.qty || 0));
+  const qty = parseFloat(actualType === 'material' ? (item.qty_per_pc || item.qtyPerPc || item.qty || item.quantity || 0) : (item.quantity || item.qty || 0));
   const rate = parseFloat(item.rate || 0);
-  const weightPerUnit = actualType === 'material' ? parseFloat(item.weight_per_unit || 0) : 0;
-  const scrapPercent = actualType === 'material' ? parseFloat(item.scrap_percent || 0) : 0;
+  const weightPerUnit = actualType === 'material' ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
+  const scrapPercent = actualType === 'material' ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
+
+  const unitWeight = weightPerUnit * (1 + (scrapPercent / 100));
+  const totalWeight = qty * unitWeight;
 
   let baseCost = qty * rate;
   if (actualType === 'material' && weightPerUnit > 0) {
-    // Total Cost = Qty * WeightPerUnit * (1 + ScrapPercent / 100) * Rate
-    baseCost = qty * weightPerUnit * (1 + (scrapPercent / 100)) * rate;
+    // Total Cost = Total Weight * Rate
+    baseCost = totalWeight * rate;
   }
 
   const itemLossPercent = actualType === 'component' ? parseFloat(item.loss_percent || item.lossPercent || 0) : 0;
@@ -81,6 +84,21 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
             {(qty / cumulativeLossFactor).toFixed(actualType === 'material' ? 4 : 2)} {item.uom}
           </span>
         </td>
+        {actualType === 'material' ? (
+          <>
+            <td className="p-2 text-center text-xs text-slate-600">
+              {unitWeight > 0 ? `${unitWeight.toFixed(3)} Kg` : '—'}
+            </td>
+            <td className="p-2 text-center text-xs text-slate-600">
+              {totalWeight > 0 ? `${(totalWeight / cumulativeLossFactor).toFixed(3)} Kg` : '—'}
+            </td>
+          </>
+        ) : (
+          <>
+            <td className="p-2 text-center text-xs text-slate-600">—</td>
+            <td className="p-2 text-center text-xs text-slate-600">—</td>
+          </>
+        )}
         <td className="p-2  text-center text-xs text-slate-600">₹{rate.toFixed(2)}</td>
         <td className="p-2  text-center text-xs text-slate-600">
           {item.warehouse || '—'}
@@ -737,8 +755,8 @@ const BOMFormPage = () => {
           });
           if (!confirm.isConfirmed) return;
         }
-        payload.qtyPerPc = parseFloat(formData.qty) || 0;
-        payload.qty_per_pc = payload.qtyPerPc;
+        payload.qty_per_pc = parseFloat(formData.qty) || 0;
+        payload.qtyPerPc = payload.qty_per_pc;
         payload.weight_per_unit = parseFloat(formData.weightPerUnit) || 0;
         payload.scrap_percent = parseFloat(formData.scrapPercent) || 0;
         payload.materialType = 'Raw Material';
@@ -1896,10 +1914,12 @@ const BOMFormPage = () => {
                       <tr>
                         <th className="p-2  text-left text-xs   text-slate-400 ">Item Details</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Qty / UOM</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Unit Wt</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Total Wt</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Warehouse</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Operation</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Total</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Total (₹)</th>
                         {!isReadOnly && <th className="p-2  text-right text-xs   text-slate-400 ">Actions</th>}
                       </tr>
                     </thead>

@@ -881,7 +881,7 @@ const ItemsMaster = () => {
                       <option value="">Select Material</option>
                       {materials.map(m => (
                         <option key={m.id} value={m.id}>
-                          {m.name} {m.density ? `(${parseFloat(m.density).toFixed(4)})` : ''}
+                          {m.name} {m.density ? `[Density = ${parseFloat(m.density).toFixed(4)} g/cm³]` : ''}
                         </option>
                       ))}
                     </select>

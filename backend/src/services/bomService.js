@@ -39,7 +39,11 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
       );
     }
   }
-  return rows;
+  return rows.map(row => ({
+    ...row,
+    weightPerUnit: row.weight_per_unit,
+    scrapPercent: row.scrap_percent
+  }));
 };
 
 const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
@@ -173,15 +177,20 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
 };
 
 const addItemMaterial = async (itemId, materialData) => {
-  const { itemCode, drawingNo, materialName, materialType, itemGroup, qtyPerPc, uom, rate, warehouse, operation, parentId, description } = materialData;
+  const { 
+    itemCode, drawingNo, materialName, materialType, 
+    itemGroup, qtyPerPc, uom, rate, warehouse, 
+    operation, parentId, description,
+    weight_per_unit, scrap_percent
+  } = materialData;
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   
   // Raw materials are GLOBAL - they should not be linked to any specific drawing
   const effectiveDrawingNo = itemGroup === 'Raw Material' ? null : (drawingNo || null);
 
   const [result] = await pool.execute(
-    'INSERT INTO sales_order_item_materials (sales_order_item_id, item_code, drawing_no, parent_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [parsedItemId, itemCode || null, effectiveDrawingNo, parentId || null, materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, description || null]
+    'INSERT INTO sales_order_item_materials (sales_order_item_id, item_code, drawing_no, parent_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation, description, weight_per_unit, scrap_percent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [parsedItemId, itemCode || null, effectiveDrawingNo, parentId || null, materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, description || null, weight_per_unit || 0, scrap_percent || 0]
   );
   return result.insertId;
 };
@@ -227,10 +236,10 @@ const addScrap = async (itemId, scrapData) => {
 };
 
 const updateItemMaterial = async (materialId, materialData) => {
-  const { materialName, materialType, itemGroup, qtyPerPc, uom, rate, warehouse, operation, description } = materialData;
+  const { materialName, materialType, itemGroup, qtyPerPc, uom, rate, warehouse, operation, description, weight_per_unit, scrap_percent } = materialData;
   await pool.execute(
-    'UPDATE sales_order_item_materials SET material_name = ?, material_type = ?, item_group = ?, qty_per_pc = ?, uom = ?, rate = ?, warehouse = ?, operation = ?, description = ? WHERE id = ?',
-    [materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, description || null, materialId]
+    'UPDATE sales_order_item_materials SET material_name = ?, material_type = ?, item_group = ?, qty_per_pc = ?, uom = ?, rate = ?, warehouse = ?, operation = ?, description = ?, weight_per_unit = ?, scrap_percent = ? WHERE id = ?',
+    [materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, description || null, weight_per_unit || 0, scrap_percent || 0, materialId]
   );
 };
 
@@ -495,7 +504,7 @@ const createBOMRequest = async (bomData) => {
           const newParentId = oldParentId ? idMap[oldParentId] : null;
 
           await connection.execute(
-            'INSERT INTO sales_order_item_materials (sales_order_item_id, item_code, drawing_no, parent_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO sales_order_item_materials (sales_order_item_id, item_code, drawing_no, parent_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation, description, weight_per_unit, scrap_percent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
               linkId, 
               safeItemCode, 
@@ -504,12 +513,14 @@ const createBOMRequest = async (bomData) => {
               m.material_name || null, 
               m.material_type || null, 
               m.item_group || null, 
-              m.qty_per_pc || 0, 
+              m.qty_per_pc || m.qtyPerPc || 0, 
               m.uom || null, 
               m.rate || 0, 
               m.warehouse || null, 
               m.operation || null,
-              m.description || null
+              m.description || null,
+              m.weight_per_unit || m.weightPerUnit || 0,
+              m.scrap_percent || m.scrapPercent || 0
             ]
           );
         }
