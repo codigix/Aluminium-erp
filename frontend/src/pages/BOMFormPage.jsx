@@ -247,7 +247,7 @@ const BOMFormPage = () => {
   });
 
   const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' });
-  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' });
+  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '' });
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
@@ -1686,7 +1686,7 @@ const BOMFormPage = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-3">
+                  <div className={`grid grid-cols-1 ${(componentForm.itemGroup || '').toLowerCase().includes('consumable') ? 'md:grid-cols-6' : 'md:grid-cols-4'} gap-2 mt-3`}>
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Unit Rate (₹)</label>
                       <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.rate} onChange={(e) => setComponentForm({ ...componentForm, rate: e.target.value })} />
@@ -1695,6 +1695,32 @@ const BOMFormPage = () => {
                       <label className="text-xs  text-slate-500 ml-1">Process Loss %</label>
                       <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-rose-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({ ...componentForm, lossPercent: e.target.value })} />
                     </div>
+
+                    {(componentForm.itemGroup || '').toLowerCase().includes('consumable') && (
+                      <>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500 ml-1">Weight/Unit (Kg)</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
+                            value={componentForm.weightPerUnit ? (parseFloat(componentForm.weightPerUnit) * (1 + (parseFloat(componentForm.scrapPercent) / 100))).toFixed(3) : ''} 
+                            readOnly 
+                            placeholder="Auto"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500 ml-1">Scrap(kg)</label>
+                          <input 
+                            type="number" 
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                            value={componentForm.scrapPercent} 
+                            onChange={(e) => setComponentForm({ ...componentForm, scrapPercent: e.target.value })}
+                            placeholder="0"
+                          />
+                        </div>
+                      </>
+                    )}
+
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Component Notes</label>
                       <input type="text" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="Special handling or revision notes..." value={componentForm.notes} onChange={(e) => setComponentForm({ ...componentForm, notes: e.target.value })} />
