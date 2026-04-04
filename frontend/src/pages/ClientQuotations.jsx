@@ -411,9 +411,39 @@ const ClientQuotations = () => {
       displayStatus: q.status
     }));
 
-    return [...pending, ...sent, ...received].sort((a, b) => 
-      new Date(b.created_at) - new Date(a.created_at)
-    );
+    // Deduplicate sent and received based on uniqueKey
+    const allQuotes = [...pending, ...sent, ...received];
+    const seenKeys = new Set();
+    const uniqueQuotes = [];
+
+    allQuotes.forEach(q => {
+      // Prioritize RECEIVED over SENT if they share the same uniqueKey (except for PENDING)
+      if (q.type === 'PENDING') {
+        uniqueQuotes.push(q);
+        return;
+      }
+
+      if (!seenKeys.has(q.uniqueKey)) {
+        // If it's the first time we see this key, or if it's RECEIVED, replace SENT
+        seenKeys.add(q.uniqueKey);
+        uniqueQuotes.push(q);
+      } else if (q.type === 'RECEIVED') {
+        // If we already have a SENT but this is RECEIVED, replace it
+        const index = uniqueQuotes.findIndex(uq => uq.uniqueKey === q.uniqueKey);
+        if (index !== -1) {
+          uniqueQuotes[index] = q;
+        }
+      }
+    });
+
+    return uniqueQuotes.sort((a, b) => {
+      // 1. PENDING always on top
+      if (a.type === 'PENDING' && b.type !== 'PENDING') return -1;
+      if (a.type !== 'PENDING' && b.type === 'PENDING') return 1;
+
+      // 2. Then sort by date descending
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
   }, [groupedByClient, sentQuotations, receivedQuotations]);
 
   const handlePriceChange = (clientName, item, price) => {

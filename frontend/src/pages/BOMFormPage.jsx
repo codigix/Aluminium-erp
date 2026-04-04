@@ -41,7 +41,7 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
   const weightPerUnit = actualType === 'material' ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
   const scrapPercent = actualType === 'material' ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
 
-  const unitWeight = weightPerUnit * (1 + (scrapPercent / 100));
+  const unitWeight = weightPerUnit * (1 + scrapPercent);
   const totalWeight = qty * unitWeight;
 
   let baseCost = qty * rate;
@@ -1805,7 +1805,7 @@ const BOMFormPage = () => {
                       />
                     </div>
 
-                    <div className="md:col-span-2 space-y-1">
+                    <div className="md:col-span-1 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Quantity</label>
                       <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="0.00" step="0.01" value={materialForm.qty} onChange={(e) => setMaterialForm({ ...materialForm, qty: e.target.value })} />
                     </div>
@@ -1831,18 +1831,18 @@ const BOMFormPage = () => {
 
                     {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CON'].includes(materialForm.itemGroup) && (
                       <>
-                        <div className="md:col-span-1 space-y-1">
-                          <label className="text-xs  text-slate-500 ml-1">Weight/Unit</label>
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-xs  text-slate-500 ml-1">Weight/Unit (Kg)</label>
                           <input 
-                            type="number" 
-                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none" 
-                            value={materialForm.weightPerUnit} 
+                            type="text" 
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
+                            value={materialForm.weightPerUnit ? (parseFloat(materialForm.weightPerUnit) * (1 + (parseFloat(materialForm.scrapPercent) || 0))).toFixed(3) : ''} 
                             readOnly 
                             placeholder="Auto"
                           />
                         </div>
                         <div className="md:col-span-1 space-y-1">
-                          <label className="text-xs  text-slate-500 ml-1">Scrap %</label>
+                          <label className="text-xs  text-slate-500 ml-1">Scrap</label>
                           <input 
                             type="number" 
                             className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
