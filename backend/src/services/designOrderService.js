@@ -10,6 +10,7 @@ const listDesignOrders = async () => {
       do.completion_date,
       do.created_at,
       so.id as sales_order_id,
+      so.status as sales_order_status,
       so.customer_po_id,
       so.project_name,
       so.target_dispatch_date,

@@ -1000,7 +1000,7 @@ function App() {
     { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'clipboard', indent: true },
     { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings', indent: true },
     { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'chart', indent: true },
-    { label: 'BOM Approval', moduleId: 'bom-approval', icon: 'check', indent: true },
+    // { label: 'BOM Approval', moduleId: 'bom-approval', icon: 'check', indent: true },
 
     { label: 'PRODUCTION', isGroup: true, groupId: 'production-group' },
     { label: 'Project Requests', moduleId: 'project-requests', icon: 'clipboard', indent: true },

@@ -88,6 +88,7 @@ const getIncomingOrders = async (departmentCode) => {
   const query = `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
+            cd.drawing_name,
             sb.material_type as item_group,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
@@ -98,6 +99,15 @@ const getIncomingOrders = async (departmentCode) => {
        SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, quantity as design_qty, unit, status as item_status, rejection_reason as item_rejection_reason
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id
+     LEFT JOIN (
+       SELECT d1.drawing_no, d1.description as drawing_name
+       FROM customer_drawings d1
+       JOIN (
+         SELECT drawing_no, MAX(id) as max_id
+         FROM customer_drawings
+         GROUP BY drawing_no
+       ) d2 ON d1.id = d2.max_id
+     ) cd ON cd.drawing_no = soi.drawing_no
      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
      WHERE (${whereClause}) AND so.request_accepted = 0
      ORDER BY so.created_at DESC`;
@@ -689,6 +699,7 @@ const rejectDesign = async (salesOrderId, reason) => {
 };
 
 const bulkApproveDesigns = async (orderIds) => {
+  console.log('[bulkApproveDesigns-service] Received orderIds:', orderIds);
   if (!Array.isArray(orderIds) || orderIds.length === 0) {
     throw new Error('No order IDs provided');
   }
@@ -698,13 +709,18 @@ const bulkApproveDesigns = async (orderIds) => {
     await connection.beginTransaction();
     
     const placeholders = orderIds.map(() => '?').join(',');
+    console.log('[bulkApproveDesigns-service] Running SELECT with placeholders:', placeholders, 'and IDs:', orderIds);
     
     const [orders] = await connection.query(
       `SELECT id, company_id FROM sales_orders WHERE id IN (${placeholders})`,
       orderIds
     );
     
-    if (orders.length === 0) throw new Error('No sales orders found');
+    console.log('[bulkApproveDesigns-service] Found orders:', orders);
+    if (orders.length === 0) {
+      console.error('[bulkApproveDesigns-service] No sales orders found for IDs:', orderIds);
+      throw new Error('No sales orders found');
+    }
     
     await connection.execute(
       `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id IN (${placeholders})`,

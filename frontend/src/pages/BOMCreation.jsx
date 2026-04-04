@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Card, StatusBadge, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { getFileUrl } from '../utils/url';
-import { Eye, FileText } from 'lucide-react';
+import { Eye, FileText, RotateCw, Clock, History, Check, X, ExternalLink } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -32,6 +32,67 @@ const BOMCreation = () => {
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
+
+  // BOM Details Modal State
+  const [showBOMDetails, setShowBOMDetails] = useState(false);
+  const [selectedBOMOrder, setSelectedBOMOrder] = useState(null);
+  const [bomOrderItems, setBomOrderItems] = useState([]);
+  const [bomDetailsLoading, setBomDetailsLoading] = useState(false);
+  const [expandedBOMItems, setExpandedBOMItems] = useState(new Set());
+
+  const toggleBOMItem = (itemId) => {
+    const newExpanded = new Set(expandedBOMItems);
+    if (newExpanded.has(itemId)) {
+      newExpanded.delete(itemId);
+    } else {
+      newExpanded.add(itemId);
+    }
+    setExpandedBOMItems(newExpanded);
+  };
+
+  const handleViewBOMDetails = async (client) => {
+    try {
+      // Find the first sales order ID from the client's items to fetch details
+      // Note: The BOM Approval modal usually shows details for a specific Sales Order.
+      // Since this table is grouped by Client, we'll need to handle it.
+      const items = clientData[client.id]?.items || [];
+      const salesOrderIds = [...new Set(items.map(i => i.sales_order_id))].filter(id => id);
+
+      if (salesOrderIds.length === 0) {
+        errorToast("No sales orders found for this client.");
+        return;
+      }
+
+      // Use the first sales order ID for the summary, similar to BOMApproval
+      const mainOrderId = salesOrderIds[0];
+      const mainItem = items.find(i => i.sales_order_id === mainOrderId);
+      
+      setSelectedBOMOrder({
+        id: mainOrderId,
+        company_name: client.client_name,
+        project_name: mainItem?.project_name || "N/A",
+        po_number: mainItem?.po_number || `SO-${mainOrderId}`
+      });
+
+      setShowBOMDetails(true);
+      setBomDetailsLoading(true);
+      
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/${mainOrderId}/timeline`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch BOM details');
+      const data = await response.json();
+      setBomOrderItems(data);
+    } catch (error) {
+      console.error(error);
+      errorToast('Failed to load BOM details');
+    } finally {
+      setBomDetailsLoading(false);
+    }
+  };
 
   const filter = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -122,16 +183,20 @@ const BOMCreation = () => {
 
   const handleRejectItem = async (itemId) => {
     const { value: reason } = await Swal.fire({
-      title: 'Reject Design Request',
+      title: '<span class="text-base font-bold text-slate-800">Reject Design Request</span>',
       input: 'textarea',
-      inputLabel: 'Reason for rejection',
-      inputPlaceholder: 'Enter reason here...',
-      inputAttributes: {
-        'aria-label': 'Enter reason here'
-      },
+      inputPlaceholder: 'Enter reason for rejection here...',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
-      confirmButtonText: 'Reject'
+      confirmButtonText: 'Reject',
+      cancelButtonText: 'Cancel',
+      width: '400px',
+      padding: '1.25rem',
+      customClass: {
+        confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-rose-100 uppercase tracking-wider',
+        cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider',
+        input: 'text-xs'
+      }
     });
 
     if (reason) {
@@ -360,13 +425,20 @@ const BOMCreation = () => {
   const handleDeleteBOM = async (itemId) => {
     try {
       const result = await Swal.fire({
-        title: 'Are you sure?',
-        text: "You want to delete this BOM? This action cannot be undone.",
+        title: '<span class="text-base font-bold text-slate-800">Delete BOM?</span>',
+        html: '<span class="text-xs text-slate-600">Are you sure you want to delete this BOM? This action <span class="font-bold text-rose-600">cannot be undone</span>.</span>',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
         cancelButtonColor: '#64748b',
-        confirmButtonText: 'Yes, delete it!'
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel',
+        width: '380px',
+        padding: '1rem',
+        customClass: {
+          confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-rose-100 uppercase tracking-wider',
+          cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider'
+        }
       });
 
       if (result.isConfirmed) {
@@ -396,13 +468,20 @@ const BOMCreation = () => {
       }
 
       const result = await Swal.fire({
-        title: 'Send for Approval?',
-        text: `Are you sure you want to send BOMs for ${client.client_name} for approval?`,
+        title: '<span class="text-base font-bold text-slate-800">Send for Approval?</span>',
+        html: `<span class="text-xs text-slate-600">Are you sure you want to send BOMs for <span class="font-bold text-indigo-600">${client.client_name}</span> for approval?</span>`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
         cancelButtonColor: '#64748b',
-        confirmButtonText: 'Yes, Send'
+        confirmButtonText: 'Yes, Send',
+        cancelButtonText: 'Cancel',
+        width: '380px',
+        padding: '1rem',
+        customClass: {
+          confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-emerald-100 uppercase tracking-wider',
+          cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider'
+        }
       });
 
       if (result.isConfirmed) {
@@ -508,6 +587,21 @@ const BOMCreation = () => {
     return Object.values(groups);
   }, [incomingRequests]);
 
+  const isClientBOMCompleted = (row) => {
+    const items = clientData[row.id]?.items || [];
+    const drawingsMap = items.reduce((acc, item) => {
+      const dwg = cleanText(item.drawing_no || 'N/A');
+      if (!acc[dwg]) acc[dwg] = [];
+      acc[dwg].push(item);
+      return acc;
+    }, {});
+    
+    const drawingsList = Object.values(drawingsMap);
+    return drawingsList.length > 0 && drawingsList.every(dwgItems => 
+      dwgItems.some(i => i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))
+    );
+  };
+
   const columns = [
     {
       label: 'Client Name',
@@ -543,35 +637,43 @@ const BOMCreation = () => {
       label: 'Overall Status',
       key: 'status',
       render: (_, row) => {
-        const items = clientData[row.id]?.items || [];
-        const drawingsMap = items.reduce((acc, item) => {
-          const dwg = cleanText(item.drawing_no || 'N/A');
-          if (!acc[dwg]) acc[dwg] = [];
-          acc[dwg].push(item);
-          return acc;
-        }, {});
-        
-        const drawingsList = Object.values(drawingsMap);
-        const allBOMsCompleted = drawingsList.length > 0 && drawingsList.every(dwgItems => 
-          dwgItems.some(i => i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))
-        );
-        return <StatusBadge status={allBOMsCompleted ? 'COMPLETED' : 'IN_PROGRESS'} />;
+        const isCompleted = isClientBOMCompleted(row);
+        return <StatusBadge status={isCompleted ? 'COMPLETED' : 'IN_PROGRESS'} />;
       }
     },
     {
       label: 'Actions',
       key: 'actions',
-      render: (_, row) => (
-        <button 
-          onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
-          className="flex items-center gap-2 p-1.5 bg-emerald-50 text-emerald-600 rounded  text-xs  hover:bg-emerald-100 transition-all border border-emerald-100"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-          </svg>
-          Send for Approval
-        </button>
-      )
+      render: (_, row) => {
+        const isCompleted = isClientBOMCompleted(row);
+        return (
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleViewBOMDetails(row); }}
+              className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all shadow-sm"
+              title="View BOM Details"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            {!(row.items?.[0]?.sales_order_status === 'BOM_SUBMITTED' || row.items?.[0]?.sales_order_status === 'BOM_Approved') && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
+                disabled={!isCompleted}
+                className={`flex items-center gap-2 p-1.5 rounded text-xs transition-all border ${
+                  isCompleted 
+                    ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100" 
+                    : "bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-60"
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                Send for Approval
+              </button>
+            )}
+          </div>
+        );
+      }
     }
   ];
 
@@ -604,7 +706,7 @@ const BOMCreation = () => {
           Object.entries(drawingsMap).map(([dwgNo, dwgItems]) => {
             const dwgKey = `${client.id}_${dwgNo}`;
             const isDwgExpanded = expandedDrawings[dwgKey];
-            const drawingName = dwgItems[0].drawing_name || 'No Description';
+            const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
             const drawingId = dwgItems[0].drawing_id;
             const itemsWithBOM = dwgItems.filter(i => i.has_bom || i.has_master_bom);
             
@@ -1124,6 +1226,261 @@ const BOMCreation = () => {
                 </svg>
                 Approve & Send
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBOMDetails && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 py-8">
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowBOMDetails(false)}></div>
+            
+            <div className="relative bg-white rounded  shadow-2xl max-w-6xl w-full overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+              <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-white">
+                <div className="flex items-center gap-2">
+                  <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100">
+                    <Eye size={20} className="drop-shadow-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-md  text-slate-900 tracking-tight leading-none ">BOM Details: {selectedBOMOrder?.po_number}</h3>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-xs  text-slate-400  ">{selectedBOMOrder?.company_name}</span>
+                      <span className="w-1 h-1 bg-slate-200 rounded" />
+                      <span className="text-xs  text-indigo-500  ">{selectedBOMOrder?.project_name}</span>
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowBOMDetails(false)} 
+                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-2 max-h-[80vh] overflow-y-auto bg-slate-50/30">
+                {bomDetailsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-2">
+                    <div className="w-5 h-5 border-4 border-indigo-600 border-t-transparent rounded animate-spin" />
+                    <p className="text-xs text-slate-400    animate-pulse">Analyzing BOM Data...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Summary Bar */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div className="bg-white p-2 rounded border border-slate-100 shadow-sm flex items-center justify-between group hover:border-indigo-200 transition-colors">
+                        <div>
+                          <p className="text-xs  text-slate-400   mb-1">Total Drawings</p>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-xl  text-slate-900 ">{bomOrderItems.filter(i => i.status !== 'REJECTED').length}</span>
+                            <span className="text-xs  text-slate-400 italic">Sets</span>
+                          </div>
+                        </div>
+                        <div className="p-2 bg-slate-50 text-slate-300 rounded group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-all">
+                          <History size={20} />
+                        </div>
+                      </div>
+                      
+                      <div className="md:col-span-2 bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-800 p-2 rounded  shadow-xl shadow-indigo-100 flex items-center justify-between border border-indigo-500/20">
+                        <div>
+                          <p className="text-xs  text-indigo-200/80   mb-1">Aggregate Estimated Manufacturing Cost</p>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-indigo-200 text-sm ">₹</span>
+                            <span className="text-xl  text-white tracking-tighter">
+                              {bomOrderItems.reduce((total, item) => {
+                                if (item.status === 'REJECTED') return total;
+                                const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
+                                const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) || 0;
+                                const labor = item.operations?.reduce((sum, o) => {
+                                  const cycle = parseFloat(o.cycle_time_min || 0);
+                                  const setup = parseFloat(o.setup_time_min || 0);
+                                  const rate = parseFloat(o.hourly_rate || 0);
+                                  return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
+                                }, 0) || 0;
+                                const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
+                                return total + (mat + comp + labor - scrap);
+                              }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="p-2 bg-white/10 text-white/50 rounded backdrop-blur-md border border-white/5 flex flex-col items-center">
+                           <Check size={15} className="text-emerald-400" />
+                           <span className="text-[8px]   tracking-tighter mt-1 text-emerald-400/80">Validated</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2">
+                      {bomOrderItems.map((item) => {
+                        const matCost = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity || 0) * parseFloat(m.rate || 0)), 0) || 0;
+                        const compCost = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
+                        const laborCost = item.operations?.reduce((sum, o) => {
+                          const cycle = parseFloat(o.cycle_time_min || 0);
+                          const setup = parseFloat(o.setup_time_min || 0);
+                          const rate = parseFloat(o.hourly_rate || 0);
+                          return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity || 0));
+                        }, 0) || 0;
+                        const scrapCredit = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
+                        const itemTotal = matCost + compCost + laborCost - scrapCredit;
+                        const profitMargin = parseFloat(selectedBOMOrder?.profit_margin || 0);
+                        const estProfit = (itemTotal * profitMargin) / 100;
+                        const isExpanded = expandedBOMItems.has(item.id);
+
+                        return (
+                          <div key={item.id} className={`bg-white rounded border transition-all ${isExpanded ? 'border-indigo-200 shadow-md ring-1 ring-indigo-50' : 'border-slate-100 hover:border-slate-200 shadow-sm'}`}>
+                            <div className="p-3">
+                              <div className="flex items-start gap-3">
+                                <div className={`p-2 rounded mt-1 ${isExpanded ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                  <FileText size={18} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="text-xs font-bold text-slate-900 truncate tracking-tight">{item.item_code}</h4>
+                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-bold uppercase tracking-wider">{item.item_group || 'FINISHED_GOOD'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[10px] text-slate-500 font-medium">
+                                    <button 
+                                      onClick={() => item.drawing_no && handlePreviewByNo(item.drawing_no)}
+                                      className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors uppercase"
+                                    >
+                                      VIEW DRAWING <ExternalLink size={10} />
+                                    </button>
+                                    <button 
+                                      onClick={() => toggleBOMItem(item.id)}
+                                      className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors uppercase"
+                                    >
+                                      {isExpanded ? 'CLOSE BOM' : 'FULL BOM'} <ExternalLink size={10} className={isExpanded ? 'rotate-180' : ''} />
+                                    </button>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex gap-6 text-center">
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Order Qty</p>
+                                    <p className="text-xs font-bold text-slate-700">{item.quantity} <span className="text-[10px] font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Material Cost</p>
+                                    <p className="text-xs font-bold text-slate-700">₹{matCost.toLocaleString('en-IN')}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Labor Cost</p>
+                                    <p className="text-xs font-bold text-slate-700">₹{laborCost.toLocaleString('en-IN')}</p>
+                                  </div>
+                                  <div className="px-4 py-1 bg-emerald-50/50 rounded border border-emerald-100/50">
+                                    <p className="text-[10px] text-emerald-600/70 uppercase tracking-wider mb-1">Est. Profit</p>
+                                    <p className="text-xs font-bold text-emerald-600">₹{estProfit.toLocaleString('en-IN')}</p>
+                                  </div>
+                                  <div className="flex items-center gap-2 pl-4 border-l border-slate-100">
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Item Total</p>
+                                      <p className="text-sm font-bold text-indigo-600">₹{itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                    </div>
+                                    <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-full">
+                                      <Check size={14} strokeWidth={3} />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {isExpanded && (
+                                <div className="mt-4 pt-4 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
+                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                    {/* Materials */}
+                                    <div className="bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                      <div className="flex items-center justify-between mb-3 px-1">
+                                        <h5 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                                          <div className="w-1 h-3 bg-indigo-600 rounded-full" />
+                                          Raw Materials
+                                        </h5>
+                                        <span className="text-[10px] font-bold text-slate-400">₹{matCost.toLocaleString('en-IN')}</span>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        {item.materials?.length > 0 ? item.materials.map((m, idx) => (
+                                          <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-colors">
+                                            <div>
+                                              <p className="text-xs font-bold text-slate-700">{m.material_name}</p>
+                                              <p className="text-[10px] text-slate-400 font-medium">{m.qty_per_pc} @ ₹{parseFloat(m.rate || 0).toLocaleString('en-IN')}</p>
+                                            </div>
+                                            <p className="text-xs font-bold text-slate-600">₹{(parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)).toLocaleString('en-IN')}</p>
+                                          </div>
+                                        )) : (
+                                          <p className="text-[10px] text-slate-400 italic px-1">No materials listed</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Components */}
+                                    <div className="bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                      <div className="flex items-center justify-between mb-3 px-1">
+                                        <h5 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                                          <div className="w-1 h-3 bg-blue-600 rounded-full" />
+                                          Components
+                                        </h5>
+                                        <span className="text-[10px] font-bold text-slate-400">₹{compCost.toLocaleString('en-IN')}</span>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        {item.components?.length > 0 ? item.components.map((c, idx) => (
+                                          <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-blue-200 transition-colors">
+                                            <div>
+                                              <p className="text-xs font-bold text-slate-700">{c.description || c.component_code}</p>
+                                              <p className="text-[10px] text-slate-400 font-medium">{c.quantity} @ ₹{parseFloat(c.rate || 0).toLocaleString('en-IN')}</p>
+                                            </div>
+                                            <p className="text-xs font-bold text-slate-600">₹{(parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)).toLocaleString('en-IN')}</p>
+                                          </div>
+                                        )) : (
+                                          <p className="text-[10px] text-slate-400 italic px-1">No components listed</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Operations */}
+                                    <div className="bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                      <div className="flex items-center justify-between mb-3 px-1">
+                                        <h5 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2">
+                                          <div className="w-1 h-3 bg-amber-600 rounded-full" />
+                                          Operations
+                                        </h5>
+                                        <span className="text-[10px] font-bold text-slate-400">₹{laborCost.toLocaleString('en-IN')}</span>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        {item.operations?.length > 0 ? item.operations.map((o, idx) => {
+                                          const opCost = ((parseFloat(o.cycle_time_min || 0) + parseFloat(o.setup_time_min || 0)) / 60 * parseFloat(o.hourly_rate || 0)) * parseFloat(item.quantity);
+                                          return (
+                                            <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-amber-200 transition-colors">
+                                              <div>
+                                                <p className="text-xs font-bold text-slate-700">{o.operation_name}</p>
+                                                <p className="text-[10px] text-slate-400 font-medium">{o.cycle_time_min + o.setup_time_min} MIN @ ₹{parseFloat(o.hourly_rate || 0).toLocaleString('en-IN')}/hr</p>
+                                              </div>
+                                              <p className="text-xs font-bold text-slate-600">₹{opCost.toLocaleString('en-IN')}</p>
+                                            </div>
+                                          );
+                                        }) : (
+                                          <p className="text-[10px] text-slate-400 italic px-1">No operations listed</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-slate-50 p-3 border-t border-slate-100 flex justify-end">
+                <button 
+                  onClick={() => setShowBOMDetails(false)}
+                  className="px-6 py-2 bg-white text-slate-600 border border-slate-200 rounded text-xs font-bold hover:bg-slate-50 transition-all uppercase tracking-widest"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
