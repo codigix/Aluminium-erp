@@ -579,9 +579,54 @@ const ItemsMaster = () => {
 
   const itemColumns = [
     { label: 'Item Code', key: 'item_code', sortable: true, className: ' text-indigo-600' },
-    { label: 'Item Name', key: 'material_name', sortable: true },
+    { 
+      label: 'Item Name', 
+      key: 'material_name', 
+      sortable: true,
+      render: (val, row) => {
+        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '').toLowerCase().trim();
+        const dims = [];
+        
+        if (shapeName === 'plate') {
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+        } else if (shapeName === 'round') {
+          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+        } else if (shapeName === 'pipe') {
+          if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+        } else {
+          // Fallback for other shapes
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
+          if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
+        }
+        
+        return (
+          <div className="flex flex-col">
+            <span className="font-medium text-slate-900">{val}</span>
+            {dims.length > 0 && (
+              <span className="text-[10px] text-slate-400 mt-0.5">
+                {dims.join(' x ')}
+              </span>
+            )}
+          </div>
+        );
+      }
+    },
     { label: 'Group', key: 'material_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{val}</span> },
     { label: 'UOM', key: 'unit', sortable: true },
+    { 
+      label: 'Weight/Unit', 
+      key: 'weight_per_unit', 
+      sortable: true,
+      render: (val, row) => val ? `${parseFloat(val).toFixed(3)} ${row.weight_uom || 'Kg'}` : '—'
+    },
     { 
       label: 'Valuation Rate (₹)', 
       key: 'valuation_rate', 

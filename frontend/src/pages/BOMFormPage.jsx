@@ -1628,7 +1628,7 @@ const BOMFormPage = () => {
                         <th className="p-2  text-center text-xs   text-slate-400 ">Qty / UOM</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Loss %</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Net Amount</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Net Amount (₹)</th>
                         {!isReadOnly && <th className="p-2  text-right text-xs   text-slate-400 ">Actions</th>}
                       </tr>
                     </thead>
@@ -2343,7 +2343,7 @@ const BOMFormPage = () => {
                         <th className="p-2  text-centertext-xs   text-slate-400 ">Loss %</th>
                         <th className="p-2  text-centertext-xs   text-slate-400 ">Scrap Qty</th>
                         <th className="p-2  text-centertext-xs   text-slate-400 ">Rate (₹)</th>
-                        <th className="p-2  text-centertext-xs   text-slate-400 ">Total Value</th>
+                        <th className="p-2  text-centertext-xs   text-slate-400 ">Total Value (₹)</th>
                         {!isReadOnly && <th className="p-2  text-righttext-xs   text-slate-400 ">Actions</th>}
                       </tr>
                     </thead>
@@ -2417,8 +2417,8 @@ const BOMFormPage = () => {
                   <th className="p-2  text-left text-xs  text-slate-500  ">Input Qty</th>
                   <th className="p-2  text-left text-xs  text-slate-500  ">Loss %</th>
                   <th className="p-2  text-left text-xs  text-slate-500  ">Scrap Qty</th>
-                  <th className="p-2  text-left text-xs  text-slate-500  ">Rate</th>
-                  <th className="p-2  text-left text-xs  text-slate-500  ">Scrap Value</th>
+                  <th className="p-2  text-left text-xs  text-slate-500  ">Rate (₹)</th>
+                  <th className="p-2  text-left text-xs  text-slate-500  ">Scrap Value (₹)</th>
                   {!isReadOnly && <th className="p-2  text-right text-xs  text-slate-500  ">Actions</th>}
                 </tr>
               </thead>
