@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Card, StatusBadge, DataTable } from '../components/ui.jsx';
+import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { getFileUrl } from '../utils/url';
+import { Eye, FileText } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -11,10 +14,24 @@ const cleanText = (text) => text ? text.replace(/\s*\(.*$/, '').trim() : '';
 const BOMCreation = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [incomingRequests, setIncomingRequests] = useState([]);
+  const [incomingLoading, setIncomingLoading] = useState(false);
+  const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
   const [clientData, setClientData] = useState({}); // { [clientId]: { items: [], loading: false } }
   const [expandedDrawings, setExpandedDrawings] = useState({}); // { drawingKey: boolean }
+  const [expandedIncomingRequests, setExpandedIncomingRequests] = useState({}); // { clientName: boolean }
   const [searchTerm, setSearchTerm] = useState('');
   const location = useLocation();
+
+  // Review Modal State
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewOrder, setReviewOrder] = useState(null);
+  const [reviewDetails, setReviewDetails] = useState([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+
+  // Preview State
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewDrawing, setPreviewDrawing] = useState(null);
 
   const filter = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -55,6 +72,215 @@ const BOMCreation = () => {
     }
   }, []);
 
+  const fetchIncomingRequests = useCallback(async () => {
+    try {
+      setIncomingLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/incoming?department=DESIGN_ENG`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch incoming design requests');
+      const data = await response.json();
+      setIncomingRequests(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIncomingLoading(false);
+    }
+  }, []);
+
+  const handleApproveItem = async (itemId) => {
+    try {
+      setBulkOperationLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'Approved ' })
+      });
+
+      if (!response.ok) throw new Error('Failed to approve item');
+
+      successToast('Item approved and moved to Process list');
+
+      // Update local state if in review modal
+      setReviewDetails(prev => prev.map(item => 
+        item.id === itemId ? { ...item, status: 'Approved ', item_status: 'Approved ' } : item
+      ));
+
+      fetchOrders();
+      fetchIncomingRequests();
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setBulkOperationLoading(false);
+    }
+  };
+
+  const handleRejectItem = async (itemId) => {
+    const { value: reason } = await Swal.fire({
+      title: 'Reject Design Request',
+      input: 'textarea',
+      inputLabel: 'Reason for rejection',
+      inputPlaceholder: 'Enter reason here...',
+      inputAttributes: {
+        'aria-label': 'Enter reason here'
+      },
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Reject'
+    });
+
+    if (reason) {
+      try {
+        setBulkOperationLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: 'REJECTED', reason: reason })
+        });
+
+        if (!response.ok) throw new Error('Failed to reject item');
+
+        successToast('Item marked as rejected');
+        
+        // Update local state if in review modal
+        setReviewDetails(prev => prev.map(item => 
+          item.id === itemId ? { 
+            ...item, 
+            status: 'REJECTED', 
+            item_status: 'REJECTED',
+            rejection_reason: reason,
+            item_rejection_reason: reason
+          } : item
+        ));
+
+        fetchOrders();
+        fetchIncomingRequests();
+      } catch (error) {
+        errorToast(error.message);
+      } finally {
+        setBulkOperationLoading(false);
+      }
+    }
+  };
+
+  const handlePreview = (item) => {
+    setPreviewDrawing(item);
+    setShowPreviewModal(true);
+  };
+
+  const handleViewOrder = async (order) => {
+    try {
+      setReviewLoading(true);
+      
+      // The "order" object here is actually the "req" object from groupedIncomingRequests
+      // In DesignOrders.jsx it expects order.id (which is sales_order_id)
+      const salesOrderId = order.sales_order_id;
+      
+      setReviewOrder({
+        ...order,
+        id: salesOrderId
+      });
+      
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/${salesOrderId}/items`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch order items');
+      const items = await response.json();
+      
+      // Filter items to show only the specific drawing that was clicked
+      const filteredItems = items.filter(item => item.drawing_no === order.drawing_no);
+      setReviewDetails(filteredItems || []);
+      
+      setShowReviewModal(true);
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleApproveDesign = async (orderId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/${orderId}/approve-design`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'APPROVE' })
+      });
+      
+      if (!response.ok) throw new Error('Failed to approve design');
+      
+      successToast('Design accepted and moved to Process tab.');
+      setShowReviewModal(false);
+      setReviewOrder(null);
+      setReviewDetails([]);
+      fetchOrders();
+      fetchIncomingRequests();
+    } catch (error) {
+      errorToast(error.message);
+    }
+  };
+
+  const handleApproveGroup = async (group) => {
+    // Get unique sales order IDs from the items in this group
+    const orderIds = [...new Set(group.items.map(item => item.id))].filter(id => id);
+    if (orderIds.length === 0) return;
+
+    const result = await Swal.fire({
+      title: '<span class="text-base font-bold text-slate-800">Approve Group Drawings</span>',
+      html: `<span class="text-xs text-slate-600">Are you sure you want to approve all <span class="font-bold text-indigo-600">${orderIds.length}</span> sales order(s) for <span class="font-bold">${group.client_name}</span>?</span>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      confirmButtonText: 'Yes, Approve All',
+      cancelButtonText: 'Cancel',
+      width: '380px',
+      padding: '1rem',
+      customClass: {
+        confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-emerald-100 uppercase tracking-wider',
+        cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider'
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setBulkOperationLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/sales-orders/bulk/approve-designs`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ orderIds })
+        });
+
+        if (!response.ok) throw new Error('Failed to approve group');
+
+        successToast(`Successfully approved all drawings for ${group.client_name}`);
+        fetchOrders();
+        fetchIncomingRequests();
+      } catch (error) {
+        errorToast(error.message);
+      } finally {
+        setBulkOperationLoading(false);
+      }
+    }
+  };
+
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
@@ -93,7 +319,8 @@ const BOMCreation = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+    fetchIncomingRequests();
+  }, [fetchOrders, fetchIncomingRequests]);
 
   useEffect(() => {
     if (filter === 'drafts' && orders.length > 0) {
@@ -124,6 +351,10 @@ const BOMCreation = () => {
 
   const toggleDrawing = (dwgKey) => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
+  };
+
+  const toggleIncomingRequest = (clientName) => {
+    setExpandedIncomingRequests(prev => ({ ...prev, [clientName]: !prev[clientName] }));
   };
 
   const handleDeleteBOM = async (itemId) => {
@@ -261,6 +492,22 @@ const BOMCreation = () => {
     });
   }, [orders, searchTerm, clientData]);
 
+  const groupedIncomingRequests = useMemo(() => {
+    const groups = incomingRequests.reduce((acc, req) => {
+      const clientName = req.company_name || 'Unknown Client';
+      if (!acc[clientName]) {
+        acc[clientName] = {
+          client_name: clientName,
+          project_name: req.project_name,
+          items: []
+        };
+      }
+      acc[clientName].items.push(req);
+      return acc;
+    }, {});
+    return Object.values(groups);
+  }, [incomingRequests]);
+
   const columns = [
     {
       label: 'Client Name',
@@ -360,7 +607,14 @@ const BOMCreation = () => {
             const drawingName = dwgItems[0].drawing_name || 'No Description';
             const drawingId = dwgItems[0].drawing_id;
             const itemsWithBOM = dwgItems.filter(i => i.has_bom || i.has_master_bom);
-            const dwgStatus = itemsWithBOM.some(i => (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))) ? 'COMPLETED' : 'PENDING';
+            
+            // Refined status logic
+            let dwgStatus = 'PENDING';
+            if (itemsWithBOM.some(i => (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))) {
+              dwgStatus = 'COMPLETED';
+            } else if (dwgItems.length > 0) {
+              dwgStatus = 'DESIGN_APPROVED'; // Custom label for UI
+            }
 
             return (
               <div key={dwgKey} className="bg-white border border-slate-100 rounded  shadow-sm overflow-hidden">
@@ -377,7 +631,13 @@ const BOMCreation = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs  text-slate-900">{dwgNo}</span>
-                        <StatusBadge status={dwgStatus} />
+                        {dwgStatus === 'DESIGN_APPROVED' ? (
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold border border-emerald-100">
+                            Design Approved
+                          </span>
+                        ) : (
+                          <StatusBadge status={dwgStatus} />
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 font-medium">{drawingName}</p>
                     </div>
@@ -391,8 +651,17 @@ const BOMCreation = () => {
                     <Link 
                       to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-100"
+                      className={`px-4 py-2 rounded text-xs transition-all shadow-sm flex items-center gap-1.5 ${
+                        dwgStatus === 'DESIGN_APPROVED' 
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100' 
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'
+                      }`}
                     >
+                      {dwgStatus === 'DESIGN_APPROVED' && (
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" />
+                        </svg>
+                      )}
                       Create BOM
                     </Link>
                   </div>
@@ -528,6 +797,150 @@ const BOMCreation = () => {
           ))}
         </div>
 
+        {/* Pending Design Approvals Section */}
+        {incomingRequests.length > 0 && (
+          <Card className="border-amber-100 bg-amber-50/20 overflow-hidden shadow-sm">
+            <div className="p-3 border-b border-amber-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-amber-900">Pending Design Approvals</h3>
+                  <p className="text-xs text-amber-600 font-medium">Review incoming requests from sales department</p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 bg-amber-200 text-amber-800 text-[10px] font-bold rounded-full border border-amber-300">
+                {incomingRequests.length} REQUESTS
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-amber-100">
+                <thead className="bg-amber-50/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-amber-700 uppercase tracking-wider">Client & Project</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-bold text-amber-700 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-bold text-amber-700 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100 bg-white/50">
+                  {groupedIncomingRequests.map((group) => (
+                    <React.Fragment key={group.client_name}>
+                      <tr 
+                        onClick={() => toggleIncomingRequest(group.client_name)}
+                        className="hover:bg-amber-50/50 transition-colors cursor-pointer"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-1 rounded transition-colors ${expandedIncomingRequests[group.client_name] ? 'bg-amber-200 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>
+                              <svg className={`w-4 h-4 transition-transform duration-300 ${expandedIncomingRequests[group.client_name] ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-slate-900">{group.client_name}</span>
+                              <span className="text-[10px] text-slate-500 font-medium">Design Review - {group.items.length} Drawings for {group.client_name}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center whitespace-nowrap">
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold border border-amber-200">
+                            Awaiting Approval
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleApproveGroup(group); }}
+                              disabled={bulkOperationLoading}
+                              className="px-3 py-1.5 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-50 active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                              </svg>
+                              Approve Group
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleIncomingRequest(group.client_name); }}
+                              className="px-3 py-1.5 bg-white text-slate-600 border border-slate-200 rounded text-[10px] font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                            >
+                              {expandedIncomingRequests[group.client_name] ? 'Hide' : 'View Details'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedIncomingRequests[group.client_name] && (
+                        <tr className="bg-amber-50/20">
+                          <td colSpan="3" className="px-4 py-0">
+                            <div className="py-2 px-6 space-y-2">
+                              <div className="bg-white/80 border border-amber-100 rounded-lg overflow-hidden">
+                                <table className="min-w-full divide-y divide-slate-100">
+                                  <thead className="bg-slate-50">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider w-10">#</th>
+                                      <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drawing</th>
+                                      <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</th>
+                                      <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-50">
+                                    {group.items.map((req, idx) => (
+                                      <tr key={req.item_id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-4 py-2 text-xs text-slate-400">{idx + 1}</td>
+                                        <td className="px-4 py-2">
+                                          <span className="text-xs font-bold text-indigo-600">{req.drawing_no}</span>
+                                        </td>
+                                        <td className="px-4 py-2">
+                                          <span className="text-xs text-slate-600 font-medium italic">{req.item_description || req.material_name || req.description || 'No Description'}</span>
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                          <div className="flex justify-end gap-1.5">
+                                            <button
+                                              onClick={() => handleViewOrder(req)}
+                                              className="px-2 py-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-indigo-100 flex items-center gap-1 shadow-sm active:scale-95"
+                                              title="Review Drawing"
+                                            >
+                                              <Eye className="w-3 h-3" />
+                                              <span className="text-[10px] font-bold">Review</span>
+                                            </button>
+                                            <button
+                                              onClick={() => handleRejectItem(req.item_id)}
+                                              disabled={bulkOperationLoading}
+                                              className="px-2 py-1 bg-white text-rose-600 border border-rose-100 rounded text-[10px] font-bold hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"
+                                            >
+                                              Reject
+                                            </button>
+                                            <button
+                                              onClick={() => handleApproveItem(req.item_id)}
+                                              disabled={bulkOperationLoading}
+                                              className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-50 active:scale-95 disabled:opacity-50 flex items-center gap-1"
+                                            >
+                                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" />
+                                              </svg>
+                                              Approve
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
         <Card className=" border border-slate-100 rounded  shadow-sm overflow-hidden">
           <div className="p-2">
             <DataTable 
@@ -542,6 +955,193 @@ const BOMCreation = () => {
           </div>
         </Card>
       </div>
+
+      {showReviewModal && reviewOrder && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
+          <div className="bg-white rounded  shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 sticky top-0 flex justify-between items-start">
+              <div>
+                <h2 className="text-lg  text-white">
+                  {reviewDetails.length === 1 ? 'Drawing Review' : 'Design Review'} - {reviewOrder.company_name}
+                </h2>
+                <p className="text-indigo-100 text-xs mt-1">
+                  {reviewDetails.length === 1 ? `Drawing: ${reviewDetails[0].drawing_no}` : `Order: ${reviewOrder.project_name}`}
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowReviewModal(false)}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-2 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs  text-slate-600 ">Customer</label>
+                  <p className="text-xs  text-slate-900 mt-1">{reviewOrder.company_name}</p>
+                </div>
+                <div>
+                  <label className="text-xs  text-slate-600 ">PO Number</label>
+                  <p className="text-xs  text-slate-900 mt-1">{reviewOrder.po_number || '—'}</p>
+                </div>
+                <div>
+                  <label className="text-xs  text-slate-600 ">Project</label>
+                  <p className="text-xs  text-slate-900 mt-1">{reviewOrder.project_name}</p>
+                </div>
+                <div>
+                  <label className="text-xs  text-slate-600 ">Sales Order</label>
+                  <p className="text-xs  text-slate-900 mt-1">SO-{String(reviewOrder.sales_order_id).padStart(4, '0')}</p>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <label className="text-xs  text-slate-600  block mb-3">Drawing Details</label>
+                {reviewLoading ? (
+                  <div className="text-center py-4">
+                    <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded  animate-spin mx-auto"></div>
+                  </div>
+                ) : reviewDetails.length > 0 ? (
+                  <div className="space-y-3">
+                    {reviewDetails.map((item, index) => (
+                      <div key={`${item.id}-${index}`} className="p-2 bg-slate-50 rounded border border-slate-200">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="grid grid-cols-4 gap-2 text-sm flex-1">
+                              <div>
+                                <span className="text-[10px] text-slate-500 font-bold uppercase">Drawing No</span>
+                                <p className=" text-slate-900 text-xs font-bold text-indigo-600">{item.drawing_no || '—'}</p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-500 font-bold uppercase">Group</span>
+                                <p className=" text-slate-900 text-xs mt-0.5">
+                                  {item.item_group ? (
+                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">
+                                      {item.item_group}
+                                    </span>
+                                  ) : '—'}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-500 font-bold uppercase">Revision</span>
+                                <p className=" text-slate-900 text-xs font-bold">{item.revision_no || 'A'}</p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-500 font-bold uppercase">Quantity</span>
+                                <p className=" text-slate-900 text-xs font-bold">{item.quantity || 1} {item.unit || 'NOS'}</p>
+                              </div>
+                            </div>
+                          </div>
+                          {((item.item_status || item.status) === 'REJECTED') ? (
+                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-[10px] font-bold border border-red-200 uppercase tracking-wider">Rejected</span>
+                          ) : ((item.item_status || item.status) === 'Approved ') ? (
+                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200 uppercase tracking-wider">Approved</span>
+                          ) : (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleApproveItem(item.id)}
+                                className="px-2 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded text-[10px] font-bold border border-emerald-200 transition-all uppercase tracking-wider"
+                              >
+                                Approve
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-2 font-medium italic">{item.item_description || item.description || 'No description provided'}</p>
+                        
+                        {item.drawing_pdf && (
+                          <div className="mt-4 border rounded  overflow-hidden bg-white">
+                            {['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(item.drawing_pdf.toLowerCase().split('.').pop()) ? (
+                              <div className="relative group">
+                                <img 
+                                  src={getFileUrl(item.drawing_pdf)} 
+                                  alt="Drawing" 
+                                  className="max-w-full h-auto object-contain mx-auto max-h-[400px] cursor-pointer"
+                                  onClick={() => handlePreview(item)}
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors pointer-events-none flex items-center justify-center">
+                                  <span className="opacity-0 group-hover:opacity-100 bg-white/90 text-slate-900 px-3 py-1 rounded text-xs font-bold shadow-lg transition-opacity border border-slate-200">
+                                    Click to Enlarge
+                                  </span>
+                                </div>
+                              </div>
+                            ) : item.drawing_pdf.toLowerCase().endsWith('.pdf') ? (
+                              <div className="p-6 flex flex-col items-center justify-center bg-slate-50/50">
+                                <div className="w-10 h-10 bg-red-100 text-red-600 rounded-lg flex items-center justify-center mb-3">
+                                  <FileText className="w-6 h-6" />
+                                </div>
+                                <h4 className="text-xs  text-slate-900 mb-1 font-bold">PDF Drawing Available</h4>
+                                <p className="text-[10px] text-slate-500 mb-4 font-medium text-center">This drawing is in PDF format and cannot be previewed directly here.</p>
+                                <button 
+                                  onClick={() => handlePreview(item)}
+                                  className="px-4 py-2 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-md shadow-indigo-100"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Open PDF Preview
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="p-6 text-center text-slate-500 text-xs font-medium italic">
+                                Preview not available for this file type
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {(item.item_status === 'REJECTED' || item.status === 'REJECTED') && (item.item_rejection_reason || item.rejection_reason || item.reason) && (
+                          <div className="mt-2 p-2 bg-red-50 rounded border border-red-100">
+                            <p className="text-xs text-red-500 italic leading-snug">
+                              <span className="font-bold not-italic mr-1 uppercase text-[10px]">Reason:</span>
+                              {item.item_rejection_reason || item.rejection_reason || item.reason}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">No drawing details available</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3 border-t border-slate-200 flex justify-end gap-2 sticky bottom-0">
+              <button 
+                onClick={() => setShowReviewModal(false)}
+                className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded text-xs font-bold hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleApproveDesign(reviewOrder.id)}
+                className="px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-100 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                </svg>
+                Approve & Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPreviewModal && previewDrawing && (
+        <DrawingPreviewModal 
+          isOpen={showPreviewModal}
+          onClose={() => {
+            setShowPreviewModal(false);
+            setPreviewDrawing(null);
+          }}
+          drawingData={{
+            drawing_no: previewDrawing.drawing_no,
+            drawing_pdf: previewDrawing.drawing_pdf
+          }}
+        />
+      )}
     </div>
   );
 };

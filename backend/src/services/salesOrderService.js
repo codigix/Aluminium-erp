@@ -623,18 +623,33 @@ const updateSalesOrderItemStatus = async (itemId, status, reason) => {
       [status, status === 'REJECTED' ? reason : null, itemId]
     );
 
-    if (status === 'REJECTED' && reason) {
-      // Get sales_order_id for this item
-      const [itemRows] = await connection.query('SELECT sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
-      if (itemRows.length > 0) {
-        const salesOrderId = itemRows[0].sales_order_id;
-        
+    // Get sales_order_id for this item
+    const [itemRows] = await connection.query('SELECT sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
+    if (itemRows.length > 0) {
+      const salesOrderId = itemRows[0].sales_order_id;
+
+      if (status === 'REJECTED' && reason) {
         // Log rejection reason
         await connection.execute(
           `INSERT INTO design_rejections (sales_order_id, reason, created_at)
            VALUES (?, ?, NOW())`,
           [salesOrderId, `Item ID ${itemId} Rejected: ${reason}`]
         );
+      } else if (status.trim().toUpperCase() === 'APPROVED') {
+        // If an item is approved, ensure the order is accepted by design and visible in process list
+        const [orderRows] = await connection.query('SELECT status, request_accepted FROM sales_orders WHERE id = ?', [salesOrderId]);
+        if (orderRows.length > 0) {
+          const order = orderRows[0];
+          if (order.request_accepted === 0) {
+            await connection.execute(
+              "UPDATE sales_orders SET request_accepted = 1, status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', updated_at = NOW() WHERE id = ?",
+              [salesOrderId]
+            );
+            
+            // Create design order entry if it doesn't exist
+            await designOrderService.createDesignOrder(salesOrderId, connection, 'IN_DESIGN');
+          }
+        }
       }
     }
 
