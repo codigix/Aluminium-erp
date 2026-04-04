@@ -343,7 +343,7 @@ const BOMApproval = () => {
                                   const rate = parseFloat(o.hourly_rate || 0);
                                   return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity));
                                 }, 0) || 0;
-                                const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
+                                const scrap = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * parseFloat(s.loss_percent || 0) * parseFloat(s.rate || 0)), 0) || 0;
                                 return total + (mat + comp + labor - scrap);
                               }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>

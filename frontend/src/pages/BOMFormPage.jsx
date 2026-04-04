@@ -1842,7 +1842,7 @@ const BOMFormPage = () => {
                           />
                         </div>
                         <div className="md:col-span-1 space-y-1">
-                          <label className="text-xs  text-slate-500 ml-1">Scrap</label>
+                          <label className="text-xs  text-slate-500 ml-1">Scrap(kg)</label>
                           <input 
                             type="number" 
                             className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
