@@ -23,12 +23,6 @@ const BOMCreation = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const location = useLocation();
 
-  // Review Modal State
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewOrder, setReviewOrder] = useState(null);
-  const [reviewDetails, setReviewDetails] = useState([]);
-  const [reviewLoading, setReviewLoading] = useState(false);
-
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
@@ -242,60 +236,48 @@ const BOMCreation = () => {
     setShowPreviewModal(true);
   };
 
-  const handleViewOrder = async (order) => {
+  const handlePreviewByNo = async (drawingNo) => {
     try {
-      setReviewLoading(true);
-      
-      // The "order" object here is actually the "req" object from groupedIncomingRequests
-      // In DesignOrders.jsx it expects order.id (which is sales_order_id)
-      const salesOrderId = order.sales_order_id;
-      
-      setReviewOrder({
-        ...order,
-        id: salesOrderId
-      });
-      
+      setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/${salesOrderId}/items`, {
+      
+      // First try to find by search
+      const response = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!response.ok) throw new Error('Failed to fetch order items');
-      const items = await response.json();
+      if (!response.ok) throw new Error('Failed to fetch drawing details');
+      const data = await response.json();
       
-      // Filter items to show only the specific drawing that was clicked
-      const filteredItems = items.filter(item => item.drawing_no === order.drawing_no);
-      setReviewDetails(filteredItems || []);
-      
-      setShowReviewModal(true);
-    } catch (error) {
-      errorToast(error.message);
-    } finally {
-      setReviewLoading(false);
-    }
-  };
+      let drawing = null;
+      if (data && data.length > 0) {
+        drawing = data.find(d => d.drawing_no === drawingNo) || data[0];
+      }
 
-  const handleApproveDesign = async (orderId) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/${orderId}/approve-design`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ action: 'APPROVE' })
-      });
-      
-      if (!response.ok) throw new Error('Failed to approve design');
-      
-      successToast('Design accepted and moved to Process tab.');
-      setShowReviewModal(false);
-      setReviewOrder(null);
-      setReviewDetails([]);
-      fetchOrders();
-      fetchIncomingRequests();
+      if (drawing) {
+        // If we found a drawing, try to fetch its full details including client info
+        // The /drawings/:id endpoint usually returns more complete data
+        try {
+          const detailRes = await fetch(`${API_BASE}/drawings/${drawing.id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (detailRes.ok) {
+            const detailData = await detailRes.json();
+            drawing = { ...drawing, ...detailData };
+          }
+        } catch (e) {
+          console.warn("Could not fetch extra drawing details", e);
+        }
+
+        setPreviewDrawing(drawing);
+        setShowPreviewModal(true);
+      } else {
+        errorToast('Drawing not found');
+      }
     } catch (error) {
-      errorToast(error.message);
+      console.error(error);
+      errorToast('Failed to load drawing preview');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1000,12 +982,12 @@ const BOMCreation = () => {
                                         <td className="px-4 py-2 text-right">
                                           <div className="flex justify-end gap-1.5">
                                             <button
-                                              onClick={() => handleViewOrder(req)}
+                                              onClick={() => handlePreviewByNo(req.drawing_no)}
                                               className="px-2 py-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-indigo-100 flex items-center gap-1 shadow-sm active:scale-95"
-                                              title="Review Drawing"
+                                              title="Preview Drawing"
                                             >
                                               <Eye className="w-3 h-3" />
-                                              <span className="text-[10px] font-bold">Review</span>
+                                              <span className="text-[10px] font-bold">Preview</span>
                                             </button>
                                             <button
                                               onClick={() => handleRejectItem(req.item_id)}
@@ -1057,179 +1039,6 @@ const BOMCreation = () => {
           </div>
         </Card>
       </div>
-
-      {showReviewModal && reviewOrder && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
-          <div className="bg-white rounded  shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 sticky top-0 flex justify-between items-start">
-              <div>
-                <h2 className="text-lg  text-white">
-                  {reviewDetails.length === 1 ? 'Drawing Review' : 'Design Review'} - {reviewOrder.company_name}
-                </h2>
-                <p className="text-indigo-100 text-xs mt-1">
-                  {reviewDetails.length === 1 ? `Drawing: ${reviewDetails[0].drawing_no}` : `Order: ${reviewOrder.project_name}`}
-                </p>
-              </div>
-              <button 
-                onClick={() => setShowReviewModal(false)}
-                className="text-white/80 hover:text-white transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-2 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs  text-slate-600 ">Customer</label>
-                  <p className="text-xs  text-slate-900 mt-1">{reviewOrder.company_name}</p>
-                </div>
-                <div>
-                  <label className="text-xs  text-slate-600 ">PO Number</label>
-                  <p className="text-xs  text-slate-900 mt-1">{reviewOrder.po_number || '—'}</p>
-                </div>
-                <div>
-                  <label className="text-xs  text-slate-600 ">Project</label>
-                  <p className="text-xs  text-slate-900 mt-1">{reviewOrder.project_name}</p>
-                </div>
-                <div>
-                  <label className="text-xs  text-slate-600 ">Sales Order</label>
-                  <p className="text-xs  text-slate-900 mt-1">SO-{String(reviewOrder.sales_order_id).padStart(4, '0')}</p>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <label className="text-xs  text-slate-600  block mb-3">Drawing Details</label>
-                {reviewLoading ? (
-                  <div className="text-center py-4">
-                    <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded  animate-spin mx-auto"></div>
-                  </div>
-                ) : reviewDetails.length > 0 ? (
-                  <div className="space-y-3">
-                    {reviewDetails.map((item, index) => (
-                      <div key={`${item.id}-${index}`} className="p-2 bg-slate-50 rounded border border-slate-200">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div className="grid grid-cols-4 gap-2 text-sm flex-1">
-                              <div>
-                                <span className="text-[10px] text-slate-500 font-bold uppercase">Drawing No</span>
-                                <p className=" text-slate-900 text-xs font-bold text-indigo-600">{item.drawing_no || '—'}</p>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-slate-500 font-bold uppercase">Group</span>
-                                <p className=" text-slate-900 text-xs mt-0.5">
-                                  {item.item_group ? (
-                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">
-                                      {item.item_group}
-                                    </span>
-                                  ) : '—'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-slate-500 font-bold uppercase">Revision</span>
-                                <p className=" text-slate-900 text-xs font-bold">{item.revision_no || 'A'}</p>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-slate-500 font-bold uppercase">Quantity</span>
-                                <p className=" text-slate-900 text-xs font-bold">{item.quantity || 1} {item.unit || 'NOS'}</p>
-                              </div>
-                            </div>
-                          </div>
-                          {((item.item_status || item.status) === 'REJECTED') ? (
-                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-[10px] font-bold border border-red-200 uppercase tracking-wider">Rejected</span>
-                          ) : ((item.item_status || item.status) === 'Approved ') ? (
-                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200 uppercase tracking-wider">Approved</span>
-                          ) : (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleApproveItem(item.id)}
-                                className="px-2 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded text-[10px] font-bold border border-emerald-200 transition-all uppercase tracking-wider"
-                              >
-                                Approve
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-600 mt-2 font-medium italic">{item.item_description || item.description || 'No description provided'}</p>
-                        
-                        {item.drawing_pdf && (
-                          <div className="mt-4 border rounded  overflow-hidden bg-white">
-                            {['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(item.drawing_pdf.toLowerCase().split('.').pop()) ? (
-                              <div className="relative group">
-                                <img 
-                                  src={getFileUrl(item.drawing_pdf)} 
-                                  alt="Drawing" 
-                                  className="max-w-full h-auto object-contain mx-auto max-h-[400px] cursor-pointer"
-                                  onClick={() => handlePreview(item)}
-                                />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors pointer-events-none flex items-center justify-center">
-                                  <span className="opacity-0 group-hover:opacity-100 bg-white/90 text-slate-900 px-3 py-1 rounded text-xs font-bold shadow-lg transition-opacity border border-slate-200">
-                                    Click to Enlarge
-                                  </span>
-                                </div>
-                              </div>
-                            ) : item.drawing_pdf.toLowerCase().endsWith('.pdf') ? (
-                              <div className="p-6 flex flex-col items-center justify-center bg-slate-50/50">
-                                <div className="w-10 h-10 bg-red-100 text-red-600 rounded-lg flex items-center justify-center mb-3">
-                                  <FileText className="w-6 h-6" />
-                                </div>
-                                <h4 className="text-xs  text-slate-900 mb-1 font-bold">PDF Drawing Available</h4>
-                                <p className="text-[10px] text-slate-500 mb-4 font-medium text-center">This drawing is in PDF format and cannot be previewed directly here.</p>
-                                <button 
-                                  onClick={() => handlePreview(item)}
-                                  className="px-4 py-2 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-md shadow-indigo-100"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Open PDF Preview
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="p-6 text-center text-slate-500 text-xs font-medium italic">
-                                Preview not available for this file type
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {(item.item_status === 'REJECTED' || item.status === 'REJECTED') && (item.item_rejection_reason || item.rejection_reason || item.reason) && (
-                          <div className="mt-2 p-2 bg-red-50 rounded border border-red-100">
-                            <p className="text-xs text-red-500 italic leading-snug">
-                              <span className="font-bold not-italic mr-1 uppercase text-[10px]">Reason:</span>
-                              {item.item_rejection_reason || item.rejection_reason || item.reason}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">No drawing details available</p>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-slate-50 p-3 border-t border-slate-200 flex justify-end gap-2 sticky bottom-0">
-              <button 
-                onClick={() => setShowReviewModal(false)}
-                className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded text-xs font-bold hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => handleApproveDesign(reviewOrder.id)}
-                className="px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-100 flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                </svg>
-                Approve & Send
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showBOMDetails && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -1493,10 +1302,7 @@ const BOMCreation = () => {
             setShowPreviewModal(false);
             setPreviewDrawing(null);
           }}
-          drawingData={{
-            drawing_no: previewDrawing.drawing_no,
-            drawing_pdf: previewDrawing.drawing_pdf
-          }}
+          drawing={previewDrawing}
         />
       )}
     </div>
