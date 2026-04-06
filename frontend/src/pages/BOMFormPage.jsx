@@ -1671,6 +1671,7 @@ const BOMFormPage = () => {
                         <option value="Kg">Kg</option>
                         <option value="Nos">Nos</option>
                         <option value="Mtr">Mtr</option>
+                        <option value="Litre (Ltr)">Litre (Ltr)</option>
                       </select>
                     </div>
                     
@@ -1943,6 +1944,7 @@ const BOMFormPage = () => {
                         <option value="Kg">Kg</option>
                         <option value="Nos">Nos</option>
                         <option value="Mtr">Mtr</option>
+                        <option value="Litre (Ltr)">Litre (Ltr)</option>
                       </select>
                     </div>
 
