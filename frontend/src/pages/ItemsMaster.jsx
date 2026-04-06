@@ -620,12 +620,17 @@ const ItemsMaster = () => {
       }
     },
     { label: 'Group', key: 'material_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{val}</span> },
-    { label: 'UOM', key: 'unit', sortable: true },
     { 
-      label: 'Weight/Unit', 
-      key: 'weight_per_unit', 
+      label: 'Unit Details', 
+      key: 'unit', 
       sortable: true,
-      render: (val, row) => val ? `${parseFloat(val).toFixed(3)} ${row.weight_uom || 'Kg'}` : '—'
+      render: (val, row) => {
+        const weight = parseFloat(row.weight_per_unit || 0);
+        if (weight > 0) {
+          return `${weight.toFixed(3)} ${row.weight_uom || 'Kg'}`;
+        }
+        return `1 ${val || 'Nos'}`;
+      }
     },
     { 
       label: 'Valuation Rate (₹)', 
