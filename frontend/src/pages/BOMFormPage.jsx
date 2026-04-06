@@ -87,14 +87,13 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
               {isConsumable ? 'Consumable' : 'Assembly'}
             </span>
           </td>
-          <td className="p-2 text-center text-xs text-slate-600">
-            {(qty / cumulativeLossFactor).toFixed(2)}
-          </td>
-          <td className="p-2 text-center text-xs text-slate-600">
-            {item.uom}
-          </td>
-          <td className="p-2 text-center text-xs text-slate-600">
-            {unitWeight > 0 ? `${unitWeight.toFixed(3)} Kg` : '—'}
+          <td className="p-2 text-center text-[11px] font-medium text-slate-600">
+            <div className="flex flex-col items-center">
+              <span>{qty.toFixed(2)} {item.uom}</span>
+              {unitWeight > 0 && (
+                <span className="text-[10px] text-slate-400">({unitWeight.toFixed(3)} Kg)</span>
+              )}
+            </div>
           </td>
           <td className="p-2 text-center text-xs text-slate-600">
             {totalWeight > 0 ? `${(totalWeight / cumulativeLossFactor).toFixed(3)} Kg` : '—'}
@@ -146,26 +145,17 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
             </div>
           </div>
         </td>
-        <td className="p-2  text-center">
-          <span className="text-xs text-slate-600">
-            {(qty / cumulativeLossFactor).toFixed(actualType === 'material' ? 4 : 2)} {item.uom}
-          </span>
+        <td className="p-2 text-center text-[11px] font-medium text-slate-600">
+          <div className="flex flex-col items-center">
+            <span>{(qty / cumulativeLossFactor).toFixed(actualType === 'material' ? 4 : 2)} {item.uom}</span>
+            {unitWeight > 0 && (
+              <span className="text-[10px] text-slate-400">({unitWeight.toFixed(3)} Kg)</span>
+            )}
+          </div>
         </td>
-        {actualType === 'material' ? (
-          <>
-            <td className="p-2 text-center text-xs text-slate-600">
-              {unitWeight > 0 ? `${unitWeight.toFixed(3)} Kg` : '—'}
-            </td>
-            <td className="p-2 text-center text-xs text-slate-600">
-              {totalWeight > 0 ? `${(totalWeight / cumulativeLossFactor).toFixed(3)} Kg` : '—'}
-            </td>
-          </>
-        ) : (
-          <>
-            <td className="p-2 text-center text-xs text-slate-600">—</td>
-            <td className="p-2 text-center text-xs text-slate-600">—</td>
-          </>
-        )}
+        <td className="p-2 text-center text-xs text-slate-600">
+          {totalWeight > 0 ? `${(totalWeight / cumulativeLossFactor).toFixed(3)} Kg` : '—'}
+        </td>
         <td className="p-2  text-center text-xs text-slate-600">₹{rate.toFixed(2)}</td>
         <td className="p-2  text-center text-xs text-slate-600">
           {item.warehouse || '—'}
@@ -1694,7 +1684,11 @@ const BOMFormPage = () => {
                       </button>
                     </div>
                   </div>
-                  <div className={`grid grid-cols-1 ${(componentForm.itemGroup || '').toLowerCase().includes('consumable') ? 'md:grid-cols-6' : 'md:grid-cols-4'} gap-2 mt-3`}>
+                  <div className={`grid grid-cols-1 ${(() => {
+                    const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((componentForm.itemGroup || '').toLowerCase().trim());
+                    const isKg = (componentForm.uom || '').toLowerCase() === 'kg';
+                    return (isWeightBasedGroup && isKg) ? 'md:grid-cols-6' : 'md:grid-cols-4';
+                  })()} gap-2 mt-3`}>
                     <div className="space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Unit Rate (₹)</label>
                       <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.rate} onChange={(e) => setComponentForm({ ...componentForm, rate: e.target.value })} />
@@ -1704,30 +1698,38 @@ const BOMFormPage = () => {
                       <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-rose-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({ ...componentForm, lossPercent: e.target.value })} />
                     </div>
 
-                    {(componentForm.itemGroup || '').toLowerCase().includes('consumable') && (
-                      <>
-                        <div className="space-y-1">
-                          <label className="text-xs text-slate-500 ml-1">Weight/Unit (Kg)</label>
-                          <input 
-                            type="text" 
-                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
-                            value={componentForm.weightPerUnit ? (parseFloat(componentForm.weightPerUnit) * (1 + parseFloat(componentForm.scrapPercent || 0))).toFixed(3) : ''} 
-                            readOnly 
-                            placeholder="Auto"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-xs text-slate-500 ml-1">Scrap(kg)</label>
-                          <input 
-                            type="number" 
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                            value={componentForm.scrapPercent} 
-                            onChange={(e) => setComponentForm({ ...componentForm, scrapPercent: e.target.value })}
-                            placeholder="0"
-                          />
-                        </div>
-                      </>
-                    )}
+                    {(() => {
+                      const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((componentForm.itemGroup || '').toLowerCase().trim());
+                      const isKg = (componentForm.uom || '').toLowerCase() === 'kg';
+                      
+                      if (isWeightBasedGroup && isKg) {
+                        return (
+                          <>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500 ml-1">Weight/Unit (Kg)</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
+                                value={componentForm.weightPerUnit ? (parseFloat(componentForm.weightPerUnit) * (1 + parseFloat(componentForm.scrapPercent || 0))).toFixed(3) : ''} 
+                                readOnly 
+                                placeholder="Auto"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500 ml-1">Scrap(kg)</label>
+                              <input 
+                                type="number" 
+                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                value={componentForm.scrapPercent} 
+                                onChange={(e) => setComponentForm({ ...componentForm, scrapPercent: e.target.value })}
+                                placeholder="0"
+                              />
+                            </div>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
 
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Component Notes</label>
@@ -1744,9 +1746,7 @@ const BOMFormPage = () => {
                       <tr>
                         <th className="p-2  text-left text-xs   text-slate-400 ">Item</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Type</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Qty</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">UOM</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Unit Wt</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Unit Details</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Total Wt</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Total (₹)</th>
@@ -1846,23 +1846,28 @@ const BOMFormPage = () => {
                             // FG and Sub-assembly check
                             const itemCode = (item.item_code || "").toUpperCase();
                             const type = (item.material_type || "").toLowerCase();
+                            const group = (item.item_group || "").toLowerCase();
                             
+                            // EXCLUDE FG and Sub-assemblies ONLY (Keep Raw Materials, Consumables, PM, etc.)
                             if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-")) return false;
-                            if (type.includes("finished") || type.includes("assembly") || type.includes("sub")) return false;
+                            if (type.includes("finished") || type.includes("assembly")) return false;
+                            if (group.includes("finished") || group.includes("assembly")) return false;
 
                             // Type Filter
                             const targetGroup = (materialForm.itemGroup || '').toLowerCase().replace(/_/g, ' ').trim();
                             const normalizedType = type.replace(/_/g, ' ').trim();
+                            const normalizedGroup = group.replace(/_/g, ' ').trim();
 
                             // Filter by group logic
                             if (targetGroup) {
-                              if (targetGroup.includes('raw material')) {
+                              if (targetGroup.includes('raw material') || targetGroup.includes('rm')) {
                                 // For Raw Material selection, allow everything EXCEPT sub-assemblies/SFG/FG
-                                if (normalizedType.includes('sub assembly') || normalizedType.includes('semi') || normalizedType.includes('sfg') || normalizedType.includes('finished') || normalizedType.includes('assembly')) return false;
-                              } else if (targetGroup.includes('consumable')) {
-                                if (!normalizedType.includes('consumable')) return false;
+                                if (normalizedType.includes('finished') || normalizedType.includes('assembly')) return false;
+                                if (normalizedGroup.includes('finished') || normalizedGroup.includes('assembly')) return false;
+                              } else if (targetGroup.includes('consumable') || targetGroup.includes('con')) {
+                                if (!normalizedType.includes('consumable') && !normalizedGroup.includes('consumable') && !normalizedGroup.includes('con')) return false;
                               } else if (targetGroup.includes('pm') || targetGroup.includes('packing')) {
-                                if (!normalizedType.includes('pm') && !normalizedType.includes('packing')) return false;
+                                if (!normalizedType.includes('pm') && !normalizedType.includes('packing') && !normalizedGroup.includes('pm') && !normalizedGroup.includes('packing')) return false;
                               } else if (targetGroup.includes('sub assembly') || targetGroup.includes('sfg') || targetGroup.includes('semi')) {
                                 if (!normalizedType.includes('sub assembly') && !normalizedType.includes('semi') && !normalizedType.includes('sfg')) return false;
                               } else if (targetGroup.includes('tool')) {
@@ -1951,32 +1956,44 @@ const BOMFormPage = () => {
                       </select>
                     </div>
 
-                    {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CON'].includes(materialForm.itemGroup) && (
-                      <>
-                        <div className="md:col-span-2 space-y-1">
-                          <label className="text-xs  text-slate-500 ml-1">Weight/Unit (Kg)</label>
-                          <input 
-                            type="text" 
-                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
-                            value={materialForm.weightPerUnit ? (parseFloat(materialForm.weightPerUnit) * (1 + (parseFloat(materialForm.scrapPercent) || 0))).toFixed(3) : ''} 
-                            readOnly 
-                            placeholder="Auto"
-                          />
-                        </div>
-                        <div className="md:col-span-1 space-y-1">
-                          <label className="text-xs  text-slate-500 ml-1">Scrap(kg)</label>
-                          <input 
-                            type="number" 
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
-                            value={materialForm.scrapPercent} 
-                            onChange={(e) => setMaterialForm({ ...materialForm, scrapPercent: e.target.value })}
-                            placeholder="0"
-                          />
-                        </div>
-                      </>
-                    )}
+                    {(() => {
+                      const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim());
+                      const isKg = (materialForm.uom || '').toLowerCase() === 'kg';
+                      
+                      if (isWeightBasedGroup && isKg) {
+                        return (
+                          <>
+                            <div className="md:col-span-2 space-y-1">
+                              <label className="text-xs  text-slate-500 ml-1">Weight/Unit (Kg)</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
+                                value={materialForm.weightPerUnit ? (parseFloat(materialForm.weightPerUnit) * (1 + (parseFloat(materialForm.scrapPercent) || 0))).toFixed(3) : ''} 
+                                readOnly 
+                                placeholder="Auto"
+                              />
+                            </div>
+                            <div className="md:col-span-1 space-y-1">
+                              <label className="text-xs  text-slate-500 ml-1">Scrap(kg)</label>
+                              <input 
+                                type="number" 
+                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
+                                value={materialForm.scrapPercent} 
+                                onChange={(e) => setMaterialForm({ ...materialForm, scrapPercent: e.target.value })}
+                                placeholder="0"
+                              />
+                            </div>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
 
-                    <div className={`space-y-1 flex flex-col justify-end ${['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CON'].includes(materialForm.itemGroup) ? 'md:col-span-2' : 'md:col-span-4'}`}>
+                    <div className={`space-y-1 flex flex-col justify-end ${(() => {
+                      const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim());
+                      const isKg = (materialForm.uom || '').toLowerCase() === 'kg';
+                      return (isWeightBasedGroup && isKg) ? 'md:col-span-2' : 'md:col-span-4';
+                    })()}`}>
                       <button
                         onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' })}
                         className="w-full py-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
@@ -2035,8 +2052,7 @@ const BOMFormPage = () => {
                     <thead className="bg-slate-50/50">
                       <tr>
                         <th className="p-2  text-left text-xs   text-slate-400 ">Item Details</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Qty / UOM</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Unit Wt</th>
+                        <th className="p-2  text-center text-xs   text-slate-400 ">Unit Details</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Total Wt</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
                         <th className="p-2  text-center text-xs   text-slate-400 ">Warehouse</th>
