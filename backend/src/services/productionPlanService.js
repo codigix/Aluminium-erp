@@ -926,9 +926,53 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
   await explodeBOM(item.item_code, item.drawing_no, soItemIdForLookup, null, 1, 0, 'FG');
 
+  // 2. Fetch dimensions from stock_balance for materials and components
+  const finalMaterials = Array.from(materialMap.values());
+  const finalComponents = Array.from(componentMap.values());
+
+  const enrichWithDimensions = async (list, codeField) => {
+    for (const item of list) {
+      const itemCode = item[codeField];
+      const matName = item.material_name || item.materialName;
+      
+      let query = 'SELECT length, width, thickness, diameter, outer_diameter, density, weight_per_unit, unit FROM stock_balance WHERE ';
+      const params = [];
+      
+      if (itemCode) {
+        query += 'item_code = ? ';
+        params.push(itemCode);
+      } else if (matName) {
+        query += 'material_name = ? ';
+        params.push(matName);
+      } else {
+        continue;
+      }
+      
+      const [stockData] = await pool.query(query + ' LIMIT 1', params);
+      if (stockData.length > 0) {
+        const s = stockData[0];
+        item.dimensions = {
+          length: s.length,
+          width: s.width,
+          thickness: s.thickness,
+          diameter: s.diameter,
+          outer_diameter: s.outer_diameter,
+          density: s.density
+        };
+        // Ensure unit/uom is consistent
+        if (!item.uom && !item.unit) {
+          item.uom = s.unit || 'Nos';
+        }
+      }
+    }
+  };
+
+  await enrichWithDimensions(finalMaterials, 'material_code');
+  await enrichWithDimensions(finalComponents, 'item_code');
+
   return {
-    materials: Array.from(materialMap.values()),
-    components: Array.from(componentMap.values()),
+    materials: finalMaterials,
+    components: finalComponents,
     operations: Array.from(operationMap.values()).flat()
   };
 };

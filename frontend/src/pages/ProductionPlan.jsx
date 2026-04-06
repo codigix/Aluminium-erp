@@ -842,7 +842,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       totalDesignQty: c.designQty || 0,
       totalPlannedQty: c.plannedQty || 0,
       bom_no: c.bomNo || '-',
-      source_fg: c.source_fg || '-'
+      source_fg: c.source_fg || '-',
+      dimensions: c.dimensions || null
     }));
 
     // 4. Combine into final Material list
@@ -1310,17 +1311,29 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'CORE') : coreMaterials).map((mat, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="p-2 ">
-                          <div className=" text-slate-800 text-xs">{mat.material_name}</div>
-                          <div className="text-xs text-slate-400">{mat.description || 'Direct Material'}</div>
+                          <div className=" text-slate-800 text-xs font-medium">{mat.material_name}</div>
+                          <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                            {mat.dimensions ? (
+                              <>
+                                {mat.dimensions.length > 0 && <span>L: {mat.dimensions.length}</span>}
+                                {mat.dimensions.width > 0 && <span>W: {mat.dimensions.width}</span>}
+                                {mat.dimensions.thickness > 0 && <span>T: {mat.dimensions.thickness}</span>}
+                                {mat.dimensions.diameter > 0 && <span>Dia: {mat.dimensions.diameter}</span>}
+                                {mat.dimensions.outer_diameter > 0 && <span>OD: {mat.dimensions.outer_diameter}</span>}
+                              </>
+                            ) : (
+                              <span>{mat.description || 'Direct Material'}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2  text-right  text-slate-700">
                           {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
                         </td>
                         <td className="p-2  text-right">
-                          <div className=" text-amber-600">
+                          <div className=" text-amber-600 font-medium">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
-                          <div className="text-xs text-slate-400  ">{isViewing ? mat.uom : mat.unit}</div>
+                          <div className="text-[10px] text-slate-400 uppercase">{mat.uom || mat.unit || 'Nos'}</div>
                         </td>
                         <td className="p-2 ">
                           <div className="text-xs text-slate-600 ">{mat.warehouse || 'Store - NC'}</div>
@@ -1370,17 +1383,29 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).map((mat, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="p-2 ">
-                          <div className=" text-slate-800 text-xs">{mat.material_name || mat.materialName}</div>
-                          <div className="text-xs text-slate-400">{mat.item_code || mat.itemCode}</div>
+                          <div className=" text-slate-800 text-xs font-medium">{mat.material_name || mat.materialName}</div>
+                          <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                            {mat.dimensions ? (
+                              <>
+                                {mat.dimensions.length > 0 && <span>L: {mat.dimensions.length}</span>}
+                                {mat.dimensions.width > 0 && <span>W: {mat.dimensions.width}</span>}
+                                {mat.dimensions.thickness > 0 && <span>T: {mat.dimensions.thickness}</span>}
+                                {mat.dimensions.diameter > 0 && <span>Dia: {mat.dimensions.diameter}</span>}
+                                {mat.dimensions.outer_diameter > 0 && <span>OD: {mat.dimensions.outer_diameter}</span>}
+                              </>
+                            ) : (
+                              <span>{mat.item_code || mat.itemCode}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2  text-right  text-slate-700">
                           {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
                         </td>
                         <td className="p-2  text-right">
-                          <div className=" text-rose-600">
+                          <div className=" text-rose-600 font-medium">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
-                          <div className="text-xs text-slate-400  ">{isViewing ? mat.uom : (mat.uom || mat.unit)}</div>
+                          <div className="text-[10px] text-slate-400 uppercase">{mat.uom || mat.unit || 'Nos'}</div>
                         </td>
                         <td className="p-2 ">
                           <div className="text-xs text-slate-500 ">{mat.source_assembly || mat.sourceFg || '-'}</div>
