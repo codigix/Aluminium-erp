@@ -39,6 +39,7 @@ const getFileUrl = (path) => {
 };
 
 const ClientQuotations = () => {
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'sent', or 'received'
   const [groupedByClient, setGroupedByClient] = useState({});
   const [sentQuotations, setSentQuotations] = useState([]);
   const [receivedQuotations, setReceivedQuotations] = useState([]);
@@ -51,6 +52,8 @@ const ClientQuotations = () => {
   const [sendingClientName, setSendingClientName] = useState(null);
   const [editingSentAmounts, setEditingSentAmounts] = useState({});
   const [savingSentAmount, setSavingSentAmount] = useState(null);
+  const [editingItemRates, setEditingItemRates] = useState({});
+  const [savingItemRateId, setSavingItemRateId] = useState(null);
 
   // Communication States
   const [showCommDrawer, setShowCommDrawer] = useState(false);
@@ -334,8 +337,15 @@ const ClientQuotations = () => {
   };
 
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    fetchUnreadCounts();
+    if (activeTab === 'pending') {
+      fetchApprovedOrders();
+    } else if (activeTab === 'sent') {
+      fetchSentQuotations();
+    } else if (activeTab === 'received') {
+      fetchReceivedQuotations();
+    }
+  }, [activeTab]);
 
   const fetchReceivedQuotations = async () => {
     try {
@@ -390,61 +400,37 @@ const ClientQuotations = () => {
   };
 
   const combinedQuotations = React.useMemo(() => {
-    const pending = Object.entries(groupedByClient).map(([name, data]) => ({
-      ...data,
-      type: 'PENDING',
-      status: 'BOM Approved',
-      displayStatus: 'BOM Approved',
-      uniqueKey: `pending_${name}`,
-      quotes: data.orders.flatMap(o => o.items || [])
-    }));
+    if (activeTab === 'pending') {
+      return Object.entries(groupedByClient).map(([name, data]) => ({
+        ...data,
+        type: 'PENDING',
+        status: 'BOM Approved',
+        displayStatus: 'BOM Approved',
+        uniqueKey: `pending_${name}`,
+        quotes: data.orders.flatMap(o => (o.items || []).map(item => ({ ...item, project_name: o.project_name })))
+      })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
 
-    const sent = sentQuotations.map(q => ({
-      ...q,
-      type: 'SENT',
-      displayStatus: q.status
-    }));
+    if (activeTab === 'sent') {
+      return sentQuotations.map(q => ({
+        ...q,
+        type: 'SENT',
+        displayStatus: q.status,
+        uniqueKey: `sent_${q.uniqueKey}`
+      })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
 
-    const received = receivedQuotations.map(q => ({
-      ...q,
-      type: 'RECEIVED',
-      displayStatus: q.status
-    }));
+    if (activeTab === 'received') {
+      return receivedQuotations.map(q => ({
+        ...q,
+        type: 'RECEIVED',
+        displayStatus: q.status,
+        uniqueKey: `received_${q.uniqueKey}`
+      })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
 
-    // Deduplicate sent and received based on uniqueKey
-    const allQuotes = [...pending, ...sent, ...received];
-    const seenKeys = new Set();
-    const uniqueQuotes = [];
-
-    allQuotes.forEach(q => {
-      // Prioritize RECEIVED over SENT if they share the same uniqueKey (except for PENDING)
-      if (q.type === 'PENDING') {
-        uniqueQuotes.push(q);
-        return;
-      }
-
-      if (!seenKeys.has(q.uniqueKey)) {
-        // If it's the first time we see this key, or if it's RECEIVED, replace SENT
-        seenKeys.add(q.uniqueKey);
-        uniqueQuotes.push(q);
-      } else if (q.type === 'RECEIVED') {
-        // If we already have a SENT but this is RECEIVED, replace it
-        const index = uniqueQuotes.findIndex(uq => uq.uniqueKey === q.uniqueKey);
-        if (index !== -1) {
-          uniqueQuotes[index] = q;
-        }
-      }
-    });
-
-    return uniqueQuotes.sort((a, b) => {
-      // 1. PENDING always on top
-      if (a.type === 'PENDING' && b.type !== 'PENDING') return -1;
-      if (a.type !== 'PENDING' && b.type === 'PENDING') return 1;
-
-      // 2. Then sort by date descending
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
-  }, [groupedByClient, sentQuotations, receivedQuotations]);
+    return [];
+  }, [groupedByClient, sentQuotations, receivedQuotations, activeTab]);
 
   const handlePriceChange = (clientName, item, price) => {
     const rate = parseFloat(price) || 0;
@@ -621,6 +607,54 @@ const ClientQuotations = () => {
       errorToast('Error updating amount');
     } finally {
       setSavingSentAmount(null);
+    }
+  };
+
+  const saveItemRate = async (quote) => {
+    const newRate = editingItemRates[quote.id];
+    if (newRate === undefined || newRate === '') return;
+
+    try {
+      setSavingItemRateId(quote.id);
+      const token = localStorage.getItem('authToken');
+      
+      const rateVal = parseFloat(newRate) || 0;
+      const qtyVal = parseFloat(quote.item_qty) || 1;
+      const totalBase = rateVal * qtyVal;
+      const totalInclGst = totalBase * (1 + (parseFloat(quote.gst_percentage) || 18) / 100);
+
+      const itemsToUpdate = [{
+        id: quote.id,
+        rate: rateVal,
+        qty: qtyVal,
+        received_amount: totalInclGst
+      }];
+
+      const response = await fetch(`${API_BASE}/quotation-requests/batch-update-rates`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ items: itemsToUpdate })
+      });
+
+      if (response.ok) {
+        successToast('Rate updated successfully');
+        fetchAllData();
+        setEditingItemRates(prev => {
+          const next = { ...prev };
+          delete next[quote.id];
+          return next;
+        });
+      } else {
+        errorToast('Failed to update rate');
+      }
+    } catch (error) {
+      console.error('Error updating rate:', error);
+      errorToast('Error updating rate');
+    } finally {
+      setSavingItemRateId(null);
     }
   };
 
@@ -904,6 +938,39 @@ const ClientQuotations = () => {
         </button>
       </div>
 
+      <div className="flex gap-2 p-1 bg-slate-100/50 rounded-lg w-fit border border-slate-200">
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
+            activeTab === 'pending'
+              ? 'bg-white text-indigo-600 shadow-sm border border-slate-200'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Pending Approval
+        </button>
+        <button
+          onClick={() => setActiveTab('sent')}
+          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
+            activeTab === 'sent'
+              ? 'bg-white text-indigo-600 shadow-sm border border-slate-200'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Sent Quotations
+        </button>
+        <button
+          onClick={() => setActiveTab('received')}
+          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
+            activeTab === 'received'
+              ? 'bg-white text-indigo-600 shadow-sm border border-slate-200'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Received Quotes
+        </button>
+      </div>
+
       <div className="space-y-2">
         <Card>
           <div className="overflow-x-auto custom-scrollbar">
@@ -1084,8 +1151,8 @@ const ClientQuotations = () => {
                                   <table className="min-w-full divide-y divide-slate-100">
                                     <thead className="bg-slate-50/30">
                                       <tr>
-                                        <th className="px-4 p-2 text-left text-xs  text-slate-500  ">Drawing</th>
-                                        <th className="px-4 p-2 text-left text-xs  text-slate-500  ">Description</th>
+                                        <th className="px-4 p-2 text-left text-xs  text-slate-500  ">Project</th>
+                                        <th className="px-4 p-2 text-left text-xs  text-slate-500  ">Drawing & Description</th>
                                         <th className="px-4 p-2 text-center text-xs  text-slate-500  ">Qty</th>
                                         {isPending ? (
                                           <>
@@ -1109,14 +1176,17 @@ const ClientQuotations = () => {
                                         group.quotes.map((item) => (
                                           <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 p-2">
+                                              <span className="text-xs text-slate-600">{item.project_name || '—'}</span>
+                                            </td>
+                                            <td className="px-4 p-2">
                                               <div className="flex flex-col">
-                                                <span className="text-xs  text-slate-900">{item.drawing_no || 'N/A'}</span>
+                                                <span className="text-xs font-medium text-slate-900">{item.drawing_no || 'N/A'}</span>
+                                                <span className="text-xs text-slate-500">{item.description || '—'}</span>
                                                 {item.status === 'REJECTED' && (
                                                   <span className="mt-1 px-1.5 py-0.5 bg-rose-100 text-rose-600 rounded text-xs  w-fit">Rejected</span>
                                                 )}
                                               </div>
                                             </td>
-                                            <td className="px-4 p-2 text-xs  text-slate-600">{item.description || '—'}</td>
                                             <td className="px-4 p-2 text-center text-xs  text-slate-900">{item.design_qty || '0'} {item.unit || 'Pcs'}</td>
                                             <td className="px-4 p-2 text-xs text-slate-600 font-medium">
                                               {item.bom_cost ? `₹${Number(item.bom_cost).toLocaleString('en-IN')}` : '—'}
@@ -1160,14 +1230,40 @@ const ClientQuotations = () => {
                                         group.quotes.map((quote) => (
                                           <tr key={quote.id} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 p-2">
+                                              <span className="text-xs text-slate-600">{quote.project_name || '—'}</span>
+                                            </td>
+                                            <td className="px-4 p-2">
                                               <div className="flex flex-col">
-                                                <span className="text-xs  text-slate-900">{quote.drawing_no || 'N/A'}</span>
-                                                <span className="text-xs text-slate-400">Project: {quote.project_name || '—'}</span>
+                                                <span className="text-xs font-medium text-slate-900">{quote.drawing_no || 'N/A'}</span>
+                                                <span className="text-xs text-slate-600">{quote.item_description || quote.description || '—'}</span>
                                               </div>
                                             </td>
-                                            <td className="px-4 p-2 text-xs  text-slate-600">{quote.description || '—'}</td>
                                             <td className="px-4 p-2 text-center text-xs  text-slate-900">{quote.item_qty} {quote.uom}</td>
-                                            <td className="px-4 p-2 text-right text-xs  text-slate-900">{formatCurrency(quote.unit_rate)}</td>
+                                            <td className="px-4 p-2 text-right text-xs  text-slate-900">
+                                              <div className="flex items-center justify-end gap-1.5 bg-slate-50 border border-slate-200 rounded px-2 py-1 w-24 ml-auto group-focus-within:border-indigo-500 transition-all">
+                                                <span className="text-slate-400">₹</span>
+                                                <input
+                                                  type="text"
+                                                  value={editingItemRates[quote.id] !== undefined ? editingItemRates[quote.id] : Number(quote.unit_rate || 0).toFixed(2)}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                      setEditingItemRates(prev => ({ ...prev, [quote.id]: val }));
+                                                    }
+                                                  }}
+                                                  className="w-full bg-transparent text-right text-slate-900 focus:outline-none"
+                                                />
+                                                {editingItemRates[quote.id] !== undefined && (
+                                                  <button
+                                                    onClick={() => saveItemRate(quote)}
+                                                    disabled={savingItemRateId === quote.id}
+                                                    className="p-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-all shadow-sm active:scale-90"
+                                                  >
+                                                    {savingItemRateId === quote.id ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </td>
                                             <td className="px-4 p-2 text-right text-xs  text-slate-900 font-medium">{formatCurrency(quote.total_amount)}</td>
                                             <td className="px-4 p-2 text-right pr-6">
                                               <StatusBadge status={quote.status} />

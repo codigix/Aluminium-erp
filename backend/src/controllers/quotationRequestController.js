@@ -6,44 +6,47 @@ const getQuotationRequests = async (req, res, next) => {
   try {
     const { status, company_id } = req.query;
     let query = `
-      SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
-             qr.profit_percentage, qr.gst_percentage,
-             so.project_name, so.bom_id, c.company_name, cp.po_number,
-             COALESCE(soi.drawing_no, '—') as drawing_no,
-             COALESCE(soi.description, so.project_name) as item_description,
-             COALESCE(
-               qr.item_qty, 
-               poi.quantity,
-               (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
-               soi.quantity, 
-               0
-             ) as item_qty,
-             COALESCE(soi.unit, 'NOS') as item_unit,
-             COALESCE(soi.item_group, 'FG') as item_group,
-             qr.id as id
-      FROM quotation_requests qr
-      LEFT JOIN sales_orders so ON so.id = qr.sales_order_id
-      JOIN companies c ON c.id = qr.company_id
-      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-      LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
-      LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
-           AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
+      SELECT *, COALESCE(total_amount / NULLIF(item_qty, 0), 0) as unit_rate FROM (
+        SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
+               qr.profit_percentage, qr.gst_percentage,
+               so.project_name, so.bom_id, c.company_name, cp.po_number,
+               COALESCE(soi.drawing_no, '—') as drawing_no,
+               COALESCE(soi.description, so.project_name) as item_description,
+               COALESCE(
+                 qr.item_qty, 
+                 poi.quantity,
+                 (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+                 soi.quantity, 
+                 0
+               ) as item_qty,
+               COALESCE(soi.unit, 'NOS') as item_unit,
+               COALESCE(soi.unit, 'NOS') as uom,
+               COALESCE(soi.item_group, 'FG') as item_group,
+               qr.id as id
+        FROM quotation_requests qr
+        LEFT JOIN sales_orders so ON so.id = qr.sales_order_id
+        JOIN companies c ON c.id = qr.company_id
+        LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
+        LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
+             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
+      ) qry
       WHERE 1=1
     `;
     const params = [];
 
     if (status) {
       const statusArray = status.split(',').map(s => s.trim());
-      query += ` AND TRIM(qr.status) IN (${statusArray.map(() => '?').join(',')})`;
+      query += ` AND TRIM(status) IN (${statusArray.map(() => '?').join(',')})`;
       params.push(...statusArray);
     }
 
     if (company_id) {
-      query += ` AND qr.company_id = ?`;
+      query += ` AND company_id = ?`;
       params.push(company_id);
     }
 
-    query += ' ORDER BY qr.created_at DESC';
+    query += ' ORDER BY created_at DESC';
 
     const [rows] = await pool.query(query, params);
     res.json(rows);
