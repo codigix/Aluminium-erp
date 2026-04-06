@@ -905,7 +905,31 @@ const ItemsMaster = () => {
                 </select>
               </div>
 
-              {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && (
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">UOM</label>
+                <select 
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={itemFormData.defaultUom}
+                  onChange={(e) => setItemFormData({...itemFormData, defaultUom: e.target.value})}
+                >
+                  <option value="Nos">Nos</option>
+                  <option value="Kg">Kg</option>
+                  <option value="Mtr">Mtr</option>
+                  <option value="Set">Set</option>
+                  <option value="Pkt">Pkt</option>
+                  <option value="Litre (Ltr)">Litre (Ltr)</option>
+                  <option value="Millilitre (ml)">Millilitre (ml)</option>
+                  <option value="Cubic Meter (m³)">Cubic Meter (m³)</option>
+                  <option value="Millimeter (mm)">Millimeter (mm)</option>
+                  <option value="Feet (ft)">Feet (ft)</option>
+                  <option value="Inch (in)">Inch (in)</option>
+                  <option value="Gram (g)">Gram (g)</option>
+                  <option value="Ton">Ton</option>
+                  <option value="Metric Ton (MT)">Metric Ton (MT)</option>
+                </select>
+              </div>
+
+              {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && itemFormData.defaultUom === 'Kg' && (
                 <>
                   <div className="space-y-2">
                     <label className="text-xs text-slate-500">Select Material Type *</label>
@@ -1000,31 +1024,43 @@ const ItemsMaster = () => {
                       </div>
                     </div>
                   )}
+
+                  <div className="space-y-2">
+                    <label className="text-xs  text-slate-500  ">Weight per Unit</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="number"
+                        step="0.001"
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        value={itemFormData.weightPerUnit}
+                        onChange={(e) => setItemFormData({...itemFormData, weightPerUnit: parseFloat(e.target.value) || 0})}
+                      />
+                      <select 
+                        className="w-24 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={itemFormData.weightUom}
+                        onChange={(e) => setItemFormData({...itemFormData, weightUom: e.target.value})}
+                      >
+                        <option value="">UOM</option>
+                        <option value="Nos">Nos</option>
+                        <option value="Kg">Kg</option>
+                        <option value="Mtr">Mtr</option>
+                        <option value="Set">Set</option>
+                        <option value="Pkt">Pkt</option>
+                        <option value="Litre (Ltr)">Litre (Ltr)</option>
+                        <option value="Millilitre (ml)">Millilitre (ml)</option>
+                        <option value="Cubic Meter (m³)">Cubic Meter (m³)</option>
+                        <option value="Millimeter (mm)">Millimeter (mm)</option>
+                        <option value="Feet (ft)">Feet (ft)</option>
+                        <option value="Inch (in)">Inch (in)</option>
+                        <option value="Gram (g)">Gram (g)</option>
+                        <option value="Ton">Ton</option>
+                        <option value="Metric Ton (MT)">Metric Ton (MT)</option>
+                      </select>
+                    </div>
+                  </div>
                 </>
               )}
-              <div className="space-y-2">
-                <label className="text-xs  text-slate-500  ">UOM</label>
-                <select 
-                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={itemFormData.defaultUom}
-                  onChange={(e) => setItemFormData({...itemFormData, defaultUom: e.target.value})}
-                >
-                  <option value="Nos">Nos</option>
-                  <option value="Kg">Kg</option>
-                  <option value="Mtr">Mtr</option>
-                  <option value="Set">Set</option>
-                  <option value="Pkt">Pkt</option>
-                  <option value="Litre (Ltr)">Litre (Ltr)</option>
-                  <option value="Millilitre (ml)">Millilitre (ml)</option>
-                  <option value="Cubic Meter (m³)">Cubic Meter (m³)</option>
-                  <option value="Millimeter (mm)">Millimeter (mm)</option>
-                  <option value="Feet (ft)">Feet (ft)</option>
-                  <option value="Inch (in)">Inch (in)</option>
-                  <option value="Gram (g)">Gram (g)</option>
-                  <option value="Ton">Ton</option>
-                  <option value="Metric Ton (MT)">Metric Ton (MT)</option>
-                </select>
-              </div>
+
               <div className="space-y-2">
                 <label className="text-xs  text-slate-500  ">Valuation Rate (₹)</label>
                 <input 
@@ -1034,39 +1070,6 @@ const ItemsMaster = () => {
                   value={itemFormData.valuationRate}
                   onChange={(e) => setItemFormData({...itemFormData, valuationRate: parseFloat(e.target.value) || 0})}
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs  text-slate-500  ">Weight per Unit</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="number"
-                    step="0.001"
-                    className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    value={itemFormData.weightPerUnit}
-                    onChange={(e) => setItemFormData({...itemFormData, weightPerUnit: parseFloat(e.target.value) || 0})}
-                  />
-                  <select 
-                    className="w-24 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={itemFormData.weightUom}
-                    onChange={(e) => setItemFormData({...itemFormData, weightUom: e.target.value})}
-                  >
-                    <option value="">UOM</option>
-                    <option value="Nos">Nos</option>
-                    <option value="Kg">Kg</option>
-                    <option value="Mtr">Mtr</option>
-                    <option value="Set">Set</option>
-                    <option value="Pkt">Pkt</option>
-                    <option value="Litre (Ltr)">Litre (Ltr)</option>
-                    <option value="Millilitre (ml)">Millilitre (ml)</option>
-                    <option value="Cubic Meter (m³)">Cubic Meter (m³)</option>
-                    <option value="Millimeter (mm)">Millimeter (mm)</option>
-                    <option value="Feet (ft)">Feet (ft)</option>
-                    <option value="Inch (in)">Inch (in)</option>
-                    <option value="Gram (g)">Gram (g)</option>
-                    <option value="Ton">Ton</option>
-                    <option value="Metric Ton (MT)">Metric Ton (MT)</option>
-                  </select>
-                </div>
               </div>
             </div>
             
