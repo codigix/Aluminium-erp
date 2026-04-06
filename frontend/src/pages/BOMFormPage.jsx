@@ -34,9 +34,11 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
   // Determine if this item is a material or component if type not provided or to be sure
   const actualType = providedType || (item.material_name ? 'material' : 'component');
   
-  const isConsumable = (item.item_group || '').toLowerCase().includes('consumable') || 
-                       (item.material_type || '').toLowerCase().includes('consumable') || 
-                       (item.material_name || '').toLowerCase().includes('consumable');
+  const isConsumable = (item.item_group || item.itemGroup || '').toLowerCase().includes('consumable') || 
+                       (item.material_type || item.materialType || '').toLowerCase().includes('consumable') || 
+                       (item.material_name || '').toLowerCase().includes('consumable') ||
+                       (item.component_code || item.componentCode || '').toLowerCase().startsWith('con-') ||
+                       (item.item_group || '').toLowerCase() === 'consumables';
 
   const children = allItems.filter(child => String(child.parent_id || child.parentId) === String(item.id));
 
@@ -702,9 +704,15 @@ const BOMFormPage = () => {
           if (data.components) {
             data.components = data.components.map(c => {
               const s = latestStockItems.find(si => si.item_code === c.component_code);
-              if (s && (!c.rate || parseFloat(c.rate) === 0)) {
-                const targetRate = s.selling_rate > 0 ? s.selling_rate : (s.valuation_rate || 0);
-                return { ...c, rate: targetRate };
+              if (s) {
+                const targetRate = (s && (!c.rate || parseFloat(c.rate) === 0)) ? (s.selling_rate > 0 ? s.selling_rate : (s.valuation_rate || 0)) : c.rate;
+                return { 
+                  ...c, 
+                  rate: targetRate,
+                  weight_per_unit: c.weight_per_unit || s.weight_per_unit || 0,
+                  scrap_percent: c.scrap_percent || s.scrap_percent || 0,
+                  item_group: c.item_group || s.item_group || s.material_type || ""
+                };
               }
               return c;
             });
@@ -1678,7 +1686,7 @@ const BOMFormPage = () => {
                     
                     <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
                       <button
-                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' })}
+                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '' })}
                         className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <Plus className="w-4 h-4" />
@@ -1703,7 +1711,7 @@ const BOMFormPage = () => {
                           <input 
                             type="text" 
                             className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
-                            value={componentForm.weightPerUnit ? (parseFloat(componentForm.weightPerUnit) * (1 + (parseFloat(componentForm.scrapPercent) / 100))).toFixed(3) : ''} 
+                            value={componentForm.weightPerUnit ? (parseFloat(componentForm.weightPerUnit) * (1 + parseFloat(componentForm.scrapPercent || 0))).toFixed(3) : ''} 
                             readOnly 
                             placeholder="Auto"
                           />
