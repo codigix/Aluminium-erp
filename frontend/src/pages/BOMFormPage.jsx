@@ -76,6 +76,11 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
                 <span className="text-xs  text-slate-800 font-medium">
                   {item.component_code || item.componentCode || item.material_name}
                 </span>
+                {getDimensionString(item) && (
+                  <span className="text-[10px] text-emerald-600 font-medium">
+                    {getDimensionString(item)}
+                  </span>
+                )}
                 {item.description && (
                   <span className="text-xs text-slate-400 truncate max-w-[200px]">{cleanText(item.description)}</span>
                 )}
@@ -137,8 +142,13 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
             {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
             <div className="flex flex-col">
               <span className="text-xs  text-slate-800">
-                {actualType === 'material' ? item.material_name : (item.component_code || item.componentCode)}
+                {actualType === 'material' ? (item.item_code || item.itemCode || item.material_name) : (item.component_code || item.componentCode)}
               </span>
+              {actualType === 'material' && getDimensionString(item) && (
+                <span className="text-[10px] text-emerald-600 font-medium">
+                  {getDimensionString(item)}
+                </span>
+              )}
               {item.description && (
                 <span className="text-xs text-slate-400 truncate max-w-[200px]">{cleanText(item.description)}</span>
               )}
@@ -195,6 +205,21 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
 
 const cleanText = (text) => text ? text.replace(/\s*\(.*$/, '').trim() : '';
 
+const getDimensionString = (item) => {
+  if (!item) return '';
+  const dimensions = [];
+  if (item.length && parseFloat(item.length) > 0) dimensions.push(`${parseFloat(item.length)}`);
+  if (item.width && parseFloat(item.width) > 0) dimensions.push(`${parseFloat(item.width)}`);
+  if (item.thickness && parseFloat(item.thickness) > 0) dimensions.push(`${parseFloat(item.thickness)}`);
+  if (item.diameter && parseFloat(item.diameter) > 0) dimensions.push(`Ø${parseFloat(item.diameter)}`);
+  if (item.outer_diameter && parseFloat(item.outer_diameter) > 0) dimensions.push(`OD${parseFloat(item.outer_diameter)}`);
+  
+  if (dimensions.length === 0) return '';
+  
+  const unit = (item.uom === 'Kg' || !item.uom) ? 'mm' : item.uom;
+  return `${dimensions.join(' × ')} ${unit}`;
+};
+
 const BOMFormPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -238,8 +263,8 @@ const BOMFormPage = () => {
     quantity: 1
   });
 
-  const [materialForm, setMaterialForm] = useState({ materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' });
-  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '' });
+  const [materialForm, setMaterialForm] = useState({ materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' });
+  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' });
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
@@ -341,17 +366,23 @@ const BOMFormPage = () => {
         const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code);
         const bomInfo = matchingBOMs.length > 0 ? matchingBOMs.sort((a, b) => (parseFloat(b.bom_cost) || 0) - (parseFloat(a.bom_cost) || 0))[0] : null;
         const bomCost = bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0;
+        const dims = getDimensionString(item);
 
         options.push({
           label: `${item.item_code} – ${item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
           value: item.item_code,
-          subLabel: item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
+          subLabel: `${dims ? `${dims}\n` : ''}${item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`}`,
           rate: bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0)),
           uom: item.unit || 'Kg',
           description: item.material_name,
           weightPerUnit: item.weight_per_unit || 0,
           itemGroup: item.material_type || item.item_group || "",
-          scrapPercent: item.scrap_percent || 0
+          scrapPercent: item.scrap_percent || 0,
+          length: item.length,
+          width: item.width,
+          thickness: item.thickness,
+          diameter: item.diameter,
+          outer_diameter: item.outer_diameter
         });
         seenCodes.add(item.item_code);
       }
@@ -390,17 +421,23 @@ const BOMFormPage = () => {
         })[0] : null;
 
         const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0);
+        const dims = getDimensionString(item);
 
         options.push({
           label: `${item.item_code} – ${item.description || item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
           value: item.item_code,
-          subLabel: `Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
+          subLabel: `${dims ? `${dims}\n` : ''}Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.rate || 0),
           uom: item.unit || 'Kg',
           description: item.description || item.material_name,
           weightPerUnit: item.weight_per_unit || 0,
           itemGroup: item.item_group || "",
-          scrapPercent: item.scrap_percent || 0
+          scrapPercent: item.scrap_percent || 0,
+          length: item.length,
+          width: item.width,
+          thickness: item.thickness,
+          diameter: item.diameter,
+          outer_diameter: item.outer_diameter
         });
         seenCodes.add(item.item_code);
       }
@@ -683,10 +720,19 @@ const BOMFormPage = () => {
           if (data.materials) {
             data.materials = data.materials.map(m => {
               const s = latestStockItems.find(si => si.material_name === m.material_name);
-              if (s && (!m.rate || parseFloat(m.rate) === 0)) {
+              if (s) {
                 // Prioritize Selling Rate as it's often the manual rate added during item creation
-                const targetRate = s.selling_rate > 0 ? s.selling_rate : (s.valuation_rate || 0);
-                return { ...m, rate: targetRate };
+                const targetRate = (!m.rate || parseFloat(m.rate) === 0) ? (s.selling_rate > 0 ? s.selling_rate : (s.valuation_rate || 0)) : m.rate;
+                return { 
+                  ...m, 
+                  rate: targetRate,
+                  item_code: m.item_code || s.item_code,
+                  length: s.length,
+                  width: s.width,
+                  thickness: s.thickness,
+                  diameter: s.diameter,
+                  outer_diameter: s.outer_diameter
+                };
               }
               return m;
             });
@@ -701,7 +747,12 @@ const BOMFormPage = () => {
                   rate: targetRate,
                   weight_per_unit: c.weight_per_unit || s.weight_per_unit || 0,
                   scrap_percent: c.scrap_percent || s.scrap_percent || 0,
-                  item_group: c.item_group || s.item_group || s.material_type || ""
+                  item_group: c.item_group || s.item_group || s.material_type || "",
+                  length: s.length,
+                  width: s.width,
+                  thickness: s.thickness,
+                  diameter: s.diameter,
+                  outer_diameter: s.outer_diameter
                 };
               }
               return c;
@@ -803,7 +854,7 @@ const BOMFormPage = () => {
       const token = localStorage.getItem('authToken');
       const payload = { ...formData };
       payload.parent_id = payload.parentId || null;
-      payload.itemCode = selectedItem?.item_code || productForm.itemCode;
+      payload.itemCode = formData.itemCode || selectedItem?.item_code || productForm.itemCode;
       payload.drawingNo = selectedItem?.drawing_no || productForm.drawingNo;
 
       if (section === 'materials') {
@@ -1642,7 +1693,12 @@ const BOMFormPage = () => {
                             description: item ? item.description : componentForm.description,
                             weightPerUnit: item ? (item.weight_per_unit || item.weightPerUnit || 0) : '',
                             itemGroup: item ? (item.itemGroup || item.item_group || "") : '',
-                            scrapPercent: item ? (item.scrapPercent || item.scrap_percent || 0) : '0'
+                            scrapPercent: item ? (item.scrapPercent || item.scrap_percent || 0) : '0',
+                            length: item ? item.length : '',
+                            width: item ? item.width : '',
+                            thickness: item ? item.thickness : '',
+                            diameter: item ? item.diameter : '',
+                            outer_diameter: item ? item.outer_diameter : ''
                           });
                         }}
                         subLabelField="subLabel"
@@ -1677,7 +1733,7 @@ const BOMFormPage = () => {
                     
                     <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
                       <button
-                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '' })}
+                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
                         className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <Plus className="w-4 h-4" />
@@ -1894,11 +1950,14 @@ const BOMFormPage = () => {
                             // Otherwise, it must match the product drawing
                             return itemDrawing === productDrawing;
                           })
-                          .map(item => ({
-                            label: item.material_name || '',
-                            value: item.item_code || '',
-                            subLabel: `${item.item_code || ''} ${item.drawing_no && item.drawing_no !== 'N/A' ? `[Drg: ${item.drawing_no}]` : ''}`
-                          }))
+                          .map(item => {
+                            const dims = getDimensionString(item);
+                            return {
+                              label: item.material_name || '',
+                              value: item.item_code || '',
+                              subLabel: `${dims ? `${dims}\n` : ''}${item.item_code || ''}${item.drawing_no && item.drawing_no !== 'N/A' ? ` [Drg: ${item.drawing_no}]` : ''}`
+                            };
+                          })
                           .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
                         }
                         value={stockItems.find(i => i.material_name === materialForm.materialName)?.item_code || ''}
@@ -1922,11 +1981,17 @@ const BOMFormPage = () => {
                           setMaterialForm({
                             ...materialForm,
                             materialName: item ? item.material_name : e.target.value,
+                            itemCode: item ? item.item_code : '',
                             itemGroup: autoGroup,
                             rate: item ? (bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0))) : materialForm.rate,
                             uom: item ? (item.unit || 'Kg') : materialForm.uom,
                             description: item ? item.material_name : materialForm.description,
-                            weightPerUnit: item ? (item.weight_per_unit || 0) : ''
+                            weightPerUnit: item ? (item.weight_per_unit || 0) : '',
+                            length: item ? item.length : '',
+                            width: item ? item.width : '',
+                            thickness: item ? item.thickness : '',
+                            diameter: item ? item.diameter : '',
+                            outer_diameter: item ? item.outer_diameter : ''
                           });
                         }}
                         subLabelField="subLabel"
@@ -1997,7 +2062,7 @@ const BOMFormPage = () => {
                       return (isWeightBasedGroup && isKg) ? 'md:col-span-2' : 'md:col-span-4';
                     })()}`}>
                       <button
-                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0' })}
+                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
                         className="w-full py-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         <Plus className="w-4 h-4" />

@@ -90,7 +90,7 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
                   <div className="flex flex-col">
                     <span>{opt[labelField]}</span>
                     {subLabelField && opt[subLabelField] && (
-                      <span className="text-xs text-slate-400 font-normal">{opt[subLabelField]}</span>
+                      <span className="text-xs text-slate-400 font-normal whitespace-pre-line">{opt[subLabelField]}</span>
                     )}
                   </div>
                 </div>

@@ -118,7 +118,16 @@ const getProductionPlanById = async (id) => {
     'SELECT * FROM production_plan_materials WHERE plan_id = ?',
     [id]
   );
-  plan.materials = materials;
+  plan.materials = materials.map(m => ({
+    ...m,
+    dimensions: {
+      length: m.length,
+      width: m.width,
+      thickness: m.thickness,
+      diameter: m.diameter,
+      outer_diameter: m.outer_diameter
+    }
+  }));
 
   // 5. Fetch Operations
   const [operations] = await pool.query(
@@ -248,8 +257,8 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, total_wt, is_kg_material, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, total_wt, is_kg_material, status, length, width, thickness, diameter, outer_diameter)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
@@ -264,7 +273,12 @@ const createProductionPlan = async (planData, createdBy) => {
             mat.category || mat.material_category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
             mat.total_wt || 0,
             mat.is_kg_material ? 1 : 0,
-            mat.status || '--'
+            mat.status || '--',
+            mat.dimensions?.length || mat.length || 0,
+            mat.dimensions?.width || mat.width || 0,
+            mat.dimensions?.thickness || mat.thickness || 0,
+            mat.dimensions?.diameter || mat.diameter || 0,
+            mat.dimensions?.outer_diameter || mat.outer_diameter || 0
           ]
         );
       }
@@ -409,8 +423,8 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, total_wt, is_kg_material, source_assembly, material_category, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, total_wt, is_kg_material, source_assembly, material_category, status, length, width, thickness, diameter, outer_diameter)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
@@ -425,7 +439,12 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
             mat.is_kg_material ? 1 : 0,
             mat.sourceAssembly || mat.source_assembly || null,
             mat.materialCategory || mat.material_category || mat.category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
-            mat.status || '--'
+            mat.status || '--',
+            mat.dimensions?.length || mat.length || 0,
+            mat.dimensions?.width || mat.width || 0,
+            mat.dimensions?.thickness || mat.thickness || 0,
+            mat.dimensions?.diameter || mat.diameter || 0,
+            mat.dimensions?.outer_diameter || mat.outer_diameter || 0
           ]
         );
       }
@@ -989,6 +1008,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           outer_diameter: s.outer_diameter,
           density: s.density
         };
+        item.weight_per_unit = s.weight_per_unit;
         // Ensure unit/uom is consistent
         if (!item.uom && !item.unit) {
           item.uom = s.unit || 'Nos';
@@ -1086,7 +1106,11 @@ const getMaterialRequestItemsForPlan = async (planId) => {
            COALESCE(actual_sb.current_balance, 0) as current_balance,
            COALESCE(issued.issued_qty, 0) as issued_qty,
            COALESCE(mr_data.status_rank, 0) as status_rank,
-           actual_sb.length, actual_sb.width, actual_sb.thickness, actual_sb.diameter, actual_sb.outer_diameter
+           COALESCE(NULLIF(ppm.length, 0), actual_sb.length, 0) as length, 
+           COALESCE(NULLIF(ppm.width, 0), actual_sb.width, 0) as width, 
+           COALESCE(NULLIF(ppm.thickness, 0), actual_sb.thickness, 0) as thickness, 
+           COALESCE(NULLIF(ppm.diameter, 0), actual_sb.diameter, 0) as diameter, 
+           COALESCE(NULLIF(ppm.outer_diameter, 0), actual_sb.outer_diameter, 0) as outer_diameter
     FROM production_plan_materials ppm
     LEFT JOIN (
         SELECT 

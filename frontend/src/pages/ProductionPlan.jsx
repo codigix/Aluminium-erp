@@ -201,19 +201,20 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const renderDimensions = (dims) => {
     if (!dims) return null;
     const parts = [];
-    if (dims.diameter > 0) parts.push(`D:${Number(dims.diameter).toFixed(1)}mm`);
-    if (dims.outer_diameter > 0) parts.push(`OD:${Number(dims.outer_diameter).toFixed(1)}mm`);
-    if (dims.thickness > 0) parts.push(`T:${Number(dims.thickness).toFixed(1)}mm`);
-    if (dims.width > 0) parts.push(`W:${Number(dims.width).toFixed(1)}mm`);
-    if (dims.length > 0) parts.push(`L:${Number(dims.length).toFixed(1)}mm`);
+    if (parseFloat(dims.diameter) > 0) parts.push(`Ø${Number(dims.diameter).toFixed(1)}mm`);
+    if (parseFloat(dims.outer_diameter) > 0) parts.push(`OD:Ø${Number(dims.outer_diameter).toFixed(1)}mm`);
+    if (parseFloat(dims.thickness) > 0) parts.push(`T:${Number(dims.thickness).toFixed(1)}mm`);
+    if (parseFloat(dims.width) > 0) parts.push(`${Number(dims.width).toFixed(1)}mm`);
+    if (parseFloat(dims.length) > 0) parts.push(`${Number(dims.length).toFixed(1)}mm`);
     
     if (parts.length === 0) return null;
     return (
-      <div className="flex flex-wrap gap-1 mt-0.5">
+      <div className="flex flex-wrap items-center gap-1 mt-0.5 text-[10px] text-slate-500 font-medium">
         {parts.map((p, i) => (
-          <span key={i} className="text-[10px] bg-slate-50 text-slate-500 px-1 rounded border border-slate-100 font-medium">
-            {p}
-          </span>
+          <React.Fragment key={i}>
+            <span>{p}</span>
+            {i < parts.length - 1 && <span className="text-slate-300">×</span>}
+          </React.Fragment>
         ))}
       </div>
     );
@@ -818,7 +819,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     } else {
       newPlan.items.forEach(item => {
         (item.components || []).forEach(comp => {
-          const baseQty = parseFloat(comp.quantity || 0);
+          const uom = (comp.unit || comp.uom || '').toUpperCase();
+          const isKg = uom === 'KG';
+          const weight = parseFloat(comp.weight_per_unit || 0);
+          const weightMultiplier = (isKg && weight > 0) ? weight : 1;
+          
+          const baseQty = parseFloat(comp.quantity || 0) * weightMultiplier;
           const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
           const totalQty = baseQty * itemPlannedQty;
           const itemCode = comp.item_code || comp.component_code;
@@ -841,7 +847,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               parentPlannedQty: itemPlannedQty,
               requiredQty: totalQty,
               required_qty: totalQty,
-              source_fg: item.itemCode
+              source_fg: item.itemCode,
+              is_kg_material: isKg,
+              total_wt: weight
             });
           }
         });
@@ -858,22 +866,29 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     const componentsAsMaterials = rawComponents.filter(c => {
       const code = (c.itemCode || c.item_code || '').toUpperCase();
       return code.startsWith('CON-');
-    }).map(c => ({
-      material_name: c.description || c.item_name || 'Consumable',
-      description: c.description || 'Consumable item from BOM',
-      required_qty: isViewing ? (c.required_qty || c.plannedQty) : c.plannedQty,
-      design_qty: isViewing ? (c.design_qty || c.designQty) : c.designQty,
-      uom: c.unit || c.uom || 'Nos',
-      warehouse: c.targetWarehouse || c.warehouse || 'Store - NC',
-      material_category: 'EXPLODED',
-      bom_ref: c.bomNo || c.bom_no || '-',
-      item_code: c.itemCode || c.item_code,
-      totalDesignQty: c.designQty || 0,
-      totalPlannedQty: c.plannedQty || 0,
-      bom_no: c.bomNo || '-',
-      source_fg: c.source_fg || '-',
-      dimensions: c.dimensions || null
-    }));
+    }).map(c => {
+      const uom = (c.unit || c.uom || '').toUpperCase();
+      const isKg = uom === 'KG' || c.is_kg_material;
+      
+      return {
+        material_name: c.description || c.item_name || 'Consumable',
+        description: c.description || 'Consumable item from BOM',
+        required_qty: isViewing ? (c.required_qty || c.plannedQty) : c.plannedQty,
+        design_qty: isViewing ? (c.design_qty || c.designQty) : c.designQty,
+        uom: c.unit || c.uom || 'Nos',
+        warehouse: c.targetWarehouse || c.warehouse || 'Store - NC',
+        material_category: 'EXPLODED',
+        bom_ref: c.bomNo || c.bom_no || '-',
+        item_code: c.itemCode || c.item_code,
+        totalDesignQty: c.designQty || 0,
+        totalPlannedQty: isViewing ? (c.required_qty || c.plannedQty) : c.plannedQty,
+        bom_no: c.bomNo || '-',
+        source_fg: c.source_fg || '-',
+        dimensions: c.dimensions || null,
+        is_kg_material: isKg,
+        total_wt: c.total_wt || c.weight_per_unit || 0
+      };
+    });
 
     // 4. Combine into final Material list
     let materialsToDisplay = isViewing ? (newPlan.materials || []) : allMaterials;
@@ -1342,16 +1357,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         <td className="p-2 ">
                           <div className=" text-slate-800 text-xs font-medium">{mat.material_name}</div>
                           <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-                            {mat.dimensions ? (
-                              <>
-                                {mat.dimensions.length > 0 && <span>L: {mat.dimensions.length}</span>}
-                                {mat.dimensions.width > 0 && <span>W: {mat.dimensions.width}</span>}
-                                {mat.dimensions.thickness > 0 && <span>T: {mat.dimensions.thickness}</span>}
-                                {mat.dimensions.diameter > 0 && <span>Dia: {mat.dimensions.diameter}</span>}
-                                {mat.dimensions.outer_diameter > 0 && <span>OD: {mat.dimensions.outer_diameter}</span>}
-                              </>
-                            ) : (
-                              <span>{mat.description || 'Direct Material'}</span>
+                            {renderDimensions(mat.dimensions) || (
+                              <span>{mat.description || mat.item_code || mat.itemCode || 'Direct Material'}</span>
                             )}
                           </div>
                         </td>
@@ -2139,7 +2146,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       </div>
                     </td>
                     <td className="py-4 text-center">
-                      <div className="text-xs  text-slate-800">{Number(item.inventory || 0).toFixed(2)}</div>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs  text-slate-800">{Number(item.inventory || 0).toFixed(2)}</span>
+                        <span className="text-xs text-slate-400">{item.uom}</span>
+                      </div>
                     </td>
                     <td className="py-4 text-right">
                       {item.is_fulfilled || item.inventory >= item.quantity ? (
