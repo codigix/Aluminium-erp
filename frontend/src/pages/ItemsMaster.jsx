@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, StatusBadge, DataTable, SearchableSelect } from '../components/ui.jsx';
-import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy } from 'lucide-react';
+import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTriangle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
 
@@ -630,6 +630,38 @@ const ItemsMaster = () => {
           return `${weight.toFixed(3)} ${row.weight_uom || 'Kg'}`;
         }
         return `1 ${val || 'Nos'}`;
+      }
+    },
+    { 
+      label: 'Stock', 
+      key: 'current_balance', 
+      sortable: true,
+      render: (val, row) => {
+        const balance = parseFloat(row.current_balance || 0);
+        const isLow = balance <= 0;
+        const uom = row.unit || 'Nos';
+        
+        return (
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isLow ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+              <div className="flex items-center gap-1.5">
+                <span className={`text-sm font-semibold ${isLow ? 'text-amber-700' : 'text-slate-700'}`}>
+                  {balance.toLocaleString('en-IN', { minimumFractionDigits: row.weight_per_unit > 0 ? 3 : 2 })}
+                </span>
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-medium uppercase tracking-wider">
+                  {uom}
+                </span>
+              </div>
+            </div>
+            {isLow && (
+              <div className="flex items-center gap-1 text-[9px] text-amber-600 font-bold mt-0.5 ml-3.5">
+                <AlertTriangle size={10} />
+                <span>LOW STOCK</span>
+              </div>
+            )}
+          </div>
+        );
       }
     },
     { 
