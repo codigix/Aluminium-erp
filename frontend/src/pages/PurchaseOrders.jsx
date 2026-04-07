@@ -168,8 +168,16 @@ const PurchaseOrders = () => {
       const selectedItem = stockItems.find(i => String(i.item_code) === String(value));
       if (selectedItem) {
         newItems[index].description = selectedItem.item_description || selectedItem.material_name || selectedItem.description;
+        newItems[index].material_name = selectedItem.material_name;
         newItems[index].unit = selectedItem.unit || 'NOS';
         newItems[index].rate = selectedItem.valuation_rate || 0;
+        newItems[index].length = selectedItem.length || 0;
+        newItems[index].width = selectedItem.width || 0;
+        newItems[index].thickness = selectedItem.thickness || 0;
+        newItems[index].diameter = selectedItem.diameter || 0;
+        newItems[index].outer_diameter = selectedItem.outer_diameter || 0;
+        newItems[index].density = selectedItem.density || 0;
+        newItems[index].weight_per_unit = selectedItem.weight_per_unit || 0;
       }
     }
 
@@ -207,10 +215,18 @@ const PurchaseOrders = () => {
           id: item.id || undefined,
           item_code: item.item_code,
           description: item.description,
+          material_name: item.material_name,
           quantity: parseFloat(item.quantity) || 0,
           unit: item.unit || 'NOS',
           rate: parseFloat(item.rate) || 0,
-          amount: parseFloat(item.amount) || 0
+          amount: parseFloat(item.amount) || 0,
+          length: item.length || 0,
+          width: item.width || 0,
+          thickness: item.thickness || 0,
+          diameter: item.diameter || 0,
+          outer_diameter: item.outer_diameter || 0,
+          density: item.density || 0,
+          weight_per_unit: item.weight_per_unit || 0
         }))
       };
 
@@ -1174,7 +1190,7 @@ const PurchaseOrders = () => {
                             <select
                               value={item.item_code}
                               onChange={(e) => handleManualItemChange(idx, 'item_code', e.target.value)}
-                              className="w-full px-4 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                              className="w-full px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                             >
                               <option value="">Select Item</option>
                               {stockItems.map(si => (
@@ -1183,6 +1199,15 @@ const PurchaseOrders = () => {
                                 </option>
                               ))}
                             </select>
+                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 px-1">
+                                {item.length > 0 && <span className="text-[10px] text-slate-400">L: {item.length}</span>}
+                                {item.width > 0 && <span className="text-[10px] text-slate-400">W: {item.width}</span>}
+                                {item.thickness > 0 && <span className="text-[10px] text-slate-400">T: {item.thickness}</span>}
+                                {item.diameter > 0 && <span className="text-[10px] text-slate-400">Dia: {item.diameter}</span>}
+                                {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400">OD: {item.outer_diameter}</span>}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 p-2">
                             <input

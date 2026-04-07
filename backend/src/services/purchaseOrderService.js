@@ -180,7 +180,14 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
           cgst_amount: parseFloat(item.cgst_amount) || 0,
           sgst_percent: parseFloat(item.sgst_percent) || 9,
           sgst_amount: parseFloat(item.sgst_amount) || 0,
-          total_amount: parseFloat(item.total_amount) || 0
+          total_amount: parseFloat(item.total_amount) || 0,
+          length: item.length || 0,
+          width: item.width || 0,
+          thickness: item.thickness || 0,
+          diameter: item.diameter || 0,
+          outer_diameter: item.outer_diameter || 0,
+          density: item.density || 0,
+          weight_per_unit: item.weight_per_unit || 0
         };
       });
     } else if (actualMrId) {
@@ -201,6 +208,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
 
       const [mrItems] = await connection.query(`
         SELECT mri.*, sb.valuation_rate,
+               sb.length, sb.width, sb.thickness, sb.diameter, sb.outer_diameter, sb.density, sb.weight_per_unit,
                COALESCE(
                  (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = mri.item_code OR soi.drawing_no = mri.item_code) AND soi.bom_cost > 0),
                  (SELECT MAX(rate) FROM production_plan_materials ppm WHERE ppm.plan_id = ? AND ppm.item_code = mri.item_code AND ppm.rate > 0),
@@ -242,7 +250,14 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
           cgst_amount: cgstAmount,
           sgst_percent: sgstPercent,
           sgst_amount: sgstAmount,
-          total_amount: totalItemAmount
+          total_amount: totalItemAmount,
+          length: item.length || 0,
+          width: item.width || 0,
+          thickness: item.thickness || 0,
+          diameter: item.diameter || 0,
+          outer_diameter: item.outer_diameter || 0,
+          density: item.density || 0,
+          weight_per_unit: item.weight_per_unit || 0
         };
       });
       
@@ -273,7 +288,14 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
           cgst_amount: cgstAmount,
           sgst_percent: sgstPercent,
           sgst_amount: sgstAmount,
-          total_amount: totalItemAmount
+          total_amount: totalItemAmount,
+          length: item.length || 0,
+          width: item.width || 0,
+          thickness: item.thickness || 0,
+          diameter: item.diameter || 0,
+          outer_diameter: item.outer_diameter || 0,
+          density: item.density || 0,
+          weight_per_unit: item.weight_per_unit || 0
         };
       });
       total_amount = items.reduce((sum, item) => Number(sum) + (Number(item.total_amount) || 0), 0);
@@ -337,9 +359,10 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
           `INSERT INTO purchase_order_items (
             purchase_order_id, item_code, description, design_qty, quantity, unit, unit_rate, amount,
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            material_name, material_type, drawing_no, drawing_id
+            material_name, material_type, drawing_no, drawing_id,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             poId,
             correctedItemCode,
@@ -357,7 +380,14 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
             item.material_name || null,
             item.material_type || null,
             item.drawing_no || correctedItemCode,
-            item.drawing_id || null
+            item.drawing_id || null,
+            item.length || 0,
+            item.width || 0,
+            item.thickness || 0,
+            item.diameter || 0,
+            item.outer_diameter || 0,
+            item.density || 0,
+            item.weight_per_unit || 0
           ]
         );
       }
@@ -500,12 +530,32 @@ const getPurchaseOrderById = async (poId) => {
       poi.material_type,
       poi.drawing_no,
       poi.accepted_quantity,
+      COALESCE(NULLIF(poi.length, 0), sb.length, 0) as length,
+      COALESCE(NULLIF(poi.width, 0), sb.width, 0) as width,
+      COALESCE(NULLIF(poi.thickness, 0), sb.thickness, 0) as thickness,
+      COALESCE(NULLIF(poi.diameter, 0), sb.diameter, 0) as diameter,
+      COALESCE(NULLIF(poi.outer_diameter, 0), sb.outer_diameter, 0) as outer_diameter,
+      COALESCE(NULLIF(poi.density, 0), sb.density, 0) as density,
+      COALESCE(NULLIF(poi.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit,
       (SELECT status FROM sales_order_items soi 
        WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
        AND soi.sales_order_id = ? 
        LIMIT 1) as sales_order_item_status
      FROM purchase_order_items poi
-     LEFT JOIN (SELECT item_code, MAX(material_name) as material_name FROM stock_balance GROUP BY item_code) sb ON poi.item_code = sb.item_code
+     LEFT JOIN (
+       SELECT 
+         item_code, 
+         MAX(material_name) as material_name,
+         MAX(length) as length,
+         MAX(width) as width,
+         MAX(thickness) as thickness,
+         MAX(diameter) as diameter,
+         MAX(outer_diameter) as outer_diameter,
+         MAX(density) as density,
+         MAX(weight_per_unit) as weight_per_unit
+       FROM stock_balance 
+       GROUP BY item_code
+     ) sb ON poi.item_code = sb.item_code
      WHERE poi.purchase_order_id = ?`,
     [po.sales_order_id, poId]
   );
@@ -603,16 +653,25 @@ const updatePurchaseOrder = async (poId, payload) => {
         if (item.id) {
           await connection.execute(
             `UPDATE purchase_order_items 
-             SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, description = ?, item_code = ?, unit = ?
+             SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, description = ?, item_code = ?, unit = ?,
+                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?
              WHERE id = ? AND purchase_order_id = ?`,
-            [rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, item.description, item.item_code, item.unit, item.id, poId]
+            [
+              rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, item.description, item.item_code, item.unit,
+              item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
+              item.id, poId
+            ]
           );
         } else {
           await connection.execute(
             `INSERT INTO purchase_order_items 
-             (purchase_order_id, item_code, description, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [poId, item.item_code, item.description, qty, designQty, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount]
+             (purchase_order_id, item_code, description, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
+              length, width, thickness, diameter, outer_diameter, density, weight_per_unit)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              poId, item.item_code, item.description, qty, designQty, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
+              item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0
+            ]
           );
         }
       }
@@ -677,6 +736,13 @@ const getPOMaterialRequests = async (filters = {}) => {
       poi.quantity as po_qty,
       poi.unit,
       poi.accepted_quantity,
+      COALESCE(NULLIF(poi.length, 0), sb.length, 0) as length,
+      COALESCE(NULLIF(poi.width, 0), sb.width, 0) as width,
+      COALESCE(NULLIF(poi.thickness, 0), sb.thickness, 0) as thickness,
+      COALESCE(NULLIF(poi.diameter, 0), sb.diameter, 0) as diameter,
+      COALESCE(NULLIF(poi.outer_diameter, 0), sb.outer_diameter, 0) as outer_diameter,
+      COALESCE(NULLIF(poi.density, 0), sb.density, 0) as density,
+      COALESCE(NULLIF(poi.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit,
       (poi.quantity - IFNULL((
         SELECT SUM(pri.received_quantity)
         FROM po_receipt_items pri
@@ -691,6 +757,19 @@ const getPOMaterialRequests = async (filters = {}) => {
     FROM purchase_orders po
     JOIN vendors v ON v.id = po.vendor_id
     JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
+    LEFT JOIN (
+      SELECT 
+        item_code, 
+        MAX(length) as length,
+        MAX(width) as width,
+        MAX(thickness) as thickness,
+        MAX(diameter) as diameter,
+        MAX(outer_diameter) as outer_diameter,
+        MAX(density) as density,
+        MAX(weight_per_unit) as weight_per_unit
+      FROM stock_balance 
+      GROUP BY item_code
+    ) sb ON poi.item_code = sb.item_code
     WHERE 1=1
     AND UPPER(poi.material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
   `;

@@ -209,7 +209,15 @@ const ensurePurchaseOrderItemColumns = async () => {
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
-      { name: 'drawing_id', definition: 'INT NULL' }
+      { name: 'drawing_id', definition: 'INT NULL' },
+      { name: 'uom', definition: 'VARCHAR(20) NULL' },
+      { name: 'length', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'width', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'thickness', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'outer_diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'density', definition: 'DECIMAL(12, 6) DEFAULT 0' },
+      { name: 'weight_per_unit', definition: 'DECIMAL(12, 6) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -268,7 +276,15 @@ const ensureQuotationItemColumns = async () => {
       { name: 'cgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'sgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
       { name: 'sgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
-      { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' }
+      { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'uom', definition: 'VARCHAR(20) NULL' },
+      { name: 'length', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'width', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'thickness', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'outer_diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'density', definition: 'DECIMAL(12, 6) DEFAULT 0' },
+      { name: 'weight_per_unit', definition: 'DECIMAL(12, 6) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -303,9 +319,26 @@ const ensurePoReceiptItemTable = async () => {
         receipt_id INT NOT NULL,
         po_item_id INT NOT NULL,
         received_quantity DECIMAL(12, 3) DEFAULT 0,
+        length DECIMAL(12, 4) DEFAULT 0,
+        width DECIMAL(12, 4) DEFAULT 0,
+        thickness DECIMAL(12, 4) DEFAULT 0,
+        diameter DECIMAL(12, 4) DEFAULT 0,
+        outer_diameter DECIMAL(12, 4) DEFAULT 0,
+        density DECIMAL(12, 4) DEFAULT 0,
+        weight_per_unit DECIMAL(12, 4) DEFAULT 0,
         FOREIGN KEY (receipt_id) REFERENCES po_receipts(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure dimension columns exist in po_receipt_items
+    const [cols] = await connection.query("SHOW COLUMNS FROM po_receipt_items");
+    const existing = new Set(cols.map(c => c.Field));
+    const dims = ['length', 'width', 'thickness', 'diameter', 'outer_diameter', 'density', 'weight_per_unit'];
+    for (const dim of dims) {
+      if (!existing.has(dim)) {
+        await connection.query(`ALTER TABLE po_receipt_items ADD COLUMN ${dim} DECIMAL(12, 4) DEFAULT 0`);
+      }
+    }
     console.log('PO Receipt items table synchronized');
   } catch (error) {
     console.error('PO Receipt items table sync failed', error.message);
@@ -389,7 +422,14 @@ const ensurePoMaterialRequestColumns = async () => {
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
-      { name: 'drawing_id', definition: 'INT NULL' }
+      { name: 'drawing_id', definition: 'INT NULL' },
+      { name: 'length', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'width', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'thickness', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'outer_diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'density', definition: 'DECIMAL(12, 6) DEFAULT 0' },
+      { name: 'weight_per_unit', definition: 'DECIMAL(12, 6) DEFAULT 0' }
     ];
 
     const missingItemCols = requiredItemCols.filter(c => !existingItemCols.has(c.name));
@@ -1388,6 +1428,8 @@ const ensureProductionPlanTables = async () => {
         uom VARCHAR(20),
         warehouse VARCHAR(100),
         bom_ref VARCHAR(100),
+        total_wt DECIMAL(12, 3),
+        is_kg_material BOOLEAN DEFAULT 0,
         source_assembly VARCHAR(120),
         material_category ENUM('CORE', 'EXPLODED') NOT NULL,
         status VARCHAR(50),
@@ -1404,6 +1446,12 @@ const ensureProductionPlanTables = async () => {
     }
     if (!existingPpmCols.has('rate')) {
       await connection.query('ALTER TABLE production_plan_materials ADD COLUMN rate DECIMAL(12, 2) DEFAULT 0 AFTER required_qty');
+    }
+    if (!existingPpmCols.has('total_wt')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN total_wt DECIMAL(12, 3) AFTER bom_ref');
+    }
+    if (!existingPpmCols.has('is_kg_material')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN is_kg_material BOOLEAN DEFAULT 0 AFTER total_wt');
     }
 
     // Create production_plan_operations table
@@ -2027,6 +2075,14 @@ const ensureGrnItemsTable = async () => {
         status VARCHAR(50) DEFAULT 'RECEIVED',
         remarks TEXT,
         is_approved TINYINT(1) DEFAULT 0,
+        uom VARCHAR(20) NULL,
+        length DECIMAL(12, 4) DEFAULT 0,
+        width DECIMAL(12, 4) DEFAULT 0,
+        thickness DECIMAL(12, 4) DEFAULT 0,
+        diameter DECIMAL(12, 4) DEFAULT 0,
+        outer_diameter DECIMAL(12, 4) DEFAULT 0,
+        density DECIMAL(12, 6) DEFAULT 0,
+        weight_per_unit DECIMAL(12, 6) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE CASCADE
@@ -2040,7 +2096,15 @@ const ensureGrnItemsTable = async () => {
       { name: 'shortage_qty', def: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'overage_qty', def: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'rejected_qty', def: 'DECIMAL(12, 3) DEFAULT 0' },
-      { name: 'is_approved', def: 'TINYINT(1) DEFAULT 0' }
+      { name: 'is_approved', def: 'TINYINT(1) DEFAULT 0' },
+      { name: 'uom', def: 'VARCHAR(20) NULL' },
+      { name: 'length', def: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'width', def: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'thickness', def: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'diameter', def: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'outer_diameter', def: 'DECIMAL(12, 4) DEFAULT 0' },
+      { name: 'density', def: 'DECIMAL(12, 6) DEFAULT 0' },
+      { name: 'weight_per_unit', def: 'DECIMAL(12, 6) DEFAULT 0' }
     ];
     
     for (const col of required) {
@@ -2228,6 +2292,68 @@ const ensureItemGroupsTable = async () => {
   }
 };
 
+const ensureProcurementRfqTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS procurement_rfqs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        rfq_number VARCHAR(50) UNIQUE NOT NULL,
+        mr_id INT,
+        requested_by INT,
+        status ENUM('DRAFT', 'SENT', 'RECEIVED', 'CLOSED') DEFAULT 'DRAFT',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (mr_id) REFERENCES material_requests(id) ON DELETE SET NULL,
+        FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS procurement_rfq_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        rfq_id INT,
+        item_code VARCHAR(50),
+        description TEXT,
+        material_name VARCHAR(255),
+        material_type VARCHAR(100),
+        drawing_no VARCHAR(100),
+        quantity DECIMAL(14,2),
+        uom VARCHAR(20),
+        length DECIMAL(12, 4) DEFAULT 0,
+        width DECIMAL(12, 4) DEFAULT 0,
+        thickness DECIMAL(12, 4) DEFAULT 0,
+        diameter DECIMAL(12, 4) DEFAULT 0,
+        outer_diameter DECIMAL(12, 4) DEFAULT 0,
+        density DECIMAL(12, 4) DEFAULT 0,
+        weight_per_unit DECIMAL(12, 4) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rfq_id) REFERENCES procurement_rfqs(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Ensure dimension columns exist in procurement_rfq_items
+    const [cols] = await connection.query("SHOW COLUMNS FROM procurement_rfq_items");
+    const existing = new Set(cols.map(c => c.Field));
+    const dims = [
+      'length', 'width', 'thickness', 'diameter', 'outer_diameter', 'density', 'weight_per_unit'
+    ];
+    for (const dim of dims) {
+      if (!existing.has(dim)) {
+        await connection.query(`ALTER TABLE procurement_rfq_items ADD COLUMN ${dim} DECIMAL(12, 4) DEFAULT 0`);
+      }
+    }
+
+    console.log('Procurement RFQ tables synchronized');
+  } catch (error) {
+    console.error('Procurement RFQ tables sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureSchema();
@@ -2270,6 +2396,7 @@ const bootstrapDatabase = async () => {
   await ensureJobCardColumns();
   await ensureMaterialRequestTables();
   await ensureMaterialRequestColumns();
+  await ensureProcurementRfqTables();
   await ensureQuotationCommunicationTable();
   await ensureOrdersTable();
   await ensureDeliveryChallansTable();

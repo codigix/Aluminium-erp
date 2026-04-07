@@ -47,14 +47,22 @@ const materialRequestController = {
         SELECT mri.*, 
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
-               COALESCE(mri.item_type, sb.material_type) as material_type
+               COALESCE(mri.item_type, sb.material_type) as material_type,
+               sb.length, sb.width, sb.thickness, sb.diameter, sb.outer_diameter, sb.density, sb.weight_per_unit
         FROM material_request_items mri
         LEFT JOIN (
           SELECT item_code, 
                  MAX(material_name) as material_name, 
                  MAX(item_description) as item_description, 
                  MAX(unit) as unit,
-                 MAX(material_type) as material_type
+                 MAX(material_type) as material_type,
+                 MAX(length) as length,
+                 MAX(width) as width,
+                 MAX(thickness) as thickness,
+                 MAX(diameter) as diameter,
+                 MAX(outer_diameter) as outer_diameter,
+                 MAX(density) as density,
+                 MAX(weight_per_unit) as weight_per_unit
           FROM stock_balance 
           GROUP BY item_code
         ) sb ON mri.item_code = sb.item_code

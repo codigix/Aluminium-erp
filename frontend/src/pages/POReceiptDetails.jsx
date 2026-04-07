@@ -193,8 +193,24 @@ const POReceiptDetails = () => {
                     <tbody>
                       {poItems.map((item, idx) => (
                         <tr key={idx} className="border-t border-slate-100">
-                          <td className="p-2  text-slate-600">{item.description || '—'}</td>
-                          <td className="p-2  text-center  text-slate-900">{item.quantity}</td>
+                          <td className="p-2  text-slate-600">
+                            <div>{item.material_name || item.description || '—'}</div>
+                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
+                              <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
+                                {item.length > 0 && <span className="text-[10px] text-slate-400">L: {item.length}</span>}
+                                {item.width > 0 && <span className="text-[10px] text-slate-400">W: {item.width}</span>}
+                                {item.thickness > 0 && <span className="text-[10px] text-slate-400">T: {item.thickness}</span>}
+                                {item.diameter > 0 && <span className="text-[10px] text-slate-400">Dia: {item.diameter}</span>}
+                                {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400">OD: {item.outer_diameter}</span>}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-2  text-center  text-slate-900">
+                            <div className="flex flex-col items-center">
+                              <span>{item.quantity}</span>
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || item.uom || 'NOS'}</span>
+                            </div>
+                          </td>
                           <td className="p-2  text-right text-slate-600">₹{parseFloat(item.unit_rate || 0).toLocaleString('en-IN')}</td>
                           <td className="p-2  text-right  text-emerald-600">₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
                         </tr>

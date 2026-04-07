@@ -248,13 +248,13 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, total_wt, is_kg_material, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
             mat.materialName || mat.material_name || mat.item || null,
-            mat.designQty || finalTargetQty || 0,
+            mat.designQty || mat.design_qty || finalTargetQty || 0,
             mat.requiredQty || mat.required_qty || 0,
             mat.rate || 0,
             mat.uom || mat.unit || 'Nos',
@@ -262,6 +262,8 @@ const createProductionPlan = async (planData, createdBy) => {
             mat.bomRef || mat.bom_ref || null,
             mat.sourceAssembly || mat.source_assembly || null,
             mat.category || mat.material_category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
+            mat.total_wt || 0,
+            mat.is_kg_material ? 1 : 0,
             mat.status || '--'
           ]
         );
@@ -407,18 +409,20 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, total_wt, is_kg_material, source_assembly, material_category, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
             mat.materialName || mat.material_name || mat.item || null,
-            mat.designQty || finalTargetQty || 0,
+            mat.designQty || mat.design_qty || finalTargetQty || 0,
             mat.requiredQty || mat.required_qty || 0,
             mat.rate || 0,
             mat.uom || mat.unit || 'Nos',
             mat.warehouse || null,
             mat.bomRef || mat.bom_ref || null,
+            mat.total_wt || 0,
+            mat.is_kg_material ? 1 : 0,
             mat.sourceAssembly || mat.source_assembly || null,
             mat.materialCategory || mat.material_category || mat.category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
             mat.status || '--'
@@ -812,9 +816,19 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
       const source_assembly = depth === 0 ? null : itemCode;
       
+      const weight = (m.weight_per_unit && parseFloat(m.weight_per_unit) > 0) ? parseFloat(m.weight_per_unit) : 0;
+      const scrapFactor = (m.scrap_percent && parseFloat(m.scrap_percent) > 0) ? (1 + parseFloat(m.scrap_percent) / 100) : 1;
+      const total_wt = weight * scrapFactor;
+
+      const itemGroup = (m.item_group || '').toUpperCase().replace(/_/g, ' ');
+      const uom = (m.uom || '').toUpperCase();
+      const isKgMaterial = (itemGroup.includes('RAW MATERIAL') || itemGroup.includes('CONSUMABLE')) && uom === 'KG';
+      
+      const baseQtyPerFG = isKgMaterial ? ((parseFloat(m.qty_per_pc) || 1) * total_wt) : (parseFloat(m.qty_per_pc) || 1);
+      
       const mKey = `${m.material_name}-${m.material_code || ''}`;
       const existing = materialMap.get(mKey);
-      const reqQty = (m.qty_per_pc || 0) * qtyMultiplier;
+      const reqQty = baseQtyPerFG * qtyMultiplier;
 
       if (existing) {
         existing.required_qty += reqQty;
@@ -831,7 +845,9 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           totalRequiredQty: reqQty,
           source_assembly,
           rate: m.rate || 0,
-          bom_ref: m.bom_no || drawingNo || 'BOM-REF'
+          bom_ref: m.bom_no || drawingNo || 'BOM-REF',
+          total_wt: total_wt,
+          is_kg_material: isKgMaterial
         });
       }
     });
@@ -912,13 +928,27 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     }
 
     return {
-      materials: materials.map(m => ({
-        ...m,
-        item_code: m.material_code || m.item_code || m.itemCode || null,
-        material_name: m.material_name || m.name || null,
-        qty_per_pc: m.qty_per_pc || 0,
-        required_qty: (m.qty_per_pc || 0) * qtyMultiplier
-      })),
+      materials: materials.map(m => {
+        const weight = (m.weight_per_unit && parseFloat(m.weight_per_unit) > 0) ? parseFloat(m.weight_per_unit) : 0;
+        const scrapFactor = (m.scrap_percent && parseFloat(m.scrap_percent) > 0) ? (1 + parseFloat(m.scrap_percent) / 100) : 1;
+        const total_wt = weight * scrapFactor;
+
+        const itemGroup = (m.item_group || '').toUpperCase().replace(/_/g, ' ');
+        const uom = (m.uom || '').toUpperCase();
+        const isKgMaterial = (itemGroup.includes('RAW MATERIAL') || itemGroup.includes('CONSUMABLE')) && uom === 'KG';
+        
+        const baseQtyPerFG = isKgMaterial ? ((parseFloat(m.qty_per_pc) || 1) * total_wt) : (parseFloat(m.qty_per_pc) || 1);
+
+        return {
+          ...m,
+          item_code: m.material_code || m.item_code || m.itemCode || null,
+          material_name: m.material_name || m.name || null,
+          qty_per_pc: m.qty_per_pc || 0,
+          required_qty: baseQtyPerFG * qtyMultiplier,
+          total_wt: total_wt,
+          is_kg_material: isKgMaterial
+        };
+      }),
       operations: (operationMap.get(currentIdentity) || []),
       components: componentResults
     };

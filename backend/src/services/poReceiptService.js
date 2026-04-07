@@ -53,7 +53,14 @@ const getPOReceiptById = async (receiptId) => {
   const [items] = await pool.query(
     `SELECT pri.*, poi.item_code, poi.description, poi.material_name, poi.material_type, poi.unit, 
             poi.design_qty, poi.quantity as expected_quantity,
-            poi.unit_rate, poi.cgst_amount, poi.sgst_amount, poi.total_amount as po_item_total
+            poi.unit_rate, poi.cgst_amount, poi.sgst_amount, poi.total_amount as po_item_total,
+            COALESCE(NULLIF(pri.length, 0), poi.length, 0) as length,
+            COALESCE(NULLIF(pri.width, 0), poi.width, 0) as width,
+            COALESCE(NULLIF(pri.thickness, 0), poi.thickness, 0) as thickness,
+            COALESCE(NULLIF(pri.diameter, 0), poi.diameter, 0) as diameter,
+            COALESCE(NULLIF(pri.outer_diameter, 0), poi.outer_diameter, 0) as outer_diameter,
+            COALESCE(NULLIF(pri.density, 0), poi.density, 0) as density,
+            COALESCE(NULLIF(pri.weight_per_unit, 0), poi.weight_per_unit, 0) as weight_per_unit
      FROM po_receipt_items pri
      LEFT JOIN purchase_order_items poi ON poi.id = pri.po_item_id
      WHERE pri.receipt_id = ?`,
@@ -127,9 +134,23 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       for (const item of filteredItems) {
         const receivedQty = item.received_qty || item.receivedQty || 0;
         await connection.execute(
-          `INSERT INTO po_receipt_items (receipt_id, po_item_id, received_quantity)
-           VALUES (?, ?, ?)`,
-          [receiptId, item.id, receivedQty]
+          `INSERT INTO po_receipt_items (
+            receipt_id, po_item_id, received_quantity, 
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
+          )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            receiptId, 
+            item.id, 
+            receivedQty,
+            item.length || 0,
+            item.width || 0,
+            item.thickness || 0,
+            item.diameter || 0,
+            item.outer_diameter || 0,
+            item.density || 0,
+            item.weight_per_unit || 0
+          ]
         );
 
         // Map warehouse code/name to ID
@@ -141,8 +162,11 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
 
         // Also create GRN item
         await connection.execute(
-          `INSERT INTO grn_items (grn_id, po_item_id, po_qty, received_qty, accepted_qty, status, warehouse_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO grn_items (
+            grn_id, po_item_id, po_qty, received_qty, accepted_qty, status, warehouse_id,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
+          )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             grnId, 
             item.id, 
@@ -150,7 +174,14 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
             receivedQty, 
             receivedQty, 
             'PENDING',
-            warehouseId
+            warehouseId,
+            item.length || 0,
+            item.width || 0,
+            item.thickness || 0,
+            item.diameter || 0,
+            item.outer_diameter || 0,
+            item.density || 0,
+            item.weight_per_unit || 0
           ]
         );
       }

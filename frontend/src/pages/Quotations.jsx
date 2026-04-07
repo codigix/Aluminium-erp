@@ -348,7 +348,14 @@ const Quotations = () => {
             planned_qty: parseFloat(item.design_qty) || 0, // Keep actual design qty as planned_qty
             quantity: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0,
             uom: item.uom || 'NOS',
-            unit_rate: item.unit_rate || item.rate || 0
+            unit_rate: item.unit_rate || item.rate || 0,
+            length: item.length || 0,
+            width: item.width || 0,
+            thickness: item.thickness || 0,
+            diameter: item.diameter || 0,
+            outer_diameter: item.outer_diameter || 0,
+            density: item.density || 0,
+            weight_per_unit: item.weight_per_unit || 0
           }));
 
           setFormData(prev => ({
@@ -1086,8 +1093,15 @@ const Quotations = () => {
       material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
       design_qty: item.design_qty || item.quantity || 0,
       quantity: item.quantity || 0,
-      uom: item.unit || 'NOS',
-      unit_rate: item.unit_rate || 0
+      uom: item.unit || item.uom || 'NOS',
+      unit_rate: item.unit_rate || 0,
+      length: item.length || 0,
+      width: item.width || 0,
+      thickness: item.thickness || 0,
+      diameter: item.diameter || 0,
+      outer_diameter: item.outer_diameter || 0,
+      density: item.density || 0,
+      weight_per_unit: item.weight_per_unit || 0
     }));
 
     setEditFormData({
@@ -1137,7 +1151,14 @@ const Quotations = () => {
       quantity: parseFloat(item.quantity) || 0,
       design_qty: parseFloat(item.quantity) || 0,
       uom: item.uom || 'NOS',
-      unit_rate: 0
+      unit_rate: 0,
+      length: item.length || 0,
+      width: item.width || 0,
+      thickness: item.thickness || 0,
+      diameter: item.diameter || 0,
+      outer_diameter: item.outer_diameter || 0,
+      density: item.density || 0,
+      weight_per_unit: item.weight_per_unit || 0
     }));
 
     setFormData({
@@ -1646,16 +1667,16 @@ const Quotations = () => {
                       </p>
                     ) : (
                       <div className="space-y-2">
-                          <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100text-xs   text-slate-500  ">
-                            <div className="col-span-3">Drawing No</div>
-                            <div className="col-span-5">Material Name</div>
+                          <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs text-slate-500">
+                            <div className="col-span-2">Drawing No</div>
+                            <div className="col-span-5">Material Name & Dimensions</div>
                             <div className="col-span-2">Type</div>
-                            <div className="col-span-1 text-center">Design Qty</div>
+                            <div className="col-span-2 text-center">Qty / UOM</div>
                             <div className="col-span-1"></div>
                           </div>
                           {formData.items.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                              <div className="col-span-3 relative">
+                            <div key={idx} className="grid grid-cols-12 gap-2 items-start py-2 border-b border-slate-50 last:border-0">
+                              <div className="col-span-2 relative">
                                 <input
                                   type="text"
                                   placeholder="Drawing No"
@@ -1674,13 +1695,24 @@ const Quotations = () => {
                                   </button>
                                 )}
                               </div>
-                              <input
-                                type="text"
-                                placeholder="Material Name"
-                                value={item.material_name}
-                                onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
-                                className="col-span-5 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
+                              <div className="col-span-5 space-y-1">
+                                <input
+                                  type="text"
+                                  placeholder="Material Name"
+                                  value={item.material_name}
+                                  onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
+                                  className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
+                                  <div className="flex flex-wrap gap-x-2 gap-y-1 px-1">
+                                    {item.length > 0 && <span className="text-[10px] text-slate-500">L: {item.length}</span>}
+                                    {item.width > 0 && <span className="text-[10px] text-slate-500">W: {item.width}</span>}
+                                    {item.thickness > 0 && <span className="text-[10px] text-slate-500">T: {item.thickness}</span>}
+                                    {item.diameter > 0 && <span className="text-[10px] text-slate-500">Dia: {item.diameter}</span>}
+                                    {item.outer_diameter > 0 && <span className="text-[10px] text-slate-500">OD: {item.outer_diameter}</span>}
+                                  </div>
+                                )}
+                              </div>
                               <input
                                 type="text"
                                 placeholder="Type"
@@ -1688,25 +1720,30 @@ const Quotations = () => {
                                 onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
                                 className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              <input
-                                type="number"
-                                placeholder="Design"
-                                value={item.quantity || item.design_qty || 0}
-                                onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
-                                className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                            <div className="col-span-1 flex justify-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(idx)}
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                                title="Remove item"
-                              >
-                                ✕
-                              </button>
+                              <div className="col-span-2 flex gap-1">
+                                <input
+                                  type="number"
+                                  placeholder="Qty"
+                                  value={item.quantity || item.design_qty || 0}
+                                  onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
+                                  className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[10px] text-slate-500 flex items-center justify-center min-w-[40px]">
+                                  {item.uom || 'NOS'}
+                                </div>
+                              </div>
+                              <div className="col-span-1 flex justify-center pt-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(idx)}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                  title="Remove item"
+                                >
+                                  ✕
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
                       </div>
                     )}
                   </div>
@@ -2133,9 +2170,9 @@ const Quotations = () => {
                       {activeTab === 'sent' ? (
                         <>
                           <div className="col-span-3">Drawing No</div>
-                          <div className="col-span-5">Material Name</div>
+                          <div className="col-span-4">Material Name</div>
                           <div className="col-span-2">Type</div>
-                          <div className="col-span-1 text-center">Design Qty</div>
+                          <div className="col-span-2 text-center">Design Qty</div>
                           <div className="col-span-1"></div>
                         </>
                       ) : (
@@ -2143,15 +2180,15 @@ const Quotations = () => {
                           <div className="col-span-2">Drawing No</div>
                           <div className="col-span-3">Material Name</div>
                           <div className="col-span-2">Type</div>
-                          <div className="col-span-1 text-center">Design Qty</div>
-                          <div className="col-span-2 text-center">Rate (₹)</div>
+                          <div className="col-span-2 text-center">Design Qty</div>
+                          <div className="col-span-1 text-center">Rate (₹)</div>
                           <div className="col-span-1 text-right">Amount</div>
                           <div className="col-span-1"></div>
                         </>
                       )}
                     </div>
                     {editFormData.items.map((item, idx) => (
-                      <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-start py-1">
                         {activeTab === 'sent' ? (
                           <>
                             <input
@@ -2166,17 +2203,28 @@ const Quotations = () => {
                               }}
                               className="col-span-3 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <input
-                              type="text"
-                              placeholder="Material Name"
-                              value={item.material_name}
-                              onChange={(e) => {
-                                const newItems = [...editFormData.items];
-                                newItems[idx].material_name = e.target.value;
-                                setEditFormData({...editFormData, items: newItems});
-                              }}
-                              className="col-span-5 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                            <div className="col-span-4 flex flex-col">
+                              <input
+                                type="text"
+                                placeholder="Material Name"
+                                value={item.material_name}
+                                onChange={(e) => {
+                                  const newItems = [...editFormData.items];
+                                  newItems[idx].material_name = e.target.value;
+                                  setEditFormData({...editFormData, items: newItems});
+                                }}
+                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
+                                  {item.length > 0 && <span className="text-[10px] text-slate-400 font-mono">L:{item.length}</span>}
+                                  {item.width > 0 && <span className="text-[10px] text-slate-400 font-mono">W:{item.width}</span>}
+                                  {item.thickness > 0 && <span className="text-[10px] text-slate-400 font-mono">T:{item.thickness}</span>}
+                                  {item.diameter > 0 && <span className="text-[10px] text-slate-400 font-mono">D:{item.diameter}</span>}
+                                  {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400 font-mono">OD:{item.outer_diameter}</span>}
+                                </div>
+                              )}
+                            </div>
                             <input
                               type="text"
                               placeholder="Type"
@@ -2188,19 +2236,22 @@ const Quotations = () => {
                               }}
                               className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <input
-                              type="number"
-                              placeholder="Design"
-                              value={item.quantity || item.design_qty || 0}
-                              onChange={(e) => {
-                                const newItems = [...editFormData.items];
-                                const val = parseFloat(e.target.value) || 0;
-                                newItems[idx].design_qty = val;
-                                newItems[idx].quantity = val;
-                                setEditFormData({...editFormData, items: newItems});
-                              }}
-                              className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                            <div className="col-span-2 flex flex-col items-center">
+                              <input
+                                type="number"
+                                placeholder="Qty"
+                                value={item.quantity || item.design_qty || 0}
+                                onChange={(e) => {
+                                  const newItems = [...editFormData.items];
+                                  const val = parseFloat(e.target.value) || 0;
+                                  newItems[idx].design_qty = val;
+                                  newItems[idx].quantity = val;
+                                  setEditFormData({...editFormData, items: newItems});
+                                }}
+                                className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              <span className="text-[10px] text-slate-400 mt-0.5 uppercase">{item.uom || 'NOS'}</span>
+                            </div>
                           </>
                         ) : (
                           <>
@@ -2216,17 +2267,28 @@ const Quotations = () => {
                               }}
                               className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <input
-                              type="text"
-                              placeholder="Material Name"
-                              value={item.material_name}
-                              onChange={(e) => {
-                                const newItems = [...editFormData.items];
-                                newItems[idx].material_name = e.target.value;
-                                setEditFormData({...editFormData, items: newItems});
-                              }}
-                              className="col-span-3 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                            <div className="col-span-3 flex flex-col">
+                              <input
+                                type="text"
+                                placeholder="Material Name"
+                                value={item.material_name}
+                                onChange={(e) => {
+                                  const newItems = [...editFormData.items];
+                                  newItems[idx].material_name = e.target.value;
+                                  setEditFormData({...editFormData, items: newItems});
+                                }}
+                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
+                                  {item.length > 0 && <span className="text-[10px] text-slate-400 font-mono">L:{item.length}</span>}
+                                  {item.width > 0 && <span className="text-[10px] text-slate-400 font-mono">W:{item.width}</span>}
+                                  {item.thickness > 0 && <span className="text-[10px] text-slate-400 font-mono">T:{item.thickness}</span>}
+                                  {item.diameter > 0 && <span className="text-[10px] text-slate-400 font-mono">D:{item.diameter}</span>}
+                                  {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400 font-mono">OD:{item.outer_diameter}</span>}
+                                </div>
+                              )}
+                            </div>
                             <input
                               type="text"
                               placeholder="Type"
@@ -2238,19 +2300,22 @@ const Quotations = () => {
                               }}
                               className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <input
-                              type="number"
-                              placeholder="Design"
-                              value={item.quantity || item.design_qty || 0}
-                              onChange={(e) => {
-                                const newItems = [...editFormData.items];
-                                const val = parseFloat(e.target.value) || 0;
-                                newItems[idx].design_qty = val;
-                                newItems[idx].quantity = val;
-                                setEditFormData({...editFormData, items: newItems});
-                              }}
-                              className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                            <div className="col-span-2 flex flex-col items-center">
+                              <input
+                                type="number"
+                                placeholder="Qty"
+                                value={item.quantity || item.design_qty || 0}
+                                onChange={(e) => {
+                                  const newItems = [...editFormData.items];
+                                  const val = parseFloat(e.target.value) || 0;
+                                  newItems[idx].design_qty = val;
+                                  newItems[idx].quantity = val;
+                                  setEditFormData({...editFormData, items: newItems});
+                                }}
+                                className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              <span className="text-[10px] text-slate-400 mt-0.5 uppercase">{item.uom || 'NOS'}</span>
+                            </div>
                             <input
                               type="number"
                               placeholder="Rate"
@@ -2260,9 +2325,9 @@ const Quotations = () => {
                                 newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-2 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <div className="col-span-1 text-right text-xs  text-slate-700">
+                            <div className="col-span-1 text-right text-xs  text-slate-700 pt-2">
                               {formatCurrency((item.design_qty || item.quantity || 0) * (item.unit_rate || 0))}
                             </div>
                           </>

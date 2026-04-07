@@ -737,7 +737,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const matName = mat.material_name || mat.materialName || mat.item || '';
         const matCat = mat.material_category || ((mat.depth <= 1) ? 'CORE' : 'EXPLODED');
         
-        const baseQty = parseFloat(mat.qty_per_pc || mat.required_qty || 0);
+        const weightMultiplier = mat.is_kg_material ? (parseFloat(mat.total_wt) || 1) : 1;
+        const baseQty = parseFloat(mat.qty_per_pc || mat.required_qty || 0) * weightMultiplier;
         const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
         
         // Use a key that represents the material identity
@@ -1333,7 +1334,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <div className=" text-amber-600 font-medium">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
-                          <div className="text-[10px] text-slate-400 uppercase">{mat.uom || mat.unit || 'Nos'}</div>
+                          <div className="text-[10px] text-slate-400 uppercase">
+                            {mat.uom || mat.unit || 'Nos'}
+                            {mat.is_kg_material && (
+                              <span className="ml-1 text-slate-300">
+                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.total_wt || 0).toFixed(3)})
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2 ">
                           <div className="text-xs text-slate-600 ">{mat.warehouse || 'Store - NC'}</div>
@@ -1405,7 +1413,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <div className=" text-rose-600 font-medium">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
-                          <div className="text-[10px] text-slate-400 uppercase">{mat.uom || mat.unit || 'Nos'}</div>
+                          <div className="text-[10px] text-slate-400 uppercase">
+                            {mat.uom || mat.unit || 'Nos'}
+                            {mat.is_kg_material && (
+                              <span className="ml-1 text-slate-300">
+                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.total_wt || 0).toFixed(3)})
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2 ">
                           <div className="text-xs text-slate-500 ">{mat.source_assembly || mat.sourceFg || '-'}</div>

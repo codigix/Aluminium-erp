@@ -275,7 +275,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         message += `Shortage detected in the following items:\n`;
         shortageItems.forEach(item => {
           const diff = (parseFloat(item.received_qty) || 0) - (parseFloat(item.accepted_qty) || 0);
-          message += `- ${item.material_name || item.item_code}: Shortage of ${diff.toFixed(2)} ${item.unit || 'units'}\n`;
+          message += `- ${item.material_name || item.item_code}: Shortage of ${diff.toFixed(3)} ${item.uom || 'Nos'}\n`;
         });
         message += `\n`;
       }
@@ -284,7 +284,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         message += `Overage detected in the following items:\n`;
         overageItems.forEach(item => {
           const diff = (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.received_qty) || 0);
-          message += `- ${item.material_name || item.item_code}: Overage of ${diff.toFixed(2)} ${item.unit || 'units'}\n`;
+          message += `- ${item.material_name || item.item_code}: Overage of ${diff.toFixed(3)} ${item.uom || 'Nos'}\n`;
         });
         message += `\n`;
       }
@@ -814,11 +814,21 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                         <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
                           <td className="p-2 ">
                             <div className="flex flex-col gap-0.5">
-                              <div className=" text-slate-900 text-xs">{item.material_name || 'Unnamed Item'}</div>
-                              <div className="inline-flex items-center p-1  rounded-md bg-slate-100 text-slate-600text-xs    w-fit tracking-tight border border-slate-200">
+                              <div className=" text-slate-900 text-xs font-medium">{item.material_name || 'Unnamed Item'}</div>
+                              <div className="inline-flex items-center p-1  rounded-md bg-slate-100 text-slate-600 text-[10px]    w-fit tracking-tight border border-slate-200">
                                 {item.item_code}
                               </div>
-                              {item.description && (
+                              {/* Dimensions Display */}
+                              {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                                  {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
+                                  {item.width > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">W: {parseFloat(item.width).toFixed(4)}</span>}
+                                  {item.thickness > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">T: {parseFloat(item.thickness).toFixed(4)}</span>}
+                                  {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
+                                  {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
+                                </div>
+                              )}
+                              {item.description && item.description !== item.material_name && (
                                 <div className="text-[8px] text-slate-400  truncate max-w-[180px] italic mt-0.5">
                                   {item.description}
                                 </div>
@@ -830,10 +840,21 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                               {item.warehouse_name || '—'}
                             </span>
                           </td>
-                          <td className="p-2  text-center  text-slate-400 text-xs">{parseFloat(item.ordered_qty || 0).toFixed(3)}</td>
-                          <td className="p-2  text-center  text-slate-600 text-xs">{parseFloat(item.received_qty || 0).toFixed(3)}</td>
+                          <td className="p-2  text-center  text-slate-400 text-xs">
+                            {parseFloat(item.ordered_qty || 0).toFixed(3)}
+                            <span className="ml-1 text-[10px] text-slate-300 uppercase">{item.uom || 'Nos'}</span>
+                          </td>
+                          <td className="p-2  text-center  text-slate-600 text-xs">
+                            {parseFloat(item.received_qty || 0).toFixed(3)}
+                            <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
+                          </td>
                           <td className="p-2  text-center  text-emerald-600 text-xs">
-                            {selectedQC.status === 'PENDING' ? 'Pending' : parseFloat(item.accepted_qty || 0).toFixed(3)}
+                            {selectedQC.status === 'PENDING' ? 'Pending' : (
+                              <>
+                                {parseFloat(item.accepted_qty || 0).toFixed(3)}
+                                <span className="ml-1 text-[10px] text-emerald-300 uppercase">{item.uom || 'Nos'}</span>
+                              </>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -964,11 +985,21 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                         <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
                           <td className="p-2 ">
                             <div className="flex flex-col gap-0.5">
-                              <div className=" text-slate-900 text-xs">{item.material_name || item.item_code || 'Unnamed Item'}</div>
-                              <div className="inline-flex items-center p-1  rounded-md bg-slate-100 text-slate-600text-xs    w-fit tracking-tight border border-slate-200">
+                              <div className=" text-slate-900 text-xs font-medium">{item.material_name || item.item_code || 'Unnamed Item'}</div>
+                              <div className="inline-flex items-center p-1  rounded-md bg-slate-100 text-slate-600 text-[10px]    w-fit tracking-tight border border-slate-200">
                                 {item.item_code}
                               </div>
-                              {item.description && (
+                              {/* Dimensions Display */}
+                              {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                                  {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
+                                  {item.width > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">W: {parseFloat(item.width).toFixed(4)}</span>}
+                                  {item.thickness > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">T: {parseFloat(item.thickness).toFixed(4)}</span>}
+                                  {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
+                                  {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
+                                </div>
+                              )}
+                              {item.description && item.description !== item.material_name && (
                                 <div className="text-[8px] text-slate-400  truncate max-w-[180px] italic mt-0.5">
                                   {item.description}
                                 </div>
@@ -976,26 +1007,39 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                             </div>
                           </td>
                           <td className="p-2  text-center  text-slate-400 text-xs">
-                            {parseFloat(item.ordered_qty || 0).toFixed(2)}
+                            {parseFloat(item.ordered_qty || 0).toFixed(3)}
+                            <span className="ml-1 text-[10px] text-slate-300 uppercase">{item.uom || 'Nos'}</span>
                           </td>
                           <td className="p-2  text-center  text-slate-900 text-xs">
-                            {parseFloat(item.received_qty || 0).toFixed(2)}
+                            {parseFloat(item.received_qty || 0).toFixed(3)}
+                            <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
                           </td>
                           <td className="p-2 ">
-                            <div className="flex justify-center">
+                            <div className="flex flex-col items-center gap-1">
                               <input
                                 type="number"
                                 value={item.accepted_qty}
                                 onChange={(e) => handleItemQtyChange(idx, e.target.value)}
-                                className="w-20 p-2 .5 bg-white border border-blue-200 rounded  text-center text-xs  text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
+                                className="w-24 p-2 .5 bg-white border border-blue-200 rounded  text-center text-xs  text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
                               />
+                              <span className="text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
                             </div>
                           </td>
-                          <td className="p-2  text-center  text-rose-500 text-xs">
-                            {shortage > 0 ? shortage.toFixed(0) : '0'}
+                          <td className="p-2  text-center  text-rose-500 text-xs font-medium">
+                            {shortage > 0 ? (
+                              <>
+                                {shortage.toFixed(3)}
+                                <span className="ml-1 text-[9px] uppercase">{item.uom || 'Nos'}</span>
+                              </>
+                            ) : '0.000'}
                           </td>
-                          <td className="p-2  text-center  text-blue-500 text-xs">
-                            {overage > 0 ? overage.toFixed(0) : '0'}
+                          <td className="p-2  text-center  text-blue-500 text-xs font-medium">
+                            {overage > 0 ? (
+                              <>
+                                {overage.toFixed(3)}
+                                <span className="ml-1 text-[9px] uppercase">{item.uom || 'Nos'}</span>
+                              </>
+                            ) : '0.000'}
                           </td>
                           <td className="p-2  text-center whitespace-nowrap">
                             {shortage > 0 ? (

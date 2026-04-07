@@ -348,12 +348,21 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
-                        <td className="p-2 ">
-                          <p className="text-xs  text-slate-800">{item.material_name || item.description || 'N/A'}</p>
+                        <td className="p-2">
+                          <p className="text-xs text-slate-800 font-medium">{item.material_name || item.description || 'N/A'}</p>
                           {(item.item_code || item.drawing_no) && (
-                            <span className="inline-flex items-center p-1  rounded text-xs  bg-slate-100 text-slate-500 mt-1  ">
+                            <span className="inline-flex items-center p-1 rounded text-[10px] bg-slate-100 text-slate-500 mt-1 uppercase tracking-wider">
                               {item.item_code || item.drawing_no}
                             </span>
+                          )}
+                          {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
+                            <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1">
+                              {item.length > 0 && <span className="text-[10px] text-slate-400">L: {item.length}</span>}
+                              {item.width > 0 && <span className="text-[10px] text-slate-400">W: {item.width}</span>}
+                              {item.thickness > 0 && <span className="text-[10px] text-slate-400">T: {item.thickness}</span>}
+                              {item.diameter > 0 && <span className="text-[10px] text-slate-400">Dia: {item.diameter}</span>}
+                              {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400">OD: {item.outer_diameter}</span>}
+                            </div>
                           )}
                         </td>
                         <td className="p-2  text-center">

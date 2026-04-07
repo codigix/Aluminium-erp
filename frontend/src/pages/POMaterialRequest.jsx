@@ -207,7 +207,15 @@ const POMaterialRequest = () => {
           mr_id: mr.id,
           items: (mr.items || []).map(item => ({
             ...item,
-            material_name: item.name || item.material_name // Ensure name is passed correctly
+            material_name: item.name || item.material_name, // Ensure name is passed correctly
+            uom: item.uom || 'pcs',
+            length: item.length || 0,
+            width: item.width || 0,
+            thickness: item.thickness || 0,
+            diameter: item.diameter || 0,
+            outer_diameter: item.outer_diameter || 0,
+            density: item.density || 0,
+            weight_per_unit: item.weight_per_unit || 0
           }))
         })
       });
@@ -997,13 +1005,22 @@ const POMaterialRequest = () => {
                         <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
                           <td className="px-6 py-5">
                             <div>
-                              <p className="text-xs   text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
-                              <p className="text-sm  text-slate-600 mt-0.5">{item.name}</p>
+                              <p className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
+                              <p className="text-sm font-medium text-slate-600 mt-0.5">{item.name}</p>
+                              {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
+                                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                                  {item.length > 0 && <span className="text-[10px] text-slate-400">L: {item.length}</span>}
+                                  {item.width > 0 && <span className="text-[10px] text-slate-400">W: {item.width}</span>}
+                                  {item.thickness > 0 && <span className="text-[10px] text-slate-400">T: {item.thickness}</span>}
+                                  {item.diameter > 0 && <span className="text-[10px] text-slate-400">Dia: {item.diameter}</span>}
+                                  {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400">OD: {item.outer_diameter}</span>}
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            <span className="text-xs  text-slate-700">
-                              {Number(item.quantity || item.design_qty || 0).toFixed(3)}
+                            <span className="text-xs font-semibold text-slate-700">
+                              {Number(item.quantity || item.design_qty || 0).toFixed(3)} {item.uom}
                             </span>
                           </td>
                           <td className="px-6 py-5 text-center">
@@ -1068,40 +1085,65 @@ const POMaterialRequest = () => {
                     </div>
                   ) : (
                     rfqs.map((rfq, ridx) => (
-                      <div key={ridx} className="p-2 border border-slate-100 rounded  hover:bg-slate-50 transition-colors">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <p className="text-xs  text-slate-900">{rfq.rfq_number}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{formatDate(rfq.created_at)}</p>
+                        <div key={ridx} className="p-3 border border-slate-100 rounded-lg  hover:bg-slate-50 transition-all shadow-sm">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <p className="text-xs font-bold  text-slate-900">{rfq.rfq_number}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider">{formatDate(rfq.created_at)}</p>
+                            </div>
+                            <StatusBadge status={rfq.status} />
                           </div>
-                          <StatusBadge status={rfq.status} />
+
+                          {rfq.items && rfq.items.length > 0 && (
+                            <div className="mb-4 space-y-2 border-b border-slate-50 pb-3">
+                              {rfq.items.map((it, iidx) => (
+                                <div key={iidx} className="flex justify-between items-start text-xs">
+                                  <div className="flex-1 min-w-0 pr-2">
+                                    <p className="font-medium text-slate-700 truncate">{it.material_name || it.item_code}</p>
+                                    {(it.length || it.width || it.thickness || it.diameter || it.outer_diameter) && (
+                                      <p className="text-[9px] text-slate-400 flex flex-wrap gap-x-1">
+                                        {it.length > 0 && <span>L: {it.length}</span>}
+                                        {it.width > 0 && <span>W: {it.width}</span>}
+                                        {it.thickness > 0 && <span>T: {it.thickness}</span>}
+                                        {it.diameter > 0 && <span>Dia: {it.diameter}</span>}
+                                        {it.outer_diameter > 0 && <span>OD: {it.outer_diameter}</span>}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="shrink-0 font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                    {Number(it.quantity).toFixed(2)} {it.uom}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {rfq.quotations && rfq.quotations.length > 0 ? (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold  text-slate-400 uppercase tracking-widest">RECEIVED QUOTES</p>
+                              {rfq.quotations.map((q, qidx) => (
+                                <div key={qidx} className="flex justify-between items-center bg-slate-50/50 p-1.5 rounded border border-slate-100/50">
+                                  <span className="text-xs  text-slate-600 truncate max-w-[120px]">{q.vendor_name}</span>
+                                  <span className="text-xs font-bold   text-indigo-600">{q.quote_number}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-amber-500 bg-amber-50/50 p-2 rounded border border-amber-100/50">
+                              <svg className="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                              <p className="text-[10px] font-medium italic">Waiting for responses...</p>
+                            </div>
+                          )}
+                          
+                          <div className="mt-4 flex gap-2">
+                            <button 
+                              onClick={() => navigate(`/quotations?rfq=${rfq.id}`)}
+                              className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold  hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
+                            >
+                              View/Process Quotes
+                            </button>
+                          </div>
                         </div>
-                        
-                        {rfq.quotations && rfq.quotations.length > 0 ? (
-                          <div className="mt-2 pt-2 border-t border-slate-50 space-y-2">
-                            <p className="text-xs  text-slate-400 ">RECEIVED QUOTES</p>
-                            {rfq.quotations.map((q, qidx) => (
-                              <div key={qidx} className="flex justify-between items-center">
-                                <span className="text-xs  text-slate-600 truncate max-w-[120px]">{q.vendor_name}</span>
-                                <span className="text-xs   text-indigo-600">{q.quote_number}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mt-2 pt-2 border-t border-slate-50">
-                            <p className="text-xs text-amber-500 italic">Waiting for vendor responses...</p>
-                          </div>
-                        )}
-                        
-                        <div className="mt-3 flex gap-2">
-                          <button 
-                            onClick={() => navigate(`/quotations?rfq=${rfq.id}`)}
-                            className="flex-1 py-1.5 bg-indigo-50 text-indigo-600 rounded text-xs   hover:bg-indigo-100 transition-colors"
-                          >
-                            Send Quotation
-                          </button>
-                        </div>
-                      </div>
                     ))
                   )}
                 </div>

@@ -24,8 +24,10 @@ const createRfq = async (payload) => {
         if (Array.isArray(items) && items.length > 0) {
             for (const item of items) {
                 await connection.execute(
-                    `INSERT INTO procurement_rfq_items (rfq_id, item_code, description, material_name, material_type, drawing_no, quantity, uom)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    `INSERT INTO procurement_rfq_items (
+                        rfq_id, item_code, description, material_name, material_type, drawing_no, quantity, uom,
+                        length, width, thickness, diameter, outer_diameter, density, weight_per_unit
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         rfq_id,
                         item.item_code || null,
@@ -34,7 +36,14 @@ const createRfq = async (payload) => {
                         item.material_type || null,
                         item.drawing_no || null,
                         item.quantity || 0,
-                        item.uom || 'NOS'
+                        item.uom || 'NOS',
+                        item.length || 0,
+                        item.width || 0,
+                        item.thickness || 0,
+                        item.diameter || 0,
+                        item.outer_diameter || 0,
+                        item.density || 0,
+                        item.weight_per_unit || 0
                     ]
                 );
             }
