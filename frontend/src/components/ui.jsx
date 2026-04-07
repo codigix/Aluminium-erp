@@ -16,27 +16,53 @@ export const Card = ({ id, title, subtitle, action, children, className = '' }) 
   </div>
 )
 
-export const SearchableSelect = ({ options, value, onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, allowCustom = true, disabled = false, openUpwards = false }) => {
+export const SearchableSelect = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder, 
+  labelField = 'label', 
+  valueField = 'value', 
+  subLabelField, 
+  getOptionLabel,
+  getOptionSublabel,
+  allowCustom = true, 
+  disabled = false, 
+  openUpwards = false,
+  className = ''
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
+
+  const getLabel = (opt) => {
+    if (!opt) return '';
+    if (getOptionLabel) return getOptionLabel(opt);
+    return opt[labelField] || '';
+  };
+
+  const getSublabel = (opt) => {
+    if (!opt) return '';
+    if (getOptionSublabel) return getOptionSublabel(opt);
+    return opt[subLabelField] || '';
+  };
 
   const selectedOption = options.find(opt => String(opt[valueField]) === String(value));
 
   useEffect(() => {
     if (!isOpen) {
-      const newVal = selectedOption ? selectedOption[labelField] : (value || '');
+      const newVal = selectedOption ? getLabel(selectedOption) : (value || '');
       if (searchTerm !== newVal) {
         setSearchTerm(newVal);
       }
     }
-  }, [value, selectedOption, isOpen, labelField, searchTerm]);
+  }, [value, selectedOption, isOpen]);
 
   const safeSearchTerm = String(searchTerm || '').toLowerCase();
   const filteredOptions = options.filter(opt => 
-    String(opt[labelField] || '').toLowerCase().includes(safeSearchTerm) ||
+    String(getLabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
     String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
-    (subLabelField && String(opt[subLabelField] || '').toLowerCase().includes(safeSearchTerm))
+    String(getSublabel(opt) || '').toLowerCase().includes(safeSearchTerm)
   );
 
   useEffect(() => {
@@ -54,7 +80,7 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
       <div className="relative">
         <input
           type="text"
-          className={`w-full p-2 border border-slate-200 rounded  text-xs  text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
+          className={`w-full p-2 border border-slate-200 rounded text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'} ${className}`}
           placeholder={placeholder}
           value={searchTerm}
           onChange={(e) => {
@@ -62,7 +88,7 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
             setSearchTerm(e.target.value);
             setIsOpen(true);
             if (allowCustom) {
-              onChange({ target: { value: e.target.value } });
+              onChange(e.target.value);
             }
           }}
           onFocus={() => !disabled && setIsOpen(true)}
@@ -82,15 +108,15 @@ export const SearchableSelect = ({ options, value, onChange, placeholder, labelF
                   key={idx}
                   className={`p-2 text-xs cursor-pointer hover:bg-blue-50 ${String(opt[valueField]) === String(value) ? 'bg-blue-50 text-blue-600 ' : 'text-slate-700'}`}
                   onClick={() => {
-                    onChange({ target: { value: opt[valueField] } });
-                    setSearchTerm(opt[labelField]);
+                    onChange(opt[valueField]);
+                    setSearchTerm(getLabel(opt));
                     setIsOpen(false);
                   }}
                 >
                   <div className="flex flex-col">
-                    <span>{opt[labelField]}</span>
-                    {subLabelField && opt[subLabelField] && (
-                      <span className="text-xs text-slate-400 font-normal whitespace-pre-line">{opt[subLabelField]}</span>
+                    <span className="font-medium">{getLabel(opt)}</span>
+                    {getSublabel(opt) && (
+                      <span className="text-[10px] text-slate-400 font-normal whitespace-pre-line">{getSublabel(opt)}</span>
                     )}
                   </div>
                 </div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card, StatusBadge } from '../components/ui.jsx';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Download, Package, ChevronDown, ChevronUp, History, Search, CheckCheck } from 'lucide-react';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Download, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -39,6 +40,7 @@ const getFileUrl = (path) => {
 };
 
 const ClientQuotations = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'sent', or 'received'
   const [groupedByClient, setGroupedByClient] = useState({});
   const [sentQuotations, setSentQuotations] = useState([]);
@@ -686,11 +688,6 @@ const ClientQuotations = () => {
     const clientData = groupedByClient[clientName];
     if (!clientData) return;
 
-    if (!clientData.email) {
-      errorToast('Client email is required to send quotation');
-      return;
-    }
-
     const prices = quotePricesMap[clientName] || {};
     let allItems = [];
     
@@ -714,82 +711,39 @@ const ClientQuotations = () => {
 
     const total = calculateClientTotal(clientName);
     
-    const result = await Swal.fire({
-      title: 'Create Quotation',
-      html: `
-        <div style="text-align: left; font-size: 14px;">
-          <p><strong>Client:</strong> ${clientData.company_name}</p>
-          <p><strong>Items:</strong> ${allItems.length}</p>
-          <p><strong>Total Amount:</strong> ₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-          <p style="color: #666; margin-top: 8px;">A professional quotation PDF will be generated for this client.</p>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: 'Create Quotation',
-      confirmButtonColor: '#10b981'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        setSendingClientName(clientName);
-        const token = localStorage.getItem('authToken');
-
-        const quotationData = {
+    navigate('/quotation-form', { 
+      state: { 
+        initialData: {
           clientId: clientData.company_id,
           clientName: clientData.company_name,
           clientEmail: clientData.email,
-          emailRequired: false,
+          contact_person: clientData.contact_person,
+          phone: clientData.phone,
+          address: clientData.address,
           items: allItems.map(item => {
-            const order = clientData.orders.find(o => o.items?.some(i => i.id === item.id));
             const profits = profitMap[clientName] || {};
             const gsts = gstMap[clientName] || {};
+            const itemPrice = parseFloat(prices[item.id]) || 0;
             
             return {
-              orderId: order?.id,
+              id: item.id,
               salesOrderItemId: item.id,
+              drawing_id: item.drawing_id,
               drawing_no: item.drawing_no,
               description: item.description,
               quantity: item.design_qty,
               unit: item.unit,
+              rate: itemPrice,
+              total: item.design_qty * itemPrice,
+              gst_percentage: gsts[item.id] || 18,
               status: item.status,
-              rejection_reason: item.rejection_reason,
-              quotedPrice: parseFloat(prices[item.id]) || 0,
-              profit_percentage: profits[item.id] || 0,
-              gst_percentage: gsts[item.id] || 18
+              rejection_reason: item.rejection_reason
             };
           }),
-          totalAmount: total,
           notes: `Drawing Numbers: ${allItems.map(i => i.drawing_no).join(', ')}`
-        };
-
-        const response = await fetch(`${API_BASE}/quotation-requests/send`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(quotationData)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || errorData.message || 'Failed to create quotation');
-        }
-
-        successToast('Quotation created successfully');
-        setExpandedClientName(null);
-        setQuotePricesMap(prev => ({
-          ...prev,
-          [clientName]: {}
-        }));
-        
-        fetchAllData();
-      } catch (error) {
-        errorToast(error.message);
-      } finally {
-        setSendingClientName(null);
-      }
-    }
+        } 
+      } 
+    });
   };
 
   const handleDownloadPDF = async (group) => {
@@ -928,14 +882,24 @@ const ClientQuotations = () => {
           </div>
         </div>
         
-        <button
-          onClick={fetchAllData}
-          disabled={loading}
-          className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200 flex items-center gap-2 text-xs "
-        >
-          <RotateCw size={15} className={loading ? 'animate-spin' : ''} />
-          Refresh All
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/quotation-form')}
+            className="p-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-all shadow-md flex items-center gap-2 text-xs"
+          >
+            <Plus size={15} />
+            Create Quotation
+          </button>
+          
+          <button
+            onClick={fetchAllData}
+            disabled={loading}
+            className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200 flex items-center gap-2 text-xs "
+          >
+            <RotateCw size={15} className={loading ? 'animate-spin' : ''} />
+            Refresh All
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 p-1 bg-slate-100/50 rounded-lg w-fit border border-slate-200">

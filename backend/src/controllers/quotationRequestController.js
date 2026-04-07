@@ -183,7 +183,7 @@ const rejectQuotationRequest = async (req, res, next) => {
 const sendQuotationViaEmail = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true } = req.body;
+    const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true, status } = req.body;
 
     if (!clientId || !items || items.length === 0) {
       return res.status(400).json({ 
@@ -213,11 +213,11 @@ const sendQuotationViaEmail = async (req, res, next) => {
                notes, created_at, profit_percentage, gst_percentage
              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)`,
             [
-              item.orderId, 
+              item.orderId || null, 
               item.salesOrderItemId || null, 
               item.quantity || 0, 
               clientId, 
-              'ACCEPTED', 
+              status || item.status || 'ACCEPTED', 
               lineTotal, 
               lineTotalInclGst, 
               item.rejection_reason || null, 
@@ -237,7 +237,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
 
     const uniqueOrderIds = [...new Set(items.map(i => i.orderId))].filter(Boolean);
 
-    if (uniqueOrderIds.length > 0) {
+    if (uniqueOrderIds.length > 0 && (status || 'SENT').toUpperCase() !== 'DRAFT') {
       // Link SO to the first quotation ID in the batch to mark it as quoted
       const firstQuoteId = quotationIds[0];
       await connection.execute(

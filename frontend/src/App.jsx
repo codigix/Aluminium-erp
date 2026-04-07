@@ -35,6 +35,7 @@ import CustomerDrawing from './pages/CustomerDrawing'
 import DesignOrders from './pages/DesignOrders'
 import ItemsMaster from './pages/ItemsMaster'
 import ClientQuotations from './pages/ClientQuotations'
+import QuotationFormPage from './pages/QuotationFormPage'
 import BOMCreation from './pages/BOMCreation'
 import RoutingOperations from './pages/RoutingOperations'
 import ProcessSheet from './pages/ProcessSheet'
@@ -74,7 +75,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -166,7 +167,7 @@ const getContactStatusActionLabel = status => {
 }
 
 const DEPARTMENT_MODULES = {
-  SALES: ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
+  SALES: ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form'],
   DESIGN_ENG: ['dashboard', 'item-master', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet'],
   PRODUCTION: ['dashboard', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'routing-operations', 'process-sheet'],
   QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
@@ -175,7 +176,7 @@ const DEPARTMENT_MODULES = {
   INVENTORY: ['dashboard', 'item-master', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
   PROCUREMENT: ['dashboard', 'item-master', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'suppliers'],
   ADMIN: [
-    'dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations',
+    'dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form',
     'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet',
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
     'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
@@ -230,10 +231,22 @@ function App() {
   const [accessRules, setAccessRules] = useState(null)
 
   const allowedModules = useMemo(() => {
+    let modules = []
     if (accessRules && accessRules.allowedModules) {
-      return accessRules.allowedModules
+      modules = accessRules.allowedModules
+    } else {
+      modules = user?.department_code ? (DEPARTMENT_MODULES[user.department_code] || []) : []
     }
-    return user?.department_code ? DEPARTMENT_MODULES[user.department_code] : []
+    
+    // Ensure auxiliary pages are always included if the main module is present
+    if (modules.includes('client-quotations') && !modules.includes('quotation-form')) {
+      modules.push('quotation-form')
+    }
+    if (modules.includes('bom-creation') && !modules.includes('bom-form')) {
+      modules.push('bom-form')
+    }
+    
+    return modules
   }, [user?.department_code, accessRules])
 
   useEffect(() => {
@@ -1365,7 +1378,7 @@ function App() {
             </div>
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">
               {navigationItems.map((item, index) => {
-                const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form')) : Boolean(item.active)
+                const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form') || (item.moduleId === 'client-quotations' && activeModule === 'quotation-form')) : Boolean(item.active)
                 const isDisabled = item.isGroup || !item.moduleId
                 
                 if (item.isGroup) {
@@ -1632,6 +1645,10 @@ function App() {
 
                 {activeModule === 'client-quotations' && (
                   <ClientQuotations />
+                )}
+
+                {activeModule === 'quotation-form' && (
+                  <QuotationFormPage />
                 )}
 
                 {activeModule === 'drawing-master' && (
