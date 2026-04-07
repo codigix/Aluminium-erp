@@ -171,11 +171,4 @@ app.use('/uploads', cors(), express.static(path.join(process.cwd(), 'uploads')))
 app.use(notFound);
 app.use(errorHandler);
 
-// Start real email receiver to fetch replies
-try {
-  emailReceiver.startEmailReceiver();
-} catch (error) {
-  console.error('[App] Failed to start email receiver:', error.message);
-}
-
 module.exports = app;
