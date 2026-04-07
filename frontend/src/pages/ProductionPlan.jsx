@@ -198,6 +198,27 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   };
 
+  const renderDimensions = (dims) => {
+    if (!dims) return null;
+    const parts = [];
+    if (dims.diameter > 0) parts.push(`D:${Number(dims.diameter).toFixed(1)}mm`);
+    if (dims.outer_diameter > 0) parts.push(`OD:${Number(dims.outer_diameter).toFixed(1)}mm`);
+    if (dims.thickness > 0) parts.push(`T:${Number(dims.thickness).toFixed(1)}mm`);
+    if (dims.width > 0) parts.push(`W:${Number(dims.width).toFixed(1)}mm`);
+    if (dims.length > 0) parts.push(`L:${Number(dims.length).toFixed(1)}mm`);
+    
+    if (parts.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-1 mt-0.5">
+        {parts.map((p, i) => (
+          <span key={i} className="text-[10px] bg-slate-50 text-slate-500 px-1 rounded border border-slate-100 font-medium">
+            {p}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const handleCreateWorkOrders = async (planId) => {
     try {
       const result = await Swal.fire({
@@ -352,7 +373,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       inventory: selectedNewItem.current_balance || 0,
       is_fulfilled: false,
       request_exists: false,
-      is_manual: true
+      is_manual: true,
+      dimensions: {
+        length: selectedNewItem.length,
+        width: selectedNewItem.width,
+        thickness: selectedNewItem.thickness,
+        diameter: selectedNewItem.diameter,
+        outer_diameter: selectedNewItem.outer_diameter
+      }
     };
 
     setMrItems(prev => [...prev, newItem]);
@@ -2096,6 +2124,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <div className="flex items-center gap-2">
                         <div className="flex flex-col">
                           <div className="text-xs  text-slate-700">{item.material_name}</div>
+                          {renderDimensions(item.dimensions)}
                           <div className="text-xs text-slate-400">({item.item_code})</div>
                         </div>
                         {item.is_manual && (
@@ -2161,8 +2190,17 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         className="text-xs h-8 bg-white"
                       />
                       {selectedNewItem && (
-                        <div className="mt-1 px-1 text-xs text-indigo-600   truncate max-w-[200px]">
-                          {selectedNewItem.material_name}
+                        <div className="mt-1 px-1">
+                          <div className="text-xs text-indigo-600 truncate max-w-[200px]">
+                            {selectedNewItem.material_name}
+                          </div>
+                          {renderDimensions({
+                            length: selectedNewItem.length,
+                            width: selectedNewItem.width,
+                            thickness: selectedNewItem.thickness,
+                            diameter: selectedNewItem.diameter,
+                            outer_diameter: selectedNewItem.outer_diameter
+                          })}
                         </div>
                       )}
                     </td>

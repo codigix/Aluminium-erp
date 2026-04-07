@@ -1021,7 +1021,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   const planCode = plan.plan_code;
   const aggregatedMap = new Map();
 
-  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists) => {
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}) => {
     if (!itemCode && !name) return;
     
     const code = (itemCode || name).trim();
@@ -1056,6 +1056,10 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         if (newType === 'RAW_MATERIAL') existing.item_type = 'RAW_MATERIAL';
       }
       if (rate && !existing.unit_rate) existing.unit_rate = rate;
+      // Merge dimensions if not already present
+      if (dimensions && Object.keys(dimensions).length > 0 && !existing.dimensions) {
+        existing.dimensions = dimensions;
+      }
     } else {
       aggregatedMap.set(key, {
         item_code: code,
@@ -1068,7 +1072,8 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         unit_rate: rate || 0,
         inventory: Math.max(0, Number(currentBalance || 0)),
         is_fulfilled: !!isFulfilled,
-        request_exists: !!requestExists
+        request_exists: !!requestExists,
+        dimensions: dimensions || {}
       });
     }
   };
@@ -1080,14 +1085,20 @@ const getMaterialRequestItemsForPlan = async (planId) => {
            COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
            COALESCE(actual_sb.current_balance, 0) as current_balance,
            COALESCE(issued.issued_qty, 0) as issued_qty,
-           COALESCE(mr_data.status_rank, 0) as status_rank
+           COALESCE(mr_data.status_rank, 0) as status_rank,
+           actual_sb.length, actual_sb.width, actual_sb.thickness, actual_sb.diameter, actual_sb.outer_diameter
     FROM production_plan_materials ppm
     LEFT JOIN (
         SELECT 
             material_name, 
             MAX(item_code) as item_code, 
             MAX(valuation_rate) as valuation_rate, 
-            SUM(current_balance) as current_balance
+            SUM(current_balance) as current_balance,
+            MAX(length) as length, 
+            MAX(width) as width, 
+            MAX(thickness) as thickness, 
+            MAX(diameter) as diameter, 
+            MAX(outer_diameter) as outer_diameter
         FROM stock_balance 
         GROUP BY material_name
     ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
@@ -1147,7 +1158,14 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       mat.design_qty, 
       effectiveInventory,
       isFulfilled,
-      requestExists
+      requestExists,
+      {
+        length: mat.length,
+        width: mat.width,
+        thickness: mat.thickness,
+        diameter: mat.diameter,
+        outer_diameter: mat.outer_diameter
+      }
     );
   }
 
