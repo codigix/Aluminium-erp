@@ -1,7 +1,7 @@
 const app = require('./app');
 const emailReceiver = require('./utils/realEmailReceiver');
 
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Sales ERP backend running on port ${PORT}`);
