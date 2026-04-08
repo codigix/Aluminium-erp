@@ -271,14 +271,18 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        // Use parent_id or id as the unique root key for the quotation chain
-        const rootId = quote.parent_id || quote.id;
-        const key = `root_${rootId}`;
+        const date = new Date(quote.created_at);
+        const roundedTime = Math.floor(date.getTime() / 60000) * 60000;
         
-        if (!grouped[key]) {
-          grouped[key] = {
+        // Grouping logic: 
+        // 1. If parent_id exists, it's a revision. Group by parent_id.
+        // 2. If no parent_id, it's a new batch. Group by company + project + approximate time.
+        const groupKey = quote.parent_id ? `parent_${quote.parent_id}` : `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`;
+        
+        if (!grouped[groupKey]) {
+          grouped[groupKey] = {
             id: quote.id,
-            uniqueKey: key,
+            uniqueKey: groupKey,
             company_name: quote.company_name,
             company_id: quote.company_id,
             created_at: quote.created_at,
@@ -292,21 +296,20 @@ const ClientQuotations = () => {
           };
         }
         
-        // Push all items belonging to any version of this root quotation
-        grouped[key].quotes.push(quote);
+        grouped[groupKey].quotes.push(quote);
 
         // Update top-level group details if this quote is a newer version
-        if ((quote.version || 1) > grouped[key].version) {
-          grouped[key].id = quote.id;
-          grouped[key].version = quote.version;
-          grouped[key].created_at = quote.created_at;
-          grouped[key].project_name = quote.project_name;
-          grouped[key].status = quote.status;
+        if ((quote.version || 1) > (grouped[groupKey].version || 0)) {
+          grouped[groupKey].id = quote.id;
+          grouped[groupKey].version = quote.version;
+          grouped[groupKey].created_at = quote.created_at;
+          grouped[groupKey].project_name = quote.project_name;
+          grouped[groupKey].status = quote.status;
         }
 
         if (quote.status !== 'REJECTED') {
-          grouped[key].total_amount += parseFloat(quote.total_amount) || 0;
-          grouped[key].received_amount += parseFloat(quote.received_amount) || 0;
+          grouped[groupKey].total_amount += parseFloat(quote.total_amount) || 0;
+          grouped[groupKey].received_amount += parseFloat(quote.received_amount) || 0;
         }
       });
       
@@ -372,14 +375,16 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        // Use parent_id or id as the unique root key for the quotation chain
-        const rootId = quote.parent_id || quote.id;
-        const key = `root_${rootId}`;
+        const date = new Date(quote.created_at);
+        const roundedTime = Math.floor(date.getTime() / 60000) * 60000;
         
-        if (!grouped[key]) {
-          grouped[key] = {
+        // Use same grouping logic as sent quotations
+        const groupKey = quote.parent_id ? `parent_${quote.parent_id}` : `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`;
+        
+        if (!grouped[groupKey]) {
+          grouped[groupKey] = {
             id: quote.id,
-            uniqueKey: key,
+            uniqueKey: groupKey,
             company_name: quote.company_name,
             company_id: quote.company_id,
             created_at: quote.created_at,
@@ -393,20 +398,19 @@ const ClientQuotations = () => {
           };
         }
         
-        // Push all items belonging to any version of this root quotation
-        grouped[key].quotes.push(quote);
+        grouped[groupKey].quotes.push(quote);
 
         // Update top-level group details if this quote is a newer version
-        if ((quote.version || 1) > grouped[key].version) {
-          grouped[key].id = quote.id;
-          grouped[key].status = quote.status;
-          grouped[key].version = quote.version;
-          grouped[key].created_at = quote.created_at;
-          grouped[key].project_name = quote.project_name;
+        if ((quote.version || 1) > (grouped[groupKey].version || 0)) {
+          grouped[groupKey].id = quote.id;
+          grouped[groupKey].status = quote.status;
+          grouped[groupKey].version = quote.version;
+          grouped[groupKey].created_at = quote.created_at;
+          grouped[groupKey].project_name = quote.project_name;
         }
 
-        grouped[key].total_amount += parseFloat(quote.total_amount) || 0;
-        grouped[key].received_amount += parseFloat(quote.received_amount) || 0;
+        grouped[groupKey].total_amount += parseFloat(quote.total_amount) || 0;
+        grouped[groupKey].received_amount += parseFloat(quote.received_amount) || 0;
       });
       
       Object.values(grouped).forEach(group => {
@@ -751,6 +755,7 @@ const ClientQuotations = () => {
             return {
               id: item.id,
               salesOrderItemId: item.id,
+              orderId: item.sales_order_id, // Link to original sales order
               drawing_id: item.drawing_id,
               drawing_no: item.drawing_no,
               description: item.description,
@@ -857,7 +862,11 @@ const ClientQuotations = () => {
   };
 
   const handleViewReceived = (group) => {
-    const firstQuote = group.quotes[0];
+    // Only get items from the LATEST version in this group
+    const latestVersion = group.version || 1;
+    const latestQuotes = group.quotes.filter(q => (q.version || 1) === latestVersion);
+    const firstQuote = latestQuotes[0] || group.quotes[0];
+
     navigate('/quotation-form', {
       state: {
         initialData: {
@@ -867,11 +876,11 @@ const ClientQuotations = () => {
           clientEmail: firstQuote?.client_email || '',
           phone: firstQuote?.client_phone || '',
           address: firstQuote?.client_address || '',
-          version: firstQuote?.version || 1,
+          version: group.version || 1,
           parentId: firstQuote?.parent_id || null,
-          projectName: firstQuote?.project_name || '',
+          projectName: group.project_name || '',
           mode: 'received',
-          items: group.quotes.map(q => ({
+          items: latestQuotes.map(q => ({
             id: q.id,
             salesOrderItemId: q.sales_order_item_id,
             orderId: q.sales_order_id,
@@ -891,8 +900,10 @@ const ClientQuotations = () => {
   };
 
   const handleRevise = (group) => {
-    // Navigate to quotation form with existing data, but as a revision
-    const firstQuote = group.quotes[0];
+    // Only get items from the LATEST version to revise
+    const latestVersion = group.version || 1;
+    const latestQuotes = group.quotes.filter(q => (q.version || 1) === latestVersion);
+    const firstQuote = latestQuotes[0] || group.quotes[0];
     
     navigate('/quotation-form', {
       state: {
@@ -902,11 +913,11 @@ const ClientQuotations = () => {
           clientEmail: firstQuote?.client_email || '',
           phone: firstQuote?.client_phone || '',
           address: firstQuote?.client_address || '',
-          version: (group.quotes[0]?.version || 1) + 1,
+          version: (group.version || 1) + 1,
           parentId: group.id,
-          projectName: firstQuote?.project_name || '',
+          projectName: group.project_name || '',
           mode: 'revise',
-          items: group.quotes.map(q => ({
+          items: latestQuotes.map(q => ({
             id: Date.now() + Math.random(),
             salesOrderItemId: q.sales_order_item_id,
             orderId: q.sales_order_id,
@@ -919,7 +930,7 @@ const ClientQuotations = () => {
             gst_percentage: q.gst_percentage || 18,
             status: 'PENDING'
           })),
-          notes: group.quotes[0]?.notes || ''
+          notes: firstQuote?.notes || ''
         }
       }
     });

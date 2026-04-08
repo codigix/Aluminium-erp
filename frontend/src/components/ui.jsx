@@ -88,7 +88,7 @@ export const SearchableSelect = ({
             setSearchTerm(e.target.value);
             setIsOpen(true);
             if (allowCustom) {
-              onChange(e.target.value);
+              onChange(e);
             }
           }}
           onFocus={() => !disabled && setIsOpen(true)}
@@ -108,7 +108,7 @@ export const SearchableSelect = ({
                   key={idx}
                   className={`p-2 text-xs cursor-pointer hover:bg-blue-50 ${String(opt[valueField]) === String(value) ? 'bg-blue-50 text-blue-600 ' : 'text-slate-700'}`}
                   onClick={() => {
-                    onChange(opt[valueField]);
+                    onChange({ target: { value: opt[valueField] } });
                     setSearchTerm(getLabel(opt));
                     setIsOpen(false);
                   }}
