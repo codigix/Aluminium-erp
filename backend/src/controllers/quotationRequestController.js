@@ -9,9 +9,15 @@ const getQuotationRequests = async (req, res, next) => {
       SELECT *, COALESCE(total_amount / NULLIF(item_qty, 0), 0) as unit_rate FROM (
         SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
                qr.profit_percentage, qr.gst_percentage,
-               so.project_name, so.bom_id, c.company_name, cp.po_number,
-               COALESCE(soi.drawing_no, '—') as drawing_no,
-               COALESCE(soi.description, so.project_name) as item_description,
+               qr.version, qr.parent_id,
+               COALESCE(qr.project_name, so.project_name, 'Manual Quotation') as project_name, 
+               so.bom_id, c.company_name, 
+               (SELECT email FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_email,
+               (SELECT phone FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_phone,
+               (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1) as client_address,
+               cp.po_number,
+               COALESCE(soi.drawing_no, qr.drawing_no, '—') as drawing_no,
+               COALESCE(soi.description, qr.description, '—') as item_description,
                COALESCE(
                  qr.item_qty, 
                  poi.quantity,
@@ -19,8 +25,8 @@ const getQuotationRequests = async (req, res, next) => {
                  soi.quantity, 
                  0
                ) as item_qty,
-               COALESCE(soi.unit, 'NOS') as item_unit,
-               COALESCE(soi.unit, 'NOS') as uom,
+               COALESCE(soi.unit, qr.item_unit, 'NOS') as item_unit,
+               COALESCE(soi.unit, qr.item_unit, 'NOS') as uom,
                COALESCE(soi.item_group, 'FG') as item_group,
                qr.id as id
         FROM quotation_requests qr
@@ -50,6 +56,82 @@ const getQuotationRequests = async (req, res, next) => {
 
     const [rows] = await pool.query(query, params);
     res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getQuotationVersionHistory = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    // First, find the root parent ID
+    const [quotes] = await pool.query(
+      'SELECT id, parent_id FROM quotation_requests WHERE id = ?',
+      [id]
+    );
+
+    if (quotes.length === 0) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    let rootId = quotes[0].parent_id || quotes[0].id;
+    
+    // Fetch all items in the chain with drawing/description details
+    const [rows] = await pool.query(
+      `SELECT qr.*, c.company_name, 
+              COALESCE(soi.drawing_no, qr.drawing_no) as drawing_no,
+              COALESCE(soi.description, qr.description) as item_description,
+              COALESCE(soi.unit, qr.item_unit) as item_unit
+       FROM quotation_requests qr
+       JOIN companies c ON qr.company_id = c.id
+       LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+       WHERE qr.id = ? OR qr.parent_id = ? 
+       ORDER BY qr.version ASC, qr.id ASC`,
+      [rootId, rootId]
+    );
+
+    // Group items by version
+    const versionGroups = [];
+    const versionMap = {};
+
+    rows.forEach(row => {
+      if (!versionMap[row.version]) {
+        versionMap[row.version] = {
+          id: row.id,
+          version: row.version,
+          status: row.status,
+          created_at: row.created_at,
+          total_amount: 0,
+          received_amount: 0,
+          project_name: row.project_name,
+          notes: row.notes,
+          company_id: row.company_id,
+          company_name: row.company_name,
+          items: []
+        };
+        versionGroups.push(versionMap[row.version]);
+      }
+      
+      const group = versionMap[row.version];
+      group.items.push({
+        id: row.id,
+        sales_order_item_id: row.sales_order_item_id,
+        drawing_no: row.drawing_no,
+        description: row.item_description,
+        quantity: row.item_qty,
+        unit: row.item_unit,
+        rate: row.total_amount / (row.item_qty || 1),
+        total: row.total_amount,
+        gst_percentage: row.gst_percentage,
+        status: row.status
+      });
+      
+      group.total_amount += parseFloat(row.total_amount) || 0;
+      group.received_amount += parseFloat(row.received_amount) || 0;
+    });
+
+    res.json(versionGroups);
   } catch (error) {
     next(error);
   }
@@ -183,7 +265,7 @@ const rejectQuotationRequest = async (req, res, next) => {
 const sendQuotationViaEmail = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true, status } = req.body;
+    const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true, status, projectName } = req.body;
 
     if (!clientId || !items || items.length === 0) {
       return res.status(400).json({ 
@@ -210,8 +292,10 @@ const sendQuotationViaEmail = async (req, res, next) => {
             `INSERT INTO quotation_requests (
                sales_order_id, sales_order_item_id, item_qty, company_id, 
                status, total_amount, received_amount, rejection_reason, 
-               notes, created_at, profit_percentage, gst_percentage
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)`,
+               notes, created_at, profit_percentage, gst_percentage,
+               version, parent_id, drawing_no, description, item_unit,
+               project_name
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               item.orderId || null, 
               item.salesOrderItemId || null, 
@@ -223,7 +307,13 @@ const sendQuotationViaEmail = async (req, res, next) => {
               item.rejection_reason || null, 
               notes || null,
               item.profit_percentage || 0,
-              gstRate
+              gstRate,
+              req.body.version || 1,
+              req.body.parentId || null,
+              item.drawing_no || null,
+              item.description || null,
+              item.unit || 'Nos',
+              projectName || null
             ]
           );
           resolve(result.insertId);
@@ -316,6 +406,28 @@ const deleteQuotationRequest = async (req, res, next) => {
     }
 
     res.json({ message: 'Quotation request deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const batchDeleteQuotationRequests = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'IDs array is required' });
+    }
+
+    const [result] = await pool.query(
+      `DELETE FROM quotation_requests WHERE id IN (${ids.map(() => '?').join(',')})`,
+      ids
+    );
+
+    res.json({ 
+      message: 'Quotation requests deleted successfully',
+      affectedRows: result.affectedRows
+    });
   } catch (error) {
     next(error);
   }
@@ -417,6 +529,7 @@ const downloadQuotationPDF = async (req, res, next) => {
 
 module.exports = {
   getQuotationRequests,
+  getQuotationVersionHistory,
   downloadQuotationPDF,
   approveQuotationRequest,
   batchApproveQuotationRequests,
@@ -424,5 +537,6 @@ module.exports = {
   rejectQuotationRequest,
   sendQuotationViaEmail,
   deleteQuotationRequest,
+  batchDeleteQuotationRequests,
   updateQuotationRates
 };

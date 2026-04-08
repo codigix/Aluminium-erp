@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card, StatusBadge } from '../components/ui.jsx';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Download, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus } from 'lucide-react';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Download, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -263,7 +263,7 @@ const ClientQuotations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests`, {
+      const response = await fetch(`${API_BASE}/quotation-requests?status=SENT,DRAFT`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch sent quotations');
@@ -271,9 +271,9 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        const date = new Date(quote.created_at);
-        const roundedTime = Math.floor(date.getTime() / 10000) * 10000;
-        const key = `${quote.company_id}_${roundedTime}`;
+        // Use parent_id or id as the unique root key for the quotation chain
+        const rootId = quote.parent_id || quote.id;
+        const key = `root_${rootId}`;
         
         if (!grouped[key]) {
           grouped[key] = {
@@ -282,21 +282,28 @@ const ClientQuotations = () => {
             company_name: quote.company_name,
             company_id: quote.company_id,
             created_at: quote.created_at,
-            status: 'Sent', 
+            status: quote.status, 
             reply_pdf: quote.reply_pdf,
+            project_name: quote.project_name, 
             total_amount: 0,
             received_amount: 0,
-            quotes: []
+            quotes: [],
+            version: quote.version || 1
           };
-        } else {
-          if (quote.id < grouped[key].id) {
-            grouped[key].id = quote.id;
-          }
-          if (quote.reply_pdf) {
-            grouped[key].reply_pdf = quote.reply_pdf;
-          }
         }
+        
+        // Push all items belonging to any version of this root quotation
         grouped[key].quotes.push(quote);
+
+        // Update top-level group details if this quote is a newer version
+        if ((quote.version || 1) > grouped[key].version) {
+          grouped[key].id = quote.id;
+          grouped[key].version = quote.version;
+          grouped[key].created_at = quote.created_at;
+          grouped[key].project_name = quote.project_name;
+          grouped[key].status = quote.status;
+        }
+
         if (quote.status !== 'REJECTED') {
           grouped[key].total_amount += parseFloat(quote.total_amount) || 0;
           grouped[key].received_amount += parseFloat(quote.received_amount) || 0;
@@ -304,6 +311,9 @@ const ClientQuotations = () => {
       });
       
       Object.values(grouped).forEach(group => {
+        // Sort quotes DESC by version so group.quotes[0] is always the latest
+        group.quotes.sort((a, b) => (b.version || 0) - (a.version || 0));
+
         const hasRejected = group.quotes.some(q => (q.status || '').trim().toUpperCase() === 'REJECTED');
         const hasAccepted = group.quotes.some(q => (q.status || '').trim().toUpperCase() !== 'REJECTED');
         
@@ -353,7 +363,8 @@ const ClientQuotations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests?status=Approved,Approved ,Rejected,REJECTED,Accepted,ACCEPTED,Approval,APPROVAL,Completed,COMPLETED`, {
+      // Include REVISED and Revised status here
+      const response = await fetch(`${API_BASE}/quotation-requests?status=Approved,Approved,Rejected,REJECTED,Accepted,ACCEPTED,Approval,APPROVAL,Completed,COMPLETED,REVISED,Revised`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch received quotations');
@@ -361,9 +372,9 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        const date = new Date(quote.created_at);
-        const roundedTime = Math.floor(date.getTime() / 10000) * 10000;
-        const key = `${quote.company_id}_${roundedTime}`;
+        // Use parent_id or id as the unique root key for the quotation chain
+        const rootId = quote.parent_id || quote.id;
+        const key = `root_${rootId}`;
         
         if (!grouped[key]) {
           grouped[key] = {
@@ -374,22 +385,33 @@ const ClientQuotations = () => {
             created_at: quote.created_at,
             status: quote.status,
             reply_pdf: quote.reply_pdf,
+            project_name: quote.project_name, 
             total_amount: 0,
             received_amount: 0,
-            quotes: []
+            quotes: [],
+            version: quote.version || 1
           };
-        } else {
-          if (quote.id < grouped[key].id) {
-            grouped[key].id = quote.id;
-          }
-          if (quote.status === 'Approved' || quote.status === 'Approval') {
-            grouped[key].status = quote.status;
-            if (quote.reply_pdf) grouped[key].reply_pdf = quote.reply_pdf;
-          }
         }
+        
+        // Push all items belonging to any version of this root quotation
         grouped[key].quotes.push(quote);
+
+        // Update top-level group details if this quote is a newer version
+        if ((quote.version || 1) > grouped[key].version) {
+          grouped[key].id = quote.id;
+          grouped[key].status = quote.status;
+          grouped[key].version = quote.version;
+          grouped[key].created_at = quote.created_at;
+          grouped[key].project_name = quote.project_name;
+        }
+
         grouped[key].total_amount += parseFloat(quote.total_amount) || 0;
         grouped[key].received_amount += parseFloat(quote.received_amount) || 0;
+      });
+      
+      Object.values(grouped).forEach(group => {
+        // Sort quotes DESC by version so group.quotes[0] is always the latest
+        group.quotes.sort((a, b) => (b.version || 0) - (a.version || 0));
       });
       
       setReceivedQuotations(Object.values(grouped));
@@ -720,6 +742,7 @@ const ClientQuotations = () => {
           contact_person: clientData.contact_person,
           phone: clientData.phone,
           address: clientData.address,
+          projectName: clientData.orders[0]?.project_name || allItems[0]?.project_name || '',
           items: allItems.map(item => {
             const profits = profitMap[clientName] || {};
             const gsts = gstMap[clientName] || {};
@@ -776,48 +799,50 @@ const ClientQuotations = () => {
     }
   };
 
-  const handleDeleteApprovedOrders = async (clientName) => {
+  const handleDismissApprovedOrders = async (clientName) => {
     const clientData = groupedByClient[clientName];
     if (!clientData) return;
 
     const result = await Swal.fire({
-      title: 'Delete BOM-Approved Orders',
+      title: 'Dismiss Approved Orders',
       html: `
         <div style="text-align: left; font-size: 14px;">
-          <p>Are you sure you want to delete all BOM-approved orders for <strong>${clientData.company_name}</strong>?</p>
-          <p style="color: #dc2626; margin-top: 12px; font-weight: bold;">This action cannot be undone.</p>
+          <p>Are you sure you want to dismiss these approved orders for <strong>${clientData.company_name}</strong>?</p>
+          <p style="color: #64748b; margin-top: 12px;">They will be hidden from the quotation pending list but not deleted from the system.</p>
         </div>
       `,
-      icon: 'warning',
+      icon: 'info',
       showCancelButton: true,
-      confirmButtonText: 'Delete',
+      confirmButtonText: 'Yes, dismiss',
       cancelButtonText: 'Cancel',
-      confirmButtonColor: '#dc2626'
+      confirmButtonColor: '#6366f1'
     });
 
     if (result.isConfirmed) {
       try {
         const token = localStorage.getItem('authToken');
-        let deleteCount = 0;
+        let updateCount = 0;
 
         for (const order of clientData.orders) {
           try {
             const response = await fetch(`${API_BASE}/sales-orders/${order.id}`, {
-              method: 'DELETE',
+              method: 'PUT',
               headers: {
-                'Authorization': `Bearer ${token}`
-              }
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ status: 'QUOTATION_IGNORED' })
             });
 
             if (response.ok) {
-              deleteCount++;
+              updateCount++;
             }
           } catch (err) {
-            console.error('Error deleting order:', err);
+            console.error('Error updating order:', err);
           }
         }
 
-        successToast(`Deleted ${deleteCount} approved orders`);
+        successToast(`Dismissed ${updateCount} approved orders`);
         setExpandedClientName(null);
         setQuotePricesMap(prev => ({
           ...prev,
@@ -826,9 +851,78 @@ const ClientQuotations = () => {
         fetchApprovedOrders();
       } catch (error) {
         console.error(error);
-        errorToast('Failed to delete approved orders');
+        errorToast('Failed to dismiss approved orders');
       }
     }
+  };
+
+  const handleViewReceived = (group) => {
+    const firstQuote = group.quotes[0];
+    navigate('/quotation-form', {
+      state: {
+        initialData: {
+          id: group.id,
+          clientId: group.company_id,
+          clientName: group.company_name,
+          clientEmail: firstQuote?.client_email || '',
+          phone: firstQuote?.client_phone || '',
+          address: firstQuote?.client_address || '',
+          version: firstQuote?.version || 1,
+          parentId: firstQuote?.parent_id || null,
+          projectName: firstQuote?.project_name || '',
+          mode: 'received',
+          items: group.quotes.map(q => ({
+            id: q.id,
+            salesOrderItemId: q.sales_order_item_id,
+            orderId: q.sales_order_id,
+            drawing_id: q.drawing_id,
+            drawing_no: q.drawing_no,
+            description: q.item_description,
+            quantity: q.item_qty,
+            unit: q.item_unit || q.uom || 'Nos',
+            rate: q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1)),
+            gst_percentage: q.gst_percentage || 18,
+            status: q.status
+          })),
+          notes: firstQuote?.notes || ''
+        }
+      }
+    });
+  };
+
+  const handleRevise = (group) => {
+    // Navigate to quotation form with existing data, but as a revision
+    const firstQuote = group.quotes[0];
+    
+    navigate('/quotation-form', {
+      state: {
+        initialData: {
+          clientId: group.company_id,
+          clientName: group.company_name,
+          clientEmail: firstQuote?.client_email || '',
+          phone: firstQuote?.client_phone || '',
+          address: firstQuote?.client_address || '',
+          version: (group.quotes[0]?.version || 1) + 1,
+          parentId: group.id,
+          projectName: firstQuote?.project_name || '',
+          mode: 'revise',
+          items: group.quotes.map(q => ({
+            id: Date.now() + Math.random(),
+            salesOrderItemId: q.sales_order_item_id,
+            orderId: q.sales_order_id,
+            drawing_id: q.drawing_id,
+            drawing_no: q.drawing_no,
+            description: q.item_description,
+            quantity: q.item_qty,
+            unit: q.item_unit || q.uom || 'Nos',
+            rate: q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1)),
+            gst_percentage: q.gst_percentage || 18,
+            status: 'PENDING'
+          })),
+          notes: group.quotes[0]?.notes || ''
+        }
+      }
+    });
   };
 
   const handleDeleteSentQuotation = async (group) => {
@@ -986,9 +1080,14 @@ const ClientQuotations = () => {
                           </td>
                           <td className=" p-2 whitespace-nowrap">
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-xs  text-slate-700">
-                                {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : (group.quotes[0]?.project_name || group.quotes[0]?.drawing_no || '—')}
+                              <span className="text-xs  text-slate-700 font-medium">
+                                {group.project_name || (group.quotes.length > 1 ? `${group.quotes.length} Drawings` : (group.quotes[0]?.drawing_no || '—'))}
                               </span>
+                              {group.project_name && group.quotes.length > 0 && (
+                                <span className="text-[10px] text-slate-400">
+                                  {group.quotes.length} item(s)
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className=" p-2 whitespace-nowrap">
@@ -1054,6 +1153,8 @@ const ClientQuotations = () => {
                                 onClick={() => {
                                   if (isPending) {
                                     setExpandedClientName(isExpanded ? null : group.company_name);
+                                  } else if (activeTab === 'received') {
+                                    handleViewReceived(group);
                                   } else {
                                     setExpandedSentKey(isExpanded ? null : key);
                                   }
@@ -1063,7 +1164,7 @@ const ClientQuotations = () => {
                                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100' 
                                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                 }`}
-                                title={isPending ? "View & Price" : "View Drawings"}
+                                title={isPending ? "View & Price" : (activeTab === 'received' ? "Open Received Form" : "View Details")}
                               >
                                 {isPending ? (isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />) : <Eye size={15} />}
                               </button>
@@ -1088,6 +1189,13 @@ const ClientQuotations = () => {
                                     title="Download PDF"
                                   >
                                     <Download size={15} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRevise(group)}
+                                    className="p-2 bg-white border border-slate-200 text-slate-600 hover:text-amber-600 hover:bg-slate-50 rounded  transition-all active:scale-95"
+                                    title="Revise Quotation"
+                                  >
+                                    <GitBranch size={15} />
                                   </button>
                                 </>
                               )}

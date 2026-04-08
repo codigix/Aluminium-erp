@@ -821,10 +821,10 @@ const ensureQuotationRequestTables = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS quotation_requests (
         id INT PRIMARY KEY AUTO_INCREMENT,
-        sales_order_id INT NOT NULL,
+        sales_order_id INT NULL,
         sales_order_item_id INT NULL,
         company_id INT NOT NULL,
-        status ENUM('PENDING', 'APPROVAL', 'Approved ', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'APPROVAL', 'Approved', 'REJECTED', 'COMPLETED', 'ACCEPTED', 'DRAFT', 'SENT', 'REVISED') DEFAULT 'PENDING',
         total_amount DECIMAL(14, 2) DEFAULT 0,
         received_amount DECIMAL(14, 2) DEFAULT 0,
         notes TEXT NULL,
@@ -839,12 +839,26 @@ const ensureQuotationRequestTables = async () => {
 
     const [quotationCols] = await connection.query('SHOW COLUMNS FROM quotation_requests');
     const existing = new Set(quotationCols.map(c => c.Field));
+    
+    // Ensure sales_order_id is NULL for manual quotations
+    const salesOrderIdCol = quotationCols.find(c => c.Field === 'sales_order_id');
+    if (salesOrderIdCol && salesOrderIdCol.Null === 'NO') {
+      await connection.query('ALTER TABLE quotation_requests MODIFY COLUMN sales_order_id INT NULL');
+      console.log('Quotation request sales_order_id updated to NULL');
+    }
+
     const requiredColumns = [
       { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'received_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'notes', definition: 'TEXT NULL' },
       { name: 'sales_order_item_id', definition: 'INT NULL' },
-      { name: 'rejection_reason', definition: 'TEXT NULL' }
+      { name: 'rejection_reason', definition: 'TEXT NULL' },
+      { name: 'project_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'version', definition: 'INT DEFAULT 1' },
+      { name: 'parent_id', definition: 'INT NULL' },
+      { name: 'drawing_no', definition: 'VARCHAR(255) NULL' },
+      { name: 'description', definition: 'TEXT NULL' },
+      { name: 'item_unit', definition: 'VARCHAR(50) DEFAULT "Nos"' }
     ];
     
     const missing = requiredColumns.filter(c => !existing.has(c.name));
@@ -881,12 +895,13 @@ const ensureQuotationRequestStatus = async () => {
     const [columns] = await connection.query("SHOW COLUMNS FROM quotation_requests LIKE 'status'");
     if (columns.length > 0) {
       const type = columns[0].Type;
-      if (!type.includes('APPROVAL') || !type.includes('ACCEPTED')) {
+      // Check if any of the new required values are missing
+      if (!type.includes('DRAFT') || !type.includes('SENT') || !type.includes('REVISED')) {
         await connection.query(`
           ALTER TABLE quotation_requests 
-          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'Approved ', 'REJECTED', 'COMPLETED', 'ACCEPTED') DEFAULT 'PENDING'
+          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'Approved', 'REJECTED', 'COMPLETED', 'ACCEPTED', 'DRAFT', 'SENT', 'REVISED') DEFAULT 'PENDING'
         `);
-        console.log('Quotation Request status updated with APPROVAL and ACCEPTED');
+        console.log('Quotation Request status updated with DRAFT, SENT, REVISED');
       }
     }
   } catch (error) {
