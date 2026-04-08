@@ -484,6 +484,9 @@ const CustomerPO = ({
                           quotationRequests.forEach(q => {
                             if (processedIds.has(q.id)) return;
                             
+                            // ONLY show APPROVED quotations in the dropdown
+                            if (q.status?.toUpperCase() !== 'APPROVED') return;
+                            
                             const qTime = new Date(q.created_at).getTime();
                             const batchItems = quotationRequests.filter(t => 
                               t.company_id === q.company_id && 

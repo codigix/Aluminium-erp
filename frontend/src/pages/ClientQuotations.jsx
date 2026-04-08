@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card, StatusBadge } from '../components/ui.jsx';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Download, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch } from 'lucide-react';
+import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Upload, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -51,7 +51,6 @@ const ClientQuotations = () => {
   const [quotePricesMap, setQuotePricesMap] = useState({});
   const [profitMap, setProfitMap] = useState({});
   const [gstMap, setGstMap] = useState({});
-  const [sendingClientName, setSendingClientName] = useState(null);
   const [editingSentAmounts, setEditingSentAmounts] = useState({});
   const [savingSentAmount, setSavingSentAmount] = useState(null);
   const [editingItemRates, setEditingItemRates] = useState({});
@@ -305,17 +304,21 @@ const ClientQuotations = () => {
           grouped[groupKey].created_at = quote.created_at;
           grouped[groupKey].project_name = quote.project_name;
           grouped[groupKey].status = quote.status;
-        }
-
-        if (quote.status !== 'REJECTED') {
-          grouped[groupKey].total_amount += parseFloat(quote.total_amount) || 0;
-          grouped[groupKey].received_amount += parseFloat(quote.received_amount) || 0;
+          grouped[groupKey].reply_pdf = quote.reply_pdf;
         }
       });
       
       Object.values(grouped).forEach(group => {
         // Sort quotes DESC by version so group.quotes[0] is always the latest
         group.quotes.sort((a, b) => (b.version || 0) - (a.version || 0));
+
+        // RECACULATE total based ONLY on the latest version found in this group
+        // If it's a batch without revisions, all quotes will have same version (e.g. 1)
+        const latestVersion = group.version || 1;
+        const latestQuotes = group.quotes.filter(q => (q.version || 1) === latestVersion);
+        
+        group.total_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
+        group.received_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
 
         const hasRejected = group.quotes.some(q => (q.status || '').trim().toUpperCase() === 'REJECTED');
         const hasAccepted = group.quotes.some(q => (q.status || '').trim().toUpperCase() !== 'REJECTED');
@@ -407,15 +410,20 @@ const ClientQuotations = () => {
           grouped[groupKey].version = quote.version;
           grouped[groupKey].created_at = quote.created_at;
           grouped[groupKey].project_name = quote.project_name;
+          grouped[groupKey].reply_pdf = quote.reply_pdf;
         }
-
-        grouped[groupKey].total_amount += parseFloat(quote.total_amount) || 0;
-        grouped[groupKey].received_amount += parseFloat(quote.received_amount) || 0;
       });
       
       Object.values(grouped).forEach(group => {
         // Sort quotes DESC by version so group.quotes[0] is always the latest
         group.quotes.sort((a, b) => (b.version || 0) - (a.version || 0));
+
+        // RECALCULATE total based ONLY on the latest version found in this group
+        const latestVersion = group.version || 1;
+        const latestQuotes = group.quotes.filter(q => (q.version || 1) === latestVersion);
+        
+        group.total_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
+        group.received_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
       });
       
       setReceivedQuotations(Object.values(grouped));
@@ -515,61 +523,6 @@ const ClientQuotations = () => {
         [itemId]: gstVal
       }
     }));
-  };
-
-  const handleApproveQuote = async (group) => {
-    const result = await Swal.fire({
-      title: 'Approve Quotation',
-      text: `Please upload the client's approval/reply PDF for QRT-${String(group.id).padStart(4, '0')}`,
-      icon: 'info',
-      input: 'file',
-      inputAttributes: {
-        'accept': 'application/pdf',
-        'aria-label': 'Upload approval PDF'
-      },
-      showCancelButton: true,
-      confirmButtonText: 'Upload & Approve',
-      confirmButtonColor: '#10b981',
-      showLoaderOnConfirm: true,
-      preConfirm: (file) => {
-        if (!file) {
-          Swal.showValidationMessage('Please select a PDF file');
-          return false;
-        }
-        return file;
-      }
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const file = result.value;
-        const token = localStorage.getItem('authToken');
-        const ids = group.quotes.map(q => q.id);
-        
-        const formData = new FormData();
-        formData.append('reply_pdf', file);
-        formData.append('ids', JSON.stringify(ids));
-
-        const response = await fetch(`${API_BASE}/quotation-requests/batch-approve`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
-          body: formData
-        });
-
-        if (response.ok) {
-          successToast('Quotation approved successfully');
-          fetchAllData();
-        } else {
-          const errorData = await response.json();
-          errorToast(errorData.error || 'Failed to approve quotation');
-        }
-      } catch (error) {
-        console.error('Error approving quotation:', error);
-        errorToast('Error approving quotation');
-      }
-    }
   };
 
   const handleSentAmountChange = (key, value) => {
@@ -686,30 +639,6 @@ const ClientQuotations = () => {
     }
   };
 
-  const calculateClientTotal = (clientName) => {
-    const clientData = groupedByClient[clientName];
-    if (!clientData) return 0;
-    
-    const prices = quotePricesMap[clientName] || {};
-    const gsts = gstMap[clientName] || {};
-    let total = 0;
-    
-    clientData.orders.forEach(order => {
-      if (order.items) {
-        order.items.forEach(item => {
-          if (item.status !== 'REJECTED') {
-            const price = parseFloat(prices[item.id]) || 0;
-            const gst = parseFloat(gsts[item.id]) || 18;
-            const qty = parseFloat(item.design_qty) || 0;
-            total += price * qty * (1 + gst / 100);
-          }
-        });
-      }
-    });
-    
-    return total;
-  };
-
   const handleSendQuote = async (clientName) => {
     const clientData = groupedByClient[clientName];
     if (!clientData) return;
@@ -735,8 +664,6 @@ const ClientQuotations = () => {
       return;
     }
 
-    const total = calculateClientTotal(clientName);
-    
     navigate('/quotation-form', { 
       state: { 
         initialData: {
@@ -748,7 +675,6 @@ const ClientQuotations = () => {
           address: clientData.address,
           projectName: clientData.orders[0]?.project_name || allItems[0]?.project_name || '',
           items: allItems.map(item => {
-            const profits = profitMap[clientName] || {};
             const gsts = gstMap[clientName] || {};
             const itemPrice = parseFloat(prices[item.id]) || 0;
             
@@ -774,37 +700,62 @@ const ClientQuotations = () => {
     });
   };
 
-  const handleDownloadPDF = async (group) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests/download-pdf/${group.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch PDF');
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      
-      const newWindow = window.open(url, '_blank');
-      
-      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Quotation_QRT-${String(group.id).padStart(4, '0')}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+  const handleUploadReplyPDF = async (group) => {
+    const result = await Swal.fire({
+      title: 'Upload Reply PDF',
+      text: `Select the client's reply PDF for QRT-${String(group.id).padStart(4, '0')}`,
+      icon: 'info',
+      input: 'file',
+      inputAttributes: {
+        'accept': 'application/pdf',
+        'aria-label': 'Upload reply PDF'
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Upload',
+      confirmButtonColor: '#6366f1',
+      showLoaderOnConfirm: true,
+      preConfirm: (file) => {
+        if (!file) {
+          Swal.showValidationMessage('Please select a PDF file');
+          return false;
+        }
+        return file;
       }
-      
-      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
-    } catch (error) {
-      console.error('PDF error:', error);
-      errorToast('Failed to load quotation PDF');
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const file = result.value;
+        const token = localStorage.getItem('authToken');
+        const ids = group.quotes.map(q => q.id);
+        
+        const formData = new FormData();
+        formData.append('reply_pdf', file);
+        formData.append('ids', JSON.stringify(ids));
+
+        const response = await fetch(`${API_BASE}/quotation-requests/batch-upload-reply`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        if (response.ok) {
+          successToast('Reply PDF uploaded successfully');
+          fetchAllData();
+        } else {
+          const errorData = await response.json();
+          errorToast(errorData.error || 'Failed to upload PDF');
+        }
+      } catch (error) {
+        console.error('Error uploading PDF:', error);
+        errorToast('Error uploading PDF');
+      }
     }
   };
 
-  const handleDismissApprovedOrders = async (clientName) => {
+  const handleDeleteApprovedOrders = async (clientName) => {
     const clientData = groupedByClient[clientName];
     if (!clientData) return;
 
@@ -1138,16 +1089,6 @@ const ClientQuotations = () => {
                           </td>
                           <td className=" p-2 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end gap-2">
-                              {group.status === 'Sent' && (
-                                <button
-                                  onClick={() => handleApproveQuote(group)}
-                                  className="p-2 bg-emerald-50 border border-emerald-100 text-emerald-600 hover:bg-emerald-100 rounded  transition-all active:scale-95 shadow-sm"
-                                  title="Approve Quotation"
-                                >
-                                  <CheckCircle size={15} />
-                                </button>
-                              )}
-                              
                               {!isPending && group.reply_pdf && (
                                 <a
                                   href={getFileUrl(group.reply_pdf)}
@@ -1195,11 +1136,11 @@ const ClientQuotations = () => {
                                     )}
                                   </button>
                                   <button
-                                    onClick={() => handleDownloadPDF(group)}
-                                    className="p-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-50 rounded  transition-all active:scale-95"
-                                    title="Download PDF"
+                                    onClick={() => handleUploadReplyPDF(group)}
+                                    className="p-2 bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-slate-50 rounded  transition-all active:scale-95"
+                                    title="Upload Reply PDF"
                                   >
-                                    <Download size={15} />
+                                    <Upload size={15} />
                                   </button>
                                   <button
                                     onClick={() => handleRevise(group)}
@@ -1403,15 +1344,11 @@ const ClientQuotations = () => {
                                           </div>
                                           <button
                                             onClick={() => handleSendQuote(group.company_name)}
-                                            disabled={sendingClientName === group.company_name || (subTotal + totalTax) === 0}
+                                            disabled={(subTotal + totalTax) === 0}
                                             className="mt-4 w-72 flex justify-center items-center gap-2 px-6 p-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
                                           >
-                                            {sendingClientName === group.company_name ? (
-                                              <Loader2 className="w-5 h-5 animate-spin" />
-                                            ) : (
-                                              <Save className="w-5 h-5" />
-                                            )}
-                                            {sendingClientName === group.company_name ? 'Creating Quotation...' : 'Create Quotation'}
+                                            <Save className="w-5 h-5" />
+                                            Create Quotation
                                           </button>
                                         </div>
                                       );

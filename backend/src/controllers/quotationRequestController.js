@@ -411,6 +411,46 @@ const deleteQuotationRequest = async (req, res, next) => {
   }
 };
 
+const batchUploadReplyPDF = async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    let ids = req.body?.ids;
+    
+    // Handle FormData stringified array
+    if (typeof ids === 'string') {
+      try {
+        ids = JSON.parse(ids);
+      } catch (e) {
+        ids = ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+      }
+    }
+
+    if (!ids || !Array.isArray(ids)) {
+      return res.status(400).json({ error: 'IDs array is required' });
+    }
+
+    const replyPdfPath = req.file ? `uploads/${req.file.filename}` : null;
+    if (!replyPdfPath) {
+      return res.status(400).json({ error: 'Reply PDF is required' });
+    }
+
+    await connection.beginTransaction();
+    for (const id of ids) {
+      await connection.execute(
+        'UPDATE quotation_requests SET reply_pdf = ?, updated_at = NOW() WHERE id = ?',
+        [replyPdfPath, id]
+      );
+    }
+    await connection.commit();
+    res.json({ message: 'Reply PDF uploaded successfully' });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+};
+
 const batchDeleteQuotationRequests = async (req, res, next) => {
   try {
     const { ids } = req.body;
@@ -533,6 +573,7 @@ module.exports = {
   downloadQuotationPDF,
   approveQuotationRequest,
   batchApproveQuotationRequests,
+  batchUploadReplyPDF,
   batchSendToDesign,
   rejectQuotationRequest,
   sendQuotationViaEmail,

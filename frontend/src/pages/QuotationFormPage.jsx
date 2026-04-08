@@ -52,10 +52,10 @@ const QuotationFormPage = () => {
   
   // Find if the absolute latest version is already approved
   const latestInHistory = versionHistory.find(vh => vh.version === maxVersion);
-  const isLatestApproved = latestInHistory?.status === 'APPROVED';
+  const isLatestApproved = latestInHistory?.status?.toUpperCase() === 'APPROVED';
 
   const currentVersionData = versionHistory.find(v => v.version === version);
-  const isCurrentApproved = currentVersionData?.status === 'APPROVED';
+  const isCurrentApproved = currentVersionData?.status?.toUpperCase() === 'APPROVED';
   
   // Old versions are always read-only, and the latest is locked if already approved
   const isLocked = (versionHistory.length > 0 && !isLatest) || isCurrentApproved;
@@ -662,7 +662,7 @@ const QuotationFormPage = () => {
                   Status
                 </label>
                 <div className="flex items-center">
-                  <StatusBadge status="Draft" />
+                  <StatusBadge status={currentVersionData?.status || 'Draft'} />
                 </div>
               </div>
             </div>
@@ -764,6 +764,7 @@ const QuotationFormPage = () => {
                                   <SearchableSelect
                                     options={drawings}
                                     value={item.drawing_id}
+                                    disabled={isLocked}
                                     onChange={(val) => {
                                       const drw = drawings.find(d => String(d.id) === String(val));
                                       const updatedItems = items.map(it => {
@@ -950,8 +951,8 @@ const QuotationFormPage = () => {
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5">
                           <div className={`w-2 h-2 rounded-full shadow-sm ${
-                            v.status === 'APPROVED' ? 'bg-emerald-500 ring-2 ring-emerald-100' : 
-                            v.status === 'REJECTED' ? 'bg-rose-500 ring-2 ring-rose-100' :
+                            v.status?.toUpperCase() === 'APPROVED' ? 'bg-emerald-500 ring-2 ring-emerald-100' : 
+                            v.status?.toUpperCase() === 'REJECTED' ? 'bg-rose-500 ring-2 ring-rose-100' :
                             (v.id === selectedVersionId || (selectedVersionId === null && v.version === version)) ? 'bg-indigo-500 ring-2 ring-indigo-100' : 'bg-slate-300'
                           }`} />
                           <div>
@@ -960,8 +961,8 @@ const QuotationFormPage = () => {
                                 Version {v.version}
                               </p>
                               <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold border tracking-tighter ${
-                                v.status === 'APPROVED' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
-                                v.status === 'REJECTED' ? 'bg-rose-50 border-rose-100 text-rose-600' :
+                                v.status?.toUpperCase() === 'APPROVED' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
+                                v.status?.toUpperCase() === 'REJECTED' ? 'bg-rose-50 border-rose-100 text-rose-600' :
                                 'bg-slate-50 border-slate-100 text-slate-500'
                               }`}>
                                 {v.status}
@@ -993,8 +994,9 @@ const QuotationFormPage = () => {
                 {/* Actions for Selected Version */}
                 {(() => {
                   const selectedV = versionHistory.find(v => v.id === selectedVersionId || (selectedVersionId === null && v.version === version));
+                  const sStatus = selectedV?.status?.toUpperCase();
                   // Hide actions if selected is approved/rejected, OR if the latest version is already approved
-                  if (!selectedV || selectedV.status === 'APPROVED' || selectedV.status === 'REJECTED' || isLatestApproved) return null;
+                  if (!selectedV || sStatus === 'APPROVED' || sStatus === 'REJECTED' || isLatestApproved) return null;
                   
                   return (
                     <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
